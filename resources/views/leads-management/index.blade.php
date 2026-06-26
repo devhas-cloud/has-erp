@@ -62,6 +62,12 @@
         cursor: pointer;
     }
     .form-check-inline input { width: auto; margin: 0; }
+    .form-group input.is-invalid,
+    .form-group select.is-invalid,
+    .form-group textarea.is-invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
+    }
 </style>
 @endsection
 
@@ -94,10 +100,10 @@
                         <th style="width:50px">#</th>
                         <th>Name</th>
                         <th>Title</th>
-                        <th>Account</th>
+                        <th>Company</th>
                         <th>Phone</th>
                         <th>Mobile</th>
-                        <th>Status</th>
+                        <th>Lead Status</th>
                         <th>Owner</th>
                         <th class="text-center" style="width:120px">Action</th>
                     </tr>
@@ -172,7 +178,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="leadModalTitle">Tambah Lead</h6>
+                <h6 class="modal-title" id="leadModalTitle">Add Lead</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
@@ -187,7 +193,7 @@
                         <div class="lead-form-section-body">
                             <div class="lead-form-row">
                                 <div class="form-group small">
-                                    <label>Lead Status *</label>
+                                    <label>Lead Status <span class="text-danger">*</span></label>
                                     <select name="lead_status" id="lead-status">
                                         <option value="New">New</option>
                                         <option value="Contacted">Contacted</option>
@@ -196,22 +202,21 @@
                                     </select>
                                 </div>
                                 <div class="form-group small">
-                                    <label>Salutation *</label>
+                                    <label>Salutation <span class="text-danger">*</span></label>
                                     <select name="salutation" id="lead-salutation">
                                         <option value="">—</option>
                                         <option value="Bapak">Bapak</option>
                                         <option value="Ibu">Ibu</option>
-                                        <option value="Saudara">Saudara</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Full Name *</label>
+                                    <label>Full Name <span class="text-danger">*</span></label>
                                     <input type="text" name="full_name" id="lead-full-name" required>
                                 </div>
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Email *</label>
+                                    <label>Email <span class="text-danger">*</span></label>
                                     <input type="email" name="email" id="lead-email">
                                 </div>
                                 <div class="form-group">
@@ -221,7 +226,7 @@
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Job Title *</label>
+                                    <label>Job Title <span class="text-danger">*</span></label>
                                     <select name="job_titles_id" id="lead-job-title">
                                         <option value="">— Pilih —</option>
                                         @foreach($jobTitles as $jt)
@@ -230,7 +235,7 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Department *</label>
+                                    <label>Department <span class="text-danger">*</span></label>
                                     <select name="divisions_id" id="lead-division">
                                         <option value="">— Pilih —</option>
                                         @foreach($divisions as $div)
@@ -297,7 +302,7 @@
                         <div class="lead-form-section-body">
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Title *</label>
+                                    <label>Title <span class="text-danger">*</span></label>
                                     <input type="text" name="lead_title" id="lead-title-acc">
                                 </div>
                                 <div class="form-group">
@@ -307,7 +312,7 @@
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Segmentation *</label>
+                                    <label>Segmentation <span class="text-danger">*</span></label>
                                     <select name="segmentation_id" id="lead-segmentation">
                                         <option value="">— Pilih —</option>
                                         @foreach($segmentations as $seg)
@@ -316,7 +321,7 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Account Type *</label>
+                                    <label>Account Type <span class="text-danger">*</span></label>
                                     <select name="account_types_id" id="lead-account-type">
                                         <option value="">— Pilih —</option>
                                         @foreach($accountTypes as $at)
@@ -409,7 +414,7 @@
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group small">
-                                    <label>Follow Up Date *</label>
+                                    <label>Follow Up Date <span class="text-danger">*</span></label>
                                     <input type="date" name="lead_follow_up_date" id="lead-follow-up">
                                 </div>
                                 <div class="form-group">
@@ -427,9 +432,9 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-lead">
-                    <i class="fa fa-save me-1"></i> Simpan
+                    <i class="fa fa-save me-1"></i> Save
                 </button>
             </div>
         </div>
@@ -452,6 +457,7 @@ function resetLeadForm() {
         s.classList.remove('open');
     });
     document.querySelector('.lead-form-section').classList.add('open');
+    $('#lead-form .is-invalid').removeClass('is-invalid');
 }
 
 function openCreateModal() {
@@ -463,10 +469,12 @@ function openCreateModal() {
     leadModalInstance.show();
 }
 
-$('#btn-save-lead').on('click', function() {
+$(document).on('click', '#btn-save-lead', function() {
     const $btn = $(this);
     const editId = $('#lead-edit-id').val();
     const isEdit = !!editId;
+
+    $('#lead-form .is-invalid').removeClass('is-invalid');
 
     const validations = [
         { field: '#lead-status', label: 'Lead Status' },
@@ -486,6 +494,11 @@ $('#btn-save-lead').on('click', function() {
         const $el = $(v.field);
         const val = $el.val() ? $el.val().trim() : '';
         if (!val) {
+            $el.addClass('is-invalid');
+            const section = $el.closest('.lead-form-section');
+            if (section.length && !section.hasClass('open')) {
+                section.addClass('open');
+            }
             toastr.error(v.label + ' wajib diisi.');
             $el.focus();
             return;
@@ -529,6 +542,10 @@ $('#btn-save-lead').on('click', function() {
             }
         }
     });
+});
+
+$(document).on('change input', '#lead-form input.is-invalid, #lead-form select.is-invalid', function() {
+    $(this).removeClass('is-invalid');
 });
 
 $(document).on('click', '.btn-delete-lead', function() {

@@ -52,7 +52,7 @@ class LeadsManagementController extends Controller
     {
         $validated = $request->validate([
             'lead_status' => 'required|in:New,Contacted,Qualified,Unqualified',
-            'salutation' => 'required|in:Ibu,Bapak,Saudara',
+            'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:100',
             'mobile' => 'nullable|string|max:30',
@@ -115,6 +115,7 @@ class LeadsManagementController extends Controller
                 'contact_methods_id' => $request->contact_methods_id,
                 'role_in_projects_id' => $request->role_in_projects_id,
                 'contact_owner_id' => Auth::id(),
+                'lead_status' => $request->lead_status,
                 'status' => 'Active',
             ]);
 
@@ -133,6 +134,7 @@ class LeadsManagementController extends Controller
                 'lead_follow_up_date' => $request->lead_follow_up_date,
                 'lead_appoinment' => $request->has('lead_appoinment'),
                 'identification' => $request->has('identification'),
+                
             ]);
 
             DB::commit();
@@ -180,7 +182,7 @@ class LeadsManagementController extends Controller
 
         $validated = $request->validate([
             'lead_status' => 'required|in:New,Contacted,Qualified,Unqualified',
-            'salutation' => 'required|in:Ibu,Bapak,Saudara',
+            'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:100',
             'mobile' => 'nullable|string|max:30',
