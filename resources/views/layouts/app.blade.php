@@ -777,6 +777,7 @@
             .filter-bar .form-control, .filter-bar .form-select { min-width: 100%; }
         }
     </style>
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css">
     @yield('styles')
 </head>
 <body>
@@ -886,6 +887,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.4/toastr.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
     <script>
         // --- Sidebar toggle ---
         const sidebar = document.getElementById('sidebar');

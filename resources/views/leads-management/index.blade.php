@@ -90,86 +90,24 @@
 <div class="card-custom fade-in">
     <div class="card-header-custom">
         <span><i class="fa fa-bullhorn me-2" style="color:var(--accent)"></i>Leads List</span>
-        <span style="font-size:12px;color:var(--text-muted);font-weight:500;">{{ $leads->total() }} total data</span>
     </div>
-    <div class="card-body-custom p-0">
-        <div class="table-responsive">
-            <table class="table table-custom table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th style="width:50px">#</th>
-                        <th>Name</th>
-                        <th>Title</th>
-                        <th>Company</th>
-                        <th>Phone</th>
-                        <th>Mobile</th>
-                        <th>Lead Status</th>
-                        <th>Owner</th>
-                        <th class="text-center" style="width:120px">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($leads as $lead)
-                    <tr>
-                        <td style="color:var(--text-muted);font-weight:500">{{ $loop->iteration + $leads->firstItem() - 1 }}</td>
-                        <td>
-                            <strong style="color:var(--text-primary);font-weight:600">
-                                {{ $lead->accountContact?->full_name ?? '—' }}
-                            </strong>
-                        </td>
-                        <td>{{ $lead->lead_title ?? '—' }}</td>
-                        <td>{{ $lead->accountCompany?->account_name ?? '—' }}</td>
-                        <td>{{ $lead->accountContact?->phone ?? '—' }}</td>
-                        <td>{{ $lead->accountContact?->mobile ?? '—' }}</td>
-                        <td>
-                            @php $ls = $lead->lead_status; @endphp
-                            <span class="status-badge {{ $ls === 'New' ? 'status-pending' : ($ls === 'Qualified' ? 'status-active' : ($ls === 'Unqualified' ? 'status-inactive' : '')) }}"
-                                  style="{{ $ls === 'Contacted' ? 'background:var(--info-soft);color:#1e40af;' : '' }}">
-                                @if($ls === 'Contacted') <i class="fa fa-phone" style="font-size:10px"></i> @endif
-                                {{ $ls }}
-                            </span>
-                        </td>
-                        <td style="color:var(--text-secondary);font-size:13px">{{ $lead->leadOwner?->username ?? '—' }}</td>
-                        <td class="text-center">
-                            <div style="display:flex;gap:5px;justify-content:center">
-                                <a href="{{ route('leads-management.show', $lead->id) }}" class="btn-icon" title="Detail">
-                                    <i class="fa fa-eye"></i>
-                                </a>
-                                @if($canUpdate)
-                                <a href="{{ route('leads-management.edit', $lead->id) }}" class="btn-icon" title="Edit">
-                                    <i class="fa fa-pen"></i>
-                                </a>
-                                @endif
-                                @if($canDelete)
-                                <button type="button" class="btn-icon danger btn-delete-lead" title="Hapus" data-id="{{ $lead->id }}">
-                                    <i class="fa fa-trash-can"></i>
-                                </button>
-                                @endif
-                            </div>
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="9">
-                            <div class="empty-state">
-                                <i class="fa fa-bullhorn"></i>
-                                <p>Belum ada data leads.</p>
-                            </div>
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+    <div class="card-body-custom p-2">
+        <table id="leads-table" class="table table-custom align-middle mb-0" style="width:100%">
+            <thead>
+                <tr>
+                    <th style="width:50px">#</th>
+                    <th>Name</th>
+                    <th>Title</th>
+                    <th>Company</th>
+                    <th>Phone</th>
+                    <th>Mobile</th>
+                    <th>Lead Status</th>
+                    <th>Owner</th>
+                    <th class="text-center" style="width:120px">Action</th>
+                </tr>
+            </thead>
+        </table>
     </div>
-    @if ($leads->hasPages())
-    <div style="padding:14px 22px;border-top:1px solid var(--card-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <span style="font-size:12.5px;color:var(--text-muted);font-weight:500">
-            Menampilkan {{ $leads->firstItem() }}–{{ $leads->lastItem() }} dari {{ $leads->total() }}
-        </span>
-        <div>{{ $leads->links() }}</div>
-    </div>
-    @endif
 </div>
 @endsection
 
@@ -246,7 +184,7 @@
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Lead Source</label>
+                                    <label>Lead Source <span class="text-danger">*</span></label>
                                     <select name="source_id" id="lead-source">
                                         <option value="">— Pilih —</option>
                                         @foreach($sources as $src)
@@ -445,6 +383,12 @@
 @section('scripts')
 <script>
 let leadModalInstance = null;
+let leadsTable = null;
+
+const leadsCanUpdate = {{ $canUpdate ? 'true' : 'false' }};
+const leadsCanDelete = {{ $canDelete ? 'true' : 'false' }};
+const showUrl = '{{ route("leads-management.show", "__ID__") }}';
+const editUrl = '{{ route("leads-management.edit", "__ID__") }}';
 
 function toggleLeadSection(header) {
     header.closest('.lead-form-section').classList.toggle('open');
@@ -469,6 +413,68 @@ function openCreateModal() {
     leadModalInstance.show();
 }
 
+function initLeadsTable() {
+    if (leadsTable) {
+        leadsTable.destroy();
+    }
+
+    leadsTable = $('#leads-table').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: '{{ route("leads-management.data") }}',
+        columns: [
+            { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
+            { data: 'full_name' },
+            { data: 'lead_title' },
+            { data: 'account_name' },
+            { data: 'phone' },
+            { data: 'mobile' },
+            { data: 'status_badge' },
+            { data: 'owner_name' },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(data, type, row) {
+                    var html = '<div style="display:flex;gap:5px;justify-content:center">';
+                    html += '<a href="' + showUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
+                    if (leadsCanUpdate) {
+                        html += ' <a href="' + editUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
+                    }
+                    if (leadsCanDelete) {
+                        html += ' <button type="button" class="btn-icon danger btn-delete-lead" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                    }
+                    html += '</div>';
+                    return html;
+                }
+            }
+        ],
+        order: [[0, 'asc']],
+        pageLength: 10,
+        lengthMenu: [10, 15, 25, 50, 100],
+        // language: {
+        //     processing: '<i class="fa fa-spinner fa-spin"></i> Loading...',
+        //     search: '',
+        //     searchPlaceholder: 'Search...',
+        //     lengthMenu: '_MENU_',
+        //     info: 'Show _START_–_END_ of _TOTAL_',
+        //     infoEmpty: 'No data available.',
+        //     infoFiltered: '(filtered from _MAX_ total entries)',
+        //     zeroRecords: 'No data found.',
+        //     paginate: {
+        //         first: '<i class="fa fa-angle-double-left"></i>',
+        //         last: '<i class="fa fa-angle-double-right"></i>',
+        //         previous: '<i class="fa fa-angle-left"></i>',
+        //         next: '<i class="fa fa-angle-right"></i>'
+        //     }
+        // },
+        // initComplete: function() {
+        //     $('.dataTables_filter input').attr('placeholder', 'Search...');
+        // }
+    });
+}
+
 $(document).on('click', '#btn-save-lead', function() {
     const $btn = $(this);
     const editId = $('#lead-edit-id').val();
@@ -483,6 +489,7 @@ $(document).on('click', '#btn-save-lead', function() {
         { field: '#lead-email', label: 'Email' },
         { field: '#lead-job-title', label: 'Job Title' },
         { field: '#lead-division', label: 'Department' },
+        { field: '#lead-source', label: 'Lead Source' },
         { field: '#lead-title-acc', label: 'Title' },
         { field: '#lead-segmentation', label: 'Segmentation' },
         { field: '#lead-account-type', label: 'Account Type' },
@@ -518,29 +525,43 @@ $(document).on('click', '#btn-save-lead', function() {
     formData.append('_token', '{{ csrf_token() }}');
     if (isEdit) formData.append('_method', 'PUT');
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Menyimpan...');
+    Swal.fire({
+        title: isEdit ? 'Update Lead?' : 'Save Lead?',
+        text: isEdit ? 'Lead data will be updated.' : 'A new lead will be added.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: isEdit ? 'Yes, update!' : 'Yes, save!',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#2563eb',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
 
-    $.ajax({
-        url: url,
-        type: 'POST',
-        data: formData,
-        processData: false,
-        contentType: false,
-        success: function(res) {
-            toastr.success(res.message);
-            if (leadModalInstance) leadModalInstance.hide();
-            setTimeout(function() { location.reload(); }, 500);
-        },
-        error: function(xhr) {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Simpan');
-            var errors = xhr.responseJSON?.errors;
-            if (errors) {
-                var first = Object.values(errors)[0];
-                toastr.error(Array.isArray(first) ? first[0] : first);
-            } else {
-                toastr.error(xhr.responseJSON?.message || 'Gagal menyimpan data.');
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+
+        $.ajax({
+            url: url,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(res) {
+                toastr.success(res.message);
+                if (leadModalInstance) leadModalInstance.hide();
+                if (leadsTable) leadsTable.ajax.reload(null, false);
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                var errors = xhr.responseJSON?.errors;
+                if (errors) {
+                    var first = Object.values(errors)[0];
+                    toastr.error(Array.isArray(first) ? first[0] : first);
+                } else {
+                    toastr.error(xhr.responseJSON?.message || 'Failed to save data.');
+                }
             }
-        }
+        });
     });
 });
 
@@ -551,12 +572,12 @@ $(document).on('change input', '#lead-form input.is-invalid, #lead-form select.i
 $(document).on('click', '.btn-delete-lead', function() {
     const id = $(this).data('id');
     Swal.fire({
-        title: 'Yakin?',
-        text: 'Data lead akan dihapus beserta kontak dan perusahaan terkait.',
+        title: 'Sure to delete this lead?',
+        text: 'This action cannot be undone.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, hapus!',
-        cancelButtonText: 'Batal',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel',
         confirmButtonColor: '#ef4444',
         cancelButtonColor: '#64748b',
         reverseButtons: true,
@@ -568,14 +589,16 @@ $(document).on('click', '.btn-delete-lead', function() {
                 data: { _token: '{{ csrf_token() }}' },
                 success: function(res) {
                     toastr.success(res.message);
-                    setTimeout(function() { location.reload(); }, 500);
+                    if (leadsTable) leadsTable.ajax.reload(null, false);
                 },
                 error: function() {
-                    toastr.error('Gagal menghapus data.');
+                    toastr.error('Failed to delete data.');
                 }
             });
         }
     });
 });
+
+initLeadsTable();
 </script>
 @endsection

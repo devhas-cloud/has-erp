@@ -25,5 +25,6 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::put('/configuration/{table}/{id}', [ConfigurationController::class, 'update'])->name('configuration.update');
     Route::delete('/configuration/{table}/{id}', [ConfigurationController::class, 'destroy'])->name('configuration.destroy');
 
+    Route::get('leads-management/data', [LeadsManagementController::class, 'data'])->name('leads-management.data');
     Route::resource('leads-management', LeadsManagementController::class);
 });

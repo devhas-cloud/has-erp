@@ -25,10 +25,6 @@ class LeadsManagementController extends Controller
 {
     public function index()
     {
-        $leads = Lead::with(['accountContact', 'accountCompany', 'leadOwner', 'source'])
-            ->orderBy('id', 'desc')
-            ->paginate(15);
-
         $jobTitles = JobTitle::where('status', 'Active')->get();
         $divisions = Division::where('status', 'Active')->get();
         $sources = Source::where('status', 'Active')->get();
@@ -42,10 +38,99 @@ class LeadsManagementController extends Controller
         $users = User::all();
 
         return view('leads-management.index', compact(
-            'leads', 'jobTitles', 'divisions', 'sources', 'contactMethods',
+            'jobTitles', 'divisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
             'businessValues', 'interactionLevels', 'users'
         ));
+    }
+
+    public function data(Request $request): JsonResponse
+    {
+        $query = Lead::with(['accountContact', 'accountCompany', 'leadOwner']);
+
+        $recordsTotal = Lead::count();
+
+        $searchValue = $request->input('search.value');
+        if ($searchValue) {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('lead_title', 'like', "%{$searchValue}%")
+                    ->orWhere('lead_status', 'like', "%{$searchValue}%")
+                    ->orWhereHas('accountContact', function ($q) use ($searchValue) {
+                        $q->where('full_name', 'like', "%{$searchValue}%")
+                            ->orWhere('phone', 'like', "%{$searchValue}%")
+                            ->orWhere('mobile', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('accountCompany', function ($q) use ($searchValue) {
+                        $q->where('account_name', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('leadOwner', function ($q) use ($searchValue) {
+                        $q->where('username', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = $query->count();
+
+        $orderColumnIndex = $request->input('order.0.column', 1);
+        $orderDirection = $request->input('order.0.dir', 'desc');
+
+        $columnOrderMap = [
+            2 => 'lead_title',
+            6 => 'lead_status',
+        ];
+
+        if (isset($columnOrderMap[$orderColumnIndex])) {
+            $query->orderBy($columnOrderMap[$orderColumnIndex], $orderDirection);
+        }
+        $query->orderBy('id', $orderDirection === 'desc' ? 'desc' : 'asc');
+
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+
+        $leads = $query->offset($start)->limit($length)->get();
+
+        $data = [];
+        foreach ($leads as $i => $lead) {
+            $data[] = [
+                'DT_RowIndex' => $start + $i + 1,
+                'id' => $lead->id,
+                'full_name' => $lead->accountContact?->full_name ?? '—',
+                'lead_title' => $lead->lead_title ?? '—',
+                'account_name' => $lead->accountCompany?->account_name ?? '—',
+                'phone' => $lead->accountContact?->phone ?? '—',
+                'mobile' => $lead->accountContact?->mobile ?? '—',
+                'status_badge' => $this->renderStatusBadge($lead->lead_status),
+                'owner_name' => $lead->leadOwner?->username ?? '—',
+            ];
+        }
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
+    private function renderStatusBadge(string $status): string
+    {
+        $badgeClass = match ($status) {
+            'New' => 'status-pending',
+            'Qualified' => 'status-active',
+            'Unqualified' => 'status-inactive',
+            default => '',
+        };
+
+        $style = $status === 'Contacted' ? 'background:var(--info-soft);color:#1e40af;' : '';
+        $icon = $status === 'Contacted' ? '<i class="fa fa-phone" style="font-size:10px"></i> ' : '';
+
+        return sprintf(
+            '<span class="status-badge %s" style="%s">%s%s</span>',
+            $badgeClass,
+            $style,
+            $icon,
+            $status
+        );
     }
 
     public function store(Request $request): JsonResponse
@@ -54,11 +139,11 @@ class LeadsManagementController extends Controller
             'lead_status' => 'required|in:New,Contacted,Qualified,Unqualified',
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
-            'email' => 'required|email|max:100',
+            'email' => 'required|email|max:100|unique:account_contacts,email',
             'mobile' => 'nullable|string|max:30',
             'job_titles_id' => 'required|exists:job_titles,id',
             'divisions_id' => 'required|exists:divisions,id',
-            'source_id' => 'nullable|exists:sources,id',
+            'source_id' => 'required|exists:sources,id',
             'contact_methods_id' => 'nullable|exists:contact_methods,id',
             'role_in_projects_id' => 'nullable|exists:role_in_projects,id',
             'unqualified_reason' => 'nullable|string',
@@ -134,21 +219,21 @@ class LeadsManagementController extends Controller
                 'lead_follow_up_date' => $request->lead_follow_up_date,
                 'lead_appoinment' => $request->has('lead_appoinment'),
                 'identification' => $request->has('identification'),
-                
+
             ]);
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Lead berhasil ditambahkan.',
+                'message' => 'Lead successfully added.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal menambahkan lead: '.$e->getMessage(),
+                'message' => 'Failed to add lead: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -261,14 +346,14 @@ class LeadsManagementController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Lead berhasil diupdate.',
+                'message' => 'Lead successfully updated.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengupdate lead: '.$e->getMessage(),
+                'message' => 'Failed to update lead: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -295,12 +380,25 @@ class LeadsManagementController extends Controller
 
     public function destroy($id): JsonResponse
     {
-        $lead = Lead::findOrFail($id);
-        $lead->delete();
+        $lead = Lead::with('accountContact')->findOrFail($id);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Lead berhasil dihapus.',
-        ]);
+        DB::beginTransaction();
+        try {
+            $lead->accountContact?->delete();
+            $lead->delete();
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lead and contact successfully deleted.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete lead.',
+            ], 500);
+        }
     }
 }
