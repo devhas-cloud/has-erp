@@ -3,7 +3,7 @@
 @section('title', 'Edit Lead')
 @section('page-title', 'Edit Lead')
 
-@push('styles')
+@section('styles')
 <style>
     .lead-edit-section { border: 1px solid var(--card-border); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; }
     .lead-edit-section-header { padding: 12px 18px; background: #f8fafc; border-bottom: 1px solid var(--card-border); font-weight: 700; font-size: 13.5px; }
@@ -17,7 +17,7 @@
     .field-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; padding: 6px 12px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
     .field-check input { width: auto; margin: 0; }
 </style>
-@endpush
+@endsection
 
 @section('content')
 <div class="page-header">

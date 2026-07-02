@@ -10,6 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             DivisionsTableSeeder::class,
+            RolesTableSeeder::class,
             ModulesTableSeeder::class,
             JobTitlesTableSeeder::class,
             SourcesTableSeeder::class,
@@ -23,6 +24,9 @@ class DatabaseSeeder extends Seeder
             AccountTypesTableSeeder::class,
             UsersTableSeeder::class,
             UserAccessControlsTableSeeder::class,
+            TaskCategoriesTableSeeder::class,
+            AccountCompanySeeder::class,
+            AccountContactSeeder::class,
         ]);
     }
 }

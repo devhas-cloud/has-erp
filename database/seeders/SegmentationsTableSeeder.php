@@ -18,7 +18,10 @@ class SegmentationsTableSeeder extends Seeder
         ];
 
         foreach ($segments as $segment) {
-            Segmentation::create($segment);
+            Segmentation::firstOrCreate(
+                ['segmentation_name' => $segment['segmentation_name']],
+                $segment
+            );
         }
     }
 }

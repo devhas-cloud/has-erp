@@ -17,7 +17,10 @@ class AccountTypesTableSeeder extends Seeder
         ];
 
         foreach ($types as $type) {
-            AccountType::create($type);
+            AccountType::firstOrCreate(
+                ['type_name' => $type['type_name']],
+                $type
+            );
         }
     }
 }

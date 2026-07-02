@@ -18,7 +18,10 @@ class BusinessValuesTableSeeder extends Seeder
         ];
 
         foreach ($values as $value) {
-            BusinessValue::create($value);
+            BusinessValue::firstOrCreate(
+                ['value_name' => $value['value_name']],
+                $value
+            );
         }
     }
 }

@@ -12,10 +12,13 @@ class TypesAccountsCompaniesTableSeeder extends Seeder
         $types = [
             ['type_name' => 'PT', 'description' => 'Perseroan Terbatas', 'status' => 'Active'],
             ['type_name' => 'CV', 'description' => 'Commanditaire Vennootschap', 'status' => 'Active'],
-      ];
+        ];
 
         foreach ($types as $type) {
-            TypesAccountsCompany::create($type);
+            TypesAccountsCompany::firstOrCreate(
+                ['type_name' => $type['type_name']],
+                $type
+            );
         }
     }
 }

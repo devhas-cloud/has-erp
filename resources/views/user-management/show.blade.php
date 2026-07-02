@@ -256,6 +256,23 @@
                     </div>
                 </div>
                 <div class="detail-row">
+                    <div class="detail-icon"><i class="fa-solid fa-sitemap"></i></div>
+                    <div class="detail-label">Task Role</div>
+                    <div class="detail-value">
+                        @if ($user->hierarchyRole)
+                            <span style="font-weight:700;color:var(--accent)">{{ $user->hierarchyRole->role_name }}</span>
+                            <span style="color:var(--text-muted);font-size:12px;margin-left:6px">
+                                Lv.{{ $user->hierarchyRole->hierarchy_level }}
+                                @if($user->hierarchyRole->is_global_delegator)
+                                    · Global Delegator
+                                @endif
+                            </span>
+                        @else
+                            <span style="color:var(--text-muted)">—</span>
+                        @endif
+                    </div>
+                </div>
+                <div class="detail-row">
                     <div class="detail-icon"><i class="fa-solid fa-cube"></i></div>
                     <div class="detail-label">Modul</div>
                     <div class="detail-value"><span class="count" style="color:var(--accent);font-weight:800;">{{ $totalModules }}</span> modul</div>

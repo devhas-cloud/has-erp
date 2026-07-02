@@ -12,6 +12,8 @@ use App\Models\JobTitle;
 use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
+use App\Models\TaskCategory;
+use App\Models\TaskRole;
 use App\Models\TypesAccountsCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,14 +29,20 @@ class ConfigurationController extends Controller
                 'model' => Division::class,
                 'label' => 'Division',
                 'slug' => 'divisions',
-                'columns' => ['division_name', 'description', 'type', 'status'],
+                'columns' => ['division_name', 'description', 'type', 'whatsapp_group_id', 'status'],
                 'rules' => [
                     'division_name' => 'required|string|max:100',
                     'description' => 'nullable|string',
                     'type' => 'required|in:Internal,External',
+                    'whatsapp_group_id' => 'nullable|string|max:100',
                     'status' => 'required|in:Active,Inactive',
                 ],
                 'extra_fields' => [
+                    'whatsapp_group_id' => [
+                        'label' => 'WhatsApp Group ID',
+                        'type' => 'text',
+                        'default' => null,
+                    ],
                     'type' => [
                         'label' => 'Type',
                         'type' => 'select',
@@ -153,6 +161,53 @@ class ConfigurationController extends Controller
                     'status' => 'required|in:Active,Inactive',
                 ],
             ],
+            'task-roles' => [
+                'model' => TaskRole::class,
+                'label' => 'Task Role',
+                'slug' => 'task-roles',
+                'columns' => ['role_name', 'hierarchy_level', 'is_global_delegator'],
+                'rules' => [
+                    'role_name' => 'required|string|max:50',
+                    'hierarchy_level' => 'required|integer|min:1',
+                    'is_global_delegator' => 'required|in:Yes,No',
+                ],
+                'extra_fields' => [
+                    'hierarchy_level' => [
+                        'label' => 'Hierarchy Level',
+                        'type' => 'number',
+                        'min' => 1,
+                        'default' => 40,
+                    ],
+                    'is_global_delegator' => [
+                        'label' => 'Global Delegator',
+                        'type' => 'select',
+                        'options' => ['No', 'Yes'],
+                        'default' => 'No',
+                    ],
+                ],
+            ],
+            'task-categories' => [
+                'model' => TaskCategory::class,
+                'label' => 'Task Category',
+                'slug' => 'task-categories',
+                'columns' => ['name', 'description', 'division_id'],
+                'rules' => [
+                    'name' => 'required|string|max:50',
+                    'description' => 'nullable|string',
+                    'division_id' => 'nullable|exists:divisions,id',
+                ],
+                'display_map' => [
+                    'division_id' => 'division.division_name',
+                ],
+                'extra_fields' => [
+                    'division_id' => [
+                        'label' => 'Division',
+                        'type' => 'select_fk',
+                        'source' => 'divisions',
+                        'source_key' => 'division_name',
+                    ],
+                ],
+            ],
         ];
     }
 
@@ -179,10 +234,40 @@ class ConfigurationController extends Controller
             $query->where($nameCol, 'like', "%{$search}%");
         }
 
+        $displayMap = $cfg['display_map'] ?? [];
+        $relations = [];
+        foreach ($displayMap as $col => $path) {
+            $relation = explode('.', $path)[0];
+            if (! in_array($relation, $relations)) {
+                $relations[] = $relation;
+            }
+        }
+        if (! empty($relations)) {
+            $query->with($relations);
+        }
+
         $records = $query->orderBy('id', 'desc')->paginate(15);
 
+        $data = $records->items();
+
+        if (! empty($displayMap)) {
+            foreach ($data as $record) {
+                foreach ($displayMap as $col => $path) {
+                    $segments = explode('.', $path);
+                    $value = $record;
+                    foreach ($segments as $seg) {
+                        if ($value === null) {
+                            break;
+                        }
+                        $value = $value->{$seg} ?? null;
+                    }
+                    $record->{$col} = $value ?? $record->{$col};
+                }
+            }
+        }
+
         return response()->json([
-            'data' => $records->items(),
+            'data' => $data,
             'pagination' => [
                 'current_page' => $records->currentPage(),
                 'last_page' => $records->lastPage(),
@@ -193,6 +278,7 @@ class ConfigurationController extends Controller
             ],
             'columns' => $cfg['columns'],
             'label' => $cfg['label'],
+            'display_map' => $cfg['display_map'] ?? null,
         ]);
     }
 

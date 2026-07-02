@@ -11,6 +11,7 @@ class AccountContact extends Model
     protected $fillable = [
         'account_companies_id',
         'full_name',
+        'icon',
         'salutation',
         'email',
         'phone',

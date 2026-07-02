@@ -720,6 +720,23 @@
         .empty-state i { font-size: 40px; opacity: 0.25; margin-bottom: 14px; display: block; }
         .empty-state p { font-size: 14px; font-weight: 500; }
 
+        /* ========== AVATAR ========== */
+        .avatar-circle {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), #34d399);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+            letter-spacing: 0.3px;
+            object-fit: cover;
+        }
+
         /* ========== MODAL ========== */
         .modal-content { border: none; border-radius: var(--radius-lg); box-shadow: 0 24px 48px rgba(0,0,0,0.12); }
         .modal-header { border-bottom: 1px solid var(--card-border); padding: 18px 24px; }
@@ -778,6 +795,9 @@
         }
     </style>
     <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+
     @yield('styles')
 </head>
 <body>
@@ -889,6 +909,8 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
     <script>
         // --- Sidebar toggle ---
         const sidebar = document.getElementById('sidebar');

@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -18,8 +19,11 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
+        'phone_number',
         'division_id',
         'role',
+        'task_role_id',
+        'icon',
     ];
 
     protected $hidden = [
@@ -62,5 +66,22 @@ class User extends Authenticatable
     public function assignedLeads(): HasMany
     {
         return $this->hasMany(Lead::class, 'assigned_to');
+    }
+
+    public function hierarchyRole(): BelongsTo
+    {
+        return $this->belongsTo(TaskRole::class, 'task_role_id');
+    }
+
+    public function createdTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'creator_id');
+    }
+
+    public function assignedTasks(): BelongsToMany
+    {
+        return $this->belongsToMany(Task::class, 'task_assignees')
+            ->withPivot('assigned_at')
+            ->withTimestamps();
     }
 }

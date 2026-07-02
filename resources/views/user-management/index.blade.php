@@ -40,6 +40,7 @@
                         <th>Email</th>
                         <th>Divisi</th>
                         <th>Role</th>
+                        <th>Task Role</th>
                         <th>Dibuat</th>
                         <th class="text-center" style="width:140px">Aksi</th>
                     </tr>
@@ -50,9 +51,11 @@
                         <td style="color:var(--text-muted);font-weight:500">{{ $loop->iteration + $users->firstItem() - 1 }}</td>
                         <td>
                             <div style="display:flex;align-items:center;gap:10px">
-                                <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#34d399);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0;letter-spacing:.3px">
-                                    {{ strtoupper(substr($user->username, 0, 2)) }}
-                                </div>
+                                @if($user->icon)
+                                    <img src="{{ $user->icon }}" class="avatar-circle" alt="" style="background:transparent">
+                                @else
+                                    <div class="avatar-circle">{{ strtoupper(substr($user->username, 0, 2)) }}</div>
+                                @endif
                                 <strong style="color:var(--text-primary);font-weight:600">{{ $user->username }}</strong>
                             </div>
                         </td>
@@ -74,6 +77,15 @@
                                     <i class="fa-solid fa-user" style="font-size:10px"></i>
                                     Staff
                                 </span>
+                            @endif
+                        </td>
+                        <td>
+                            @if ($user->hierarchyRole)
+                                <span class="status-badge" style="background:var(--accent-soft);color:var(--accent)">
+                                    {{ $user->hierarchyRole->role_name }}
+                                </span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
                             @endif
                         </td>
                         <td style="color:var(--text-muted);font-size:13px">{{ $user->created_at->format('d M Y') }}</td>
@@ -100,7 +112,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="empty-state">
                                 <i class="fa-solid fa-users-slash"></i>
                                 <p>Belum ada data user.</p>

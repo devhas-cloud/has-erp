@@ -16,7 +16,10 @@ class InteractionLevelsTableSeeder extends Seeder
         ];
 
         foreach ($levels as $level) {
-            InteractionLevel::create($level);
+            InteractionLevel::firstOrCreate(
+                ['level_name' => $level['level_name']],
+                $level
+            );
         }
     }
 }

@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('account_companies', function (Blueprint $table) {
             $table->id();
             $table->string('account_name', 150);
+            $table->string('icon')->nullable();
             $table->foreignId('sources_id')->nullable()->constrained('sources')->nullOnDelete();
             $table->foreignId('types_accounts_companies_id')->nullable()->constrained('types_accounts_companies')->nullOnDelete();
             $table->string('website', 200)->nullable();

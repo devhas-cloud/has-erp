@@ -12,6 +12,7 @@ class Division extends Model
         'description',
         'type',
         'status',
+        'whatsapp_group_id',
     ];
 
     public function users(): HasMany

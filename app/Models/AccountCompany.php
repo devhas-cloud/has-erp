@@ -10,6 +10,7 @@ class AccountCompany extends Model
 {
     protected $fillable = [
         'account_name',
+        'icon',
         'sources_id',
         'types_accounts_companies_id',
         'website',

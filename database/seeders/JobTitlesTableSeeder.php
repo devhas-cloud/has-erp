@@ -18,7 +18,10 @@ class JobTitlesTableSeeder extends Seeder
         ];
 
         foreach ($titles as $title) {
-            JobTitle::create($title);
+            JobTitle::firstOrCreate(
+                ['title_name' => $title['title_name']],
+                $title
+            );
         }
     }
 }

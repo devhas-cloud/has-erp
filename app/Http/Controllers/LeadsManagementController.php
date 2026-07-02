@@ -15,11 +15,15 @@ use App\Models\Lead;
 use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
+use App\Models\TypesAccountsCompany;
 use App\Models\User;
+use App\Services\LeadImportService;
+use App\Services\XlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class LeadsManagementController extends Controller
 {
@@ -36,11 +40,14 @@ class LeadsManagementController extends Controller
         $businessValues = BusinessValue::where('status', 'Active')->get();
         $interactionLevels = InteractionLevel::where('status', 'Active')->get();
         $users = User::all();
+        $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
+        $typesAccountsCompanies = TypesAccountsCompany::where('status', 'Active')->get();
 
         return view('leads-management.index', compact(
             'jobTitles', 'divisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
-            'businessValues', 'interactionLevels', 'users'
+            'businessValues', 'interactionLevels', 'users', 'accountCompanies',
+            'typesAccountsCompanies'
         ));
     }
 
@@ -95,8 +102,14 @@ class LeadsManagementController extends Controller
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $lead->id,
                 'full_name' => $lead->accountContact?->full_name ?? '—',
+                'initials' => strtoupper(substr($lead->accountContact?->full_name ?? '?', 0, 2)),
+                'icon' => $lead->accountContact?->icon,
+                'name_display' => $lead->accountContact?->full_name ?? '—',
                 'lead_title' => $lead->lead_title ?? '—',
                 'account_name' => $lead->accountCompany?->account_name ?? '—',
+                'company_initials' => strtoupper(substr($lead->accountCompany?->account_name ?? '?', 0, 2)),
+                'company_icon' => $lead->accountCompany?->icon,
+                'company_name_display' => $lead->accountCompany?->account_name ?? '—',
                 'phone' => $lead->accountContact?->phone ?? '—',
                 'mobile' => $lead->accountContact?->mobile ?? '—',
                 'status_badge' => $this->renderStatusBadge($lead->lead_status),
@@ -133,6 +146,32 @@ class LeadsManagementController extends Controller
         );
     }
 
+    public function searchCompanies(Request $request): JsonResponse
+    {
+        $q = $request->get('q', '');
+        $companies = AccountCompany::where('account_name', 'like', "%{$q}%")
+            ->limit(20)
+            ->get();
+
+        $data = $companies->map(fn ($c) => [
+            'id' => $c->id,
+            'text' => $c->account_name,
+            'segmentation_id' => $c->segmentation_id,
+            'account_types_id' => $c->account_types_id,
+            'types_accounts_companies_id' => $c->types_accounts_companies_id,
+            'business_entities_id' => $c->business_entities_id,
+            'business_values_id' => $c->business_values_id,
+            'interaction_levels_id' => $c->interaction_levels_id,
+            'address_billing_street' => $c->address_billing_street,
+            'address_billing_city' => $c->address_billing_city,
+            'address_billing_province' => $c->address_billing_province,
+            'address_billing_postal_code' => $c->address_billing_postal_code,
+            'address_billing_country' => $c->address_billing_country,
+        ]);
+
+        return response()->json(['results' => $data]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -141,6 +180,7 @@ class LeadsManagementController extends Controller
             'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:100|unique:account_contacts,email',
             'mobile' => 'nullable|string|max:30',
+            'phone' => 'nullable|string|max:30',
             'job_titles_id' => 'required|exists:job_titles,id',
             'divisions_id' => 'required|exists:divisions,id',
             'source_id' => 'required|exists:sources,id',
@@ -162,6 +202,8 @@ class LeadsManagementController extends Controller
             'address_zip' => 'nullable|string|max:10',
             'address_country' => 'nullable|string|max:100',
             'end_user' => 'nullable|integer',
+            'types_accounts_companies_id' => 'nullable|exists:types_accounts_companies,id',
+            'account_companies_id' => 'nullable|exists:account_companies,id',
             'lead_can_be_contacted' => 'boolean',
             'lead_follow_up_date' => 'required|date',
             'lead_appoinment' => 'boolean',
@@ -171,29 +213,35 @@ class LeadsManagementController extends Controller
 
         DB::beginTransaction();
         try {
-            $company = AccountCompany::create([
-                'account_name' => $request->company ?: ($request->full_name.' - Company'),
-                'segmentation_id' => $request->segmentation_id,
-                'account_types_id' => $request->account_types_id,
-                'business_entities_id' => $request->business_entities_id,
-                'business_values_id' => $request->business_values_id,
-                'interaction_levels_id' => $request->interaction_levels_id,
-                'address_billing_street' => $request->address_street,
-                'address_billing_city' => $request->address_city,
-                'address_billing_province' => $request->address_province,
-                'address_billing_postal_code' => $request->address_zip,
-                'address_billing_country' => $request->address_country,
-                'end_user' => $request->end_user,
-                'phone' => $request->mobile,
-                'account_owner_id' => Auth::id(),
-                'status' => 'Active',
-            ]);
+            if ($request->filled('account_companies_id')) {
+                $company = AccountCompany::findOrFail($request->account_companies_id);
+            } else {
+                $company = AccountCompany::create([
+                    'account_name' => $request->company ?: ($request->full_name.' - Company'),
+                    'segmentation_id' => $request->segmentation_id,
+                    'account_types_id' => $request->account_types_id,
+                    'types_accounts_companies_id' => $request->types_accounts_companies_id,
+                    'business_entities_id' => $request->business_entities_id,
+                    'business_values_id' => $request->business_values_id,
+                    'interaction_levels_id' => $request->interaction_levels_id,
+                    'address_billing_street' => $request->address_street,
+                    'address_billing_city' => $request->address_city,
+                    'address_billing_province' => $request->address_province,
+                    'address_billing_postal_code' => $request->address_zip,
+                    'address_billing_country' => $request->address_country,
+                    'end_user' => $request->end_user,
+                    'phone' => $request->phone,
+                    'account_owner_id' => Auth::id(),
+                    'status' => 'Active',
+                ]);
+            }
 
             $contact = AccountContact::create([
                 'account_companies_id' => $company->id,
                 'full_name' => $request->full_name,
                 'salutation' => $request->salutation,
                 'email' => $request->email,
+                'phone' => $request->phone,
                 'mobile' => $request->mobile,
                 'job_titles_id' => $request->job_titles_id,
                 'divisions_id' => $request->divisions_id,
@@ -292,6 +340,7 @@ class LeadsManagementController extends Controller
             'address_zip' => 'nullable|string|max:10',
             'address_country' => 'nullable|string|max:100',
             'end_user' => 'nullable|integer',
+            'account_companies_id' => 'nullable|exists:account_companies,id',
             'lead_can_be_contacted' => 'boolean',
             'lead_follow_up_date' => 'required|date',
             'lead_appoinment' => 'boolean',
@@ -301,26 +350,34 @@ class LeadsManagementController extends Controller
 
         DB::beginTransaction();
         try {
-            $lead->accountCompany->update([
-                'account_name' => $request->company ?: $lead->accountCompany->account_name,
-                'segmentation_id' => $request->segmentation_id,
-                'account_types_id' => $request->account_types_id,
-                'business_entities_id' => $request->business_entities_id,
-                'business_values_id' => $request->business_values_id,
-                'interaction_levels_id' => $request->interaction_levels_id,
-                'address_billing_street' => $request->address_street,
-                'address_billing_city' => $request->address_city,
-                'address_billing_province' => $request->address_province,
-                'address_billing_postal_code' => $request->address_zip,
-                'address_billing_country' => $request->address_country,
-                'end_user' => $request->end_user,
-                'phone' => $request->mobile,
-            ]);
+            if ($request->filled('account_companies_id')) {
+                $company = AccountCompany::findOrFail($request->account_companies_id);
+                $lead->accountCompany()->associate($company);
+                $lead->save();
+            } else {
+                $lead->accountCompany->update([
+                    'account_name' => $request->company ?: $lead->accountCompany->account_name,
+                    'segmentation_id' => $request->segmentation_id,
+                    'account_types_id' => $request->account_types_id,
+                    'types_accounts_companies_id' => $request->types_accounts_companies_id,
+                    'business_entities_id' => $request->business_entities_id,
+                    'business_values_id' => $request->business_values_id,
+                    'interaction_levels_id' => $request->interaction_levels_id,
+                    'address_billing_street' => $request->address_street,
+                    'address_billing_city' => $request->address_city,
+                    'address_billing_province' => $request->address_province,
+                    'address_billing_postal_code' => $request->address_zip,
+                    'address_billing_country' => $request->address_country,
+                    'end_user' => $request->end_user,
+                    'phone' => $request->phone,
+                ]);
+            }
 
             $lead->accountContact->update([
                 'full_name' => $request->full_name,
                 'salutation' => $request->salutation,
                 'email' => $request->email,
+                'phone' => $request->phone,
                 'mobile' => $request->mobile,
                 'job_titles_id' => $request->job_titles_id,
                 'divisions_id' => $request->divisions_id,
@@ -370,6 +427,7 @@ class LeadsManagementController extends Controller
             'accountCompany.businessEntity',
             'accountCompany.businessValue',
             'accountCompany.interactionLevel',
+            'accountCompany.typesAccountsCompany',
             'leadOwner',
             'assignedTo',
             'source',
@@ -400,5 +458,54 @@ class LeadsManagementController extends Controller
                 'message' => 'Failed to delete lead.',
             ], 500);
         }
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:5120',
+        ]);
+
+        $path = $request->file('file')->storeAs('imports', 'leads_'.time().'.csv');
+
+        try {
+            $service = new LeadImportService;
+            $result = $service->import(
+                storage_path('app/private/'.$path),
+                Auth::id()
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Import selesai: {$result['success']} berhasil, {$result['failed']} gagal dari ".($result['success'] + $result['failed']).' data.',
+                'result' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal import: '.$e->getMessage(),
+            ], 500);
+        } finally {
+            Storage::delete($path);
+        }
+    }
+
+    public function downloadTemplate()
+    {
+        $path = storage_path('app/private/templates/lead_import_template.xlsx');
+
+        $dir = dirname($path);
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $references = LeadImportService::getReferenceData();
+
+        $generator = new XlsxTemplateGenerator;
+        $generator->generate($references, $path);
+
+        return response()->download($path, 'Lead_Import_Template.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 }

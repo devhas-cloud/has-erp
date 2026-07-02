@@ -181,6 +181,11 @@
                     @error('email') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
                 <div class="col-md-6">
+                    <label class="form-label">Nomor Telepon</label>
+                    <input type="text" name="phone_number" class="form-control @error('phone_number') is-invalid @enderror" value="{{ old('phone_number') }}" placeholder="08xxxxxxxxxx">
+                    @error('phone_number') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
+                <div class="col-md-6">
                     <label class="form-label">Password<span class="field-required">*</span></label>
                     <div class="pw-wrapper">
                         <input type="password" name="password" id="inputPassword" class="form-control @error('password') is-invalid @enderror" placeholder="Minimal 8 karakter" required>
@@ -202,6 +207,18 @@
                         @endforeach
                     </select>
                     @error('division_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Task Role</label>
+                    <select name="task_role_id" class="form-select @error('task_role_id') is-invalid @enderror">
+                        <option value="">— Pilih Task Role —</option>
+                        @foreach ($taskRoles as $tr)
+                            <option value="{{ $tr->id }}" {{ old('task_role_id') == $tr->id ? 'selected' : '' }}>
+                                {{ $tr->role_name }} (Lv.{{ $tr->hierarchy_level }})
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('task_role_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Role<span class="field-required">*</span></label>
@@ -296,47 +313,51 @@
 </div>
 @endsection
 
-@push('scripts')
+@section('scripts')
 <script>
-// Toggle password visibility
-document.getElementById('togglePassword').addEventListener('click', function() {
-    const input = document.getElementById('inputPassword');
-    const icon = this.querySelector('i');
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.classList.replace('fa-eye', 'fa-eye-slash');
-    } else {
-        input.type = 'password';
-        icon.classList.replace('fa-eye-slash', 'fa-eye');
-    }
-});
+$(function() {
+    // Toggle password visibility
+    $('#togglePassword').on('click', function() {
+        var $input = $('#inputPassword');
+        var $icon = $(this).find('i');
+        if ($input.attr('type') === 'password') {
+            $input.attr('type', 'text');
+            $icon.removeClass('fa-eye').addClass('fa-eye-slash');
+        } else {
+            $input.attr('type', 'password');
+            $icon.removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+    });
 
-// Check all column in access control table
-document.querySelectorAll('.check-all-col').forEach(function(cb) {
-    cb.addEventListener('change', function() {
-        const col = this.dataset.col;
-        this.closest('table').querySelectorAll('tbody .' + col).forEach(function(r) {
-            r.checked = cb.checked;
+    // Check all column in access control table
+    $(document).on('change', '.check-all-col', function() {
+        var col = $(this).data('col');
+        var checked = this.checked;
+        var $section = $(this).closest('.ac-section');
+        if ($section.length) {
+            $section.find('tbody input.' + col).each(function() {
+                this.checked = checked;
+            });
+        }
+    });
+
+    // Submit confirmation
+    $('#btn-submit').on('click', function(e) {
+        e.preventDefault();
+        var $form = $('#form-user');
+        Swal.fire({
+            title: 'Simpan Data?',
+            text: 'Pastikan data user dan hak akses sudah benar.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, simpan',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#10b981',
+            cancelButtonColor: '#64748b',
+        }).then(function(result) {
+            if (result.isConfirmed) $form.submit();
         });
     });
 });
-
-// Submit confirmation
-document.getElementById('btn-submit').addEventListener('click', function(e) {
-    e.preventDefault();
-    const form = document.getElementById('form-user');
-    Swal.fire({
-        title: 'Simpan Data?',
-        text: 'Pastikan data user dan hak akses sudah benar.',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Ya, simpan',
-        cancelButtonText: 'Batal',
-        confirmButtonColor: '#10b981',
-        cancelButtonColor: '#64748b',
-    }).then(function(result) {
-        if (result.isConfirmed) form.submit();
-    });
-});
 </script>
-@endpush
+@endsection

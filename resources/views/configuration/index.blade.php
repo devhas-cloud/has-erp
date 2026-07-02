@@ -398,24 +398,19 @@
                         <label for="field-name" class="form-label" id="label-name">Name</label>
                         <input type="text" class="form-control" id="field-name" name="name" required>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3" id="field-desc-group">
                         <label for="field-description" class="form-label">Description</label>
                         <textarea class="form-control" id="field-description" name="description" rows="2"></textarea>
                     </div>
-                    <div class="mb-3">
+                    <div id="dynamic-extra-fields"></div>
+                    <div class="mb-3" id="field-status-group">
                         <label for="field-status" class="form-label">Status</label>
                         <select class="form-select" id="field-status" name="status" required>
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                         </select>
                     </div>
-                    <div class="mb-3" id="extra-fields-container" style="display:none;">
-                        <label for="field-extra-type" class="form-label" id="label-extra-type">Type</label>
-                        <select class="form-select" id="field-extra-type" name="extra_type">
-                            <option value="Internal">Internal</option>
-                            <option value="External">External</option>
-                        </select>
-                    </div>
+
                 </form>
             </div>
             <div class="modal-footer">
@@ -545,15 +540,22 @@
             const nameCol = columns[0];
 
             let rows = '';
-            data.forEach(function(item, i) {
-                const cacheKey = table + '_' + item.id;
-                itemsCache[cacheKey] = {
-                    id: item.id,
-                    name: item[nameCol] || '',
-                    description: item.description || '',
-                    status: item.status || 'Active',
-                    type: item.type || null
-                };
+                    data.forEach(function(item, i) {
+                        const cacheKey = table + '_' + item.id;
+                        const cacheEntry = {
+                            id: item.id,
+                            name: item[nameCol] || '',
+                            description: item.description || '',
+                            status: item.status || 'Active',
+                            type: item.type || null
+                        };
+                        const cfg = configMeta[table];
+                        if (cfg && cfg.extra_fields) {
+                            Object.keys(cfg.extra_fields).forEach(function(k) {
+                                cacheEntry[k] = item[k] !== undefined ? item[k] : null;
+                            });
+                        }
+                        itemsCache[cacheKey] = cacheEntry;
 
                 rows += '<tr>';
                 rows += '<td>' + (baseFrom + i + 1) + '</td>';
@@ -670,8 +672,14 @@
                 btnSave.disabled = false;
                 btnSave.innerHTML = '<i class="fa-solid fa-check"></i> Simpan';
             }
-            const extraContainer = getElement('extra-fields-container');
-            if (extraContainer) extraContainer.style.display = 'none';
+
+            const descGroup = getElement('field-desc-group');
+            if (descGroup) descGroup.style.display = '';
+            const statusGroup = getElement('field-status-group');
+            if (statusGroup) statusGroup.style.display = '';
+
+            const extraContainer = getElement('dynamic-extra-fields');
+            if (extraContainer) extraContainer.innerHTML = '';
         }
 
         function openModal(mode, table, itemData) {
@@ -696,15 +704,22 @@
             if (activeTable) activeTable.value = table;
             if (labelName) labelName.textContent = colName;
 
+            const hasDesc = cfg && cfg.rules && Object.keys(cfg.rules).includes('description');
+            const hasStatus = cfg && cfg.rules && Object.keys(cfg.rules).includes('status');
+            const descGroup = getElement('field-desc-group');
+            const statusGroup = getElement('field-status-group');
+            if (descGroup) descGroup.style.display = hasDesc ? '' : 'none';
+            if (statusGroup) statusGroup.style.display = hasStatus ? '' : 'none';
+
             if (mode === 'create') {
                 if (modalTitle) modalTitle.textContent = 'Tambah ' + label;
             } else if (mode === 'edit' && itemData) {
                 if (modalTitle) modalTitle.textContent = 'Edit ' + label;
                 if (editId) editId.value = itemData.id;
                 if (fieldName) fieldName.value = itemData.name || '';
-                if (fieldDesc) fieldDesc.value = itemData.description || '';
+                if (hasDesc && fieldDesc) fieldDesc.value = itemData.description || '';
 
-                if (fieldStatus) {
+                if (hasStatus && fieldStatus) {
                     const statusValue = itemData.status || 'Active';
                     for (let i = 0; i < fieldStatus.options.length; i++) {
                         if (fieldStatus.options[i].value === statusValue) {
@@ -715,18 +730,7 @@
                 }
             }
 
-            const extraCfg = cfg && cfg.extra_fields ? cfg.extra_fields : null;
-            const extraContainer = getElement('extra-fields-container');
-            if (extraContainer) {
-                extraContainer.style.display = extraCfg ? 'block' : 'none';
-            }
-            if (extraCfg && extraCfg.type) {
-                const typeSelect = getElement('field-extra-type');
-                if (typeSelect) {
-                    const defVal = extraCfg.type.default || 'Internal';
-                    typeSelect.value = (mode === 'edit' && itemData && itemData.type) ? itemData.type : defVal;
-                }
-            }
+            renderExtraFields(cfg, mode, itemData);
 
             const modalEl = getElement('configModal');
             if (!modalEl) {
@@ -743,6 +747,103 @@
             setTimeout(function() {
                 if (fieldName) fieldName.focus();
             }, 300);
+        }
+
+        function renderExtraFields(cfg, mode, itemData) {
+            const container = getElement('dynamic-extra-fields');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const extraFields = cfg && cfg.extra_fields ? cfg.extra_fields : null;
+            if (!extraFields) return;
+
+            Object.keys(extraFields).forEach(function(key) {
+                const ef = extraFields[key];
+                const fieldId = 'extra-' + key;
+                const div = document.createElement('div');
+                div.className = 'mb-3';
+
+                const label = document.createElement('label');
+                label.className = 'form-label';
+                label.setAttribute('for', fieldId);
+                label.textContent = ef.label;
+                div.appendChild(label);
+
+                let input;
+
+                if (ef.type === 'select' && ef.options) {
+                    input = document.createElement('select');
+                    input.className = 'form-select';
+                    input.id = fieldId;
+                    input.name = key;
+                    ef.options.forEach(function(opt) {
+                        const option = document.createElement('option');
+                        option.value = opt;
+                        option.textContent = opt;
+                        input.appendChild(option);
+                    });
+                    if (mode === 'edit' && itemData && itemData[key] !== undefined) {
+                        input.value = itemData[key];
+                    } else if (ef.default !== undefined) {
+                        input.value = ef.default;
+                    }
+                } else if (ef.type === 'number') {
+                    input = document.createElement('input');
+                    input.type = 'number';
+                    input.className = 'form-control';
+                    input.id = fieldId;
+                    input.name = key;
+                    if (ef.min !== undefined) input.min = ef.min;
+                    if (mode === 'edit' && itemData && itemData[key] !== undefined) {
+                        input.value = itemData[key];
+                    } else if (ef.default !== undefined) {
+                        input.value = ef.default;
+                    }
+                } else if (ef.type === 'select_fk' && ef.source) {
+                    input = document.createElement('select');
+                    input.className = 'form-select';
+                    input.id = fieldId;
+                    input.name = key;
+                    var optEmpty = document.createElement('option');
+                    optEmpty.value = '';
+                    optEmpty.textContent = '— Select —';
+                    input.appendChild(optEmpty);
+                    div.appendChild(label);
+                    div.appendChild(input);
+                    container.appendChild(div);
+
+                    $.get('{{ route("configuration.list", ["table" => "__FK__"]) }}'.replace('__FK__', ef.source), { per_page: 100 }, function(res) {
+                        var sel = document.getElementById(fieldId);
+                        if (!sel) return;
+                        var nameCol = res.columns[0];
+                        res.data.forEach(function(item) {
+                            var opt = document.createElement('option');
+                            opt.value = item.id;
+                            opt.textContent = item[nameCol];
+                            sel.appendChild(opt);
+                        });
+                        if (mode === 'edit' && itemData && itemData[key] !== undefined) {
+                            sel.value = itemData[key];
+                        }
+                    });
+
+                    return;
+                } else {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'form-control';
+                    input.id = fieldId;
+                    input.name = key;
+                    if (mode === 'edit' && itemData && itemData[key] !== undefined) {
+                        input.value = itemData[key];
+                    } else if (ef.default !== undefined) {
+                        input.value = ef.default;
+                    }
+                }
+
+                div.appendChild(input);
+                container.appendChild(div);
+            });
         }
 
         function closeModal() {
@@ -881,6 +982,16 @@
                 data.type = $('#field-extra-type').val();
             }
 
+            if (cfg && cfg.extra_fields) {
+                Object.keys(cfg.extra_fields).forEach(function(key) {
+                    var ef = cfg.extra_fields[key];
+                    var input = document.getElementById('extra-' + key);
+                    if (input) {
+                        data[key] = input.value;
+                    }
+                });
+            }
+
             let url, method;
             if (editId) {
                 url = routes.update.replace('__TABLE__', table).replace('__ID__', editId);
@@ -901,13 +1012,19 @@
                     toastr.success(res.message || 'Data berhasil disimpan.');
 
                     if (editId) {
-                        itemsCache[table + '_' + editId] = {
+                        var cacheEntry = {
                             id: editId,
                             name: nameVal,
                             description: data.description,
                             status: data.status,
                             type: data.type || null
                         };
+                        if (cfg && cfg.extra_fields) {
+                            Object.keys(cfg.extra_fields).forEach(function(k) {
+                                cacheEntry[k] = data[k];
+                            });
+                        }
+                        itemsCache[table + '_' + editId] = cacheEntry;
                     }
 
                     closeModal();

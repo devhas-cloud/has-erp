@@ -18,7 +18,10 @@ class ContactMethodsTableSeeder extends Seeder
         ];
 
         foreach ($methods as $method) {
-            ContactMethod::create($method);
+            ContactMethod::firstOrCreate(
+                ['method_name' => $method['method_name']],
+                $method
+            );
         }
     }
 }

@@ -18,7 +18,10 @@ class RoleInProjectsTableSeeder extends Seeder
         ];
 
         foreach ($roles as $role) {
-            RoleInProject::create($role);
+            RoleInProject::firstOrCreate(
+                ['role_name' => $role['role_name']],
+                $role
+            );
         }
     }
 }

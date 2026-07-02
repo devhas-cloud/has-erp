@@ -13,12 +13,38 @@ class UsersTableSeeder extends Seeder
     {
         $itDivision = Division::where('division_name', 'IT')->first();
 
-        User::create([
-            'username' => 'superadmin',
-            'email' => 'superadmin@erp.local',
-            'password' => Hash::make('password'),
-            'division_id' => $itDivision ? $itDivision->id : null,
-            'role' => 'Admin',
-        ]);
+        User::firstOrCreate(
+            ['username' => 'superadmin'],
+            [
+                'email' => 'superadmin@erp.local',
+                'password' => Hash::make('password'),
+                'division_id' => $itDivision ? $itDivision->id : null,
+                'role' => 'Admin',
+                'task_role_id' => 1,
+            ]
+        );
+
+        User::firstOrCreate(
+            ['username' => 'abu'],
+            [
+                'email' => 'abu@erp.local',
+                'password' => Hash::make('password'),
+                'division_id' => $itDivision ? $itDivision->id : null,
+                'role' => 'Staff',
+                'task_role_id' => 3,
+            ]
+        );
+
+        User::firstOrCreate(
+            ['username' => 'ichsan'],
+            [
+                'email' => 'ichsan@erp.local',
+                'password' => Hash::make('password'),
+                'division_id' => $itDivision ? $itDivision->id : null,
+                'role' => 'Manager',
+                'task_role_id' => 2,
+            ]
+        );
+
     }
 }

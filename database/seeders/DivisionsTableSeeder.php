@@ -18,7 +18,10 @@ class DivisionsTableSeeder extends Seeder
         ];
 
         foreach ($divisions as $division) {
-            Division::create($division);
+            Division::firstOrCreate(
+                ['division_name' => $division['division_name']],
+                $division
+            );
         }
     }
 }

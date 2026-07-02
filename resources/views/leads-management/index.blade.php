@@ -68,6 +68,10 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
     }
+    select.is-invalid + .select2-container .select2-selection {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
+    }
 </style>
 @endsection
 
@@ -79,6 +83,14 @@
     </div>
     @if($canCreate)
     <div class="page-header-actions">
+        {{-- <a href="{{ route('leads-management.template') }}" class="btn btn-outline-secondary btn-sm me-2" title="Download Template">
+            <i class="fa fa-download"></i>
+            <span>Template</span>
+        </a> --}}
+        <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="openImportModal()">
+            <i class="fa fa-upload"></i>
+            <span>Import</span>
+        </button>
         <button type="button" class="btn-accent" onclick="openCreateModal()">
             <i class="fa fa-plus"></i>
             <span>Add Lead</span>
@@ -160,6 +172,10 @@
                                 <div class="form-group">
                                     <label>Mobile</label>
                                     <input type="text" name="mobile" id="lead-mobile">
+                                </div>
+                                <div class="form-group">
+                                    <label>Phone</label>
+                                    <input type="text" name="phone" id="lead-phone">
                                 </div>
                             </div>
                             <div class="lead-form-row">
@@ -245,10 +261,21 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Company</label>
-                                    <input type="text" name="company" id="lead-company">
+                                    <select id="lead-company" style="width:100%"></select>
+                                    <input type="hidden" name="account_companies_id" id="lead-company-id">
                                 </div>
+
                             </div>
                             <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Field Type <span class="text-danger">*</span></label>
+                                    <select name="types_accounts_companies_id" id="lead-field-type">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($typesAccountsCompanies as $tac)
+                                        <option value="{{ $tac->id }}">{{ $tac->type_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
                                 <div class="form-group">
                                     <label>Segmentation <span class="text-danger">*</span></label>
                                     <select name="segmentation_id" id="lead-segmentation">
@@ -324,7 +351,12 @@
                             <div class="lead-form-row">
                                 <div class="form-group small">
                                     <label>End User</label>
-                                    <input type="number" name="end_user" id="lead-end-user" placeholder="0">
+                                    <select name="end_user" id="lead-end-user">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($accountCompanies as $ac)
+                                        <option value="{{ $ac->id }}">{{ $ac->account_name }}</option>
+                                        @endforeach
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -380,6 +412,45 @@
 </div>
 @endpush
 
+@push('modals')
+<div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Import Leads</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="fa fa-file-excel" style="font-size:40px;color:#217346"></i>
+                    <p class="mt-2 mb-0" style="font-size:13px;color:var(--text-muted)">
+                        Download template, isi data, lalu upload file CSV.
+                    </p>
+                    <a href="{{ route('leads-management.template') }}" class="btn btn-sm btn-outline-success mt-2">
+                        <i class="fa fa-download me-1"></i> Download Template (.xlsx)
+                    </a>
+                </div>
+                <hr>
+                <form id="import-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:12px;font-weight:600">Pilih File CSV</label>
+                        <input type="file" name="file" id="import-file" class="form-control" accept=".csv,.txt" required>
+                        <small class="text-muted">Maksimal 5MB. Format: CSV (Save As dari Excel).</small>
+                    </div>
+                    <div id="import-result" style="display:none;font-size:13px;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-import">
+                    <i class="fa fa-upload me-1"></i> Upload & Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+
 @section('scripts')
 <script>
 let leadModalInstance = null;
@@ -402,6 +473,9 @@ function resetLeadForm() {
     });
     document.querySelector('.lead-form-section').classList.add('open');
     $('#lead-form .is-invalid').removeClass('is-invalid');
+    $('#lead-company').val('').trigger('change');
+    $('#lead-company-id').val('');
+    $('#lead-end-user').val('').trigger('change');
 }
 
 function openCreateModal() {
@@ -424,9 +498,31 @@ function initLeadsTable() {
         ajax: '{{ route("leads-management.data") }}',
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
-            { data: 'full_name' },
+            {
+                data: 'full_name', orderable: true, searchable: true,
+                render: function(data, type, row) {
+                    var avatar = row.icon
+                        ? '<img src="' + row.icon + '" class="avatar-circle" alt="" style="background:transparent">'
+                        : '<div class="avatar-circle">' + row.initials + '</div>';
+                    return '<div style="display:flex;align-items:center;gap:10px">' +
+                        avatar +
+                        '<strong style="color:var(--text-primary);font-weight:600">' + row.name_display + '</strong>' +
+                        '</div>';
+                }
+            },
             { data: 'lead_title' },
-            { data: 'account_name' },
+            {
+                data: 'account_name', orderable: true, searchable: true,
+                render: function(data, type, row) {
+                    var avatar = row.company_icon
+                        ? '<img src="' + row.company_icon + '" class="avatar-circle" alt="" style="background:transparent">'
+                        : '<div class="avatar-circle">' + row.company_initials + '</div>';
+                    return '<div style="display:flex;align-items:center;gap:10px">' +
+                        avatar +
+                        '<span style="color:var(--text-primary);font-weight:500">' + row.company_name_display + '</span>' +
+                        '</div>';
+                }
+            },
             { data: 'phone' },
             { data: 'mobile' },
             { data: 'status_badge' },
@@ -491,6 +587,7 @@ $(document).on('click', '#btn-save-lead', function() {
         { field: '#lead-division', label: 'Department' },
         { field: '#lead-source', label: 'Lead Source' },
         { field: '#lead-title-acc', label: 'Title' },
+        { field: '#lead-field-type', label: 'Field Type' },
         { field: '#lead-segmentation', label: 'Segmentation' },
         { field: '#lead-account-type', label: 'Account Type' },
         { field: '#lead-follow-up', label: 'Follow Up Date' },
@@ -521,6 +618,17 @@ $(document).on('click', '#btn-save-lead', function() {
     const url = isEdit
         ? '{{ route("leads-management.update", "__ID__") }}'.replace('__ID__', editId)
         : '{{ route("leads-management.store") }}';
+
+    const companyId = $('#lead-company-id').val();
+    if (companyId) {
+        formData.delete('account_companies_id');
+        formData.set('account_companies_id', companyId);
+    } else {
+        const freeText = $('#lead-company').val();
+        if (freeText && freeText.trim()) {
+            formData.set('company', freeText.trim());
+        }
+    }
 
     formData.append('_token', '{{ csrf_token() }}');
     if (isEdit) formData.append('_method', 'PUT');
@@ -597,6 +705,121 @@ $(document).on('click', '.btn-delete-lead', function() {
             });
         }
     });
+});
+
+let importModalInstance = null;
+
+function openImportModal() {
+    document.getElementById('import-form').reset();
+    document.getElementById('import-result').style.display = 'none';
+    document.getElementById('import-result').innerHTML = '';
+    if (!importModalInstance) {
+        importModalInstance = new bootstrap.Modal(document.getElementById('importModal'));
+    }
+    importModalInstance.show();
+}
+
+$(document).on('click', '#btn-import', function() {
+    const $btn = $(this);
+    const fileInput = document.getElementById('import-file');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        toastr.error('Pilih file CSV terlebih dahulu.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('_token', '{{ csrf_token() }}');
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Importing...');
+
+    $.ajax({
+        url: '{{ route("leads-management.import") }}',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
+
+            const resultDiv = document.getElementById('import-result');
+            resultDiv.style.display = 'block';
+
+            let html = '<div class="alert alert-success py-2 mb-2">' + res.message + '</div>';
+            if (res.result && res.result.errors && res.result.errors.length > 0) {
+                html += '<div class="alert alert-warning py-2"><strong>Detail error:</strong><br>' +
+                    res.result.errors.map(function(e) { return '&bull; ' + e; }).join('<br>') +
+                    '</div>';
+            }
+            resultDiv.innerHTML = html;
+
+            if (leadsTable) leadsTable.ajax.reload(null, false);
+        },
+        error: function(xhr) {
+            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
+            var msg = xhr.responseJSON?.message || 'Gagal import file.';
+            toastr.error(msg);
+        }
+    });
+});
+
+$(document).on('shown.bs.modal', '#leadModal', function() {
+    if (!$('#lead-company').hasClass('select2-hidden-accessible')) {
+        $('#lead-company').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Ketik nama perusahaan...',
+            allowClear: true,
+            width: '100%',
+            tags: true,
+            createTag: function(params) {
+                return {
+                    id: params.term,
+                    text: params.term + ' (new)',
+                    newTag: true
+                };
+            },
+            dropdownParent: $('#leadModal'),
+            ajax: {
+                url: '{{ route("leads-management.search-companies") }}',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(res) { return { results: res.results }; }
+            }
+        }).on('select2:select', function(e) {
+            var c = e.params.data;
+            if (c.newTag) {
+                $('#lead-company-id').val('');
+            } else {
+                $('#lead-company-id').val(c.id);
+                if (c.segmentation_id) $('#lead-segmentation').val(c.segmentation_id);
+                if (c.account_types_id) $('#lead-account-type').val(c.account_types_id);
+                if (c.types_accounts_companies_id) $('#lead-field-type').val(c.types_accounts_companies_id);
+                if (c.business_entities_id) $('#lead-biz-entity').val(c.business_entities_id);
+                if (c.business_values_id) $('#lead-biz-value').val(c.business_values_id);
+                if (c.interaction_levels_id) $('#lead-interaction').val(c.interaction_levels_id);
+                if (c.address_billing_street) $('#lead-addr-street').val(c.address_billing_street);
+                if (c.address_billing_city) $('#lead-addr-city').val(c.address_billing_city);
+                if (c.address_billing_province) $('#lead-addr-province').val(c.address_billing_province);
+                if (c.address_billing_postal_code) $('#lead-addr-zip').val(c.address_billing_postal_code);
+                if (c.address_billing_country) $('#lead-addr-country').val(c.address_billing_country);
+            }
+        }).on('select2:clear', function() {
+            $('#lead-company-id').val('');
+        });
+    }
+
+    if (!$('#lead-end-user').hasClass('select2-hidden-accessible')) {
+        $('#lead-end-user').select2({
+            theme: 'bootstrap-5',
+            placeholder: '— Pilih —',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#leadModal')
+        });
+    }
 });
 
 initLeadsTable();

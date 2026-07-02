@@ -12,7 +12,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('account_companies_id')->constrained('account_companies')->cascadeOnDelete();
             $table->string('full_name', 150);
-            $table->enum('salutation', ['Ibu', 'Bapak', 'Saudara'])->nullable();
+            $table->string('icon')->nullable();
+            $table->enum('salutation', ['Ibu', 'Bapak'])->nullable();
             $table->string('email', 100)->nullable();
             $table->string('phone', 30)->nullable();
             $table->string('mobile', 30)->nullable();

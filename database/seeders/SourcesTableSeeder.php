@@ -21,7 +21,10 @@ class SourcesTableSeeder extends Seeder
         ];
 
         foreach ($sources as $source) {
-            Source::create($source);
+            Source::firstOrCreate(
+                ['source_name' => $source['source_name']],
+                $source
+            );
         }
     }
 }

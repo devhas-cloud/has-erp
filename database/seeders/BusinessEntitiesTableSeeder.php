@@ -21,7 +21,10 @@ class BusinessEntitiesTableSeeder extends Seeder
         ];
 
         foreach ($entities as $entity) {
-            BusinessEntity::create($entity);
+            BusinessEntity::firstOrCreate(
+                ['entity_name' => $entity['entity_name']],
+                $entity
+            );
         }
     }
 }
