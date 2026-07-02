@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Division;
+use App\Models\Notification;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
@@ -203,6 +204,22 @@ class TaskPlannerController extends Controller
 
         $task = Task::create($validated);
         $task->assignees()->sync($assigneeIds);
+
+        $task->load('creator');
+        foreach ($otherAssignees as $assigneeId) {
+            $assignee = User::find($assigneeId);
+            if ($assignee) {
+                Notification::create([
+                    'user_id' => $assignee->id,
+                    'type' => 'task_assigned',
+                    'title' => "Tugas baru: {$task->title}",
+                    'body' => "{$task->creator->username} menugaskan Anda",
+                    'notifiable_type' => Task::class,
+                    'notifiable_id' => $task->id,
+                    'data' => ['task_id' => $task->id, 'creator' => $task->creator->username],
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,

@@ -7,6 +7,7 @@ use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -47,4 +48,10 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('task-planner/{id}/activities', [TaskPlannerController::class, 'activities'])->name('task-planner.activities');
     Route::post('task-planner/{id}/activities', [TaskPlannerController::class, 'storeActivity'])->name('task-planner.store-activity');
     Route::resource('task-planner', TaskPlannerController::class);
+
+    Route::get('/notifications/count', [NotificationController::class, 'count'])->name('notifications.count');
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.mark-read');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+
 });

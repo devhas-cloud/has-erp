@@ -793,6 +793,43 @@
             .filter-bar { flex-direction: column; align-items: stretch; }
             .filter-bar .form-control, .filter-bar .form-select { min-width: 100%; }
         }
+
+        .notif-dropdown {
+            display: none; position: absolute; top: 48px; right: 0; width: 380px;
+            max-height: 480px; background: #fff; border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgba(0,0,0,0.1);
+            z-index: 1060; overflow: hidden; flex-direction: column;
+        }
+        .notif-dropdown.show { display: flex; }
+        .notif-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 18px; border-bottom: 1px solid var(--card-border);
+            font-size: 14px; font-weight: 700; flex-shrink: 0;
+        }
+        .notif-header .mark-all { font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; background: none; border: none; }
+        .notif-header .mark-all:hover { text-decoration: underline; }
+        .notif-list { overflow-y: auto; flex: 1; }
+        .notif-item {
+            display: flex; gap: 12px; padding: 12px 18px; border-bottom: 1px solid #f1f5f9;
+            cursor: pointer; transition: background 0.15s; align-items: flex-start;
+        }
+        .notif-item:hover { background: #f8fafc; }
+        .notif-item.unread { background: var(--accent-soft); }
+        .notif-item.unread:hover { background: rgba(16,185,129,0.12); }
+        .notif-item .notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+        .notif-item.read .notif-dot { background: transparent; }
+        .notif-item .notif-content { flex: 1; min-width: 0; }
+        .notif-item .notif-title { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+        .notif-item .notif-body { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+        .notif-item .notif-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+        .notif-empty { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        .notif-bell-wrapper { position: relative; }
+        .topbar-badge {
+            position: absolute; top: 5px; right: 5px; min-width: 16px; height: 16px;
+            background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
+            border-radius: 8px; padding: 0 5px; display: none; align-items: center; justify-content: center;
+            line-height: 1; border: 1.5px solid #fff;
+        }
     </style>
     <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -870,10 +907,21 @@
             <span class="topbar-page-title">@yield('page-title', 'Dashboard')</span>
         </div>
         <div class="topbar-right">
-            <button class="topbar-btn" title="Notifikasi" aria-label="Notifications">
-                <i class="fa-regular fa-bell"></i>
-                <span class="topbar-badge"></span>
-            </button>
+            <div class="notif-bell-wrapper">
+                <button class="topbar-btn" id="notif-bell" title="Notifikasi" aria-label="Notifications">
+                    <i class="fa-regular fa-bell"></i>
+                </button>
+                <span class="topbar-badge" id="notif-badge"></span>
+                <div class="notif-dropdown" id="notif-dropdown">
+                    <div class="notif-header">
+                        <span>Notifikasi</span>
+                        <button class="mark-all" onclick="markAllRead()">Tandai semua dibaca</button>
+                    </div>
+                    <div class="notif-list" id="notif-list">
+                        <div class="notif-empty">Memuat...</div>
+                    </div>
+                </div>
+            </div>
             <button class="topbar-btn" title="Pengaturan" aria-label="Settings">
                 <i class="fa-solid fa-gear"></i>
             </button>
@@ -987,6 +1035,105 @@
             clearTimeout(window._resizeTimer);
             window._resizeTimer = setTimeout(handleResize, 150);
         });
+
+        // --- Notification bell ---
+        var notifPollTimer;
+
+        function pollNotificationCount() {
+            $.get('{{ route("notifications.count") }}', function(res) {
+                var $badge = $('#notif-badge');
+                if (res.count > 0) {
+                    $badge.text(res.count > 99 ? '99+' : res.count).css('display', 'flex');
+                } else {
+                    $badge.hide();
+                }
+            });
+        }
+
+        function loadNotifications() {
+            $.get('{{ route("notifications.index") }}', function(res) {
+                var $list = $('#notif-list');
+                if (!res.data || res.data.length === 0) {
+                    $list.html('<div class="notif-empty"><i class="fa fa-bell-slash" style="font-size:24px;display:block;margin-bottom:8px;opacity:0.3"></i>Tidak ada notifikasi</div>');
+                    return;
+                }
+
+                var html = '';
+                res.data.forEach(function(n) {
+                    var cls = n.read ? 'read' : 'unread';
+                    var dataAttrs = 'data-id="' + n.id + '" data-type="' + (n.type || 'default') + '"';
+
+                    // ambil data JSON jika ada
+                    if (n.data && n.data.task_id) {
+                        dataAttrs += ' data-task-id="' + n.data.task_id + '"';
+                    }
+
+                    html += '<div class="notif-item ' + cls + '" ' + dataAttrs + ' onclick="openNotif(this)" style="cursor:pointer;">';
+                    html += '<span class="notif-dot"></span>';
+                    html += '<div class="notif-content">';
+                    html += '<div class="notif-title">' + (n.title || 'Notifikasi') + '</div>';
+                    if (n.body) html += '<div class="notif-body">' + n.body + '</div>';
+                    html += '<div class="notif-time">' + (n.time || 'Baru saja') + '</div>';
+                    html += '</div></div>';
+                });
+                $list.html(html);
+            }).fail(function(err) {
+                console.error('Error loading notifications:', err);
+                var $list = $('#notif-list');
+                $list.html('<div class="notif-empty">Error memuat notifikasi</div>');
+            });
+        }
+
+        function openNotif(el) {
+            var $el = $(el);
+            var notifId = parseInt($el.data('id'));
+            var type = $el.data('type') || 'default';
+            var taskId = $el.data('task-id') || null;
+
+            $.post('{{ url("/notifications") }}/' + notifId + '/read', { _token: '{{ csrf_token() }}' }, function(res) {
+                console.log('Notification marked as read:', res);
+                $('#notif-dropdown').removeClass('show');
+                pollNotificationCount();
+
+                var targetUrl = '{{ url("task-planner") }}' + '/' + taskId;
+                if (targetUrl) {
+                    console.log('Redirecting to:', targetUrl);
+                    window.location.href = targetUrl;
+                } else {
+                    console.log('No target URL found for redirect');
+                }
+            }).fail(function(err) {
+                console.error('Error marking notification as read:', err);
+                toastr.error('Error membaca notifikasi');
+            });
+        }
+
+        function markAllRead() {
+            $.post('{{ route("notifications.read-all") }}', { _token: '{{ csrf_token() }}' }, function() {
+                pollNotificationCount();
+                loadNotifications();
+            });
+        }
+
+        $('#notif-bell').on('click', function(e) {
+            e.stopPropagation();
+            var $dd = $('#notif-dropdown');
+            if ($dd.hasClass('show')) {
+                $dd.removeClass('show');
+                return;
+            }
+            loadNotifications();
+            $dd.addClass('show');
+        });
+
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.notif-bell-wrapper').length) {
+                $('#notif-dropdown').removeClass('show');
+            }
+        });
+
+        pollNotificationCount();
+        notifPollTimer = setInterval(pollNotificationCount, 30000);
 
         // --- Toastr config ---
         toastr.options = {

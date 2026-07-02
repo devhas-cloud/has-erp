@@ -3,7 +3,11 @@
 namespace App\Providers;
 
 use App\Models\Module;
+use App\Models\Task;
+use App\Models\TaskActivity;
 use App\Models\UserAccessControl;
+use App\Observers\TaskActivityObserver;
+use App\Observers\TaskObserver;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -17,6 +21,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Task::observe(TaskObserver::class);
+        TaskActivity::observe(TaskActivityObserver::class);
+
         View::composer('*', function ($view) {
             if (! Auth::check()) {
                 return;
