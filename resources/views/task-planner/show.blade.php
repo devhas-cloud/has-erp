@@ -219,6 +219,40 @@
             0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; }
         }
 
+        .chat-msg .chat-reply-btn {
+            opacity: 0; position: absolute; right: -28px; top: 50%; transform: translateY(-50%);
+            width: 24px; height: 24px; border-radius: 50%; background: #f1f5f9; border: 1px solid #e5e7eb;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 11px; color: var(--text-muted); transition: all 0.15s;
+        }
+        .chat-msg:hover .chat-reply-btn { opacity: 1; }
+        .chat-reply-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .chat-msg { position: relative; }
+
+        .chat-quote {
+            padding: 6px 10px; background: rgba(0,0,0,0.05); border-left: 3px solid var(--accent);
+            border-radius: 4px; margin-bottom: 6px; font-size: 12px; cursor: pointer;
+            max-width: 100%; overflow: hidden;
+        }
+        .chat-msg.mine .chat-quote { background: rgba(255,255,255,0.15); border-left-color: rgba(255,255,255,0.5); }
+        .chat-quote .quote-user { font-weight: 700; margin-bottom: 1px; }
+        .chat-quote .quote-text { opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .reply-preview-bar {
+            display: none; align-items: center; gap: 10px; padding: 8px 14px;
+            background: var(--accent-soft); border-top: 1px solid rgba(16,185,129,0.15);
+        }
+        .reply-preview-bar .reply-label { font-size: 11px; font-weight: 600; opacity: 0.7; }
+        .reply-preview-bar .reply-text { font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .reply-preview-bar .reply-close { cursor: pointer; font-size: 14px; opacity: 0.5; }
+        .reply-preview-bar .reply-close:hover { opacity: 1; }
+
+        .highlight-flash { animation: highlightFlash 1.5s ease-out; }
+        @keyframes highlightFlash {
+            0% { background: rgba(16,185,129,0.2); }
+            100% { background: transparent; }
+        }
+
         #filePreviewBody img { max-width: 100%; max-height: 75vh; border-radius: 6px; display: block; margin: 0 auto; }
         #filePreviewBody iframe { width: 100%; height: 70vh; border: none; border-radius: 4px; }
         #filePreviewModal .modal-dialog { max-width: 90vw; }
@@ -318,6 +352,11 @@
                         <div class="tab-pane fade show active" id="tab-activity">
                             <div class="chat-area" id="chat-area">
                                 <div class="chat-feed" id="activity-feed"></div>
+                                <div class="reply-preview-bar" id="reply-preview-bar">
+                                    <span class="reply-label">↩ Replying to</span>
+                                    <span class="reply-text" id="reply-preview-text"></span>
+                                    <span class="reply-close" onclick="cancelReply()">&times;</span>
+                                </div>
                                 <div class="chat-composer-bar">
                                     <button type="button" class="chat-attach-btn" id="btn-attach-file" title="Lampirkan">
                                         <i class="fa fa-paperclip"></i>
@@ -557,6 +596,29 @@
 
         var currentUserId = {{ Auth::id() }};
         var taskId = {{ $task->id }};
+        var currentReplyId = null;
+
+        function startReply(id, username, content) {
+            currentReplyId = id;
+            $('#reply-preview-bar').show();
+            $('#reply-preview-text').html('<strong>' + username + '</strong>: ' + (content || ''));
+            $('#activity-content').focus();
+        }
+
+        function cancelReply() {
+            currentReplyId = null;
+            $('#reply-preview-bar').hide();
+            $('#reply-preview-text').text('');
+        }
+
+        function scrollToActivity(id) {
+            var el = document.getElementById('activity-' + id);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('highlight-flash');
+                setTimeout(function() { el.classList.remove('highlight-flash'); }, 2000);
+            }
+        }
 
         function formatDateLabel(dateStr) {
             var d = new Date(dateStr);
@@ -617,7 +679,7 @@
                     var showAvatar = !isMine && lastUserId !== a.user_id;
                     var showName = !isMine && lastUserId !== a.user_id;
 
-                    html += '<div class="chat-msg ' + cls + '">';
+                    html += '<div class="chat-msg ' + cls + '" id="activity-' + a.id + '">';
 
                     if (showAvatar) {
                         html += '<div class="chat-avatar-sm" style="background:' + bgColor + '">' + (a.initials || '?') + '</div>';
@@ -630,6 +692,14 @@
                         html += '<div class="chat-sender">' + (a.username || '?') + '</div>';
                     }
                     html += '<div class="chat-bubble">';
+
+                    if (a.reply_to) {
+                        html += '<div class="chat-quote" onclick="scrollToActivity(' + a.reply_to.id + ')">';
+                        html += '<div class="quote-user">' + (a.reply_to.username || '?') + '</div>';
+                        html += '<div class="quote-text">' + (a.reply_to.content || '') + '</div>';
+                        html += '</div>';
+                    }
+
                     if (a.attachments && a.attachments.length > 0) {
                         a.attachments.forEach(function(att) {
                             if (att.type === 'image') {
@@ -642,10 +712,16 @@
                     if (a.content) {
                         if (a.attachments && a.attachments.length > 0) {
                             html += '<div style="margin-top:6px">' + a.content + '</div>';
+                        } else if (!a.reply_to) {
+                            html += a.content;
                         } else {
                             html += a.content;
                         }
                     }
+                    html += '</div>';
+                    html += '<button class="chat-reply-btn" onclick="startReply(' + a.id + ', \'' + (a.username || '?') + '\', \'' + (a.content || '').replace(/'/g, "\\'").substring(0, 80) + '\')" title="Reply"><i class="fa fa-reply"></i></button>';
+                    html += '<div class="chat-bubble-time">' + formatTimeLabel(a.created_at || a.timestamp) + '</div>';
+                    html += '</div>';
                     html += '</div>';
                     html += '<div class="chat-bubble-time">' + formatTimeLabel(a.created_at || a.timestamp) + '</div>';
                     html += '</div>';
@@ -732,6 +808,7 @@
             var formData = new FormData();
             formData.append('content', content);
             formData.append('_token', '{{ csrf_token() }}');
+            if (currentReplyId) formData.append('reply_to_id', currentReplyId);
             selectedFiles.forEach(function(file) {
                 formData.append('attachments[]', file);
             });
@@ -745,6 +822,7 @@
                 success: function(res) {
                     $textarea.val('').css('height', 'auto');
                     selectedFiles = [];
+                    cancelReply();
                     $('#chat-file-chip').hide().empty();
                     loadActivities();
                 },

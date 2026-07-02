@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class TaskPlannerController extends Controller
 {
@@ -327,7 +328,7 @@ class TaskPlannerController extends Controller
     public function activities($id): JsonResponse
     {
         $task = Task::findOrFail($id);
-        $activities = $task->activities()->with(['user', 'attachments'])->orderBy('created_at', 'asc')->get()
+        $activities = $task->activities()->with(['user', 'attachments', 'replyTo.user'])->orderBy('created_at', 'asc')->get()
             ->map(fn ($a) => [
                 'id' => $a->id,
                 'user_id' => $a->user_id,
@@ -339,6 +340,11 @@ class TaskPlannerController extends Controller
                     'type' => $att->attachment_type,
                     'name' => $att->attachment_name,
                 ])->toArray(),
+                'reply_to' => $a->reply_to_id ? [
+                    'id' => $a->replyTo->id,
+                    'username' => $a->replyTo->user?->username,
+                    'content' => Str::limit($a->replyTo->content ?? '', 120),
+                ] : null,
                 'created_at' => $a->created_at->toIso8601String(),
                 'time' => $a->created_at->diffForHumans(),
                 'timestamp' => $a->created_at->format('d M Y H:i'),
@@ -356,6 +362,7 @@ class TaskPlannerController extends Controller
             'content' => 'nullable|string|max:2000',
             'attachments' => 'nullable|array|max:10',
             'attachments.*' => 'file|max:2048|mimetypes:'.$mimeRule,
+            'reply_to_id' => 'nullable|exists:task_activities,id',
         ]);
 
         $hasContent = ! empty($validated['content'] ?? null);
@@ -372,6 +379,7 @@ class TaskPlannerController extends Controller
             'task_id' => $id,
             'user_id' => Auth::id(),
             'content' => $validated['content'] ?? null,
+            'reply_to_id' => $validated['reply_to_id'] ?? null,
         ]);
 
         if ($hasFiles) {

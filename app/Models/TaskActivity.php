@@ -12,6 +12,7 @@ class TaskActivity extends Model
         'task_id',
         'user_id',
         'content',
+        'reply_to_id',
     ];
 
     public function task(): BelongsTo
@@ -27,5 +28,15 @@ class TaskActivity extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(TaskActivityAttachment::class, 'task_activity_id');
+    }
+
+    public function replyTo(): BelongsTo
+    {
+        return $this->belongsTo(TaskActivity::class, 'reply_to_id');
+    }
+
+    public function replies(): HasMany
+    {
+        return $this->hasMany(TaskActivity::class, 'reply_to_id');
     }
 }
