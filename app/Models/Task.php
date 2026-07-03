@@ -15,11 +15,11 @@ class Task extends Model
     protected $fillable = [
         'creator_id',
         'category_id',
-        'division_id',
+        'whatsapp_group_id',
         'title',
         'description',
-        'start_date',
         'due_date',
+        'time',
         'status',
         'requires_approval',
         'alert_type',
@@ -29,8 +29,7 @@ class Task extends Model
     ];
 
     protected $casts = [
-        'start_date' => 'datetime',
-        'due_date' => 'datetime',
+        'due_date' => 'date',
         'alert_time' => 'datetime',
         'requires_approval' => 'boolean',
         'is_alert_sent' => 'boolean',
@@ -49,6 +48,11 @@ class Task extends Model
     public function division(): BelongsTo
     {
         return $this->belongsTo(Division::class);
+    }
+
+    public function whatsappGroup(): BelongsTo
+    {
+        return $this->belongsTo(WhatsAppGroup::class);
     }
 
     public function assignees(): BelongsToMany

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Division extends Model
 {
@@ -12,7 +13,6 @@ class Division extends Model
         'description',
         'type',
         'status',
-        'whatsapp_group_id',
     ];
 
     public function users(): HasMany
@@ -23,5 +23,10 @@ class Division extends Model
     public function accountContacts(): HasMany
     {
         return $this->hasMany(AccountContact::class, 'divisions_id');
+    }
+
+    public function whatsappGroup(): HasOne
+    {
+        return $this->hasOne(WhatsAppGroup::class);
     }
 }

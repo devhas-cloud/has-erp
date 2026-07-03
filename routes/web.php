@@ -4,10 +4,11 @@ use App\Http\Controllers\AccountManagementController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
+use App\Http\Controllers\DashboardTaskPlannerController;
 use App\Http\Controllers\LeadsManagementController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
-use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -42,12 +43,19 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::resource('accounts-management', AccountManagementController::class);
 
     Route::get('task-planner/data', [TaskPlannerController::class, 'data'])->name('task-planner.data');
+    Route::get('task-planner/export', [TaskPlannerController::class, 'export'])->name('task-planner.export');
+    Route::get('task-planner/import-template', [TaskPlannerController::class, 'downloadTemplate'])->name('task-planner.template');
+    Route::post('task-planner/import', [TaskPlannerController::class, 'import'])->name('task-planner.import');
     Route::get('task-planner/fetch-assignees', [TaskPlannerController::class, 'fetchAssignees'])->name('task-planner.fetch-assignees');
+    Route::get('task-planner/fetch-whatsapp-groups', [TaskPlannerController::class, 'fetchWhatsAppGroups'])->name('task-planner.fetch-whatsapp-groups');
     Route::post('task-planner/{id}/approve', [TaskPlannerController::class, 'approve'])->name('task-planner.approve');
     Route::post('task-planner/{id}/transition', [TaskPlannerController::class, 'transition'])->name('task-planner.transition');
     Route::get('task-planner/{id}/activities', [TaskPlannerController::class, 'activities'])->name('task-planner.activities');
     Route::post('task-planner/{id}/activities', [TaskPlannerController::class, 'storeActivity'])->name('task-planner.store-activity');
     Route::resource('task-planner', TaskPlannerController::class);
+
+    Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
+        ->name('dashboard-task-planner.index');
 
     Route::get('/notifications/count', [NotificationController::class, 'count'])->name('notifications.count');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

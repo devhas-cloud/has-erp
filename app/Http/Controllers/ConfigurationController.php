@@ -15,6 +15,7 @@ use App\Models\Source;
 use App\Models\TaskCategory;
 use App\Models\TaskRole;
 use App\Models\TypesAccountsCompany;
+use App\Models\WhatsAppGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -29,25 +30,47 @@ class ConfigurationController extends Controller
                 'model' => Division::class,
                 'label' => 'Division',
                 'slug' => 'divisions',
-                'columns' => ['division_name', 'description', 'type', 'whatsapp_group_id', 'status'],
+                'columns' => ['division_name', 'description', 'type', 'status'],
                 'rules' => [
                     'division_name' => 'required|string|max:100',
                     'description' => 'nullable|string',
                     'type' => 'required|in:Internal,External',
-                    'whatsapp_group_id' => 'nullable|string|max:100',
                     'status' => 'required|in:Active,Inactive',
                 ],
                 'extra_fields' => [
-                    'whatsapp_group_id' => [
-                        'label' => 'WhatsApp Group ID',
-                        'type' => 'text',
-                        'default' => null,
-                    ],
                     'type' => [
                         'label' => 'Type',
                         'type' => 'select',
                         'options' => ['Internal', 'External'],
                         'default' => 'Internal',
+                    ],
+                ],
+            ],
+            'whatsapp-groups' => [
+                'model' => WhatsAppGroup::class,
+                'label' => 'WhatsApp Group',
+                'slug' => 'whatsapp-groups',
+                'columns' => ['group_name', 'group_id', 'division_id', 'description', 'status'],
+                'rules' => [
+                    'group_name' => 'required|string|max:100',
+                    'group_id' => 'nullable|string|max:100',
+                    'division_id' => 'required|exists:divisions,id',
+                    'description' => 'nullable|string',
+                    'status' => 'required|in:Active,Inactive',
+                ],
+                'display_map' => [
+                    'division_id' => 'division.division_name',
+                ],
+                'extra_fields' => [
+                    'group_id' => [
+                        'label' => 'Group ID',
+                        'type' => 'text',
+                    ],
+                    'division_id' => [
+                        'label' => 'Division',
+                        'type' => 'select_fk',
+                        'source' => 'divisions',
+                        'source_key' => 'division_name',
                     ],
                 ],
             ],

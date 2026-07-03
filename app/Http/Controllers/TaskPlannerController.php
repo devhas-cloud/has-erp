@@ -2,22 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Division;
 use App\Models\Notification;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
+use App\Services\TaskExportService;
+use App\Services\TaskImportService;
+use App\Services\TaskXlsxTemplateGenerator;
+use App\Models\WhatsAppGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class TaskPlannerController extends Controller
 {
     public function index()
     {
-        $divisions = Division::where('status', 'Active')->get();
+        $whatsappGroups = WhatsAppGroup::with('division')->where('status', 'Active')->get();
         $users = User::all();
 
         $user = Auth::user();
@@ -29,7 +33,7 @@ class TaskPlannerController extends Controller
                 ->orWhere('division_id', $userDivisionId);
         })->get();
 
-        return view('task-planner.index', compact('divisions', 'users', 'categories', 'userId'));
+        return view('task-planner.index', compact('whatsappGroups', 'users', 'categories', 'userId'));
     }
 
     public function data(Request $request): JsonResponse
@@ -38,7 +42,7 @@ class TaskPlannerController extends Controller
         $user = Auth::user()->load('hierarchyRole');
         $userRole = $user->hierarchyRole;
 
-        $query = Task::with(['creator', 'category', 'division', 'assignees']);
+        $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees']);
 
         if ($userRole && $userRole->is_global_delegator) {
         } elseif ($userRole) {
@@ -84,6 +88,16 @@ class TaskPlannerController extends Controller
             $query->where('category_id', $categoryFilter);
         }
 
+        $dueDateFrom = $request->input('due_date_from');
+        if ($dueDateFrom) {
+            $query->where('due_date', '>=', $dueDateFrom);
+        }
+
+        $dueDateTo = $request->input('due_date_to');
+        if ($dueDateTo) {
+            $query->where('due_date', '<=', $dueDateTo.' 23:59:59');
+        }
+
         $recordsFiltered = $query->count();
 
         $orderColumnIndex = $request->input('order.0.column', 0);
@@ -119,9 +133,10 @@ class TaskPlannerController extends Controller
                 'status_label' => $this->renderStatusBadge($task->status),
                 'creator_name' => $task->creator?->username ?? '—',
                 'assignees' => $assigneeNames ?: '—',
+                'time' => $task->time ?? '',
                 'due_date' => $task->due_date?->format('d M Y') ?? '—',
                 'due_date_raw' => $task->due_date?->format('Y-m-d') ?? '',
-                'is_overdue' => $task->due_date && $task->due_date->isPast() && ! in_array($task->status, ['done']),
+                'is_overdue' => $task->due_date && $task->due_date->endOfDay()->isPast() && ! in_array($task->status, ['done']),
             ];
         }
 
@@ -174,15 +189,35 @@ class TaskPlannerController extends Controller
         return response()->json(['results' => $results]);
     }
 
+    public function fetchWhatsAppGroups(Request $request): JsonResponse
+    {
+        $query = WhatsAppGroup::with('division')->where('status', 'Active');
+
+        if ($q = $request->get('q')) {
+            $query->where(function ($qry) use ($q) {
+                $qry->where('group_name', 'like', "%{$q}%")
+                    ->orWhereHas('division', fn ($d) => $d->where('division_name', 'like', "%{$q}%"));
+            });
+        }
+
+        $results = $query->limit(30)->get()
+            ->map(fn ($g) => [
+                'id' => $g->id,
+                'text' => $g->group_name.' ('.$g->division?->division_name.')',
+            ]);
+
+        return response()->json(['results' => $results]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
-            'division_id' => 'nullable|exists:divisions,id',
-            'start_date' => 'required|date',
-            'due_date' => 'required|date|after_or_equal:start_date',
+            'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
+            'due_date' => 'required|date',
+            'time' => 'nullable|date_format:H:i',
             'assignees' => 'nullable|array',
             'assignees.*' => 'exists:users,id',
             'alert_type' => 'required|in:none,email,whatsapp,both',
@@ -229,14 +264,14 @@ class TaskPlannerController extends Controller
 
     public function edit($id)
     {
-        $task = Task::with(['assignees', 'category', 'division'])->findOrFail($id);
-        $divisions = Division::where('status', 'Active')->get();
+        $task = Task::with(['assignees', 'category', 'whatsappGroup'])->findOrFail($id);
+        $whatsappGroups = WhatsAppGroup::with('division')->where('status', 'Active')->get();
         $categories = TaskCategory::all();
         $users = User::all();
         $statuses = ['todo', 'in_progress', 'waiting_approval', 'done'];
 
         return view('task-planner.edit', compact(
-            'task', 'divisions', 'categories', 'users', 'statuses'
+            'task', 'whatsappGroups', 'categories', 'users', 'statuses'
         ));
     }
 
@@ -248,9 +283,9 @@ class TaskPlannerController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
-            'division_id' => 'nullable|exists:divisions,id',
-            'start_date' => 'required|date',
-            'due_date' => 'required|date|after_or_equal:start_date',
+            'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
+            'due_date' => 'required|date',
+            'time' => 'nullable|date_format:H:i',
             'status' => 'required|in:todo,in_progress,waiting_approval,done',
             'assignees' => 'nullable|array',
             'assignees.*' => 'exists:users,id',
@@ -291,7 +326,7 @@ class TaskPlannerController extends Controller
         $task = Task::with([
             'creator.hierarchyRole',
             'category',
-            'division',
+            'whatsappGroup.division',
             'assignees.hierarchyRole',
         ])->findOrFail($id);
 
@@ -428,5 +463,111 @@ class TaskPlannerController extends Controller
             'success' => true,
             'message' => 'Task berhasil dihapus.',
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $userId = Auth::id();
+        $user = Auth::user()->load('hierarchyRole');
+        $userRole = $user->hierarchyRole;
+
+        $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees']);
+
+        if ($userRole && $userRole->is_global_delegator) {
+        } elseif ($userRole) {
+            $level = $userRole->hierarchy_level;
+            $query->where(function ($q) use ($userId, $level) {
+                $q->where('creator_id', $userId)
+                    ->orWhereHas('assignees', fn ($q) => $q->where('user_id', $userId))
+                    ->orWhereHas('creator.hierarchyRole', fn ($q) => $q->where('hierarchy_level', '>', $level));
+            });
+        } else {
+            $query->where(function ($q) use ($userId) {
+                $q->where('creator_id', $userId)
+                    ->orWhereHas('assignees', fn ($q) => $q->where('user_id', $userId));
+            });
+        }
+
+        $statusFilter = $request->input('status');
+        if ($statusFilter) {
+            $query->where('status', $statusFilter);
+        }
+
+        $categoryFilter = $request->input('category_id');
+        if ($categoryFilter) {
+            $query->where('category_id', $categoryFilter);
+        }
+
+        $dueDateFrom = $request->input('due_date_from');
+        if ($dueDateFrom) {
+            $query->where('due_date', '>=', $dueDateFrom);
+        }
+
+        $dueDateTo = $request->input('due_date_to');
+        if ($dueDateTo) {
+            $query->where('due_date', '<=', $dueDateTo.' 23:59:59');
+        }
+
+        $tasks = $query->orderBy('id', 'desc')->get();
+
+        $headers = [
+            'ID', 'Title', 'Description', 'Category', 'Status',
+            'Creator', 'Assignees', 'WhatsApp Group', 'Due Date', 'Time',
+            'Requires Approval', 'Alert Type', 'Alert Target', 'Alert Time', 'Created At',
+        ];
+
+        $service = new TaskExportService;
+        $filePath = $service->export($tasks, $headers);
+
+        return response()->download($filePath, 'tasks-export-'.date('Y-m-d').'.xlsx')
+            ->deleteFileAfterSend(true);
+    }
+
+    public function downloadTemplate()
+    {
+        $references = TaskImportService::getReferenceData();
+        $filePath = storage_path('app/temp/task-template-'.uniqid().'.xlsx');
+        $dir = dirname($filePath);
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $generator = new TaskXlsxTemplateGenerator;
+        $generator->generate($references, $filePath);
+
+        return response()->download($filePath, 'task-import-template.xlsx')
+            ->deleteFileAfterSend(true);
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
+        ]);
+
+        $file = $request->file('file');
+        $filePath = $file->storeAs('imports', 'task-import-'.uniqid().'.'.$file->getClientOriginalExtension());
+
+        $fullPath = Storage::path($filePath);
+
+        try {
+            $service = new TaskImportService;
+            $result = $service->import($fullPath);
+
+            return response()->json([
+                'success' => $result['failed'] === 0,
+                'message' => "Import selesai. {$result['success']} berhasil, {$result['failed']} gagal.",
+                'result' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengimpor: '.$e->getMessage(),
+            ], 422);
+        } finally {
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
+        }
     }
 }

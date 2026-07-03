@@ -106,6 +106,8 @@
         <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px">
             <span><i class="fa fa-tasks me-2" style="color:var(--accent)"></i>Tasks List</span>
             <div class="filter-bar">
+                <input type="date" id="filter-due-from" onchange="taskTable.ajax.reload(null, false)" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date From">
+                <input type="date" id="filter-due-to" onchange="taskTable.ajax.reload(null, false)" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date To">
                 <select id="filter-status" onchange="taskTable.ajax.reload(null, false)">
                     <option value="">All Status</option>
                     <option value="todo">To Do</option>
@@ -119,6 +121,14 @@
                         <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                     @endforeach
                 </select>
+                <button type="button" class="btn btn-sm btn-success" style="font-size:12px" onclick="exportTasks()">
+                    <i class="fa fa-download me-1"></i>Export
+                </button>
+                @if($canCreate)
+                <button type="button" class="btn btn-sm btn-info" style="font-size:12px;color:#fff" onclick="openImportModal()">
+                    <i class="fa fa-upload me-1"></i>Import
+                </button>
+                @endif
             </div>
         </div>
     </div>
@@ -127,12 +137,13 @@
             <thead>
                 <tr>
                     <th style="width:50px">#</th>
-                    <th>Title</th>
-                    <th>Category</th>
-                    <th>Status</th>
                     <th>Creator</th>
+                    <th>Title</th>
                     <th>Assignee(s)</th>
+                    <th>Category</th>
+                    <th>Time</th>
                     <th>Due Date</th>
+                    <th>Status</th>
                     <th class="text-center" style="width:120px">Action</th>
                 </tr>
             </thead>
@@ -184,24 +195,16 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
-                                    <label>Division (for alert group)</label>
-                                    <select name="division_id" id="task-division-id">
-                                        <option value="">— Select Division —</option>
-                                        @foreach($divisions as $div)
-                                            <option value="{{ $div->id }}">{{ $div->division_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
+
                             </div>
                             <div class="task-form-row">
                                 <div class="form-group">
-                                    <label>Start Date <span class="text-danger">*</span></label>
-                                    <input type="datetime-local" name="start_date" id="task-start-date">
+                                    <label>Due Date <span class="text-danger">*</span></label>
+                                    <input type="date" name="due_date" id="task-due-date">
                                 </div>
                                 <div class="form-group">
-                                    <label>Due Date <span class="text-danger">*</span></label>
-                                    <input type="datetime-local" name="due_date" id="task-due-date">
+                                    <label>Time</label>
+                                    <input type="time" name="time" id="task-time">
                                 </div>
                             </div>
                         </div>
@@ -236,9 +239,9 @@
                                     <label>Alert Type</label>
                                     <select name="alert_type" id="task-alert-type">
                                         <option value="none">None</option>
-                                        <option value="email">Email</option>
+                                        {{-- <option value="email">Email</option> --}}
                                         <option value="whatsapp">WhatsApp</option>
-                                        <option value="both">Both</option>
+                                        {{-- <option value="both">Both</option> --}}
                                     </select>
                                 </div>
                                 <div class="form-group small">
@@ -246,8 +249,15 @@
                                     <select name="alert_target" id="task-alert-target">
                                         <option value="personal">Personal (Japri)</option>
                                         <option value="group">Group WA</option>
-                                        <option value="both">Both</option>
+                                        {{-- <option value="both">Both</option> --}}
                                     </select>
+                                </div>
+                                 <div class="form-group" id="whatsapp-group-container" style="display:none">
+                                    <label>WhatsApp Group (for alert group)</label>
+                                    <select name="whatsapp_group_id" id="task-whatsapp-group" style="width:100%"></select>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                                        Pilih grup WA untuk notifikasi.
+                                    </div>
                                 </div>
                                 <div class="form-group small">
                                     <label>Alert Time</label>
@@ -267,6 +277,38 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:500px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa fa-upload me-2" style="color:var(--accent)"></i>Import Tasks</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+                    Download template terlebih dahulu, isi data, lalu upload kembali.
+                </p>
+                <a href="{{ route('task-planner.template') }}" class="btn btn-sm btn-accent mb-3">
+                    <i class="fa fa-download me-1"></i> Download Template
+                </a>
+                <hr>
+                <div class="form-group">
+                    <label>Upload File (xlsx, xls, csv)</label>
+                    <input type="file" id="import-file" accept=".xlsx,.xls,.csv" class="form-control form-control-sm" style="margin-top:4px">
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Max 5MB</div>
+                </div>
+                <div id="import-result" style="display:none;margin-top:12px"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-import-task">
+                    <i class="fa fa-upload me-1"></i> Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @endpush
 
 @section('scripts')
@@ -279,6 +321,8 @@ const taskCanDelete = {{ $canDelete ? 'true' : 'false' }};
 const currentUserId = {{ $userId }};
 const showUrl = '{{ route("task-planner.show", "__ID__") }}';
 const editUrl = '{{ route("task-planner.edit", "__ID__") }}';
+const exportUrl = '{{ route("task-planner.export") }}';
+const importUrl = '{{ route("task-planner.import") }}';
 
 function toggleTaskSection(header) {
     header.closest('.task-form-section').classList.toggle('open');
@@ -294,12 +338,15 @@ function resetTaskForm() {
     document.querySelectorAll('.task-form-section')[1].classList.add('open');
     $('#task-form .is-invalid').removeClass('is-invalid');
     $('#task-assignees').val(null).trigger('change');
+    $('#task-whatsapp-group').val(null).trigger('change');
+    $('#whatsapp-group-container').hide();
+    $('#task-alert-target').val('personal');
 }
 
 function openCreateModal() {
     resetTaskForm();
     document.getElementById('taskModalTitle').textContent = 'Add Task';
-    document.getElementById('btn-save-task').innerHTML = '<i class="fa fa-save me-1"></i> Save';
+    $('#btn-save-task').prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
     if (!taskModalInstance) {
         taskModalInstance = new bootstrap.Modal(document.getElementById('taskModal'));
     }
@@ -319,21 +366,33 @@ function initTasksTable() {
             data: function(d) {
                 d.status = $('#filter-status').val();
                 d.category_id = $('#filter-category').val();
+                d.due_date_from = $('#filter-due-from').val();
+                d.due_date_to = $('#filter-due-to').val();
             }
         },
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
+
+            { data: 'creator_name', orderable: true },
             { data: 'title', orderable: true, searchable: true },
+
+            { data: 'assignees', orderable: true },
             {
                 data: null,
-                orderable: false,
+                orderable: true,
                 render: function(data, type, row) {
                     return '<span class="status-badge status-pending">' + row.category_name + '</span>';
                 }
             },
-            { data: 'status_label', orderable: false },
-            { data: 'creator_name', orderable: false },
-            { data: 'assignees', orderable: false },
+            {
+                data:null,
+                orderable: true,
+                render: function(data, type, row) {
+                    var time = row.time ?  row.time : '—';
+                    return time;
+                }
+            },
+
             {
                 data: null,
                 render: function(data, type, row) {
@@ -341,6 +400,8 @@ function initTasksTable() {
                     return '<span class="' + cls + '">' + row.due_date + (row.is_overdue ? ' <i class="fa fa-exclamation-circle"></i>' : '') + '</span>';
                 }
             },
+            { data: 'status_label', orderable: true },
+
             {
                 data: null,
                 orderable: false,
@@ -362,8 +423,8 @@ function initTasksTable() {
             }
         ],
         order: [[0, 'desc']],
-        pageLength: 10,
-        lengthMenu: [10, 15, 25, 50, 100],
+        pageLength: 15,
+        lengthMenu: [15, 25, 50, 100],
     });
 }
 
@@ -377,7 +438,6 @@ $(document).on('click', '#btn-save-task', function() {
     const validations = [
         { field: '#task-title', label: 'Title' },
         { field: '#task-category-id', label: 'Category' },
-        { field: '#task-start-date', label: 'Start Date' },
         { field: '#task-due-date', label: 'Due Date' },
     ];
 
@@ -395,15 +455,6 @@ $(document).on('click', '#btn-save-task', function() {
             $el.focus();
             return;
         }
-    }
-
-    const startDate = $('#task-start-date').val();
-    const dueDate = $('#task-due-date').val();
-    if (startDate && dueDate && dueDate < startDate) {
-        $('#task-due-date').addClass('is-invalid');
-        toastr.error('Due Date tidak boleh sebelum Start Date.');
-        $('#task-due-date').focus();
-        return;
     }
 
     const formData = new FormData(document.getElementById('task-form'));
@@ -516,8 +567,102 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
             minimumInputLength: 1
         });
     }
+
+    if (!$('#task-whatsapp-group').hasClass('select2-hidden-accessible')) {
+        $('#task-whatsapp-group').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Search and select WhatsApp group...',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#taskModal'),
+            ajax: {
+                url: '{{ route("task-planner.fetch-whatsapp-groups") }}',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(data) { return { results: data.results }; }
+            },
+            minimumInputLength: 0
+        });
+    }
+});
+
+$(document).on('change', '#task-alert-target', function() {
+    var val = $(this).val();
+    if (val === 'group' || val === 'both') {
+        $('#whatsapp-group-container').show();
+    } else {
+        $('#whatsapp-group-container').hide();
+    }
 });
 
 initTasksTable();
+
+function openImportModal() {
+    $('#import-file').val('');
+    $('#import-result').hide().empty();
+    new bootstrap.Modal(document.getElementById('importModal')).show();
+}
+
+function exportTasks() {
+    var params = new URLSearchParams();
+    var status = $('#filter-status').val();
+    var category = $('#filter-category').val();
+    var dueFrom = $('#filter-due-from').val();
+    var dueTo = $('#filter-due-to').val();
+    if (status) params.set('status', status);
+    if (category) params.set('category_id', category);
+    if (dueFrom) params.set('due_date_from', dueFrom);
+    if (dueTo) params.set('due_date_to', dueTo);
+    window.open(exportUrl + '?' + params.toString(), '_blank');
+}
+
+$(document).on('click', '#btn-import-task', function() {
+    var $btn = $(this);
+    var file = $('#import-file')[0].files[0];
+    if (!file) {
+        toastr.error('Pilih file terlebih dahulu.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('file', file);
+    formData.append('_token', '{{ csrf_token() }}');
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Importing...');
+    $('#import-result').hide().empty();
+
+    $.ajax({
+        url: importUrl,
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            var html = '';
+            if (res.success) {
+                html += '<div class="alert alert-success py-2 px-3 mb-2" style="font-size:13px">' + res.message + '</div>';
+            } else {
+                html += '<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:13px">' + res.message + '</div>';
+            }
+            if (res.result && res.result.errors && res.result.errors.length) {
+                html += '<ul style="font-size:12px;color:#dc3545;margin:0;padding-left:16px;max-height:150px;overflow-y:auto">';
+                res.result.errors.forEach(function(e) {
+                    html += '<li>' + e + '</li>';
+                });
+                html += '</ul>';
+            }
+            $('#import-result').html(html).show();
+            if (taskTable) taskTable.ajax.reload(null, false);
+        },
+        error: function(xhr) {
+            var msg = xhr.responseJSON?.message || 'Gagal mengimpor.';
+            $('#import-result').html('<div class="alert alert-danger py-2 px-3 mb-0" style="font-size:13px">' + msg + '</div>').show();
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Import');
+        }
+    });
+});
 </script>
 @endsection

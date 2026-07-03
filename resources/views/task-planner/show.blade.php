@@ -315,10 +315,12 @@
                         <span><i class="fa fa-folder me-1"></i>
                             <span style="font-weight:600">{{ $task->category?->name ?? '—' }}</span>
                         </span>
-                        <span><i class="fa fa-building me-1"></i> {{ $task->division?->division_name ?? 'Global' }}</span>
-                        <span><i class="fa fa-calendar me-1"></i> Start: {{ $task->start_date->format('d M Y H:i') }}</span>
+                        <span><i class="fa fa-building me-1"></i> {{ $task->whatsappGroup?->group_name ?? '—' }}</span>
                         <span><i class="fa fa-calendar-check me-1"></i> Due:
-                            {{ $task->due_date->format('d M Y H:i') }}</span>
+                            {{ $task->due_date->format('d M Y') }}</span>
+                        @if ($task->time)
+                            <span><i class="fa fa-clock me-1"></i> {{ $task->time }}</span>
+                        @endif
                         @if ($task->requires_approval)
                             <span><i class="fa fa-clipboard-check me-1"></i> Requires Approval</span>
                         @endif
@@ -386,8 +388,12 @@
                 <div class="card-header-custom">
                     <span><i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees</span>
 
-                    @php $isCreator = $task->creator_id === Auth::id(); @endphp
-                    @if ($task->status !== 'done')
+                    @php
+                        $isCreator = $task->creator_id === Auth::id();
+                        $isAssignee = $task->assignees->contains('id', Auth::id());
+                        $canTransition = $isCreator || $isAssignee;
+                    @endphp
+                    @if ($task->status !== 'done' && $canTransition)
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
                             @if ($task->status === 'todo')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"

@@ -59,6 +59,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-tasks',
                 'group' => 'CRM',
             ],
+            [
+                'module_code' => 'MOD_DASHBOARD_TASK_PLANNER',
+                'module_name' => 'Dashboard Task Planner',
+                'description' => 'Dashboard monitoring tugas dan statistik',
+                'route_name' => 'dashboard-task-planner',
+                'icon' => 'fa fa-chart-pie',
+                'group' => 'Dashboard',
+            ],
         ];
 
         foreach ($modules as $module) {
