@@ -44,7 +44,7 @@
                         <div class="field small">
                             <label>Lead Status</label>
                             <select name="lead_status">
-                                @foreach(['New','Contacted','Qualified','Unqualified'] as $s)
+                                @foreach(['New','Approach','Qualified','Unqualified'] as $s)
                                 <option value="{{ $s }}" {{ $lead->lead_status === $s ? 'selected' : '' }}>{{ $s }}</option>
                                 @endforeach
                             </select>

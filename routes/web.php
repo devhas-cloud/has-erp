@@ -34,7 +34,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('leads-management/template', [LeadsManagementController::class, 'downloadTemplate'])->name('leads-management.template');
     Route::post('leads-management/import', [LeadsManagementController::class, 'import'])->name('leads-management.import');
     Route::get('leads-management/search-companies', [LeadsManagementController::class, 'searchCompanies'])->name('leads-management.search-companies');
-    Route::resource('leads-management', LeadsManagementController::class);
+    Route::get('leads-management/{lead}/fetch', [LeadsManagementController::class, 'fetch'])->name('leads-management.fetch');
+    Route::resource('leads-management', LeadsManagementController::class)->except(['edit']);
+    // Route::get('leads-management/{lead}/edit', ...)->name('leads-management.edit'); // dikomentari
 
     Route::get('contact-management/data', [ContactManagementController::class, 'data'])->name('contact-management.data');
     Route::resource('contact-management', ContactManagementController::class);

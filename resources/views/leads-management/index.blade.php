@@ -146,7 +146,7 @@
                                     <label>Lead Status <span class="text-danger">*</span></label>
                                     <select name="lead_status" id="lead-status">
                                         <option value="New">New</option>
-                                        <option value="Contacted">Contacted</option>
+                                        <option value="Approach">Approach</option>
                                         <option value="Qualified">Qualified</option>
                                         <option value="Unqualified">Unqualified</option>
                                     </select>
@@ -459,7 +459,7 @@ let leadsTable = null;
 const leadsCanUpdate = {{ $canUpdate ? 'true' : 'false' }};
 const leadsCanDelete = {{ $canDelete ? 'true' : 'false' }};
 const showUrl = '{{ route("leads-management.show", "__ID__") }}';
-const editUrl = '{{ route("leads-management.edit", "__ID__") }}';
+const fetchUrl = '{{ route("leads-management.fetch", "__ID__") }}';
 
 function toggleLeadSection(header) {
     header.closest('.lead-form-section').classList.toggle('open');
@@ -485,6 +485,74 @@ function openCreateModal() {
         leadModalInstance = new bootstrap.Modal(document.getElementById('leadModal'));
     }
     leadModalInstance.show();
+}
+
+function openEditModal(id) {
+    resetLeadForm();
+    document.getElementById('leadModalTitle').textContent = 'Edit Lead';
+    if (!leadModalInstance) {
+        leadModalInstance = new bootstrap.Modal(document.getElementById('leadModal'));
+    }
+
+    $.get(fetchUrl.replace('__ID__', id), function(res) {
+        $('#lead-edit-id').val(res.lead.id);
+
+        $('#lead-status').val(res.lead.lead_status);
+        $('#lead-salutation').val(res.contact ? res.contact.salutation : '').trigger('change');
+        $('#lead-full-name').val(res.contact ? res.contact.full_name : '');
+        $('#lead-email').val(res.contact ? res.contact.email : '');
+        $('#lead-mobile').val(res.contact ? res.contact.mobile : '');
+        $('#lead-phone').val(res.contact ? res.contact.phone : '');
+        $('#lead-job-title').val(res.contact ? res.contact.job_titles_id : '').trigger('change');
+        $('#lead-division').val(res.contact ? res.contact.divisions_id : '').trigger('change');
+        $('#lead-source').val(res.lead.source_id).trigger('change');
+        $('#lead-contact-method').val(res.contact ? res.contact.contact_methods_id : '').trigger('change');
+        $('#lead-role').val(res.contact ? res.contact.role_in_projects_id : '').trigger('change');
+        if (res.lead.closed_date) {
+            $('#lead-close-date').val(res.lead.closed_date.substring(0, 10));
+        }
+        if (res.lead.all_filed_completed) {
+            $('#lead-all-complete').prop('checked', true);
+        }
+        $('#lead-unqualified').val(res.lead.unqualified_reason);
+
+        $('#lead-title-acc').val(res.lead.lead_title);
+        if (res.company) {
+            var option = new Option(res.company.account_name, res.company.id, true, true);
+            $('#lead-company').append(option).trigger('change');
+            $('#lead-company-id').val(res.company.id);
+            $('#lead-field-type').val(res.company.types_accounts_companies_id).trigger('change');
+            $('#lead-segmentation').val(res.company.segmentation_id).trigger('change');
+            $('#lead-account-type').val(res.company.account_types_id).trigger('change');
+            $('#lead-biz-entity').val(res.company.business_entities_id).trigger('change');
+            $('#lead-biz-value').val(res.company.business_values_id).trigger('change');
+            $('#lead-interaction').val(res.company.interaction_levels_id).trigger('change');
+            $('#lead-addr-street').val(res.company.address_billing_street);
+            $('#lead-addr-city').val(res.company.address_billing_city);
+            $('#lead-addr-province').val(res.company.address_billing_province);
+            $('#lead-addr-zip').val(res.company.address_billing_postal_code);
+            $('#lead-addr-country').val(res.company.address_billing_country);
+            $('#lead-end-user').val(res.company.end_user).trigger('change');
+        }
+
+        if (res.lead.lead_can_be_contacted) {
+            $('#lead-can-contact').prop('checked', true);
+        }
+        if (res.lead.lead_appoinment) {
+            $('#lead-appointment').prop('checked', true);
+        }
+        if (res.lead.identification) {
+            $('#lead-identification').prop('checked', true);
+        }
+        if (res.lead.lead_follow_up_date) {
+            $('#lead-follow-up').val(res.lead.lead_follow_up_date.substring(0, 10));
+        }
+        $('#lead-assigned').val(res.lead.assigned_to).trigger('change');
+
+        leadModalInstance.show();
+    }).fail(function() {
+        toastr.error('Failed to load lead data.');
+    });
 }
 
 function initLeadsTable() {
@@ -536,7 +604,7 @@ function initLeadsTable() {
                     var html = '<div style="display:flex;gap:5px;justify-content:center">';
                     html += '<a href="' + showUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
                     if (leadsCanUpdate) {
-                        html += ' <a href="' + editUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
+                        html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
                     if (leadsCanDelete) {
                         html += ' <button type="button" class="btn-icon danger btn-delete-lead" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
@@ -658,6 +726,7 @@ $(document).on('click', '#btn-save-lead', function() {
                 toastr.success(res.message);
                 if (leadModalInstance) leadModalInstance.hide();
                 if (leadsTable) leadsTable.ajax.reload(null, false);
+                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
             },
             error: function(xhr) {
                 $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');

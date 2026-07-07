@@ -175,7 +175,7 @@ class LeadsManagementController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'lead_status' => 'required|in:New,Contacted,Qualified,Unqualified',
+            'lead_status' => 'required|in:New,Approach,Qualified,Unqualified',
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:100|unique:account_contacts,email',
@@ -260,13 +260,13 @@ class LeadsManagementController extends Controller
                 'source_id' => $request->source_id,
                 'unqualified_reason' => $request->unqualified_reason,
                 'closed_date' => $request->closed_date,
-                'all_filed_completed' => $request->has('all_filed_completed'),
+                'all_filed_completed' => $request->input('all_filed_completed') === '1',
                 'lead_owner_id' => Auth::id(),
                 'assigned_to' => $request->assigned_to,
-                'lead_can_be_contacted' => $request->has('lead_can_be_contacted'),
+                'lead_can_be_contacted' => $request->input('lead_can_be_contacted') === '1',
                 'lead_follow_up_date' => $request->lead_follow_up_date,
-                'lead_appoinment' => $request->has('lead_appoinment'),
-                'identification' => $request->has('identification'),
+                'lead_appoinment' => $request->input('lead_appoinment') === '1',
+                'identification' => $request->input('identification') === '1',
 
             ]);
 
@@ -309,12 +309,23 @@ class LeadsManagementController extends Controller
         ));
     }
 
+    public function fetch($id): JsonResponse
+    {
+        $lead = Lead::with(['accountContact', 'accountCompany'])->findOrFail($id);
+
+        return response()->json([
+            'lead' => $lead,
+            'contact' => $lead->accountContact,
+            'company' => $lead->accountCompany,
+        ]);
+    }
+
     public function update(Request $request, $id): JsonResponse
     {
         $lead = Lead::findOrFail($id);
 
         $validated = $request->validate([
-            'lead_status' => 'required|in:New,Contacted,Qualified,Unqualified',
+            'lead_status' => 'required|in:New,Approach,Qualified,Unqualified',
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:100',
@@ -391,12 +402,12 @@ class LeadsManagementController extends Controller
                 'source_id' => $request->source_id,
                 'unqualified_reason' => $request->unqualified_reason,
                 'closed_date' => $request->closed_date,
-                'all_filed_completed' => $request->has('all_filed_completed'),
+                'all_filed_completed' => $request->input('all_filed_completed') === '1',
                 'assigned_to' => $request->assigned_to,
-                'lead_can_be_contacted' => $request->has('lead_can_be_contacted'),
+                'lead_can_be_contacted' => $request->input('lead_can_be_contacted') === '1',
                 'lead_follow_up_date' => $request->lead_follow_up_date,
-                'lead_appoinment' => $request->has('lead_appoinment'),
-                'identification' => $request->has('identification'),
+                'lead_appoinment' => $request->input('lead_appoinment') === '1',
+                'identification' => $request->input('identification') === '1',
             ]);
 
             DB::commit();
@@ -433,7 +444,26 @@ class LeadsManagementController extends Controller
             'source',
         ])->findOrFail($id);
 
-        return view('leads-management.show', compact('lead'));
+        $jobTitles = JobTitle::where('status', 'Active')->get();
+        $divisions = Division::where('status', 'Active')->get();
+        $sources = Source::where('status', 'Active')->get();
+        $contactMethods = ContactMethod::where('status', 'Active')->get();
+        $roleInProjects = RoleInProject::where('status', 'Active')->get();
+        $segmentations = Segmentation::where('status', 'Active')->get();
+        $accountTypes = AccountType::where('status', 'Active')->get();
+        $businessEntities = BusinessEntity::where('status', 'Active')->get();
+        $businessValues = BusinessValue::where('status', 'Active')->get();
+        $interactionLevels = InteractionLevel::where('status', 'Active')->get();
+        $users = User::all();
+        $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
+        $typesAccountsCompanies = TypesAccountsCompany::where('status', 'Active')->get();
+
+        return view('leads-management.show', compact(
+            'lead', 'jobTitles', 'divisions', 'sources', 'contactMethods',
+            'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
+            'businessValues', 'interactionLevels', 'users', 'accountCompanies',
+            'typesAccountsCompanies'
+        ));
     }
 
     public function destroy($id): JsonResponse
