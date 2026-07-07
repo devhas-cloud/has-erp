@@ -35,6 +35,12 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('leads-management/import', [LeadsManagementController::class, 'import'])->name('leads-management.import');
     Route::get('leads-management/search-companies', [LeadsManagementController::class, 'searchCompanies'])->name('leads-management.search-companies');
     Route::get('leads-management/{lead}/fetch', [LeadsManagementController::class, 'fetch'])->name('leads-management.fetch');
+    Route::get('leads-management/{lead}/activities', [LeadsManagementController::class, 'fetchActivities'])->name('leads-management.activities.fetch');
+    Route::post('leads-management/{lead}/activities', [LeadsManagementController::class, 'storeActivity'])->name('leads-management.activities.store');
+    Route::post('leads-management/activities/{activity}/upload', [LeadsManagementController::class, 'uploadActivityAttachment'])->name('leads-management.activities.upload');
+    Route::delete('leads-management/activities/{activity}', [LeadsManagementController::class, 'destroyActivity'])->name('leads-management.activities.destroy');
+    Route::get('leads-management/{lead}/tasks', [LeadsManagementController::class, 'fetchLeadTasks'])->name('leads-management.tasks.fetch');
+    Route::post('leads-management/{lead}/tasks', [LeadsManagementController::class, 'storeLeadTask'])->name('leads-management.tasks.store');
     Route::resource('leads-management', LeadsManagementController::class)->except(['edit']);
     // Route::get('leads-management/{lead}/edit', ...)->name('leads-management.edit'); // dikomentari
 

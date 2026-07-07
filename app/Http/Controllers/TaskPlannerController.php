@@ -7,10 +7,10 @@ use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
+use App\Models\WhatsAppGroup;
 use App\Services\TaskExportService;
 use App\Services\TaskImportService;
 use App\Services\TaskXlsxTemplateGenerator;
-use App\Models\WhatsAppGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -380,7 +380,7 @@ class TaskPlannerController extends Controller
     public function activities($id): JsonResponse
     {
         $task = Task::findOrFail($id);
-        $activities = $task->activities()->with(['user', 'attachments', 'replyTo.user'])->orderBy('created_at', 'asc')->get()
+        $activities = $task->activities()->with(['user', 'attachments', 'replyTo.user', 'replies.user', 'replies.attachments'])->whereNull('reply_to_id')->orderBy('created_at', 'asc')->get()
             ->map(fn ($a) => [
                 'id' => $a->id,
                 'user_id' => $a->user_id,
@@ -397,6 +397,18 @@ class TaskPlannerController extends Controller
                     'username' => $a->replyTo->user?->username,
                     'content' => Str::limit($a->replyTo->content ?? '', 120),
                 ] : null,
+                'replies' => $a->replies->map(fn ($r) => [
+                    'id' => $r->id,
+                    'user_id' => $r->user_id,
+                    'username' => $r->user->username,
+                    'content' => $r->content,
+                    'created_at' => $r->created_at->toIso8601String(),
+                    'attachments' => $r->attachments->map(fn ($att) => [
+                        'url' => $att->attachment_url,
+                        'type' => $att->attachment_type,
+                        'name' => $att->attachment_name,
+                    ])->toArray(),
+                ])->toArray(),
                 'created_at' => $a->created_at->toIso8601String(),
                 'time' => $a->created_at->diffForHumans(),
                 'timestamp' => $a->created_at->format('d M Y H:i'),
@@ -413,7 +425,7 @@ class TaskPlannerController extends Controller
         $validated = $request->validate([
             'content' => 'nullable|string|max:2000',
             'attachments' => 'nullable|array|max:10',
-            'attachments.*' => 'file|max:2048|mimetypes:'.$mimeRule,
+            'attachments.*' => 'file|max:10240|mimetypes:'.$mimeRule,
             'reply_to_id' => 'nullable|exists:task_activities,id',
         ]);
 

@@ -4,260 +4,221 @@
 @section('page-title', 'Detail Task')
 
 @section('styles')
-    <style>
-        .nav-tabs .nav-link {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-muted);
-            border: none;
-            padding: 10px 18px;
-            border-radius: 0;
-        }
+<style>
+    .nav-tabs .nav-link {
+        font-size: 13px; font-weight: 600;
+        color: var(--text-muted); border: none;
+        padding: 10px 18px; border-radius: 0;
+    }
+    .nav-tabs .nav-link.active {
+        color: var(--accent); background: transparent;
+        border-bottom: 2px solid var(--accent);
+    }
+    .nav-tabs .nav-link:hover:not(.active) {
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--card-border);
+    }
+    .info-table td:first-child { color: var(--text-muted); width: 140px; font-size: 12.5px; }
+    .info-table td:last-child { font-size: 13.5px; color: var(--text-primary); }
+    .assignee-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; background: var(--accent-soft);
+        border-radius: 20px; font-size: 12px; font-weight: 600;
+        color: var(--accent); margin: 2px;
+    }
 
-        .nav-tabs .nav-link.active {
-            color: var(--accent);
-            background: transparent;
-            border-bottom: 2px solid var(--accent);
-        }
+    /* ── Activity Feed ── */
+    .activity-feed { padding: 4px 0; }
+    .activity-feed .activity-form-card {
+        background: #f8fafc;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+    .activity-feed .activity-form-card textarea {
+        width: 100%;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        font-size: 13px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 60px;
+        transition: border-color .15s;
+    }
+    .activity-feed .activity-form-card textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+        outline: none;
+    }
+    .activity-form-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .activity-form-actions .btn { font-size: 12px; }
 
-        .nav-tabs .nav-link:hover:not(.active) {
-            color: var(--text-primary);
-            border-bottom: 2px solid var(--card-border);
-        }
+    .activity-post {
+        display: flex;
+        gap: 12px;
+        padding: 16px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .activity-post:last-child { border-bottom: none; }
+    .activity-post-avatar {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: var(--accent-soft); color: var(--accent);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 13px; flex-shrink: 0;
+    }
+    .activity-post-body { flex: 1; min-width: 0; }
+    .activity-post-header {
+        display: flex; align-items: center; gap: 8px;
+        margin-bottom: 4px; flex-wrap: wrap;
+    }
+    .activity-post-author { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+    .activity-post-time { font-size: 11px; color: var(--text-muted); }
+    .activity-post-content {
+        font-size: 13px; color: var(--text-secondary);
+        line-height: 1.5; margin-bottom: 8px;
+        white-space: pre-wrap; word-break: break-word;
+    }
+    .activity-post-attachments { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .activity-post-attachment {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 12px; background: #f1f5f9;
+        border-radius: var(--radius-sm); font-size: 12px;
+        color: var(--text-secondary); text-decoration: none;
+    }
+    .activity-post-attachment:hover { background: #e2e8f0; }
+    .activity-post-attachment-image {
+        width: 80px; height: 80px; object-fit: cover;
+        border-radius: var(--radius-sm); cursor: pointer;
+        border: 1px solid var(--card-border);
+    }
+    .activity-post-actions {
+        display: flex; align-items: center; gap: 12px; margin-top: 4px;
+    }
+    .activity-post-actions button {
+        background: none; border: none; font-size: 12px;
+        font-weight: 500; color: var(--text-muted);
+        cursor: pointer; padding: 2px 4px; transition: color .15s;
+    }
+    .activity-post-actions button:hover { color: var(--accent); }
 
-        .info-table td:first-child {
-            color: var(--text-muted);
-            width: 140px;
-            font-size: 12.5px;
-        }
+    .activity-reply-form {
+        display: flex; flex-direction: column; gap: 6px;
+        margin-top: 10px; padding: 10px 14px;
+        background: #f8fafc; border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm);
+    }
+    .activity-reply-form .reply-input-row {
+        display: flex; gap: 8px; align-items: center;
+    }
+    .activity-reply-form input[type="text"] {
+        flex: 1; border: 1px solid var(--card-border);
+        border-radius: 20px; padding: 6px 14px;
+        font-size: 12px; font-family: inherit;
+    }
+    .activity-reply-form input[type="text"]:focus {
+        border-color: var(--accent); outline: none;
+    }
+    .activity-reply-form .reply-actions { display: flex; gap: 4px; align-items: center; }
+    .activity-reply-form .reply-actions button {
+        background: none; border: none; font-size: 12px;
+        color: var(--text-muted); cursor: pointer;
+        padding: 4px 6px; border-radius: var(--radius-sm);
+    }
+    .activity-reply-form .reply-actions button:hover {
+        color: var(--accent); background: #e2e8f0;
+    }
+    .activity-reply-form .reply-file-name { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+    .reply-file-previews {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+    }
+    .reply-file-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px 3px 6px;
+        background: #fff;
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        font-size: 11px;
+        max-width: 180px;
+    }
+    .reply-file-chip img {
+        width: 18px; height: 18px;
+        border-radius: 3px;
+        object-fit: cover;
+    }
+    .reply-file-chip .chip-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+    }
+    .reply-file-chip .chip-close {
+        cursor: pointer;
+        color: var(--text-muted);
+        font-size: 10px;
+        flex-shrink: 0;
+    }
+    .reply-file-chip .chip-close:hover { color: #dc3545; }
+    .activity-reply-toggle-wrapper { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+    .activity-reply-toggle {
+        background: none; border: none; font-size: 12px;
+        font-weight: 600; color: var(--text-muted); cursor: pointer;
+        padding: 4px 10px; border-radius: 20px; transition: all .15s;
+    }
+    .activity-reply-toggle:hover { color: var(--accent); background: var(--accent-soft); }
+    .activity-replies { margin-top: 12px; padding-left: 48px; }
+    .activity-reply { display: flex; gap: 10px; margin-bottom: 10px; }
+    .activity-reply-avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: #e2e8f0; color: var(--text-muted);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 600; font-size: 10px; flex-shrink: 0;
+    }
+    .activity-reply-body { flex: 1; }
+    .activity-reply-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+    .activity-reply-author { font-weight: 600; font-size: 12px; color: var(--text-primary); }
+    .activity-reply-time { font-size: 10px; color: var(--text-muted); }
+    .activity-reply-content {
+        font-size: 12px; color: var(--text-secondary);
+        line-height: 1.4; white-space: pre-wrap; word-break: break-word;
+    }
 
-        .info-table td:last-child {
-            font-size: 13.5px;
-            color: var(--text-primary);
-        }
+    #filePreviewBody img { max-width: 100%; max-height: 80vh; border-radius: 6px; display: block; margin: 0 auto; }
+    #filePreviewBody iframe { width: 100%; height: 70vh; border: none; border-radius: 4px; }
+    #filePreviewModal .modal-dialog { max-width: 90vw; }
+    #filePreviewModal .modal-body { padding: 8px; }
 
-        .assignee-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            background: var(--accent-soft);
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--accent);
-            margin: 2px;
-        }
-
-        .chat-area {
-            display: flex;
-            flex-direction: column;
-            height: 520px;
-            background: #f9fafb;
-        }
-        .chat-feed {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px 16px 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .chat-feed::-webkit-scrollbar { width: 5px; }
-        .chat-feed::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
-
-        .chat-date-sep {
-            text-align: center;
-            margin: 14px 0 10px;
-            position: relative;
-        }
-        .chat-date-sep .date-line { position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid #e5e7eb; }
-        .chat-date-sep .date-label {
-            position: relative;
-            display: inline-block;
-            background: #f9fafb;
-            padding: 0 12px;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-
-        .chat-msg { display: flex; gap: 8px; max-width: 85%; margin-bottom: 2px; align-items: flex-end; }
-        .chat-msg.mine { align-self: flex-end; flex-direction: row-reverse; }
-        .chat-msg.theirs { align-self: flex-start; }
-
-        .chat-avatar-sm {
-            width: 30px; height: 30px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
-            margin-bottom: 2px;
-        }
-        .chat-msg.mine .chat-avatar-sm { display: none; }
-        .chat-msg.mine + .chat-msg.mine .chat-avatar-sm { display: none; }
-        .chat-msg.mine:first-child .chat-avatar-sm,
-        .chat-msg.theirs + .chat-msg.mine .chat-avatar-sm { display: flex; }
-
-        .chat-bubble-wrap { display: flex; flex-direction: column; }
-        .chat-msg.mine .chat-bubble-wrap { align-items: flex-end; }
-        .chat-msg.theirs .chat-bubble-wrap { align-items: flex-start; }
-        .chat-sender {
-            font-size: 10.5px;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 1px;
-            padding: 0 6px;
-        }
-        .chat-msg.theirs:first-child .chat-sender,
-        .chat-msg.theirs + .chat-msg.mine + .chat-msg.theirs .chat-sender { display: block; }
-        .chat-msg.theirs + .chat-msg.theirs .chat-sender { display: none; }
-
-        .chat-bubble {
-            padding: 9px 14px;
-            font-size: 13.5px;
-            line-height: 1.55;
-            word-break: break-word;
-            white-space: pre-wrap;
-            max-width: 100%;
-            position: relative;
-        }
-        .chat-msg.mine .chat-bubble {
-            background: var(--accent);
-            color: #fff;
-            border-radius: 16px 4px 16px 16px;
-        }
-        .chat-msg.theirs .chat-bubble {
-            background: #fff;
-            color: var(--text-primary);
-            border-radius: 4px 16px 16px 16px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-        }
-        .chat-bubble-time {
-            font-size: 10px;
-            margin-top: 1px;
-            padding: 0 6px;
-            opacity: 0.5;
-        }
-        .chat-msg.mine .chat-bubble-time { text-align: right; }
-        .chat-msg.theirs .chat-bubble-time { text-align: left; }
-
-        .chat-img { margin-top: 4px; }
-        .chat-img img {
-            max-width: 260px; max-height: 200px; border-radius: 10px;
-            cursor: pointer; display: block;
-        }
-        .chat-msg.mine .chat-img img { border: 2px solid rgba(255,255,255,0.3); }
-        .chat-msg.theirs .chat-img img { border: 1px solid #e5e7eb; }
-        .chat-file-link {
-            display: inline-flex; align-items: center; gap: 8px;
-            padding: 8px 12px; background: rgba(255,255,255,0.15);
-            border-radius: 8px; font-size: 12px; text-decoration: none;
-            margin-top: 4px;
-        }
-        .chat-msg.mine .chat-file-link { color: #fff; background: rgba(255,255,255,0.2); }
-        .chat-msg.theirs .chat-file-link {
-            color: var(--text-primary); background: #f1f5f9; border: 1px solid #e5e7eb;
-        }
-
-        .chat-composer-bar {
-            display: flex; gap: 8px; align-items: flex-end;
-            padding: 10px 14px;
-            background: #fff;
-            border-top: 1px solid #e5e7eb;
-        }
-        .chat-composer-bar textarea {
-            flex: 1; border: 1px solid #e5e7eb; border-radius: 20px;
-            padding: 8px 14px; font-size: 13.5px; font-family: inherit;
-            resize: none; min-height: 38px; max-height: 120px; overflow-y: auto;
-            line-height: 1.4; color: var(--text-primary);
-        }
-        .chat-composer-bar textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-        .chat-composer-bar textarea::placeholder { color: #9ca3af; }
-
-        .chat-attach-btn {
-            width: 38px; height: 38px; border-radius: 50%; border: none;
-            background: #f1f5f9; color: var(--text-muted); cursor: pointer;
-            display: flex; align-items: center; justify-content: center; font-size: 15px;
-            flex-shrink: 0; transition: all 0.15s;
-        }
-        .chat-attach-btn:hover { background: #e5e7eb; color: var(--accent); }
-        .chat-send-btn {
-            width: 38px; height: 38px; border-radius: 50%; border: none;
-            background: var(--accent); color: #fff; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; font-size: 14px;
-            flex-shrink: 0; transition: all 0.15s;
-        }
-        .chat-send-btn:hover { filter: brightness(1.1); }
-        .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
-
-        .chat-file-chip-bar {
-            display: flex; align-items: center; gap: 6px;
-            padding: 4px 10px 4px 4px;
-            background: #f1f5f9; border-radius: 16px; font-size: 11px;
-            margin-bottom: 6px; max-width: 220px;
-        }
-        .chat-file-chip-bar img { width: 24px; height: 24px; border-radius: 5px; object-fit: cover; }
-        .chat-file-chip-bar .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-        .chat-file-chip-bar .chip-remove { cursor: pointer; color: #9ca3af; flex-shrink: 0; }
-        .chat-file-chip-bar .chip-remove:hover { color: #dc3545; }
-
-        .chat-empty {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100%; text-align: center; color: var(--text-muted); gap: 8px;
-        }
-        .chat-empty i { font-size: 44px; opacity: 0.15; }
-        .chat-empty p { font-size: 14px; margin: 0; font-weight: 500; }
-        .chat-empty .sub { font-size: 12px; opacity: 0.5; }
-
-        .chat-skeleton { display: flex; gap: 8px; padding: 6px 0; align-items: flex-end; }
-        .chat-skeleton.mine { flex-direction: row-reverse; align-self: flex-end; }
-        .chat-skeleton .skel-bubble {
-            height: 40px; width: 180px; border-radius: 16px 4px 16px 16px;
-            background: #e5e7eb; animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer {
-            0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; }
-        }
-
-        .chat-msg .chat-reply-btn {
-            opacity: 0; position: absolute; right: -28px; top: 50%; transform: translateY(-50%);
-            width: 24px; height: 24px; border-radius: 50%; background: #f1f5f9; border: 1px solid #e5e7eb;
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
-            font-size: 11px; color: var(--text-muted); transition: all 0.15s;
-        }
-        .chat-msg:hover .chat-reply-btn { opacity: 1; }
-        .chat-reply-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .chat-msg { position: relative; }
-
-        .chat-quote {
-            padding: 6px 10px; background: rgba(0,0,0,0.05); border-left: 3px solid var(--accent);
-            border-radius: 4px; margin-bottom: 6px; font-size: 12px; cursor: pointer;
-            max-width: 100%; overflow: hidden;
-        }
-        .chat-msg.mine .chat-quote { background: rgba(255,255,255,0.15); border-left-color: rgba(255,255,255,0.5); }
-        .chat-quote .quote-user { font-weight: 700; margin-bottom: 1px; }
-        .chat-quote .quote-text { opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        .reply-preview-bar {
-            display: none; align-items: center; gap: 10px; padding: 8px 14px;
-            background: var(--accent-soft); border-top: 1px solid rgba(16,185,129,0.15);
-        }
-        .reply-preview-bar .reply-label { font-size: 11px; font-weight: 600; opacity: 0.7; }
-        .reply-preview-bar .reply-text { font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .reply-preview-bar .reply-close { cursor: pointer; font-size: 14px; opacity: 0.5; }
-        .reply-preview-bar .reply-close:hover { opacity: 1; }
-
-        .highlight-flash { animation: highlightFlash 1.5s ease-out; }
-        @keyframes highlightFlash {
-            0% { background: rgba(16,185,129,0.2); }
-            100% { background: transparent; }
-        }
-
-        #filePreviewBody img { max-width: 100%; max-height: 75vh; border-radius: 6px; display: block; margin: 0 auto; }
-        #filePreviewBody iframe { width: 100%; height: 70vh; border: none; border-radius: 4px; }
-        #filePreviewModal .modal-dialog { max-width: 90vw; }
-        #filePreviewModal .modal-body { padding: 8px; }
-    </style>
+    /* ── Loading States ── */
+    .activity-form-card.loading {
+        opacity: 0.6;
+        pointer-events: none;
+        position: relative;
+    }
+    .activity-form-card.loading::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,0.4);
+        border-radius: var(--radius);
+        z-index: 1;
+    }
+    .activity-reply-form.loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+</style>
 @endsection
 
 @section('content')
@@ -352,24 +313,29 @@
                 <div class="card-body-custom">
                     <div class="tab-content">
                         <div class="tab-pane fade show active" id="tab-activity">
-                            <div class="chat-area" id="chat-area">
-                                <div class="chat-feed" id="activity-feed"></div>
-                                <div class="reply-preview-bar" id="reply-preview-bar">
-                                    <span class="reply-label">↩ Replying to</span>
-                                    <span class="reply-text" id="reply-preview-text"></span>
-                                    <span class="reply-close" onclick="cancelReply()">&times;</span>
+                            <div class="activity-feed" id="activity-feed">
+
+                                <div id="activity-list"></div>
+                                <div id="activity-loading" style="text-align:center;padding:20px;color:var(--text-muted)">
+                                    <i class="fa fa-spinner fa-spin"></i> Loading...
                                 </div>
-                                <div class="chat-composer-bar">
-                                    <button type="button" class="chat-attach-btn" id="btn-attach-file" title="Lampirkan">
-                                        <i class="fa fa-paperclip"></i>
-                                    </button>
-                                    <textarea id="activity-content" placeholder="Tulis pesan..." rows="1"></textarea>
-                                    <button type="button" class="chat-send-btn" id="btn-post-activity" title="Kirim">
-                                        <i class="fa fa-paper-plane"></i>
-                                    </button>
-                                    <input type="file" id="activity-file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" multiple style="display:none">
+
+
+                                 <div class="activity-form-card">
+                                    <textarea id="activity-input" placeholder="Tulis aktivitas..." rows="2"></textarea>
+                                    <div class="activity-form-actions">
+                                        <div>
+                                            <input type="file" id="activity-file" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="$('#activity-file').click()">
+                                                <i class="fa fa-paperclip"></i> Attach
+                                            </button>
+                                            <span id="activity-file-name" style="font-size:12px;color:var(--text-muted);margin-left:8px"></span>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-accent" id="btn-post-activity">
+                                            <i class="fa fa-paper-plane"></i> Post
+                                        </button>
+                                    </div>
                                 </div>
-                                <div id="chat-file-chip" style="display:none;padding:0 14px 6px;background:#fff"></div>
                             </div>
                         </div>
                         <div class="tab-pane fade" id="tab-log">
@@ -524,353 +490,347 @@
 @endsection
 
 @section('scripts')
-    <script>
-        $(document).on('click', '.btn-approve-task', function() {
-            var id = $(this).data('id');
-            var $btn = $(this);
-            Swal.fire({
-                title: 'Approve Task?',
-                text: 'Status akan berubah menjadi Done.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Yes, approve',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#10b981',
-                cancelButtonColor: '#64748b',
-                reverseButtons: true,
-            }).then(function(result) {
-                if (result.isConfirmed) {
-                    $btn.prop('disabled', true).html(
-                        '<i class="fa fa-spinner fa-spin me-1"></i> Approving...');
-                    $.ajax({
-                        url: '{{ route('task-planner.index') }}/' + id + '/approve',
-                        method: 'POST',
-                        data: {
-                            _token: '{{ csrf_token() }}'
-                        },
-                        success: function(res) {
-                            toastr.success(res.message);
-                            location.reload();
-                        },
-                        error: function(xhr) {
-                            $btn.prop('disabled', false).html(
-                                '<i class="fa fa-check"></i><span>Approve</span>');
-                            toastr.error(xhr.responseJSON?.message || 'Gagal approve.');
-                        }
-                    });
-                }
-            });
-        });
-
-        $(document).on('click', '.btn-transition', function() {
-            var id = $(this).data('id');
-            var status = $(this).data('status');
-            var $btn = $(this);
-            var label = status === 'in_progress' ? 'Start Progress?' : 'Mark as Done?';
-            Swal.fire({
-                title: label,
-                text: 'Status task akan berubah.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Ya',
-                cancelButtonText: 'Batal',
-                confirmButtonColor: '#10b981',
-                cancelButtonColor: '#64748b',
-                reverseButtons: true,
-            }).then(function(result) {
-                if (result.isConfirmed) {
-                    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>');
-                    $.ajax({
-                        url: '{{ route('task-planner.index') }}/' + id + '/transition',
-                        method: 'POST',
-                        data: {
-                            status: status,
-                            _token: '{{ csrf_token() }}'
-                        },
-                        success: function(res) {
-                            toastr.success(res.message);
-                            location.reload();
-                        },
-                        error: function(xhr) {
-                            $btn.prop('disabled', false);
-                            toastr.error(xhr.responseJSON?.message || 'Gagal.');
-                        }
-                    });
-                }
-            });
-        });
-
-        var currentUserId = {{ Auth::id() }};
-        var taskId = {{ $task->id }};
-        var currentReplyId = null;
-
-        function startReply(id, username, content) {
-            currentReplyId = id;
-            $('#reply-preview-bar').show();
-            $('#reply-preview-text').html('<strong>' + username + '</strong>: ' + (content || ''));
-            $('#activity-content').focus();
-        }
-
-        function cancelReply() {
-            currentReplyId = null;
-            $('#reply-preview-bar').hide();
-            $('#reply-preview-text').text('');
-        }
-
-        function scrollToActivity(id) {
-            var el = document.getElementById('activity-' + id);
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.classList.add('highlight-flash');
-                setTimeout(function() { el.classList.remove('highlight-flash'); }, 2000);
+<script>
+$(document).on('click', '.btn-approve-task', function() {
+    var id = $(this).data('id');
+    var $btn = $(this);
+    Swal.fire({
+        title: 'Approve Task?', text: 'Status akan berubah menjadi Done.',
+        icon: 'question', showCancelButton: true,
+        confirmButtonText: 'Yes, approve', cancelButtonText: 'Cancel',
+        confirmButtonColor: '#10b981', cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Approving...');
+        $.ajax({
+            url: '{{ route('task-planner.index') }}/' + id + '/approve',
+            method: 'POST', data: { _token: '{{ csrf_token() }}' },
+            success: function(res) { toastr.success(res.message); location.reload(); },
+            error: function(xhr) {
+                $btn.prop('disabled', false).html('<i class="fa fa-check"></i><span>Approve</span>');
+                toastr.error(xhr.responseJSON?.message || 'Gagal approve.');
             }
+        });
+    });
+});
+
+$(document).on('click', '.btn-transition', function() {
+    var id = $(this).data('id'), status = $(this).data('status'), $btn = $(this);
+    var label = status === 'in_progress' ? 'Start Progress?' : 'Mark as Done?';
+    Swal.fire({
+        title: label, text: 'Status task akan berubah.',
+        icon: 'question', showCancelButton: true,
+        confirmButtonText: 'Ya', cancelButtonText: 'Batal',
+        confirmButtonColor: '#10b981', cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>');
+        $.ajax({
+            url: '{{ route('task-planner.index') }}/' + id + '/transition',
+            method: 'POST', data: { status: status, _token: '{{ csrf_token() }}' },
+            success: function(res) { toastr.success(res.message); location.reload(); },
+            error: function(xhr) { $btn.prop('disabled', false); toastr.error(xhr.responseJSON?.message || 'Gagal.'); }
+        });
+    });
+});
+
+// ── Activity Feed ──
+var taskId = {{ $task->id }};
+var currentUserId = {{ Auth::id() }};
+var activitiesBaseUrl = '{{ route('task-planner.index') }}/' + taskId + '/activities';
+
+function loadActivities() {
+    $.get(activitiesBaseUrl, function(res) {
+        var data = res.data || [];
+        var html = '';
+        if (data.length > 0) {
+            data.forEach(function(a) { html += renderActivity(a); });
+        } else {
+            html = '<div class="empty-state"><i class="fa fa-chart-line"></i><p>Belum ada aktivitas.</p></div>';
         }
+        $('#activity-list').html(html);
+        $('#activity-loading').hide();
+    }).fail(function() {
+        $('#activity-loading').html('<span style="color:var(--danger)">Gagal memuat aktivitas.</span>');
+    });
+}
 
-        function formatDateLabel(dateStr) {
-            var d = new Date(dateStr);
-            var now = new Date();
-            var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            var yesterday = new Date(today.getTime() - 86400000);
-            var msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            if (msgDate.getTime() === today.getTime()) return 'Hari ini';
-            if (msgDate.getTime() === yesterday.getTime()) return 'Kemarin';
-            var months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-            return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
-        }
+function renderActivity(a) {
+    var avatar = a.username ? a.username.substring(0, 2).toUpperCase() : '??';
+    var time = a.created_at ? moment(a.created_at).fromNow() : '—';
+    var attachmentsHtml = '';
+    if (a.attachments && a.attachments.length > 0) {
+        a.attachments.forEach(function(at) {
+            var url = at.url || at.attachment_path;
+            var name = at.name || at.attachment_name || 'File';
+            if (at.type === 'image' || (at.mime_type && at.mime_type.startsWith('image/'))) {
+                attachmentsHtml += '<img src="' + url + '" class="activity-post-attachment-image" onclick="openFilePreview(\'' + url + '\',\'' + name + '\')">';
+            } else {
+                attachmentsHtml += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + url + '\',\'' + name + '\');return false"><i class="fa fa-file"></i> ' + name + '</a>';
+            }
+        });
+    }
 
-        function formatTimeLabel(ts) {
-            var d = new Date(ts);
-            return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
-        }
+    // Reply quote
+    var quoteHtml = '';
+    if (a.reply_to) {
+        quoteHtml = '<div style="padding:6px 10px;background:#f1f5f9;border-left:3px solid var(--accent);border-radius:4px;margin-bottom:8px;font-size:12px">' +
+            '<div style="font-weight:700;margin-bottom:2px;font-size:11px">↩ ' + (a.reply_to.username || '?') + '</div>' +
+            '<div style="opacity:0.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (a.reply_to.content || '') + '</div></div>';
+    }
 
-        function loadActivities() {
-            var $feed = $('#activity-feed');
-            $feed.html(
-                '<div class="chat-skeleton"><div class="skel-bubble"></div></div>' +
-                '<div class="chat-skeleton mine"><div class="skel-bubble" style="width:120px;border-radius:16px 16px 4px 16px"></div></div>' +
-                '<div class="chat-skeleton"><div class="skel-bubble" style="width:200px"></div></div>'
-            );
+    var isMine = a.user_id === currentUserId;
+    var avatarCircle = '<div class="activity-post-avatar" style="' + (isMine ? 'background:var(--accent);color:#fff' : '') + '">' + avatar + '</div>';
 
-            $.get('{{ route("task-planner.index") }}/' + taskId + '/activities', function(res) {
-                var data = res.data || [];
+    // Replies
+    var replyCount = (a.replies && a.replies.length) ? a.replies.length : 0;
+    var repliesSectionId = 'replies-section-' + a.id;
+    var replyFormId = 'reply-form-' + a.id;
+    var replyFileId = 'reply-file-' + a.id;
 
-                if (data.length === 0) {
-                    $feed.html(
-                        '<div class="chat-empty">' +
-                        '<i class="fa fa-comments"></i>' +
-                        '<p>Belum ada percakapan</p>' +
-                        '<p class="sub">Kirim pesan pertama untuk memulai</p>' +
-                        '</div>'
-                    );
-                    return;
-                }
-
-                var html = '';
-                var lastDate = '';
-                var lastUserId = null;
-
-                data.forEach(function(a) {
-                    var aDate = a.created_at ? a.created_at.split('T')[0] : '';
-                    if (aDate !== lastDate) {
-                        html += '<div class="chat-date-sep"><span class="date-line"></span><span class="date-label">' + formatDateLabel(aDate) + '</span></div>';
-                        lastDate = aDate;
-                        lastUserId = null;
+    var repliesHtml = '';
+    if (replyCount > 0) {
+        var displayStyle = replyCount > 2 ? 'style="display:none"' : '';
+        repliesHtml = '<div class="activity-replies" id="' + repliesSectionId + '" ' + displayStyle + '>';
+        a.replies.forEach(function(r) {
+            var rAvatar = r.username ? r.username.substring(0, 2).toUpperCase() : '??';
+            var rTime = r.created_at ? moment(r.created_at).fromNow() : '—';
+            var rAttach = '';
+            if (r.attachments && r.attachments.length > 0) {
+                r.attachments.forEach(function(at) {
+                    var u = at.url || at.attachment_path;
+                    var n = at.name || at.attachment_name || 'File';
+                    if (at.type === 'image' || (at.mime_type && at.mime_type.startsWith('image/'))) {
+                        rAttach += '<img src="' + u + '" class="activity-post-attachment-image" onclick="openFilePreview(\'' + u + '\',\'' + n + '\')" style="width:60px;height:60px">';
+                    } else {
+                        rAttach += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + u + '\',\'' + n + '\');return false"><i class="fa fa-file"></i> ' + n + '</a>';
                     }
-
-                    var isMine = a.user_id === currentUserId;
-                    var cls = isMine ? 'mine' : 'theirs';
-                    var hue = a.user_id ? (a.user_id * 137) % 360 : 210;
-                    var bgColor = 'hsl(' + hue + ', 55%, 50%)';
-
-                    var showAvatar = !isMine && lastUserId !== a.user_id;
-                    var showName = !isMine && lastUserId !== a.user_id;
-
-                    html += '<div class="chat-msg ' + cls + '" id="activity-' + a.id + '">';
-
-                    if (showAvatar) {
-                        html += '<div class="chat-avatar-sm" style="background:' + bgColor + '">' + (a.initials || '?') + '</div>';
-                    } else if (!isMine) {
-                        html += '<div style="width:30px;flex-shrink:0"></div>';
-                    }
-
-                    html += '<div class="chat-bubble-wrap">';
-                    if (showName) {
-                        html += '<div class="chat-sender">' + (a.username || '?') + '</div>';
-                    }
-                    html += '<div class="chat-bubble">';
-
-                    if (a.reply_to) {
-                        html += '<div class="chat-quote" onclick="scrollToActivity(' + a.reply_to.id + ')">';
-                        html += '<div class="quote-user">' + (a.reply_to.username || '?') + '</div>';
-                        html += '<div class="quote-text">' + (a.reply_to.content || '') + '</div>';
-                        html += '</div>';
-                    }
-
-                    if (a.attachments && a.attachments.length > 0) {
-                        a.attachments.forEach(function(att) {
-                            if (att.type === 'image') {
-                                html += '<div class="chat-img"><img src="' + att.url + '" onclick="openLightbox(\'' + att.url + '\')" loading="lazy"></div>';
-                            } else {
-                                html += '<a href="#" class="chat-file-link" onclick="openFileLightbox(\'' + att.url + '\', \'' + (att.name || 'File') + '\');return false;" style="display:block;margin-top:2px"><i class="fa fa-file me-1"></i>' + (att.name || 'File') + '</a>';
-                            }
-                        });
-                    }
-                    if (a.content) {
-                        if (a.attachments && a.attachments.length > 0) {
-                            html += '<div style="margin-top:6px">' + a.content + '</div>';
-                        } else if (!a.reply_to) {
-                            html += a.content;
-                        } else {
-                            html += a.content;
-                        }
-                    }
-                    html += '</div>';
-                    html += '<button class="chat-reply-btn" onclick="startReply(' + a.id + ', \'' + (a.username || '?') + '\', \'' + (a.content || '').replace(/'/g, "\\'").substring(0, 80) + '\')" title="Reply"><i class="fa fa-reply"></i></button>';
-                    html += '<div class="chat-bubble-time">' + formatTimeLabel(a.created_at || a.timestamp) + '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '<div class="chat-bubble-time">' + formatTimeLabel(a.created_at || a.timestamp) + '</div>';
-                    html += '</div>';
-                    html += '</div>';
-
-                    lastUserId = isMine ? null : a.user_id;
                 });
-
-                $feed.html(html);
-                setTimeout(scrollChatBottom, 100);
-            }).fail(function() {
-                $feed.html('<div class="chat-empty"><i class="fa fa-exclamation-triangle"></i><p>Gagal memuat.</p></div>');
-            });
-        }
-
-        function scrollChatBottom() {
-            var $feed = $('#activity-feed');
-            $feed.scrollTop($feed[0].scrollHeight);
-        }
-
-        var $textarea = $('#activity-content');
-        $textarea.on('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-        });
-        $textarea.on('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                e.preventDefault();
-                $('#btn-post-activity').click();
+                rAttach = '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">' + rAttach + '</div>';
             }
+            repliesHtml += '<div class="activity-reply">' +
+                '<div class="activity-reply-avatar">' + rAvatar + '</div>' +
+                '<div class="activity-reply-body">' +
+                '<div class="activity-reply-header"><span class="activity-reply-author">' + (r.username || '—') + '</span><span class="activity-reply-time">' + rTime + '</span></div>' +
+                '<div class="activity-reply-content">' + escapeHtml(r.content || '') + '</div>' + rAttach +
+                '</div></div>';
         });
+        repliesHtml += '</div>';
+    }
 
-        $('#btn-attach-file').on('click', function() { $('#activity-file-input').click(); });
+    // Reply toggle
+    var replyToggle = '';
+    if (replyCount > 0) {
+        var toggleLabel = replyCount > 2 ? 'Lihat ' + replyCount + ' balasan' : 'Sembunyikan balasan';
+        replyToggle = '<button class="activity-reply-toggle" onclick="toggleReplies(' + a.id + ')"><i class="fa fa-comments"></i> ' + toggleLabel + '</button>';
+    }
 
-        var selectedFiles = [];
+    // Reply form (di BAWAH replies) — multi-file
+    var replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
+        '<div class="reply-input-row">' +
+        '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '">' +
+        '<div class="reply-actions">' +
+        '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
+        '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
+        '</div></div>' +
+        '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
+        '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div></div>';
 
-        $('#activity-file-input').on('change', function() {
-            var newFiles = Array.from(this.files);
-            newFiles.forEach(function(file) {
-                if (selectedFiles.length >= 10) { toastr.error('Maksimum 10 file.'); return; }
-                if (selectedFiles.some(function(f) { return f.name === file.name && f.size === file.size; })) return;
-                selectedFiles.push(file);
-            });
-            $(this).val('');
-            renderFilePreview();
-        });
+    var html = '<div class="activity-post" id="activity-' + a.id + '">' +
+        avatarCircle +
+        '<div class="activity-post-body">' +
+        '<div class="activity-post-header">' +
+        '<span class="activity-post-author">' + (a.username || '—') + '</span>' +
+        '<span class="activity-post-time">' + time + '</span>' +
+        '</div>' +
+        quoteHtml +
+        '<div class="activity-post-content">' + escapeHtml(a.content || '') + '</div>' +
+        (attachmentsHtml ? '<div class="activity-post-attachments">' + attachmentsHtml + '</div>' : '') +
+        '<div class="activity-post-actions">' +
+        '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>' +
+        replyToggle +
+        '</div>' +
+        repliesHtml +
+        replyFormHtml +
+        '</div></div>';
+    return html;
+}
 
-        function renderFilePreview() {
-            var $chip = $('#chat-file-chip');
-            if (selectedFiles.length === 0) { $chip.hide().empty(); return; }
-            var html = '';
-            selectedFiles.forEach(function(file, i) {
-                html += '<div class="chat-file-chip-bar">';
-                if (file.type.startsWith('image/')) {
-                    var reader = new FileReader();
-                    reader.onload = (function(idx) { return function(e) { $('.chip-img-' + idx).attr('src', e.target.result); }; })(i);
-                    reader.readAsDataURL(file);
-                    html += '<img class="chip-img-' + i + '" src="" style="width:24px;height:24px;border-radius:5px;background:#e5e7eb">';
-                } else {
-                    html += '<span style="width:24px;height:24px;border-radius:5px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0"><i class="fa fa-file"></i></span>';
-                }
-                html += '<span class="chip-name">' + file.name + '</span>';
-                html += '<span class="chip-remove" data-idx="' + i + '"><i class="fa fa-times"></i></span>';
-                html += '</div>';
-            });
-            $chip.html(html).show();
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ── Reply to Activity ──
+var replyFileState = {};
+
+function handleReplyFiles(activityId) {
+    var input = $('#reply-file-' + activityId)[0];
+    if (!input || !input.files.length) return;
+    if (!replyFileState[activityId]) replyFileState[activityId] = [];
+    Array.from(input.files).forEach(function(file) {
+        if (replyFileState[activityId].length >= 10) { toastr.error('Maksimum 10 file.'); return; }
+        var exists = replyFileState[activityId].some(function(f) { return f.name === file.name && f.size === file.size; });
+        if (!exists) replyFileState[activityId].push(file);
+    });
+    input.value = '';
+    renderReplyPreviews(activityId);
+}
+
+function renderReplyPreviews(activityId) {
+    var files = replyFileState[activityId] || [];
+    var $container = $('#reply-previews-' + activityId);
+    if (files.length === 0) { $container.empty(); return; }
+    var html = '';
+    files.forEach(function(file, idx) {
+        var thumb = '';
+        if (file.type.startsWith('image/')) {
+            (function(i) {
+                var reader = new FileReader();
+                reader.onload = function(e) { $('.reply-chip-img-' + activityId + '-' + i).attr('src', e.target.result); };
+                reader.readAsDataURL(file);
+            })(idx);
+            thumb = '<img class="reply-chip-img-' + activityId + '-' + idx + '" src="">';
+        } else {
+            thumb = '<i class="fa fa-file"></i>';
         }
+        html += '<div class="reply-file-chip">' + thumb + '<span class="chip-name">' + escapeHtml(file.name) + '</span><span class="chip-close" onclick="removeReplyFile(' + activityId + ',' + idx + ')">&times;</span></div>';
+    });
+    $container.html(html);
+}
 
-        $(document).on('click', '.chip-remove', function() {
-            var idx = parseInt($(this).data('idx'));
-            selectedFiles.splice(idx, 1);
-            $('#activity-file-input').val('');
-            renderFilePreview();
-        });
+function removeReplyFile(activityId, idx) {
+    if (replyFileState[activityId]) { replyFileState[activityId].splice(idx, 1); renderReplyPreviews(activityId); }
+}
 
-        $('#btn-post-activity').on('click', function() {
-            var content = $textarea.val().trim();
-            if (!content && selectedFiles.length === 0) {
-                $textarea.focus();
-                return;
-            }
-            var $btn = $(this).prop('disabled', true);
-
-            var formData = new FormData();
-            formData.append('content', content);
-            formData.append('_token', '{{ csrf_token() }}');
-            if (currentReplyId) formData.append('reply_to_id', currentReplyId);
-            selectedFiles.forEach(function(file) {
-                formData.append('attachments[]', file);
-            });
-
-            $.ajax({
-                url: '{{ route("task-planner.index") }}/' + taskId + '/activities',
-                method: 'POST',
-                data: formData,
-                processData: false,
-                contentType: false,
-                success: function(res) {
-                    $textarea.val('').css('height', 'auto');
-                    selectedFiles = [];
-                    cancelReply();
-                    $('#chat-file-chip').hide().empty();
-                    loadActivities();
-                },
-                error: function(xhr) {
-                    toastr.error(xhr.responseJSON?.message || 'Gagal mengirim.');
-                },
-                complete: function() {
-                    $btn.prop('disabled', false);
-                }
-            });
-        });
-
-        $('button[data-bs-target="#tab-activity"]').on('shown.bs.tab', function() { loadActivities(); });
-
-        loadActivities();
-
-        function openLightbox(url) {
-            $('#filePreviewTitle').text('Image Preview');
-            $('#filePreviewBody').html('<img src="' + url + '" alt="">');
-            $('#filePreviewFooter').empty();
-            new bootstrap.Modal('#filePreviewModal').show();
+function toggleReplies(activityId) {
+    var section = $('#replies-section-' + activityId);
+    var count = section.find('.activity-reply').length;
+    section.toggle();
+    var btns = $('.activity-reply-toggle');
+    btns.each(function() {
+        if ($(this).attr('onclick') && $(this).attr('onclick').indexOf('toggleReplies(' + activityId + ')') !== -1) {
+            $(this).html(section.is(':visible') ? '<i class="fa fa-comments"></i> Sembunyikan balasan' : '<i class="fa fa-comments"></i> Lihat ' + count + ' balasan');
         }
+    });
+}
 
-        function openFileLightbox(url, name) {
-            var ext = name.split('.').pop().toLowerCase();
-            var previewable = ['pdf', 'txt', 'html', 'htm', 'csv', 'json', 'xml', 'svg'];
-            if (previewable.indexOf(ext) !== -1) {
-                window.open(url, '_blank');
-                return;
-            }
-            $('#filePreviewTitle').text(name);
-            $('#filePreviewBody').html(
-                '<div style="padding:40px 20px;text-align:center">' +
-                '<i class="fa fa-file" style="font-size:56px;color:var(--text-muted);display:block;margin-bottom:16px"></i>' +
-                '<p style="font-size:15px;font-weight:600;color:var(--text-primary)">' + name + '</p>' +
-                '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">File tidak dapat ditampilkan di browser</p>' +
-                '</div>'
-            );
-            $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button> <a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
-            new bootstrap.Modal('#filePreviewModal').show();
+function replyToActivity(activityId) {
+    var input = $('#reply-input-' + activityId);
+    var content = input.val().trim();
+    var files = replyFileState[activityId] || [];
+    if (!content && files.length === 0) return;
+
+    var $form = $('#reply-form-' + activityId);
+    $form.addClass('loading');
+    var $sendBtn = $form.find('.reply-actions button[onclick*="replyToActivity"]');
+    $sendBtn.html('<i class="fa fa-spinner fa-spin"></i>');
+
+    var formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('content', content || '');
+    formData.append('reply_to_id', activityId);
+    files.forEach(function(file) { formData.append('attachments[]', file); });
+
+    $.ajax({
+        url: activitiesBaseUrl,
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function() {
+            input.val('');
+            replyFileState[activityId] = [];
+            $('#reply-previews-' + activityId).empty();
+            loadActivities();
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.message || 'Gagal mengirim balasan.');
+        },
+        complete: function() {
+            $form.removeClass('loading');
+            $sendBtn.html('<i class="fa fa-paper-plane"></i>');
         }
-    </script>
+    });
+}
+
+// ── File Preview Modal ──
+function openFilePreview(url, name) {
+    var ext = name ? name.split('.').pop().toLowerCase() : '';
+    var imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+    $('#filePreviewBody').empty();
+    if (ext === 'pdf') {
+        $('#filePreviewTitle').text(name || 'PDF Preview');
+        $('#filePreviewBody').html('<iframe src="' + url + '" style="width:100%;height:85vh;border:none;border-radius:6px"></iframe>');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+    } else if (imageExts.indexOf(ext) !== -1) {
+        $('#filePreviewTitle').text(name || 'Image Preview');
+        $('#filePreviewBody').html('<img src="' + url + '" alt="' + name + '" style="max-width:100%;max-height:80vh;border-radius:6px;display:block;margin:0 auto">');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+    } else {
+        $('#filePreviewTitle').text(name || 'File Preview');
+        $('#filePreviewBody').html(
+            '<div style="padding:40px 20px;text-align:center">' +
+            '<i class="fa fa-file" style="font-size:56px;color:var(--text-muted);display:block;margin-bottom:16px"></i>' +
+            '<p style="font-size:15px;font-weight:600;color:var(--text-primary)">' + (name || 'File') + '</p>' +
+            '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Klik Download untuk membuka file</p></div>'
+        );
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+    }
+    new bootstrap.Modal('#filePreviewModal').show();
+}
+
+// ── Post Activity ──
+$(document).on('click', '#btn-post-activity', function() {
+    var $btn = $(this);
+    var content = $('#activity-input').val().trim();
+    if (!content) { toastr.error('Tulis aktivitas terlebih dahulu.'); return; }
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+    $('.activity-form-card').addClass('loading');
+
+    var formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('content', content);
+    var fileInput = $('#activity-file')[0];
+    if (fileInput && fileInput.files[0]) {
+        formData.append('attachments[]', fileInput.files[0]);
+    }
+
+    $.ajax({
+        url: activitiesBaseUrl,
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            $('#activity-input').val('');
+            $('#activity-file').val('');
+            $('#activity-file-name').text('');
+            loadActivities();
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.message || 'Gagal posting.');
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Post');
+            $('.activity-form-card').removeClass('loading');
+        }
+    });
+});
+
+$(document).on('change', '#activity-file', function() {
+    var name = this.files[0] ? this.files[0].name : '';
+    $('#activity-file-name').text(name);
+});
+
+$('button[data-bs-target="#tab-activity"]').on('shown.bs.tab', function() { loadActivities(); });
+
+loadActivities();
+</script>
 @endsection
 
 @push('modals')

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\AccountCompany;
 use App\Models\AccountContact;
 use App\Models\AccountType;
+use App\Models\Activity;
+use App\Models\ActivityAttachment;
 use App\Models\BusinessEntity;
 use App\Models\BusinessValue;
 use App\Models\ContactMethod;
@@ -15,6 +17,8 @@ use App\Models\Lead;
 use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
+use App\Models\Task;
+use App\Models\TaskCategory;
 use App\Models\TypesAccountsCompany;
 use App\Models\User;
 use App\Services\LeadImportService;
@@ -457,12 +461,13 @@ class LeadsManagementController extends Controller
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $typesAccountsCompanies = TypesAccountsCompany::where('status', 'Active')->get();
+        $categories = TaskCategory::with('division')->get();
 
         return view('leads-management.show', compact(
             'lead', 'jobTitles', 'divisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
             'businessValues', 'interactionLevels', 'users', 'accountCompanies',
-            'typesAccountsCompanies'
+            'typesAccountsCompanies', 'categories'
         ));
     }
 
@@ -537,5 +542,176 @@ class LeadsManagementController extends Controller
         return response()->download($path, 'Lead_Import_Template.xlsx', [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+    }
+
+    public function fetchActivities($id): JsonResponse
+    {
+        $lead = Lead::findOrFail($id);
+
+        $activities = $lead->activities()
+            ->whereNull('reply_to_id')
+            ->with(['user', 'attachments', 'replies.user', 'replies.attachments', 'task'])
+            ->orderBy('created_at', 'asc')
+            ->paginate(20);
+
+        return response()->json($activities);
+    }
+
+    public function storeActivity(Request $request, $id): JsonResponse
+    {
+        $lead = Lead::findOrFail($id);
+
+        $mimeRule = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,application/zip,application/x-zip-compressed,application/octet-stream';
+        $validated = $request->validate([
+            'content' => 'nullable|string|max:5000',
+            'attachments' => 'nullable|array|max:10',
+            'attachments.*' => 'file|max:10240|mimetypes:'.$mimeRule,
+            'reply_to_id' => 'nullable|exists:activities,id',
+        ]);
+
+        $hasContent = ! empty($validated['content'] ?? null);
+        $hasFiles = $request->hasFile('attachments');
+
+        if (! $hasContent && ! $hasFiles) {
+            return response()->json(['message' => 'Content or file attachment required.'], 422);
+        }
+
+        $activity = Activity::create([
+            'lead_id' => $lead->id,
+            'user_id' => Auth::id(),
+            'content' => $validated['content'] ?? '',
+            'reply_to_id' => $validated['reply_to_id'] ?? null,
+        ]);
+
+        if ($hasFiles) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('activity-attachments', 'public');
+                $mime = $file->getMimeType();
+                $activity->attachments()->create([
+                    'attachment_path' => $path,
+                    'attachment_type' => str_starts_with($mime, 'image/') ? 'image' : 'file',
+                    'attachment_name' => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+
+        $activity->load(['user', 'attachments']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Activity posted.',
+            'activity' => $activity,
+        ]);
+    }
+
+    public function uploadActivityAttachment(Request $request, Activity $activity): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|max:10240',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('activity-attachments', 'public');
+
+        $attachment = ActivityAttachment::create([
+            'activity_id' => $activity->id,
+            'attachment_path' => $path,
+            'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+            'attachment_name' => $file->getClientOriginalName(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'File uploaded.',
+            'attachment' => $attachment->append('attachment_url'),
+        ]);
+    }
+
+    public function destroyActivity(Activity $activity): JsonResponse
+    {
+        if ($activity->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $activity->attachments()->delete();
+        $activity->replies()->delete();
+        $activity->delete();
+
+        return response()->json(['success' => true, 'message' => 'Activity deleted.']);
+    }
+
+    public function fetchLeadTasks($id): JsonResponse
+    {
+        $lead = Lead::findOrFail($id);
+
+        $tasks = $lead->tasks()
+            ->with(['creator', 'assignees', 'category'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($tasks);
+    }
+
+    public function storeLeadTask(Request $request, $id): JsonResponse
+    {
+        $lead = Lead::findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:150',
+            'description' => 'nullable|string|max:5000',
+            'category_id' => 'required|exists:task_categories,id',
+            'due_date' => 'required|date',
+            'time' => 'nullable|date_format:H:i',
+            'assignee_id' => 'nullable|exists:users,id',
+            'activity_id' => 'nullable|exists:activities,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $task = Task::create([
+                'creator_id' => Auth::id(),
+                'lead_id' => $lead->id,
+                'activity_id' => $validated['activity_id'] ?? null,
+                'category_id' => $validated['category_id'],
+                'title' => $validated['title'],
+                'description' => $validated['description'],
+                'due_date' => $validated['due_date'],
+                'time' => $validated['time'] ?? null,
+                'status' => 'todo',
+                'requires_approval' => false,
+                'alert_type' => 'none',
+                'alert_target' => 'personal',
+            ]);
+
+            $assigneeIds = [Auth::id()];
+            if ($validated['assignee_id']) {
+                $assigneeIds[] = $validated['assignee_id'];
+            }
+            $task->assignees()->sync(array_unique($assigneeIds));
+
+            Activity::create([
+                'lead_id' => $lead->id,
+                'task_id' => $task->id,
+                'user_id' => Auth::id(),
+                'content' => "📋 Created task: {$task->title}",
+            ]);
+
+            DB::commit();
+
+            $task->load(['creator', 'assignees']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Task created.',
+                'task' => $task,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create task: '.$e->getMessage(),
+            ], 500);
+        }
     }
 }

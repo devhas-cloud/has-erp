@@ -14,6 +14,8 @@ class Task extends Model
 
     protected $fillable = [
         'creator_id',
+        'lead_id',
+        'activity_id',
         'category_id',
         'whatsapp_group_id',
         'title',
@@ -65,5 +67,15 @@ class Task extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(TaskActivity::class);
+    }
+
+    public function lead(): BelongsTo
+    {
+        return $this->belongsTo(Lead::class);
+    }
+
+    public function sourceActivity(): BelongsTo
+    {
+        return $this->belongsTo(Activity::class, 'activity_id');
     }
 }

@@ -250,6 +250,301 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220,53,69,.1) !important;
     }
+
+    /* ── Activity Feed ── */
+    .activity-feed { padding: 4px 0; max-height: 520px; overflow-y: auto; }
+    .activity-form-card {
+        background: #f8fafc;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+    .activity-form-card textarea {
+        width: 100%;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        font-size: 13px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 60px;
+        transition: border-color .15s;
+    }
+    .activity-form-card textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+        outline: none;
+    }
+    .activity-form-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .activity-form-actions .btn { font-size: 12px; }
+
+    .activity-post {
+        display: flex;
+        gap: 12px;
+        padding: 16px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .activity-post:last-child { border-bottom: none; }
+    .activity-post-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--accent-soft);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 13px;
+        flex-shrink: 0;
+    }
+    .activity-post-body { flex: 1; min-width: 0; }
+    .activity-post-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+        flex-wrap: wrap;
+    }
+    .activity-post-author { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+    .activity-post-time { font-size: 11px; color: var(--text-muted); }
+    .activity-post-content { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word; }
+    .activity-post-attachments { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .activity-post-attachment {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #f1f5f9;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        color: var(--text-secondary);
+        text-decoration: none;
+    }
+    .activity-post-attachment:hover { background: #e2e8f0; }
+    .activity-post-attachment-image {
+        width: 80px; height: 80px;
+        object-fit: cover;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        border: 1px solid var(--card-border);
+    }
+    .activity-post-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 4px;
+    }
+    .activity-post-actions button {
+        background: none;
+        border: none;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 2px 4px;
+        transition: color .15s;
+    }
+    .activity-post-actions button:hover { color: var(--accent); }
+
+    .activity-replies { margin-top: 12px; padding-left: 48px; }
+    .activity-reply { display: flex; gap: 10px; margin-bottom: 10px; }
+    .activity-reply-avatar {
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        background: #e2e8f0;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 10px;
+        flex-shrink: 0;
+    }
+    .activity-reply-body { flex: 1; }
+    .activity-reply-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+    .activity-reply-author { font-weight: 600; font-size: 12px; color: var(--text-primary); }
+    .activity-reply-time { font-size: 10px; color: var(--text-muted); }
+    .activity-reply-content { font-size: 12px; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+
+    .activity-reply-form {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 10px;
+        padding: 10px 14px;
+        background: #f8fafc;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm);
+    }
+    .activity-reply-form .reply-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .activity-reply-form input[type="text"] {
+        flex: 1;
+        border: 1px solid var(--card-border);
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-family: inherit;
+    }
+    .activity-reply-form input[type="text"]:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    .activity-reply-form .reply-actions {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+    }
+    .activity-reply-form .reply-actions button {
+        background: none;
+        border: none;
+        font-size: 12px;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: var(--radius-sm);
+    }
+    .activity-reply-form .reply-actions button:hover {
+        color: var(--accent);
+        background: #e2e8f0;
+    }
+    .activity-reply-form .reply-file-name {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-left: 4px;
+    }
+
+    .activity-reply-toggle-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    .activity-reply-toggle {
+        background: none;
+        border: none;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 4px 10px;
+        border-radius: 20px;
+        transition: all .15s;
+    }
+    .activity-reply-toggle:hover {
+        color: var(--accent);
+        background: var(--accent-soft);
+    }
+
+    .task-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background .1s;
+    }
+    .task-item:last-child { border-bottom: none; }
+    .task-item:hover { background: rgba(16,185,129,.02); }
+    .task-item-icon {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+    .task-item-body { flex: 1; min-width: 0; }
+    .task-item-title { font-weight: 600; font-size: 13.5px; color: var(--text-primary); margin-bottom: 2px; }
+    .task-item-meta { font-size: 12px; color: var(--text-muted); }
+    .task-item-status { font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 20px; flex-shrink: 0; }
+
+    /* ── Task Form (modal) ── */
+    .task-form-section {
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        margin-bottom: 16px;
+        overflow: hidden;
+    }
+    .task-form-section-header {
+        padding: 10px 16px;
+        background: #f8fafc;
+        border-bottom: 1px solid var(--card-border);
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        user-select: none;
+    }
+    .task-form-section-body { padding: 16px; display: none; }
+    .task-form-section.open .task-form-section-body { display: block; }
+    .task-form-section-header .chevron { transition: transform .2s; font-size: 11px; color: var(--text-muted); }
+    .task-form-section.open .chevron { transform: rotate(180deg); }
+    .task-form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .task-form-row .form-group { flex: 1; min-width: 200px; }
+    .task-form-row .form-group.small { flex: 0 0 160px; }
+
+    /* ── File Preview Modal ── */
+    #filePreviewBody img { max-width: 100%; max-height: 80vh; border-radius: 6px; display: block; margin: 0 auto; }
+    #filePreviewBody iframe { width: 100%; height: 85vh; border: none; border-radius: 6px; }
+    #filePreviewModal .modal-dialog { max-width: 90vw; }
+    #filePreviewModal .modal-body { padding: 8px; }
+
+    /* ── Reply file previews ── */
+    .reply-file-previews {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+    }
+    .reply-file-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px 3px 6px;
+        background: #fff;
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        font-size: 11px;
+        max-width: 180px;
+    }
+    .reply-file-chip img { width: 18px; height: 18px; border-radius: 3px; object-fit: cover; }
+    .reply-file-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .reply-file-chip .chip-close { cursor: pointer; color: var(--text-muted); font-size: 10px; flex-shrink: 0; }
+    .reply-file-chip .chip-close:hover { color: #dc3545; }
+
+    /* ── Loading States ── */
+    .activity-form-card.loading {
+        opacity: 0.6;
+        pointer-events: none;
+        position: relative;
+    }
+    .activity-form-card.loading::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,0.4);
+        border-radius: var(--radius);
+        z-index: 1;
+    }
+    .activity-reply-form.loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
 </style>
 @endsection
 
@@ -378,15 +673,42 @@
             <div class="card-body-custom">
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="tab-activity" role="tabpanel">
-                        <div class="empty-state">
-                            <i class="fa fa-chart-line"></i>
-                            <p>Belum ada aktivitas.</p>
+                        <div class="activity-feed" id="activity-feed">
+
+                             <div id="activity-list"></div>
+                            <div id="activity-loading" style="text-align:center;padding:20px;color:var(--text-muted)">
+                                <i class="fa fa-spinner fa-spin"></i> Loading...
+                            </div>
+
+                            <div class="activity-form-card">
+                                <textarea id="activity-input" placeholder="Tulis aktivitas..." rows="2"></textarea>
+                                <div class="activity-form-actions">
+                                    <div>
+                                         <input type="file" id="activity-file" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="$('#activity-file').click()">
+                                            <i class="fa fa-paperclip"></i> Attach
+                                        </button>
+                                        <span id="activity-file-name" style="font-size:12px;color:var(--text-muted);margin-left:8px"></span>
+                                        <div class="reply-file-previews" id="activity-file-previews"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-accent" id="btn-post-activity">
+                                        <i class="fa fa-paper-plane"></i> Post
+                                    </button>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                     <div class="tab-pane fade" id="tab-task" role="tabpanel">
-                        <div class="empty-state">
-                            <i class="fa fa-tasks"></i>
-                            <p>Belum ada task.</p>
+                        <div style="padding:12px 16px 0;display:flex;justify-content:flex-end">
+                            <button type="button" class="btn btn-sm btn-accent" onclick="openCreateTaskModal()">
+                                <i class="fa fa-plus"></i> Buat Task
+                            </button>
+                        </div>
+                        <div id="task-list">
+                            <div style="text-align:center;padding:20px;color:var(--text-muted)">
+                                <i class="fa fa-spinner fa-spin"></i> Loading...
+                            </div>
                         </div>
                     </div>
                     <div class="tab-pane fade" id="tab-noted" role="tabpanel">
@@ -770,6 +1092,136 @@
 </div>
 @endpush
 
+@push('modals')
+<div class="modal fade modal-task" id="taskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="taskModalTitle">Buat Task</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+                <form id="task-form" autocomplete="off">
+                    <input type="hidden" id="lead-id-for-task" value="{{ $lead->id }}">
+
+                    <div class="task-form-section open">
+                        <div class="task-form-section-header" onclick="toggleTaskSection(this)">
+                            <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Task Information</span>
+                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                        </div>
+                        <div class="task-form-section-body">
+                            <div class="task-form-row">
+                                <div class="form-group">
+                                    <label>Title <span class="text-danger">*</span></label>
+                                    <input type="text" name="title" id="task-title" placeholder="Enter task title">
+                                </div>
+                            </div>
+                            <div class="task-form-row">
+                                <div class="form-group" style="flex:2">
+                                    <label>Description</label>
+                                    <textarea name="description" id="task-description" rows="3" placeholder="Task description..."></textarea>
+                                </div>
+                            </div>
+                            <div class="task-form-row">
+                                <div class="form-group">
+                                    <label>Category <span class="text-danger">*</span></label>
+                                    <select name="category_id" id="task-category-id">
+                                        <option value="">— Select Category —</option>
+                                        @foreach($categories as $cat)
+                                            <option value="{{ $cat->id }}">
+                                                {{ $cat->division_id ? '[' . optional($cat->division)->division_name . '] ' : '[Global] ' }}
+                                                {{ $cat->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Due Date <span class="text-danger">*</span></label>
+                                    <input type="date" name="due_date" id="task-due-date">
+                                </div>
+                                <div class="form-group small">
+                                    <label>Time</label>
+                                    <input type="time" name="time" id="task-time">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="task-form-section open">
+                        <div class="task-form-section-header" onclick="toggleTaskSection(this)">
+                            <span><i class="fa fa-users me-2" style="color:var(--accent)"></i>Assign To</span>
+                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                        </div>
+                        <div class="task-form-section-body">
+                            <div class="task-form-row">
+                                <div class="form-group">
+                                    <label>Assign To</label>
+                                    <select name="assignee_id" id="task-assignee" style="width:100%">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($users as $u)
+                                        <option value="{{ $u->id }}">{{ $u->username }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Default will be assigned to yourself.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="task-form-section">
+                        <div class="task-form-section-header" onclick="toggleTaskSection(this)">
+                            <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Settings</span>
+                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                        </div>
+                        <div class="task-form-section-body">
+                            <div class="task-form-row">
+                                <div class="form-group small">
+                                    <label>Alert Type</label>
+                                    <select name="alert_type" id="task-alert-type">
+                                        <option value="none">None</option>
+                                        <option value="whatsapp">WhatsApp</option>
+                                    </select>
+                                </div>
+                                <div class="form-group small">
+                                    <label>Alert Target</label>
+                                    <select name="alert_target" id="task-alert-target">
+                                        <option value="personal">Personal (Japri)</option>
+                                        <option value="group">Group WA</option>
+                                    </select>
+                                </div>
+                                <div class="form-group small">
+                                    <label>Alert Time</label>
+                                    <input type="datetime-local" name="alert_time" id="task-alert-time">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-lead-task">
+                    <i class="fa fa-save me-1"></i> Buat Task
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="filePreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="filePreviewTitle">File Preview</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-2" id="filePreviewBody"></div>
+            <div class="modal-footer" id="filePreviewFooter"></div>
+        </div>
+    </div>
+</div>
+@endpush
+
 @section('scripts')
 <script>
 let leadModalInstance = null;
@@ -1005,5 +1457,417 @@ function openEditModal(id) {
         });
     }
 });
+
+// ── Activity Feed ──
+const leadId = {{ $lead->id }};
+const activityFetchUrl = '/leads-management/' + leadId + '/activities';
+const taskFetchUrl = '/leads-management/' + leadId + '/tasks';
+const activityStoreUrl = '/leads-management/' + leadId + '/activities';
+
+function loadActivities() {
+    $.get(activityFetchUrl, function(res) {
+        var html = '';
+        if (res.data && res.data.length > 0) {
+            res.data.forEach(function(a) { html += renderActivity(a); });
+        } else {
+            html = '<div class="empty-state"><i class="fa fa-chart-line"></i><p>Belum ada aktivitas.</p></div>';
+        }
+        $('#activity-list').html(html);
+        $('#activity-loading').hide();
+    }).fail(function() {
+        $('#activity-loading').html('<span style="color:var(--danger)">Gagal memuat aktivitas.</span>');
+    });
+}
+
+function renderActivity(a) {
+    var avatar = a.user ? (a.user.username || '?').substring(0, 2).toUpperCase() : '??';
+    var time = a.created_at ? moment(a.created_at).fromNow() : '—';
+    var attachmentsHtml = '';
+    if (a.attachments && a.attachments.length > 0) {
+        a.attachments.forEach(function(at) {
+            var url = at.attachment_url || at.attachment_path;
+            var name = at.attachment_name || 'File';
+            if (at.attachment_type === 'image') {
+                attachmentsHtml += '<img src="' + url + '" class="activity-post-attachment-image" onclick="openFilePreview(\'' + url + '\',\'' + name + '\')">';
+            } else {
+                attachmentsHtml += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + url + '\',\'' + name + '\');return false"><i class="fa fa-file"></i> ' + name + '</a>';
+            }
+        });
+    }
+    var taskBadge = '';
+    if (a.task) {
+        taskBadge = '<span class="status-badge status-active" style="font-size:10px;padding:1px 8px;margin-left:8px"><i class="fa fa-tasks" style="font-size:9px"></i> Task #' + a.task.id + '</span>';
+    }
+
+    var replyCount = (a.replies && a.replies.length) ? a.replies.length : 0;
+    var repliesSectionId = 'replies-section-' + a.id;
+    var replyFormId = 'reply-form-' + a.id;
+    var replyFileId = 'reply-file-' + a.id;
+
+    var repliesHtml = '';
+    if (replyCount > 0) {
+        var displayStyle = replyCount > 2 ? 'style="display:none"' : '';
+        repliesHtml = '<div class="activity-replies" id="' + repliesSectionId + '" ' + displayStyle + '>';
+        a.replies.forEach(function(r) {
+            var rAvatar = r.user ? (r.user.username || '?').substring(0, 2).toUpperCase() : '??';
+            var rTime = r.created_at ? moment(r.created_at).fromNow() : '—';
+            var rAttach = '';
+            if (r.attachments && r.attachments.length > 0) {
+                r.attachments.forEach(function(at) {
+                    var u = at.attachment_url || at.attachment_path;
+                    var n = at.attachment_name || 'File';
+                    if (at.attachment_type === 'image') {
+                        rAttach += '<img src="' + u + '" class="activity-post-attachment-image" onclick="openFilePreview(\'' + u + '\',\'' + n + '\')" style="width:60px;height:60px;display:inline-block;margin-right:4px">';
+                    } else {
+                        rAttach += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + u + '\',\'' + n + '\');return false" style="display:inline-flex;margin-right:4px"><i class="fa fa-file"></i> ' + n + '</a>';
+                    }
+                });
+                rAttach = '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">' + rAttach + '</div>';
+            }
+            repliesHtml += '<div class="activity-reply">' +
+                '<div class="activity-reply-avatar">' + rAvatar + '</div>' +
+                '<div class="activity-reply-body">' +
+                '<div class="activity-reply-header"><span class="activity-reply-author">' + (r.user ? r.user.username : '—') + '</span><span class="activity-reply-time">' + rTime + '</span></div>' +
+                '<div class="activity-reply-content">' + escapeHtml(r.content || '') + '</div>' + rAttach +
+                '</div></div>';
+        });
+        repliesHtml += '</div>';
+    }
+
+    var replyToggle = '';
+    if (replyCount > 0) {
+        var toggleLabel = replyCount > 2 ? 'Lihat ' + replyCount + ' balasan' : 'Sembunyikan balasan';
+        replyToggle = '<button class="activity-reply-toggle" onclick="toggleReplies(' + a.id + ')"><i class="fa fa-comments"></i> ' + toggleLabel + '</button>';
+    }
+
+    var replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
+        '<div class="reply-input-row">' +
+        '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '">' +
+        '<div class="reply-actions">' +
+        '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
+        '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
+        '</div></div>' +
+        '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
+        '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div></div>';
+
+    var html = '<div class="activity-post" id="activity-' + a.id + '">' +
+        '<div class="activity-post-avatar">' + avatar + '</div>' +
+        '<div class="activity-post-body">' +
+        '<div class="activity-post-header">' +
+        '<span class="activity-post-author">' + (a.user ? a.user.username : '—') + '</span>' +
+        '<span class="activity-post-time">' + time + '</span>' +
+        taskBadge +
+        '</div>' +
+        '<div class="activity-post-content">' + escapeHtml(a.content || '') + '</div>' +
+        (attachmentsHtml ? '<div class="activity-post-attachments">' + attachmentsHtml + '</div>' : '') +
+        '<div class="activity-post-actions">' +
+        '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>' +
+        replyToggle +
+        '</div>' +
+        repliesHtml +
+        replyFormHtml +
+        '</div></div>';
+    return html;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ── Reply ──
+var replyFileState = {};
+
+function handleReplyFiles(activityId) {
+    var input = $('#reply-file-' + activityId)[0];
+    if (!input || !input.files.length) return;
+    if (!replyFileState[activityId]) replyFileState[activityId] = [];
+    Array.from(input.files).forEach(function(file) {
+        if (replyFileState[activityId].length >= 10) { toastr.error('Maksimum 10 file.'); return; }
+        var exists = replyFileState[activityId].some(function(f) { return f.name === file.name && f.size === file.size; });
+        if (!exists) replyFileState[activityId].push(file);
+    });
+    input.value = '';
+    renderReplyPreviews(activityId);
+}
+
+function renderReplyPreviews(activityId) {
+    var files = replyFileState[activityId] || [];
+    var $container = $('#reply-previews-' + activityId);
+    if (files.length === 0) { $container.empty(); return; }
+    var html = '';
+    files.forEach(function(file, idx) {
+        var thumb = '';
+        if (file.type.startsWith('image/')) {
+            (function(i) {
+                var reader = new FileReader();
+                reader.onload = function(e) { $('.reply-chip-img-' + activityId + '-' + i).attr('src', e.target.result); };
+                reader.readAsDataURL(file);
+            })(idx);
+            thumb = '<img class="reply-chip-img-' + activityId + '-' + idx + '" src="">';
+        } else {
+            thumb = '<i class="fa fa-file"></i>';
+        }
+        html += '<div class="reply-file-chip">' + thumb + '<span class="chip-name">' + escapeHtml(file.name) + '</span><span class="chip-close" onclick="removeReplyFile(' + activityId + ',' + idx + ')">&times;</span></div>';
+    });
+    $container.html(html);
+}
+
+function removeReplyFile(activityId, idx) {
+    if (replyFileState[activityId]) { replyFileState[activityId].splice(idx, 1); renderReplyPreviews(activityId); }
+}
+
+function toggleReplies(activityId) {
+    var section = $('#replies-section-' + activityId);
+    var count = section.find('.activity-reply').length;
+    section.toggle();
+    var btns = $('.activity-reply-toggle');
+    btns.each(function() {
+        if ($(this).attr('onclick') && $(this).attr('onclick').indexOf('toggleReplies(' + activityId + ')') !== -1) {
+            $(this).html(section.is(':visible') ? '<i class="fa fa-comments"></i> Sembunyikan balasan' : '<i class="fa fa-comments"></i> Lihat ' + count + ' balasan');
+        }
+    });
+}
+
+function replyToActivity(activityId) {
+    var input = $('#reply-input-' + activityId);
+    var content = input.val().trim();
+    var files = replyFileState[activityId] || [];
+    if (!content && files.length === 0) return;
+
+    var $form = $('#reply-form-' + activityId);
+    $form.addClass('loading');
+    var $sendBtn = $form.find('.reply-actions button[onclick*="replyToActivity"]');
+    $sendBtn.html('<i class="fa fa-spinner fa-spin"></i>');
+
+    var formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('content', content || '');
+    formData.append('reply_to_id', activityId);
+    files.forEach(function(file) { formData.append('attachments[]', file); });
+
+    $.ajax({
+        url: activityStoreUrl,
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function() {
+            input.val('');
+            replyFileState[activityId] = [];
+            $('#reply-previews-' + activityId).empty();
+            loadActivities();
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.message || 'Gagal mengirim balasan.');
+        },
+        complete: function() {
+            $form.removeClass('loading');
+            $sendBtn.html('<i class="fa fa-paper-plane"></i>');
+        }
+    });
+}
+
+// ── Post Activity ──
+$(document).on('click', '#btn-post-activity', function() {
+    var $btn = $(this);
+    var content = $('#activity-input').val().trim();
+    if (!content) { toastr.error('Tulis aktivitas terlebih dahulu.'); return; }
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+    $('.activity-form-card').addClass('loading');
+
+    var formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('content', content);
+    var fileInput = $('#activity-file')[0];
+    if (activitySelectedFiles.length > 0) {
+        activitySelectedFiles.forEach(function(file) {
+            formData.append('attachments[]', file);
+        });
+    }
+
+    $.ajax({
+        url: activityStoreUrl,
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            $('#activity-input').val('');
+            activitySelectedFiles = [];
+            $('#activity-file-previews').empty();
+            $('#activity-file-name').text('');
+            loadActivities();
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.message || 'Gagal posting.');
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Post');
+            $('.activity-form-card').removeClass('loading');
+        }
+    });
+});
+
+// ── Multi-file upload for main post ──
+var activitySelectedFiles = [];
+
+$(document).on('change', '#activity-file', function() {
+    var files = Array.from(this.files);
+    files.forEach(function(file) {
+        if (activitySelectedFiles.length >= 10) { toastr.error('Maksimum 10 file.'); return; }
+        var exists = activitySelectedFiles.some(function(f) { return f.name === file.name && f.size === file.size; });
+        if (!exists) activitySelectedFiles.push(file);
+    });
+    this.value = '';
+    renderActivityFilePreviews();
+});
+
+function renderActivityFilePreviews() {
+    var $container = $('#activity-file-previews');
+    if (activitySelectedFiles.length === 0) { $container.empty(); $('#activity-file-name').text(''); return; }
+    var html = '';
+    activitySelectedFiles.forEach(function(file, idx) {
+        var thumb = '';
+        if (file.type.startsWith('image/')) {
+            (function(i) {
+                var reader = new FileReader();
+                reader.onload = function(e) { $('.act-chip-img-' + i).attr('src', e.target.result); };
+                reader.readAsDataURL(file);
+            })(idx);
+            thumb = '<img class="act-chip-img-' + idx + '" src="">';
+        } else {
+            thumb = '<i class="fa fa-file"></i>';
+        }
+        html += '<div class="reply-file-chip">' + thumb + '<span class="chip-name">' + escapeHtml(file.name) + '</span><span class="chip-close" onclick="removeActivityFile(' + idx + ')">&times;</span></div>';
+    });
+    $container.html(html);
+    $('#activity-file-name').text(activitySelectedFiles.length + ' file(s) selected');
+}
+
+function removeActivityFile(idx) {
+    activitySelectedFiles.splice(idx, 1);
+    renderActivityFilePreviews();
+}
+
+// ── File Preview ──
+function openFilePreview(url, name) {
+    var ext = name ? name.split('.').pop().toLowerCase() : '';
+    var imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+    var videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+    $('#filePreviewBody').empty();
+    if (ext === 'pdf') {
+        $('#filePreviewTitle').text(name || 'PDF Preview');
+        $('#filePreviewBody').html('<iframe src="' + url + '" style="width:100%;height:85vh;border:none;border-radius:6px"></iframe>');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+    } else if (videoExts.indexOf(ext) !== -1) {
+        $('#filePreviewTitle').text(name || 'Video Preview');
+        $('#filePreviewBody').html('<video src="' + url + '" controls style="max-width:100%;max-height:80vh;border-radius:6px;display:block;margin:0 auto"></video>');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+    } else if (imageExts.indexOf(ext) !== -1) {
+        $('#filePreviewTitle').text(name || 'Image Preview');
+        $('#filePreviewBody').html('<img src="' + url + '" alt="' + name + '" style="max-width:100%;max-height:80vh;border-radius:6px;display:block;margin:0 auto">');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+    } else {
+        $('#filePreviewTitle').text(name || 'File Preview');
+        $('#filePreviewBody').html(
+            '<div style="padding:40px 20px;text-align:center">' +
+            '<i class="fa fa-file" style="font-size:56px;color:var(--text-muted);display:block;margin-bottom:16px"></i>' +
+            '<p style="font-size:15px;font-weight:600;color:var(--text-primary)">' + (name || 'File') + '</p>' +
+            '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">File akan diunduh secara otomatis</p></div>'
+        );
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+    }
+    new bootstrap.Modal('#filePreviewModal').show();
+}
+
+// ── Task ──
+function toggleTaskSection(header) {
+    header.closest('.task-form-section').classList.toggle('open');
+}
+
+function openCreateTaskModal() {
+    $('#task-form')[0].reset();
+    document.getElementById('taskModalTitle').textContent = 'Buat Task';
+    new bootstrap.Modal(document.getElementById('taskModal')).show();
+}
+
+$(document).on('click', '#btn-save-lead-task', function() {
+    var $btn = $(this);
+    var title = $('#task-title').val().trim();
+    var category = $('#task-category-id').val();
+    var dueDate = $('#task-due-date').val();
+    if (!title) { toastr.error('Title wajib diisi.'); return; }
+    if (!category) { toastr.error('Category wajib diisi.'); return; }
+    if (!dueDate) { toastr.error('Due Date wajib diisi.'); return; }
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Creating...');
+
+    $.ajax({
+        url: '/leads-management/' + leadId + '/tasks',
+        type: 'POST',
+        data: {
+            _token: '{{ csrf_token() }}',
+            title: title,
+            description: $('#task-description').val(),
+            category_id: category,
+            due_date: dueDate,
+            time: $('#task-time').val(),
+            assignee_id: $('#task-assignee').val()
+        },
+        success: function(res) {
+            toastr.success(res.message);
+            bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
+            loadActivities();
+            loadTasks();
+        },
+        error: function(xhr) {
+            var errors = xhr.responseJSON?.errors;
+            if (errors) {
+                var first = Object.values(errors)[0];
+                toastr.error(Array.isArray(first) ? first[0] : first);
+            } else {
+                toastr.error(xhr.responseJSON?.message || 'Gagal membuat task.');
+            }
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Buat Task');
+        }
+    });
+});
+
+// ── Task List ──
+function loadTasks() {
+    $.get(taskFetchUrl, function(res) {
+        var html = '';
+        if (res.length > 0) {
+            res.forEach(function(t) {
+                var iconBg = t.status === 'done' ? 'background:#d1fae5;color:#059669' : 'background:#f1f5f9;color:var(--text-muted)';
+                var statusClass = t.status === 'done' ? 'status-active' : t.status === 'in_progress' ? 'status-pending' : 'status-inactive';
+                var statusLabel = t.status === 'todo' ? 'To Do' : t.status === 'in_progress' ? 'In Progress' : t.status === 'waiting_approval' ? 'Waiting' : 'Done';
+                var assigneeName = (t.assignees && t.assignees.length > 0) ? t.assignees.map(function(a) { return a.username; }).join(', ') : '—';
+                html += '<div class="task-item">' +
+                    '<div class="task-item-icon" style="' + iconBg + '"><i class="fa fa-tasks"></i></div>' +
+                    '<div class="task-item-body">' +
+                    '<div class="task-item-title">' + escapeHtml(t.title) + '</div>' +
+                    '<div class="task-item-meta">Assign: ' + escapeHtml(assigneeName) + ' · Due: ' + (t.due_date || '—') + '</div>' +
+                    '</div>' +
+                    '<span class="task-item-status ' + statusClass + '">' + statusLabel + '</span>' +
+                    '</div>';
+            });
+        } else {
+            html = '<div class="empty-state"><i class="fa fa-tasks"></i><p>Belum ada task.</p></div>';
+        }
+        $('#task-list').html(html);
+    }).fail(function() {
+        $('#task-list').html('<div style="text-align:center;padding:20px;color:var(--danger)">Gagal memuat task.</div>');
+    });
+}
+
+// ── Init ──
+loadActivities();
+loadTasks();
 </script>
 @endsection
