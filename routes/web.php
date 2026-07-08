@@ -68,6 +68,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('/notifications/count', [NotificationController::class, 'count'])->name('notifications.count');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/all', [NotificationController::class, 'all'])->name('notifications.all');
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.mark-read');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
 

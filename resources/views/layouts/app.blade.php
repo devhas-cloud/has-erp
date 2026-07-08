@@ -1821,6 +1821,30 @@
             font-size: 13px;
         }
 
+        .notif-footer {
+            border-top: 1px solid var(--card-border);
+            padding: 12px 20px;
+            text-align: center;
+            flex-shrink: 0;
+            background: linear-gradient(180deg, transparent, rgba(248,250,252,0.5));
+        }
+
+        .notif-footer a {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 12.5px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .notif-footer a:hover {
+            color: var(--accent-hover);
+            gap: 8px;
+        }
+
         .notif-bell-wrapper {
             position: relative;
         }
@@ -2038,6 +2062,12 @@
                     </div>
                     <div class="notif-list" id="notif-list">
                         <div class="notif-empty">Memuat...</div>
+                    </div>
+                    <div class="notif-footer">
+                        <a href="{{ route('notifications.all') }}">
+                            <i class="fa-regular fa-eye"></i>
+                            Lihat Semua Notifikasi
+                        </a>
                     </div>
                 </div>
             </div>

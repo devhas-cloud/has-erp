@@ -681,7 +681,8 @@ class LeadsManagementController extends Controller
             'category_id' => 'required|exists:task_categories,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
-            'assignee_id' => 'nullable|exists:users,id',
+            'assignees' => 'nullable|array',
+            'assignees.*' => 'exists:users,id',
             'activity_id' => 'nullable|exists:activities,id',
         ]);
 
@@ -702,11 +703,11 @@ class LeadsManagementController extends Controller
                 'alert_target' => 'personal',
             ]);
 
-            $assigneeIds = [Auth::id()];
-            if ($validated['assignee_id']) {
-                $assigneeIds[] = $validated['assignee_id'];
+            $assigneeIds = $request->input('assignees', []);
+            if (empty($assigneeIds)) {
+                $assigneeIds = [Auth::id()];
             }
-            $task->assignees()->sync(array_unique($assigneeIds));
+            $task->assignees()->sync($assigneeIds);
 
             Activity::create([
                 'lead_id' => $lead->id,

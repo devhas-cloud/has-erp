@@ -280,6 +280,10 @@
 @endsection
 
 @section('content')
+    @php
+        $backParam = request('back');
+        $backLeadId = $backParam && str_starts_with($backParam, 'lead-') ? str_replace('lead-', '', $backParam) : null;
+    @endphp
     <div class="page-header">
         <div>
             <h1 class="page-header-title">Detail Task</h1>
@@ -292,9 +296,15 @@
                 </a>
             @endif
 
-            <a href="{{ route('task-planner.index') }}" class="btn-ghost">
-                <i class="fa fa-arrow-left"></i><span>Kembali</span>
-            </a>
+            @if($backLeadId)
+                <a href="{{ route('leads-management.show', $backLeadId) }}" class="btn-ghost">
+                    <i class="fa fa-arrow-left"></i><span>Kembali ke Lead</span>
+                </a>
+            @else
+                <a href="{{ route('task-planner.index') }}" class="btn-ghost">
+                    <i class="fa fa-arrow-left"></i><span>Kembali</span>
+                </a>
+            @endif
 
         </div>
     </div>
@@ -1021,7 +1031,7 @@ function scrollToTarget(id) {
     if (window.location.hash && window.location.hash.startsWith('#activity-')) {
         scrollToTarget(window.location.hash.replace('#activity-', ''));
     }
-}
+
 
 function scrollToTarget(id) {
     var attempts = 0;

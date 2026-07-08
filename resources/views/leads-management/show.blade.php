@@ -171,7 +171,8 @@
     .lead-header__meta i { opacity: .6; margin-right: 4px; }
 
     /* ── Modal styles ── */
-    .modal-lead .modal-dialog { max-width: 800px; }
+    .modal-task     .modal-lead .modal-dialog { max-width: 800px; }
+    .modal-task .modal-dialog { max-width: 800px; }
     .lead-form-section {
         border: 1px solid var(--card-border);
         border-radius: var(--radius);
@@ -458,7 +459,7 @@
         transition: background .1s;
     }
     .task-item:last-child { border-bottom: none; }
-    .task-item:hover { background: rgba(16,185,129,.02); }
+    .task-item:hover { background: rgba(16,185,129,.02); cursor: pointer; }
     .task-item-icon {
         width: 32px; height: 32px;
         border-radius: 8px;
@@ -774,7 +775,10 @@
                                 <i class="fa fa-spinner fa-spin"></i> Loading...
                             </div>
 
-                             <div class="activity-form-card">
+
+
+                        </div>
+                        <div class="activity-form-card">
                                  <textarea id="activity-input" placeholder="Tulis aktivitas..." rows="2"></textarea>
                                  <div class="mention-suggestions" id="mention-suggestions"></div>
                                  <div class="activity-form-actions">
@@ -791,13 +795,11 @@
                                     </button>
                                 </div>
                             </div>
-
-                        </div>
                     </div>
                     <div class="tab-pane fade" id="tab-task" role="tabpanel">
                         <div style="padding:12px 16px 0;display:flex;justify-content:flex-end">
-                            <button type="button" class="btn btn-sm btn-accent" onclick="openCreateTaskModal()">
-                                <i class="fa fa-plus"></i> Buat Task
+                            <button type="button" class="btn btn-sm btn-accent" style="height: 25px;" onclick="openCreateTaskModal()">
+                                <i class="fa fa-plus"></i> Add Task
                             </button>
                         </div>
                         <div id="task-list">
@@ -1196,7 +1198,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="taskModalTitle">Buat Task</h6>
+                <h6 class="modal-title" id="taskModalTitle">Add Task</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" style="max-height:70vh;overflow-y:auto">
@@ -1255,13 +1257,8 @@
                             <div class="task-form-row">
                                 <div class="form-group">
                                     <label>Assign To</label>
-                                    <select name="assignee_id" id="task-assignee" style="width:100%">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($users as $u)
-                                        <option value="{{ $u->id }}">{{ $u->username }}</option>
-                                        @endforeach
-                                    </select>
-                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Default will be assigned to yourself.</div>
+                                    <select name="assignees[]" id="task-assignees" multiple style="width:100%"></select>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Leave empty to assign to yourself. Filtered by your delegation hierarchy.</div>
                                 </div>
                             </div>
                         </div>
@@ -1553,6 +1550,26 @@ function openEditModal(id) {
             allowClear: true,
             width: '100%',
             dropdownParent: $('#leadModal')
+        });
+    }
+});
+
+$(document).on('shown.bs.modal', '#taskModal', function() {
+    if (!$('#task-assignees').hasClass('select2-hidden-accessible')) {
+        $('#task-assignees').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Search and select assignees...',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#taskModal'),
+            ajax: {
+                url: '/users/search',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(res) { return { results: res.results.map(function(u) { return { id: u.id, text: u.username }; }) }; }
+            },
+            minimumInputLength: 1
         });
     }
 });
@@ -1894,6 +1911,7 @@ function toggleTaskSection(header) {
 function openCreateTaskModal() {
     $('#task-form')[0].reset();
     document.getElementById('taskModalTitle').textContent = 'Buat Task';
+    $('#task-assignees').val(null).trigger('change');
     new bootstrap.Modal(document.getElementById('taskModal')).show();
 }
 
@@ -1918,7 +1936,7 @@ $(document).on('click', '#btn-save-lead-task', function() {
             category_id: category,
             due_date: dueDate,
             time: $('#task-time').val(),
-            assignee_id: $('#task-assignee').val()
+            assignees: $('#task-assignees').val()
         },
         success: function(res) {
             toastr.success(res.message);
@@ -1947,15 +1965,20 @@ function loadTasks() {
         var html = '';
         if (res.length > 0) {
             res.forEach(function(t) {
-                var iconBg = t.status === 'done' ? 'background:#d1fae5;color:#059669' : 'background:#f1f5f9;color:var(--text-muted)';
+                var iconBg = t.status === 'done' ? 'background:#d1fae5;color:#059669' : t.status === 'in_progress' ? 'background:#dbeafe;color:#2563eb' : 'background:#f1f5f9;color:var(--text-muted)';
                 var statusClass = t.status === 'done' ? 'status-active' : t.status === 'in_progress' ? 'status-pending' : 'status-inactive';
                 var statusLabel = t.status === 'todo' ? 'To Do' : t.status === 'in_progress' ? 'In Progress' : t.status === 'waiting_approval' ? 'Waiting' : 'Done';
                 var assigneeName = (t.assignees && t.assignees.length > 0) ? t.assignees.map(function(a) { return a.username; }).join(', ') : '—';
-                html += '<div class="task-item">' +
+                var creatorName = t.creator ? t.creator.username : '—';
+                var categoryName = t.category ? t.category.name : '—';
+                var dueLabel = t.due_date || '—';
+                var dueStyle = (t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString())) ? 'color:#dc3545;font-weight:600' : '';
+                html += '<div class="task-item" onclick="window.location.href=\'/task-planner/' + t.id + '?back=lead-' + leadId + '\'" style="cursor:pointer">' +
                     '<div class="task-item-icon" style="' + iconBg + '"><i class="fa fa-tasks"></i></div>' +
                     '<div class="task-item-body">' +
                     '<div class="task-item-title">' + escapeHtml(t.title) + '</div>' +
-                    '<div class="task-item-meta">Assign: ' + escapeHtml(assigneeName) + ' · Due: ' + (t.due_date || '—') + '</div>' +
+                    '<div class="task-item-meta"><i class="fa fa-user"></i> ' + escapeHtml(assigneeName) + ' · <i class="fa fa-user-pen"></i> ' + escapeHtml(creatorName) + '</div>' +
+                    '<div class="task-item-meta" style="margin-top:2px"><i class="fa fa-folder"></i> ' + escapeHtml(categoryName) + ' · <i class="fa fa-calendar" style="' + dueStyle + '"></i> <span style="' + dueStyle + '">' + dueLabel + '</span></div>' +
                     '</div>' +
                     '<span class="task-item-status ' + statusClass + '">' + statusLabel + '</span>' +
                     '</div>';
