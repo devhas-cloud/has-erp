@@ -252,13 +252,14 @@
     }
 
     /* ── Activity Feed ── */
-    .activity-feed { padding: 4px 0; max-height: 520px; overflow-y: auto; }
+    .activity-feed { padding: 4px 0; max-height: 600px; overflow-y: auto; }
     .activity-form-card {
         background: #f8fafc;
         border: 1px solid var(--card-border);
         border-radius: var(--radius);
         padding: 16px;
         margin-bottom: 20px;
+        position: relative;
     }
     .activity-form-card textarea {
         width: 100%;
@@ -383,6 +384,7 @@
         background: #f8fafc;
         border: 1px solid var(--card-border);
         border-radius: var(--radius-sm);
+        position: relative;
     }
     .activity-reply-form .reply-input-row {
         display: flex;
@@ -545,6 +547,98 @@
         opacity: 0.6;
         pointer-events: none;
     }
+
+    /* ── Mention Suggestions ── */
+    .mention-suggestions {
+        position: static;
+        background: #fff;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        box-shadow: 0 6px 20px rgba(0,0,0,.12);
+        max-height: 220px;
+        overflow-y: auto;
+        width: 260px;
+        margin-top: 4px;
+        display: none;
+    }
+    .mention-suggestion-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        cursor: pointer;
+        font-size: 13px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .mention-suggestion-item:last-child { border-bottom: none; }
+    .mention-suggestion-item:hover,
+    .mention-suggestion-item.active {
+        background: var(--accent-soft);
+    }
+    .mention-suggestion-avatar {
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        background: var(--accent-soft);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 11px;
+        color: var(--accent); flex-shrink: 0;
+    }
+    .mention-suggestion-name {
+        font-weight: 600; color: var(--text-primary);
+    }
+    .mention-tag {
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-weight: 600;
+        display: inline;
+    }
+
+    /* ── Highlight Flash ── */
+    .highlight-flash {
+        animation: highlightFlash 5s ease-out;
+    }
+    @keyframes highlightFlash {
+        0% { background: rgba(16,185,129,0.25); }
+        100% { background: transparent; }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 767.98px) {
+        .lead-header { flex-direction: column; }
+        .lead-header__identity { flex-wrap: wrap; }
+        .lead-header__name { font-size: 17px; }
+        .lead-header__meta { gap: 12px; font-size: 12px; }
+
+        .activity-feed { max-height: 70vh; }
+        .activity-post-avatar { width: 30px; height: 30px; font-size: 11px; }
+        .activity-post-content { font-size: 12px; }
+        .activity-post-attachment-image { width: 60px; height: 60px; }
+
+        .info-table td:first-child { width: 100px; font-size: 11px; padding-right: 8px; }
+        .info-table td:last-child { font-size: 12px; }
+
+        .lead-path__link { padding: 8px 14px 8px 18px; min-height: 36px; }
+        .lead-path__stage { width: 18px; height: 18px; font-size: 10px; }
+        .lead-path__title { font-size: 10px; }
+
+        .mention-suggestions { width: 100%; max-width: 260px; }
+
+        .activity-form-actions { flex-direction: column; align-items: stretch; }
+        .activity-form-actions .btn { width: 100%; justify-content: center; }
+        .activity-reply-form .reply-input-row { flex-direction: column; }
+        .activity-reply-form input[type="text"] { width: 100%; }
+        .activity-replies { padding-left: 24px; }
+
+        .task-item { flex-wrap: wrap; }
+        .task-item-status { margin-left: auto; }
+
+        .page-header { flex-direction: column; gap: 12px; }
+        .page-header-actions { width: 100%; }
+        .page-header-actions .btn-accent,
+        .page-header-actions .btn-ghost { flex: 1; justify-content: center; }
+    }
 </style>
 @endsection
 
@@ -574,7 +668,7 @@
 
 <div class="row g-4">
     <!-- ═══════════════ Left Column ═══════════════ -->
-    <div class="col-lg-9">
+    <div class="col-sm-12 col-lg-9">
 
          <!-- ── Lead Header Card ── -->
         <div class="lead-path-wrapper fade-in" >
@@ -680,9 +774,10 @@
                                 <i class="fa fa-spinner fa-spin"></i> Loading...
                             </div>
 
-                            <div class="activity-form-card">
-                                <textarea id="activity-input" placeholder="Tulis aktivitas..." rows="2"></textarea>
-                                <div class="activity-form-actions">
+                             <div class="activity-form-card">
+                                 <textarea id="activity-input" placeholder="Tulis aktivitas..." rows="2"></textarea>
+                                 <div class="mention-suggestions" id="mention-suggestions"></div>
+                                 <div class="activity-form-actions">
                                     <div>
                                          <input type="file" id="activity-file" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>
                                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="$('#activity-file').click()">
@@ -729,7 +824,7 @@
     </div>
 
     <!-- ═══════════════ Right Column ═══════════════ -->
-    <div class="col-lg-3">
+    <div class="col-sm-12 col-lg-3">
 
         <!-- ── Contact Information ── -->
         <div class="card-custom fade-in stagger-1">
@@ -737,6 +832,7 @@
                 <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Contact Information</span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
+                <div class="table-responsive">
                 <table class="table table-sm table-borderless mb-0 info-table">
                     <tr><td>Full Name</td><td><strong>{{ $lead->accountContact?->full_name ?? '—' }}</strong></td></tr>
                     <tr><td>Salutation</td><td>{{ $lead->accountContact?->salutation ?? '—' }}</td></tr>
@@ -748,6 +844,7 @@
                     <tr><td>Contact Method</td><td>{{ $lead->accountContact?->contactMethod?->method_name ?? '—' }}</td></tr>
                     <tr><td>Role in Project</td><td>{{ $lead->accountContact?->roleInProject?->role_name ?? '—' }}</td></tr>
                 </table>
+                </div>
             </div>
         </div>
 
@@ -757,25 +854,27 @@
                 <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Information</span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
-                <table class="table table-sm table-borderless mb-0 info-table">
-                    <tr><td>Company</td><td><strong>{{ $lead->accountCompany?->account_name ?? '—' }}</strong></td></tr>
-                    <tr><td>Field Type</td><td>{{ $lead->accountCompany?->typesAccountsCompany?->type_name ?? '—' }}</td></tr>
-                    <tr><td>Segmentation</td><td>{{ $lead->accountCompany?->segmentation?->segmentation_name ?? '—' }}</td></tr>
-                    <tr><td>Account Type</td><td>{{ $lead->accountCompany?->accountType?->type_name ?? '—' }}</td></tr>
-                    <tr><td>Business Entity</td><td>{{ $lead->accountCompany?->businessEntity?->entity_name ?? '—' }}</td></tr>
-                    <tr><td>Business Value</td><td>{{ $lead->accountCompany?->businessValue?->value_name ?? '—' }}</td></tr>
-                    <tr><td>Interaction Level</td><td>{{ $lead->accountCompany?->interactionLevel?->level_name ?? '—' }}</td></tr>
-                    <tr><td>End User</td><td>{{ $lead->accountCompany?->end_user ?? '—' }}</td></tr>
-                    <tr><td>Address</td><td>
-                        {{ collect([
-                            $lead->accountCompany?->address_billing_street,
-                            $lead->accountCompany?->address_billing_city,
-                            $lead->accountCompany?->address_billing_province,
-                            $lead->accountCompany?->address_billing_postal_code,
-                            $lead->accountCompany?->address_billing_country,
-                        ])->filter()->join(', ') ?: '—' }}
-                    </td></tr>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-sm table-borderless mb-0 info-table">
+                        <tr><td>Company</td><td><strong>{{ $lead->accountCompany?->account_name ?? '—' }}</strong></td></tr>
+                        <tr><td>Field Type</td><td>{{ $lead->accountCompany?->typesAccountsCompany?->type_name ?? '—' }}</td></tr>
+                        <tr><td>Segmentation</td><td>{{ $lead->accountCompany?->segmentation?->segmentation_name ?? '—' }}</td></tr>
+                        <tr><td>Account Type</td><td>{{ $lead->accountCompany?->accountType?->type_name ?? '—' }}</td></tr>
+                        <tr><td>Business Entity</td><td>{{ $lead->accountCompany?->businessEntity?->entity_name ?? '—' }}</td></tr>
+                        <tr><td>Business Value</td><td>{{ $lead->accountCompany?->businessValue?->value_name ?? '—' }}</td></tr>
+                        <tr><td>Interaction Level</td><td>{{ $lead->accountCompany?->interactionLevel?->level_name ?? '—' }}</td></tr>
+                        <tr><td>End User</td><td>{{ $lead->accountCompany?->end_user ?? '—' }}</td></tr>
+                        <tr><td>Address</td><td>
+                            {{ collect([
+                                $lead->accountCompany?->address_billing_street,
+                                $lead->accountCompany?->address_billing_city,
+                                $lead->accountCompany?->address_billing_province,
+                                $lead->accountCompany?->address_billing_postal_code,
+                                $lead->accountCompany?->address_billing_country,
+                            ])->filter()->join(', ') ?: '—' }}
+                        </td></tr>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -1474,6 +1573,9 @@ function loadActivities() {
         }
         $('#activity-list').html(html);
         $('#activity-loading').hide();
+        if (window.location.hash?.startsWith('#activity-') || sessionStorage.getItem('mention_target')) {
+            setTimeout(scrollToMentionedActivity, 100);
+        }
     }).fail(function() {
         $('#activity-loading').html('<span style="color:var(--danger)">Gagal memuat aktivitas.</span>');
     });
@@ -1524,11 +1626,11 @@ function renderActivity(a) {
                 });
                 rAttach = '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">' + rAttach + '</div>';
             }
-            repliesHtml += '<div class="activity-reply">' +
+            repliesHtml += '<div class="activity-reply" id="activity-' + r.id + '">' +
                 '<div class="activity-reply-avatar">' + rAvatar + '</div>' +
                 '<div class="activity-reply-body">' +
                 '<div class="activity-reply-header"><span class="activity-reply-author">' + (r.user ? r.user.username : '—') + '</span><span class="activity-reply-time">' + rTime + '</span></div>' +
-                '<div class="activity-reply-content">' + escapeHtml(r.content || '') + '</div>' + rAttach +
+                '<div class="activity-reply-content">' + renderMentions(r.content || '') + '</div>' + rAttach +
                 '</div></div>';
         });
         repliesHtml += '</div>';
@@ -1542,13 +1644,14 @@ function renderActivity(a) {
 
     var replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
         '<div class="reply-input-row">' +
-        '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '">' +
+        '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' + a.id + ')}">' +
         '<div class="reply-actions">' +
         '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
         '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
         '</div></div>' +
         '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
-        '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div></div>';
+        '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div>' +
+        '<div class="mention-suggestions reply-mention-suggestions" id="mention-suggestions-reply-' + a.id + '"></div></div>';
 
     var html = '<div class="activity-post" id="activity-' + a.id + '">' +
         '<div class="activity-post-avatar">' + avatar + '</div>' +
@@ -1558,7 +1661,7 @@ function renderActivity(a) {
         '<span class="activity-post-time">' + time + '</span>' +
         taskBadge +
         '</div>' +
-        '<div class="activity-post-content">' + escapeHtml(a.content || '') + '</div>' +
+        '<div class="activity-post-content">' + renderMentions(a.content || '') + '</div>' +
         (attachmentsHtml ? '<div class="activity-post-attachments">' + attachmentsHtml + '</div>' : '') +
         '<div class="activity-post-actions">' +
         '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>' +
@@ -1866,8 +1969,133 @@ function loadTasks() {
     });
 }
 
+// ── Mention Engine ──
+var mentionActive = false;
+var mentionStart = -1;
+var mentionQuery = '';
+var mentionResults = [];
+var mentionIndex = 0;
+var mentionTextarea = null;
+
+$(document).on('keydown keyup', '#activity-input, .activity-reply-form input[type="text"]', function(e) {
+    mentionTextarea = this;
+    if (e.type === 'keydown' && mentionActive) {
+        if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab'].includes(e.key)) {
+            e.preventDefault(); e.stopImmediatePropagation();
+            if (e.key === 'ArrowDown') { mentionIndex = (mentionIndex + 1) % mentionResults.length; updateMentionActive(); return; }
+            if (e.key === 'ArrowUp') { mentionIndex = (mentionIndex - 1 + mentionResults.length) % mentionResults.length; updateMentionActive(); return; }
+            if (e.key === 'Enter') { if (mentionResults[mentionIndex]) selectMention(mentionResults[mentionIndex].username); return; }
+            if (e.key === 'Escape') { mentionActive = false; $('.mention-suggestions').hide(); return; }
+            if (e.key === 'Tab') { if (mentionResults[0]) selectMention(mentionResults[0].username); return; }
+        }
+    }
+    if (e.type === 'keyup' && !['ArrowDown','ArrowUp','Enter','Escape','Tab'].includes(e.key)) { handleMentionTrigger.call(this); }
+});
+
+function handleMentionTrigger() {
+    var cursorPos = this.selectionStart;
+    var text = this.value;
+    var atIdx = text.lastIndexOf('@', cursorPos - 1);
+    if (atIdx !== -1 && (atIdx === 0 || text[atIdx - 1] === ' ' || text[atIdx - 1] === '\n')) {
+        var query = text.substring(atIdx + 1, cursorPos);
+        if (!query.includes(' ') && query.length >= 1) {
+            mentionActive = true;
+            mentionStart = atIdx;
+            mentionQuery = query;
+            searchMentions(query, this);
+            return;
+        }
+    }
+    mentionActive = false;
+    $('.mention-suggestions').hide();
+    mentionIndex = 0;
+}
+
+function searchMentions(query, input) {
+    $.get('/users/search', { q: query }, function(res) {
+        if (res.results && res.results.length > 0) {
+            mentionResults = res.results;
+            mentionIndex = 0;
+            var html = '';
+            res.results.forEach(function(user, i) {
+                var initials = user.initials || '?';
+                html += '<div class="mention-suggestion-item" onclick="selectMention(\'' + user.username + '\')" onmouseenter="mentionIndex=' + i + ';updateMentionActive()">' +
+                    '<div class="mention-suggestion-avatar">' + initials + '</div>' +
+                    '<span class="mention-suggestion-name">' + user.username + '</span></div>';
+            });
+            var dropdownId = $(input).attr('id') === 'activity-input' ? '#mention-suggestions' : '#mention-suggestions-reply-' + $(input).attr('id').replace('reply-input-', '');
+            $(dropdownId).html(html).show();
+        } else {
+            $('.mention-suggestions').hide();
+        }
+    });
+}
+
+function updateMentionActive() {
+    var dropdownId = $(mentionTextarea).attr('id') === 'activity-input' ? '#mention-suggestions' : '#mention-suggestions-reply-' + $(mentionTextarea).attr('id').replace('reply-input-', '');
+    $(dropdownId + ' .mention-suggestion-item').removeClass('active').eq(mentionIndex).addClass('active');
+}
+
+function selectMention(username) {
+    var $ta = $(mentionTextarea);
+    var text = $ta.val();
+    var cursorPos = $ta[0].selectionStart;
+    var atIdx = text.lastIndexOf('@', cursorPos - 1);
+    if (atIdx === -1 || (atIdx > 0 && text[atIdx - 1] !== ' ' && text[atIdx - 1] !== '\n')) atIdx = mentionStart;
+    if (atIdx === -1) { mentionActive = false; return; }
+    var before = text.substring(0, atIdx);
+    var after = text.substring(cursorPos);
+    $ta.val(before + '@' + username + ' ' + after);
+    $('.mention-suggestions').hide();
+    mentionActive = false;
+    mentionStart = -1;
+    $ta.focus();
+}
+
+function renderMentions(text) {
+    return escapeHtml(text || '').replace(/(^|\s)@([a-zA-Z0-9_\.]+)/g, '$1<span class="mention-tag">@$2</span>');
+}
+
 // ── Init ──
 loadActivities();
 loadTasks();
+scrollToMentionedActivity();
+$(window).on('hashchange', scrollToMentionedActivity);
+
+function scrollToMentionedActivity() {
+    if (window.location.hash && window.location.hash.startsWith('#activity-')) {
+        scrollToTarget(window.location.hash.replace('#activity-', ''));
+        return;
+    }
+    var targetId = sessionStorage.getItem('mention_target');
+    if (targetId) {
+        sessionStorage.removeItem('mention_target');
+        scrollToTarget(targetId);
+    }
+}
+
+function scrollToTarget(id) {
+    var attempts = 0;
+    var checkExist = setInterval(function() {
+        var el = document.getElementById('activity-' + id);
+        if (!el) el = document.querySelector('[id="activity-' + id + '"]');
+        if (el) {
+            clearInterval(checkExist);
+            var repliesSection = el.closest('.activity-replies');
+            if (repliesSection && repliesSection.style.display === 'none') {
+                repliesSection.style.display = 'block';
+                var toggleBtn = el.closest('.activity-post-body').querySelector('.activity-reply-toggle');
+                if (toggleBtn) {
+                    var count = repliesSection.querySelectorAll('.activity-reply').length;
+                    toggleBtn.innerHTML = '<i class="fa fa-comments"></i> Sembunyikan balasan';
+                }
+            }
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('highlight-flash');
+            setTimeout(function() { el.classList.remove('highlight-flash'); }, 2200);
+        }
+        if (++attempts > 50) clearInterval(checkExist);
+    }, 150);
+}
 </script>
 @endsection

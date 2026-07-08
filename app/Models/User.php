@@ -84,4 +84,9 @@ class User extends Authenticatable
             ->withPivot('assigned_at')
             ->withTimestamps();
     }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
 }

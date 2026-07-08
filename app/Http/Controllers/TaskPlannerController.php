@@ -8,6 +8,7 @@ use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\WhatsAppGroup;
+use App\Services\MentionParser;
 use App\Services\TaskExportService;
 use App\Services\TaskImportService;
 use App\Services\TaskXlsxTemplateGenerator;
@@ -459,6 +460,22 @@ class TaskPlannerController extends Controller
         }
 
         $activity->load(['user', 'attachments']);
+
+        // Mention notifications
+        $mentionedIds = MentionParser::extractMentionedIds($activity->content ?? '');
+        foreach ($mentionedIds as $uid) {
+            if ((int) $uid !== Auth::id()) {
+                Notification::create([
+                    'user_id' => $uid,
+                    'type' => 'mention',
+                    'title' => 'You were mentioned by '.Auth::user()->username,
+                    'body' => Str::limit($activity->content ?? '', 120),
+                    'notifiable_type' => TaskActivity::class,
+                    'notifiable_id' => $activity->id,
+                    'data' => ['activity_id' => $activity->id, 'task_id' => $activity->task_id, 'mentioned_by' => Auth::id()],
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,

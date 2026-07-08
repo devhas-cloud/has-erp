@@ -14,6 +14,7 @@ use App\Models\Division;
 use App\Models\InteractionLevel;
 use App\Models\JobTitle;
 use App\Models\Lead;
+use App\Models\Notification;
 use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
@@ -22,12 +23,14 @@ use App\Models\TaskCategory;
 use App\Models\TypesAccountsCompany;
 use App\Models\User;
 use App\Services\LeadImportService;
+use App\Services\MentionParser;
 use App\Services\XlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class LeadsManagementController extends Controller
 {
@@ -597,6 +600,22 @@ class LeadsManagementController extends Controller
 
         $activity->load(['user', 'attachments']);
 
+        // Mention notifications
+        $mentionedIds = MentionParser::extractMentionedIds($activity->content);
+        foreach ($mentionedIds as $uid) {
+            if ((int) $uid !== Auth::id()) {
+                Notification::create([
+                    'user_id' => $uid,
+                    'type' => 'mention',
+                    'title' => 'You were mentioned by '.Auth::user()->username,
+                    'body' => Str::limit($activity->content, 120),
+                    'notifiable_type' => Activity::class,
+                    'notifiable_id' => $activity->id,
+                    'data' => ['activity_id' => $activity->id, 'lead_id' => $activity->lead_id, 'mentioned_by' => Auth::id()],
+                ]);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Activity posted.',
@@ -713,5 +732,21 @@ class LeadsManagementController extends Controller
                 'message' => 'Failed to create task: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    public function searchUsers(Request $request): JsonResponse
+    {
+        $q = $request->get('q', '');
+        $users = User::where('username', 'like', "%{$q}%")
+            ->orWhere('email', 'like', "%{$q}%")
+            ->limit(10)
+            ->get()
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'username' => $u->username,
+                'initials' => strtoupper(substr($u->username, 0, 2)),
+            ]);
+
+        return response()->json(['results' => $users->toArray()]);
     }
 }

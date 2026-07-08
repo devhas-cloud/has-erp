@@ -104,21 +104,23 @@
         <span><i class="fa fa-bullhorn me-2" style="color:var(--accent)"></i>Leads List</span>
     </div>
     <div class="card-body-custom p-2">
-        <table id="leads-table" class="table table-custom align-middle mb-0" style="width:100%">
-            <thead>
-                <tr>
-                    <th style="width:50px">#</th>
-                    <th>Name</th>
-                    <th>Title</th>
-                    <th>Company</th>
-                    <th>Phone</th>
-                    <th>Mobile</th>
-                    <th>Lead Status</th>
-                    <th>Owner</th>
-                    <th class="text-center" style="width:120px">Action</th>
-                </tr>
-            </thead>
-        </table>
+        <div class="table-responsive">
+            <table id="leads-table" class="table table-custom align-middle mb-0" style="width:100%">
+                <thead>
+                    <tr>
+                        <th style="width:50px">#</th>
+                        <th>Name</th>
+                        <th>Title</th>
+                        <th>Company</th>
+                        <th>Phone</th>
+                        <th>Mobile</th>
+                        <th>Lead Status</th>
+                        <th>Owner</th>
+                        <th class="text-center" style="width:120px">Action</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
     </div>
 </div>
 @endsection
