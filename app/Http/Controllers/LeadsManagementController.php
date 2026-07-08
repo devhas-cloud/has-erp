@@ -677,37 +677,51 @@ class LeadsManagementController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:150',
-            'description' => 'nullable|string|max:5000',
+            'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
+            'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
             'assignees' => 'nullable|array',
             'assignees.*' => 'exists:users,id',
-            'activity_id' => 'nullable|exists:activities,id',
+            'alert_type' => 'nullable|in:none,email,whatsapp,both',
+            'alert_target' => 'required|in:personal,group,both',
+            'alert_time' => 'nullable|date',
         ]);
+
+        $validated['creator_id'] = Auth::id();
+        $validated['status'] = 'todo';
+
+        $assigneeIds = $request->input('assignees', []);
+
+        if (empty($assigneeIds)) {
+            $assigneeIds = [Auth::id()];
+        }
+
+        $otherAssignees = array_values(array_diff($assigneeIds, [Auth::id()]));
+        $validated['requires_approval'] = ! empty($otherAssignees);
+
 
         DB::beginTransaction();
         try {
-            $task = Task::create([
-                'creator_id' => Auth::id(),
-                'lead_id' => $lead->id,
-                'activity_id' => $validated['activity_id'] ?? null,
-                'category_id' => $validated['category_id'],
-                'title' => $validated['title'],
-                'description' => $validated['description'],
-                'due_date' => $validated['due_date'],
-                'time' => $validated['time'] ?? null,
-                'status' => 'todo',
-                'requires_approval' => false,
-                'alert_type' => 'none',
-                'alert_target' => 'personal',
-            ]);
-
-            $assigneeIds = $request->input('assignees', []);
-            if (empty($assigneeIds)) {
-                $assigneeIds = [Auth::id()];
-            }
+            $task = Task::create($validated);
             $task->assignees()->sync($assigneeIds);
+
+            $task->load('creator');
+            foreach ($otherAssignees as $assigneeId) {
+                $assignee = User::find($assigneeId);
+                if ($assignee) {
+                    Notification::create([
+                        'user_id' => $assignee->id,
+                        'type' => 'task_assigned',
+                        'title' => "Tugas baru: {$task->title}",
+                        'body' => "{$task->creator->username} menugaskan Anda",
+                        'notifiable_type' => Task::class,
+                        'notifiable_id' => $task->id,
+                        'data' => ['task_id' => $task->id, 'creator' => $task->creator->username],
+                    ]);
+                }
+            }
 
             Activity::create([
                 'lead_id' => $lead->id,
@@ -715,6 +729,8 @@ class LeadsManagementController extends Controller
                 'user_id' => Auth::id(),
                 'content' => "📋 Created task: {$task->title}",
             ]);
+
+
 
             DB::commit();
 

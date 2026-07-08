@@ -61,6 +61,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('task-planner/{id}/transition', [TaskPlannerController::class, 'transition'])->name('task-planner.transition');
     Route::get('task-planner/{id}/activities', [TaskPlannerController::class, 'activities'])->name('task-planner.activities');
     Route::post('task-planner/{id}/activities', [TaskPlannerController::class, 'storeActivity'])->name('task-planner.store-activity');
+    Route::post('task-planner/{id}/visit', [TaskPlannerController::class, 'storeVisit'])->name('task-planner.visit');
+    Route::get('task-planner/{id}/visits', [TaskPlannerController::class, 'visits'])->name('task-planner.visits');
     Route::resource('task-planner', TaskPlannerController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])

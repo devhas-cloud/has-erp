@@ -244,7 +244,16 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - updated_at
    - **Index:** (user_id, read_at), (notifiable_type, notifiable_id)
    - **Relasi:** Many-to-One ke tabel `users`
-   - **Relasi:** Polymorphic ke berbagai model (tasks, dll)
+   - **Relasi:** Polymorphic ke berbagai model (tasks, leads, dll)
+
+   **Notification Types:**
+   - `task_assigned` — User ditugaskan ke task baru
+   - `task_activity` — Ada aktivitas/komentar baru pada task
+   - `task_approval_required` — Task butuh approval creator
+   - `task_approved` — Task telah disetujui
+   - `task_status_changed` — Status task berubah
+   - `mention` — User di-mention (@username) pada aktivitas lead atau task
+   - `visit_recorded` — Visit location direkam pada task oleh user
 
 
 20. **Table Task Roles (task_roles)**
@@ -292,6 +301,7 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - **Relasi:** Many-to-One ke tabel `whatsapp_groups`
    - **Relasi:** Many-to-Many ke tabel `users` (via `task_assignees`)
    - **Relasi:** One-to-Many ke tabel `task_activities`
+   - **Relasi:** One-to-Many ke tabel `task_visits`
 
 23. **Table Task Assignees (task_assignees)** [Pivot]
    - task_id (Foreign Key ke tabel tasks, Composite Primary Key)
@@ -355,4 +365,17 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - updated_at
    - **Index:** activity_id
    - **Relasi:** Many-to-One ke tabel `activities`
+
+28. **Table Task Visits (task_visits)**
+   - id (Primary Key)
+   - task_id (Foreign Key ke tabel tasks)                 // Task yang dikunjungi
+   - user_id (Foreign Key ke tabel users)                 // Pengguna yang melakukan kunjungan
+   - latitude (decimal(10,7))                              // Latitude GPS
+   - longitude (decimal(10,7))                             // Longitude GPS
+   - address (string 255, nullable)                        // Alamat (reverse geocoding, opsional)
+   - created_at
+   - updated_at
+   - **Index:** (task_id, created_at)
+   - **Relasi:** Many-to-One ke tabel `tasks`
+   - **Relasi:** Many-to-One ke tabel `users`
 

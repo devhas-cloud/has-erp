@@ -599,4 +599,56 @@ class TaskPlannerController extends Controller
             }
         }
     }
+
+    public function storeVisit(Request $request, $id): JsonResponse
+    {
+        $task = Task::findOrFail($id);
+        $isCreator = $task->creator_id === Auth::id();
+        $isAssignee = $task->assignees->contains('id', Auth::id());
+        if (! $isCreator && ! $isAssignee) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'address' => 'nullable|string|max:255',
+        ]);
+
+        $visit = $task->visits()->create([
+            'user_id' => Auth::id(),
+            'latitude' => $validated['latitude'],
+            'longitude' => $validated['longitude'],
+            'address' => $validated['address'] ?? null,
+        ]);
+
+        TaskActivity::create([
+            'task_id' => $task->id,
+            'user_id' => Auth::id(),
+            'content' => '📍 Recorded a visit (lat: '.$validated['latitude'].', lng: '.$validated['longitude'].')',
+        ]);
+
+        $visit->load('user');
+
+        return response()->json(['success' => true, 'message' => 'Visit recorded.', 'visit' => $visit]);
+    }
+
+    public function visits($id): JsonResponse
+    {
+        $task = Task::findOrFail($id);
+        $visits = $task->visits()->with('user')->latest()->get()
+            ->map(fn ($v) => [
+                'id' => $v->id,
+                'user_id' => $v->user_id,
+                'username' => $v->user->username,
+                'initials' => strtoupper(substr($v->user->username, 0, 2)),
+                'latitude' => (float) $v->latitude,
+                'longitude' => (float) $v->longitude,
+                'address' => $v->address,
+                'created_at' => $v->created_at->toIso8601String(),
+                'time' => $v->created_at->diffForHumans(),
+            ]);
+
+        return response()->json($visits);
+    }
 }

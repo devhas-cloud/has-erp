@@ -78,4 +78,9 @@ class Task extends Model
     {
         return $this->belongsTo(Activity::class, 'activity_id');
     }
+
+    public function visits(): HasMany
+    {
+        return $this->hasMany(TaskVisit::class);
+    }
 }

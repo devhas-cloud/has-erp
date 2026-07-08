@@ -171,8 +171,8 @@
     .lead-header__meta i { opacity: .6; margin-right: 4px; }
 
     /* ── Modal styles ── */
-    .modal-task     .modal-lead .modal-dialog { max-width: 800px; }
-    .modal-task .modal-dialog { max-width: 800px; }
+
+    .modal-lead .modal-dialog { max-width: 800px; }
     .lead-form-section {
         border: 1px solid var(--card-border);
         border-radius: var(--radius);
@@ -1240,7 +1240,7 @@
                                     <label>Due Date <span class="text-danger">*</span></label>
                                     <input type="date" name="due_date" id="task-due-date">
                                 </div>
-                                <div class="form-group small">
+                                <div class="form-group">
                                     <label>Time</label>
                                     <input type="time" name="time" id="task-time">
                                 </div>
@@ -1264,7 +1264,7 @@
                         </div>
                     </div>
 
-                    <div class="task-form-section">
+                    <div class="task-form-section" style="display:none">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
                             <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Settings</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -1297,7 +1297,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-lead-task">
-                    <i class="fa fa-save me-1"></i> Buat Task
+                    <i class="fa fa-save me-1"></i> Add Task
                 </button>
             </div>
         </div>
@@ -1910,7 +1910,7 @@ function toggleTaskSection(header) {
 
 function openCreateTaskModal() {
     $('#task-form')[0].reset();
-    document.getElementById('taskModalTitle').textContent = 'Buat Task';
+    document.getElementById('taskModalTitle').textContent = 'Add Task';
     $('#task-assignees').val(null).trigger('change');
     new bootstrap.Modal(document.getElementById('taskModal')).show();
 }
@@ -1936,7 +1936,10 @@ $(document).on('click', '#btn-save-lead-task', function() {
             category_id: category,
             due_date: dueDate,
             time: $('#task-time').val(),
-            assignees: $('#task-assignees').val()
+            assignees: $('#task-assignees').val(),
+            alert_type: $('#task-alert-type').val(),
+            alert_target: $('#task-alert-target').val(),
+            alert_time: $('#task-alert-time').val()
         },
         success: function(res) {
             toastr.success(res.message);
@@ -1950,11 +1953,11 @@ $(document).on('click', '#btn-save-lead-task', function() {
                 var first = Object.values(errors)[0];
                 toastr.error(Array.isArray(first) ? first[0] : first);
             } else {
-                toastr.error(xhr.responseJSON?.message || 'Gagal membuat task.');
+                toastr.error(xhr.responseJSON?.message || 'Gagal memAdd Task.');
             }
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Buat Task');
+            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Add Task');
         }
     });
 });
@@ -1971,7 +1974,7 @@ function loadTasks() {
                 var assigneeName = (t.assignees && t.assignees.length > 0) ? t.assignees.map(function(a) { return a.username; }).join(', ') : '—';
                 var creatorName = t.creator ? t.creator.username : '—';
                 var categoryName = t.category ? t.category.name : '—';
-                var dueLabel = t.due_date || '—';
+                var dueLabel = t.due_date? new Date(t.due_date).toISOString().split('T')[0] : '—';
                 var dueStyle = (t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString())) ? 'color:#dc3545;font-weight:600' : '';
                 html += '<div class="task-item" onclick="window.location.href=\'/task-planner/' + t.id + '?back=lead-' + leadId + '\'" style="cursor:pointer">' +
                     '<div class="task-item-icon" style="' + iconBg + '"><i class="fa fa-tasks"></i></div>' +

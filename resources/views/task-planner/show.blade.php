@@ -276,6 +276,39 @@
         0% { background: rgba(16,185,129,0.25); }
         100% { background: transparent; }
     }
+
+    /* ── Visit Location ── */
+    .visit-item {
+        display: flex; gap: 10px; padding: 10px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .visit-item:last-child { border-bottom: none; }
+    .visit-item-icon {
+        width: 32px; height: 32px; border-radius: 50%;
+        background: var(--accent-soft); color: var(--accent);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px; flex-shrink: 0;
+    }
+    .visit-item-body { flex: 1; min-width: 0; }
+    .visit-item-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+    .visit-item-meta { font-size: 11px; color: var(--text-muted); }
+    .visit-item-coords { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .visit-item-time { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .visit-empty {
+        font-size: 13px; color: var(--text-muted);
+        padding: 8px 0; text-align: center;
+    }
+    .visit-map-link {
+        display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
+        font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer;
+        padding: 6px 14px; background: var(--accent-soft);
+        border-radius: var(--radius-sm); border: 1px solid rgba(16,185,129,0.15);
+        transition: all .15s;
+    }
+    .visit-map-link:hover { background: var(--accent); color: #fff; }
+    #visitMapModal .modal-body { padding: 0; }
+    #recordVisitModal .modal-body { padding: 0; }
+    #visitMap, #recordMap { width: 100%; height: 55vh; border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
 </style>
 @endsection
 
@@ -463,6 +496,27 @@
                 </div>
             </div>
 
+             <!-- ── Visit Location ── -->
+            <div class="card-custom fade-in stagger-4 mt-4">
+                <div class="card-header-custom">
+                    <span><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Visit Location</span>
+                    @php
+                        $isCreator = $task->creator_id === Auth::id();
+                        $isAssignee = $task->assignees->contains('id', Auth::id());
+                        $canTransition = $isCreator || $isAssignee;
+                    @endphp
+                    @if ($canTransition && $task->status !== 'done')
+                    <button type="button" class="btn btn-sm btn-accent" id="btn-record-visit" style="font-size:11px">
+                        <i class="fa fa-location-dot"></i> Record
+                    </button>
+                    @endif
+                </div>
+                <div class="card-body-custom" id="visit-list">
+                    <div class="visit-empty"><i class="fa fa-spinner fa-spin"></i> Loading...</div>
+                </div>
+            </div>
+
+
             <div class="card-custom fade-in stagger-2 mt-4">
                 <div class="card-header-custom">
                     <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Configuration</span>
@@ -554,6 +608,8 @@
                     </table>
                 </div>
             </div>
+
+
     </div>
 </div>
 @endsection
@@ -902,6 +958,91 @@ $(document).on('change', '#activity-file', function() {
 
 $('button[data-bs-target="#tab-activity"]').on('shown.bs.tab', function() { loadActivities(); });
 
+// ── Visit Location ──
+function loadVisits() {
+    $.get('/task-planner/' + taskId + '/visits', function(res) {
+        var html = '';
+        var data = Array.isArray(res) ? res : (res.data || []);
+        if (data.length === 0) { html = '<div class="visit-empty">Belum ada visit.</div>'; }
+        else {
+            data.forEach(function(v) {
+                html += '<div class="visit-item">' +
+                    '<div class="visit-item-icon"><i class="fa fa-map-pin"></i></div>' +
+                    '<div class="visit-item-body">' +
+                    '<div class="visit-item-name">' + (v.username || '—') + '</div>' +
+                    '<div class="visit-item-coords">' + (v.latitude||0).toFixed(6) + ', ' + (v.longitude||0).toFixed(6) + '</div>' +
+                    '<div class="visit-map-link" onclick="openVisitMap(' + v.latitude + ',' + v.longitude + ',\'' + (v.username || '') + '\')"><i class="fa fa-map"></i> Buka Peta</div>' +
+                    '<div class="visit-item-time">' + (v.time || '—') + '</div>' +
+                    '</div></div>';
+            });
+        }
+        $('#visit-list').html(html);
+    }).fail(function() { $('#visit-list').html('<div class="visit-empty" style="color:var(--danger)">Gagal.</div>'); });
+}
+
+var visitMapInstance = null, recordMapInst = null, currentLat = null, currentLng = null;
+
+function openVisitMap(lat, lng, name) {
+    var modal = new bootstrap.Modal(document.getElementById('visitMapModal'));
+    $('#visitMapModal').off('shown.bs.modal').on('shown.bs.modal', function() {
+        if (visitMapInstance) { visitMapInstance.remove(); visitMapInstance = null; }
+        setTimeout(function() {
+            visitMapInstance = L.map('visitMap', { center: [lat, lng], zoom: 15, zoomControl: true });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OSM' }).addTo(visitMapInstance);
+            L.marker([lat, lng]).addTo(visitMapInstance).bindPopup('<strong>' + (name || 'Visit') + '</strong>').openPopup();
+            visitMapInstance.invalidateSize();
+        }, 300);
+    }).off('hidden.bs.modal').on('hidden.bs.modal', function() {
+        if (visitMapInstance) { visitMapInstance.remove(); visitMapInstance = null; }
+    });
+    modal.show();
+}
+
+$(document).on('click', '#btn-record-visit', function() {
+    if (!navigator.geolocation) { toastr.error('Geolocation tidak didukung.'); return; }
+    var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+    navigator.geolocation.getCurrentPosition(function(pos) {
+        $btn.prop('disabled', false).html('<i class="fa fa-location-dot"></i> Record');
+        currentLat = pos.coords.latitude; currentLng = pos.coords.longitude;
+        $('#record-visit-coords').text(currentLat.toFixed(6) + ', ' + currentLng.toFixed(6) + ' · Acc: ±' + (pos.coords.accuracy ? pos.coords.accuracy.toFixed(0) : '?') + 'm');
+        var modal = new bootstrap.Modal(document.getElementById('recordVisitModal'));
+        $('#recordVisitModal').off('shown.bs.modal').on('shown.bs.modal', function() {
+            if (recordMapInst) { recordMapInst.remove(); recordMapInst = null; }
+            setTimeout(function() {
+                recordMapInst = L.map('recordMap', { center: [currentLat, currentLng], zoom: 16, zoomControl: true });
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OSM' }).addTo(recordMapInst);
+                L.marker([currentLat, currentLng]).addTo(recordMapInst).bindPopup('📍 ' + currentLat.toFixed(6) + ', ' + currentLng.toFixed(6)).openPopup();
+                recordMapInst.invalidateSize();
+            }, 300);
+        }).off('hidden.bs.modal').on('hidden.bs.modal', function() {
+            if (recordMapInst) { recordMapInst.remove(); recordMapInst = null; }
+        });
+        modal.show();
+    }, function(err) {
+        $btn.prop('disabled', false).html('<i class="fa fa-location-dot"></i> Record');
+        toastr.error('Gagal lokasi: ' + (err.message || 'Izin ditolak.'));
+    }, { enableHighAccuracy: true, timeout: 10000 });
+});
+
+$(document).on('click', '#btn-save-record-visit', function() {
+    if (!currentLat || !currentLng) return;
+    var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+    $.ajax({
+        url: '/task-planner/' + taskId + '/visit',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}', latitude: currentLat, longitude: currentLng },
+        success: function(res) {
+            toastr.success(res.message);
+            bootstrap.Modal.getInstance(document.getElementById('recordVisitModal')).hide();
+            loadVisits(); loadActivities();
+        },
+        error: function(xhr) { toastr.error(xhr.responseJSON?.message || 'Gagal.'); },
+        complete: function() { $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save'); }
+    });
+});
+
+loadVisits();
+
 // ── Mention Engine ──
 var mentionActive = false;
 var mentionStart = -1;
@@ -1069,6 +1210,45 @@ function scrollToTarget(id) {
             </div>
             <div class="modal-body text-center p-2" id="filePreviewBody"></div>
             <div class="modal-footer" id="filePreviewFooter"></div>
+        </div>
+    </div>
+</div>
+@endpush
+
+@push('modals')
+<div class="modal fade" id="visitMapModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Visit Location</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="visitMap" style="width:100%;height:55vh"></div>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+
+@push('modals')
+<div class="modal fade" id="recordVisitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Record Visit Location</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="recordMap" style="width:100%;height:50vh"></div>
+                <div style="padding:12px 16px;font-size:13px;color:var(--text-secondary);border-top:1px solid var(--card-border)" id="record-visit-coords">—</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-record-visit">
+                    <i class="fa fa-save me-1"></i> Save
+                </button>
+            </div>
         </div>
     </div>
 </div>
