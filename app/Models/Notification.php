@@ -28,6 +28,35 @@ class Notification extends Model
         return $this->morphTo();
     }
 
+    public function getGroupKeyAttribute(): string
+    {
+        if ($taskId = $this->data['task_id'] ?? null) {
+            return 'task_'.$taskId;
+        }
+        if ($leadId = $this->data['lead_id'] ?? null) {
+            return 'lead_'.$leadId;
+        }
+
+        return str_replace('\\', '_', $this->notifiable_type).'_'.$this->notifiable_id;
+    }
+
+    public function getGroupTypeAttribute(): string
+    {
+        if ($this->data['task_id'] ?? null) {
+            return 'task';
+        }
+        if ($this->data['lead_id'] ?? null) {
+            return 'lead';
+        }
+
+        return 'other';
+    }
+
+    public function getGroupIdAttribute(): ?int
+    {
+        return $this->data['task_id'] ?? $this->data['lead_id'] ?? null;
+    }
+
     public function markAsRead(): void
     {
         if (is_null($this->read_at)) {

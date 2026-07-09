@@ -24,39 +24,77 @@
         <span class="notif-total">{{ $notifications->total() }} total</span>
     </div>
     <div class="card-body-custom p-0">
-        @forelse ($notifications as $n)
+        @forelse ($grouped as $groupKey => $items)
         @php
-            $icon = match($n->type) {
-                'task_assigned' => 'fa-tasks',
-                'task_status_changed' => 'fa-arrows-rotate',
-                'task_approval_required' => 'fa-clipboard-check',
-                'task_approved' => 'fa-check-circle',
-                'task_activity' => 'fa-comment',
-                'mention' => 'fa-at',
-                default => 'fa-bell',
-            };
-            $readClass = is_null($n->read_at) ? 'unread' : 'read';
+            $first = $items->first();
+            $groupType = $first->group_type;
+            if ($groupType === 'task') {
+                $groupTitle = $taskTitles->get($first->group_id, 'Task #' . $first->group_id);
+                $groupIcon = 'fa-tasks';
+            } elseif ($groupType === 'lead') {
+                $groupTitle = $leadTitles->get($first->group_id, 'Lead #' . $first->group_id);
+                $groupIcon = 'fa-flag';
+            } else {
+                $groupTitle = 'Unknown';
+                $groupIcon = 'fa-bell';
+            }
+            $unreadCount = $items->filter(fn($n) => is_null($n->read_at))->count();
         @endphp
-        <div class="notif-card {{ $readClass }}"
-            data-id="{{ $n->id }}"
-            data-type="{{ $n->type }}"
-            data-task-id="{{ $n->data['task_id'] ?? '' }}"
-            data-lead-id="{{ $n->data['lead_id'] ?? '' }}"
-            data-activity-id="{{ $n->data['activity_id'] ?? '' }}"
-            onclick="openNotifFromPage(this)">
-            <div class="notif-card-left">
-                <span class="notif-card-dot {{ $readClass }}"></span>
-                <span class="notif-card-icon">
-                    <i class="fa-solid {{ $icon }}"></i>
-                </span>
-            </div>
-            <div class="notif-card-body">
-                <div class="notif-card-title">{{ $n->title }}</div>
-                <div class="notif-card-msg">{{ $n->body ?? '—' }}</div>
-                <div class="notif-card-time">
-                    <i class="fa-regular fa-clock"></i>
-                    {{ $n->created_at->diffForHumans() }}
+        <div class="notif-page-group">
+            <div class="notif-page-group-header">
+                <div class="notif-page-group-left">
+                    <div class="notif-page-group-icon">
+                        <i class="fa-solid {{ $groupIcon }}"></i>
+                    </div>
+                    <div class="notif-page-group-info">
+                        <div class="notif-page-group-title">{{ $groupTitle }}</div>
+                        <div class="notif-page-group-meta">{{ $items->count() }} notifikasi</div>
+                    </div>
                 </div>
+                @if ($unreadCount > 0)
+                <span class="notif-page-group-badge">{{ $unreadCount }}</span>
+                @endif
+            </div>
+            <div class="notif-page-group-body">
+                @foreach ($items->sortByDesc('created_at') as $n)
+                @php
+                    $icon = match($n->type) {
+                        'task_assigned' => 'fa-tasks',
+                        'task_status_changed' => 'fa-arrows-rotate',
+                        'task_approval_required' => 'fa-clipboard-check',
+                        'task_approved' => 'fa-check-circle',
+                        'task_activity' => 'fa-comment',
+                        'mention' => 'fa-at',
+                        default => 'fa-bell',
+                    };
+                    $readClass = is_null($n->read_at) ? 'unread' : 'read';
+                    $hasTaskId = isset($n->data['task_id']);
+                    $hasLeadId = isset($n->data['lead_id']);
+                    $hasActivityId = isset($n->data['activity_id']);
+                @endphp
+                <div class="notif-card {{ $readClass }}"
+                    data-id="{{ $n->id }}"
+                    data-type="{{ $n->type }}"
+                    data-task-id="{{ $hasTaskId ? $n->data['task_id'] : '' }}"
+                    data-lead-id="{{ $hasLeadId ? $n->data['lead_id'] : '' }}"
+                    data-activity-id="{{ $hasActivityId ? $n->data['activity_id'] : '' }}"
+                    onclick="openNotifFromPage(this)">
+                    <div class="notif-card-left">
+                        <span class="notif-card-dot {{ $readClass }}"></span>
+                        <span class="notif-card-icon">
+                            <i class="fa-solid {{ $icon }}"></i>
+                        </span>
+                    </div>
+                    <div class="notif-card-body">
+                        <div class="notif-card-title">{{ $n->title }}</div>
+                        <div class="notif-card-msg">{{ $n->body ?? '—' }}</div>
+                        <div class="notif-card-time">
+                            <i class="fa-regular fa-clock"></i>
+                            {{ $n->created_at->diffForHumans() }}
+                        </div>
+                    </div>
+                </div>
+                @endforeach
             </div>
         </div>
         @empty
@@ -295,6 +333,73 @@
         font-size: 12.5px;
     }
 }
+
+.notif-page-group {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+.notif-page-group:last-child {
+    border-bottom: none;
+}
+.notif-page-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 22px;
+    gap: 12px;
+    background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+    border-bottom: 1px solid #e2e8f0;
+}
+.notif-page-group-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+.notif-page-group-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.notif-page-group-info {
+    flex: 1;
+    min-width: 0;
+}
+.notif-page-group-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.notif-page-group-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+}
+.notif-page-group-badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+.notif-page-group-body .notif-card {
+    padding-left: 46px;
+}
+.notif-page-group-body .notif-card:last-child {
+    border-bottom: none;
+}
 </style>
 
 @endsection
@@ -341,6 +446,7 @@
         }, function() {
             $('.notif-card').removeClass('unread').addClass('read');
             $('.notif-card-dot').addClass('read');
+            $('.notif-page-group-badge').hide();
             toastr.success('Semua notifikasi telah ditandai dibaca');
         }).fail(function() {
             toastr.error('Gagal menandai notifikasi');

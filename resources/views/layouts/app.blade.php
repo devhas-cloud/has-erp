@@ -1814,6 +1814,97 @@
             font-weight: 600;
         }
 
+        .notif-group {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+        }
+        .notif-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            cursor: pointer;
+            gap: 10px;
+            background: #f8fafc;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.15s;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .notif-group-header:hover {
+            background: #f1f5f9;
+        }
+        .notif-group-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+        .notif-group-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .notif-group-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .notif-group-title {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .notif-group-meta {
+            font-size: 10.5px;
+            color: var(--text-muted);
+        }
+        .notif-group-badge {
+            background: var(--accent);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .notif-group-chevron {
+            font-size: 11px;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .notif-group-chevron.open {
+            transform: rotate(180deg);
+        }
+        .notif-group-body {
+            background: #fff;
+        }
+        .notif-group-body .notif-item {
+            padding: 10px 20px 10px 52px;
+            border-bottom: none;
+        }
+        .notif-group-body .notif-item:not(:last-child) {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.02);
+        }
+        .notif-group-body .notif-item .notif-dot {
+            width: 6px;
+            height: 6px;
+            margin-top: 5px;
+        }
+
         .notif-empty {
             padding: 48px 20px;
             text-align: center;
@@ -2267,28 +2358,40 @@
                 }
 
                 var html = '';
-                res.data.forEach(function(n) {
-                    var cls = n.read ? 'read' : 'unread';
-                    var dataAttrs = 'data-id="' + n.id + '" data-type="' + (n.type || 'default') + '"';
+                res.data.forEach(function(group) {
+                    var hasUnread = group.unread_count > 0;
 
-                    // ambil data JSON jika ada
-                    if (n.data && n.data.task_id) {
-                        dataAttrs += ' data-task-id="' + n.data.task_id + '"';
+                    html += '<div class="notif-group">';
+                    html += '<div class="notif-group-header" onclick="toggleGroup(this)">';
+                    html += '<div class="notif-group-left">';
+                    html += '<div class="notif-group-icon"><i class="fa ' + group.group_icon + '"></i></div>';
+                    html += '<div class="notif-group-info">';
+                    html += '<div class="notif-group-title">' + escapeHtml(group.group_title) + '</div>';
+                    html += '<div class="notif-group-meta">' + group.notifications.length + ' notifikasi · ' + group.latest_time + '</div>';
+                    html += '</div></div>';
+                    if (hasUnread) {
+                        html += '<span class="notif-group-badge">' + group.unread_count + '</span>';
                     }
-                    if (n.data && n.data.lead_id) {
-                        dataAttrs += ' data-lead-id="' + n.data.lead_id + '"';
-                    }
-                    if (n.data && n.data.activity_id) {
-                        dataAttrs += ' data-activity-id="' + n.data.activity_id + '"';
-                    }
+                    html += '<i class="fa fa-chevron-down notif-group-chevron"></i>';
+                    html += '</div>';
+                    html += '<div class="notif-group-body">';
 
-                    html += '<div class="notif-item ' + cls + '" ' + dataAttrs +
-                        ' onclick="openNotif(this)" style="cursor:pointer;">';
-                    html += '<span class="notif-dot"></span>';
-                    html += '<div class="notif-content">';
-                    html += '<div class="notif-title">' + (n.title || 'Notifikasi') + '</div>';
-                    if (n.body) html += '<div class="notif-body">' + n.body + '</div>';
-                    html += '<div class="notif-time">' + (n.time || 'Baru saja') + '</div>';
+                    group.notifications.forEach(function(n) {
+                        var cls = n.read ? 'read' : 'unread';
+                        var dataAttrs = 'data-id="' + n.id + '" data-type="' + (n.type || 'default') + '"';
+                        if (n.task_id) dataAttrs += ' data-task-id="' + n.task_id + '"';
+                        if (n.lead_id) dataAttrs += ' data-lead-id="' + n.lead_id + '"';
+                        if (n.activity_id) dataAttrs += ' data-activity-id="' + n.activity_id + '"';
+
+                        html += '<div class="notif-item ' + cls + '" ' + dataAttrs + ' onclick="openNotif(this)" style="cursor:pointer;">';
+                        html += '<span class="notif-dot"></span>';
+                        html += '<div class="notif-content">';
+                        html += '<div class="notif-title">' + escapeHtml(n.title) + '</div>';
+                        if (n.body) html += '<div class="notif-body">' + escapeHtml(n.body) + '</div>';
+                        html += '<div class="notif-time">' + (n.time || 'Baru saja') + '</div>';
+                        html += '</div></div>';
+                    });
+
                     html += '</div></div>';
                 });
                 $list.html(html);
@@ -2297,6 +2400,20 @@
                 var $list = $('#notif-list');
                 $list.html('<div class="notif-empty">Error memuat notifikasi</div>');
             });
+        }
+
+        function toggleGroup(headerEl) {
+            var $header = $(headerEl);
+            var $body = $header.next('.notif-group-body');
+            $body.slideToggle(150);
+            $header.find('.notif-group-chevron').toggleClass('open');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         function openNotif(el) {
@@ -2337,8 +2454,9 @@
             $.post('{{ route('notifications.read-all') }}', {
                 _token: '{{ csrf_token() }}'
             }, function() {
+                $('.notif-group-body .notif-item').removeClass('unread').addClass('read').find('.notif-dot').addClass('read');
+                $('.notif-group-badge').hide();
                 pollNotificationCount();
-                loadNotifications();
             });
         }
 
