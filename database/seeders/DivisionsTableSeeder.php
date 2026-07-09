@@ -10,12 +10,17 @@ class DivisionsTableSeeder extends Seeder
     public function run(): void
     {
         $divisions = [
-            ['division_name' => 'IT', 'description' => 'Teknologi Informasi', 'type' => 'Internal', 'status' => 'Active'],
-            ['division_name' => 'HR', 'description' => 'Sumber Daya Manusia', 'type' => 'Internal', 'status' => 'Active'],
-            ['division_name' => 'Finance', 'description' => 'Keuangan', 'type' => 'Internal', 'status' => 'Active'],
-            ['division_name' => 'Marketing', 'description' => 'Pemasaran', 'type' => 'Internal', 'status' => 'Active'],
-            ['division_name' => 'Sales', 'description' => 'Penjualan', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'Admin', 'description' => 'Administrasi', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'WATER', 'description' => 'Water Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'IMS', 'description' => 'IMS Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'PD', 'description' => 'PD Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'Marketing', 'description' => 'Marketing Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'Sales', 'description' => 'Sales Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'Finance', 'description' => 'Finance Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'ER', 'description' => 'ER Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'GA', 'description' => 'GA Management', 'type' => 'Internal', 'status' => 'Active'],
         ];
+
 
         foreach ($divisions as $division) {
             Division::firstOrCreate(

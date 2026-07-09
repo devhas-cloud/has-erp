@@ -1849,6 +1849,28 @@
             position: relative;
         }
 
+        .notif-close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+            background: var(--card);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .notif-close-btn:hover {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
         .topbar-badge {
             position: absolute;
             top: 5px;
@@ -1902,6 +1924,15 @@
             }
         }
 
+        @keyframes notifMobileIn {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -1938,9 +1969,24 @@
                 align-items: flex-start;
             }
 
-            .notif-dropdown {
-                width: calc(100vw - 32px);
-                right: -8px;
+            .notif-close-btn {
+                display: flex;
+            }
+
+            .notif-dropdown.show {
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%;
+                height: 100dvh;
+                max-height: none;
+                border-radius: 0;
+                z-index: 1070;
+                animation: notifMobileIn 0.3s var(--ease-bounce) both;
+            }
+
+            .notif-list {
+                min-height: 0;
+                -webkit-overflow-scrolling: touch;
             }
 
             .scroll-progress {
@@ -2059,7 +2105,12 @@
                 <div class="notif-dropdown" id="notif-dropdown">
                     <div class="notif-header">
                         <span>Notifikasi</span>
-                        <button class="mark-all" onclick="markAllRead()">Tandai semua dibaca</button>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <button class="mark-all" onclick="event.stopPropagation();markAllRead()">Tandai semua dibaca</button>
+                            <button class="notif-close-btn" id="notifCloseBtn" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="notif-list" id="notif-list">
                         <div class="notif-empty">Memuat...</div>
@@ -2303,9 +2354,14 @@
         });
 
         $(document).on('click', function(e) {
-            if (!$(e.target).closest('.notif-bell-wrapper').length) {
+            if (!$(e.target).closest('.notif-bell-wrapper, #notif-dropdown').length) {
                 $('#notif-dropdown').removeClass('show');
             }
+        });
+
+        $('#notifCloseBtn').on('click', function(e) {
+            e.stopPropagation();
+            $('#notif-dropdown').removeClass('show');
         });
 
         pollNotificationCount();

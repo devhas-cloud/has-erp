@@ -133,6 +133,7 @@
         </div>
     </div>
     <div class="card-body-custom p-2">
+        <div class="table-responsive">
         <table id="tasks-table" class="table table-custom align-middle mb-0" style="width:100%">
             <thead>
                 <tr>
@@ -148,6 +149,7 @@
                 </tr>
             </thead>
         </table>
+        </div>
     </div>
 </div>
 @endsection

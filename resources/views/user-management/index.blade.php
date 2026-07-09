@@ -60,22 +60,17 @@
                             </div>
                         </td>
                         <td style="color:var(--text-secondary)">{{ $user->email }}</td>
-                        <td>{{ $user->division?->division_name ?? '<span style="color:var(--text-muted)">—</span>' }}</td>
+                        <td>{!! $user->division?->division_name ?? '<span style="color:var(--text-muted)">—</span>' !!}</td>
                         <td>
                             @if ($user->role === 'Admin')
                                 <span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d">
                                     <i class="fa-solid fa-shield-halved" style="font-size:10px"></i>
                                     Admin
                                 </span>
-                            @elseif ($user->role === 'Manager')
-                                <span class="status-badge" style="background:var(--warning-soft);color:#78350f">
-                                    <i class="fa-solid fa-user-tie" style="font-size:10px"></i>
-                                    Manager
-                                </span>
                             @else
                                 <span class="status-badge" style="background:var(--info-soft);color:#1e40af">
                                     <i class="fa-solid fa-user" style="font-size:10px"></i>
-                                    Staff
+                                    User
                                 </span>
                             @endif
                         </td>

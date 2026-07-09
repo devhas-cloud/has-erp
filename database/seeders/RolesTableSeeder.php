@@ -11,7 +11,10 @@ class RolesTableSeeder extends Seeder
     {
         $roles = [
             ['role_name' => 'Admin',      'hierarchy_level' => 10, 'is_global_delegator' => true],
-            ['role_name' => 'Manager',    'hierarchy_level' => 20, 'is_global_delegator' => false],
+            ['role_name' => 'Owner',      'hierarchy_level' => 15, 'is_global_delegator' => true],
+            ['role_name' => 'Manager',    'hierarchy_level' => 18, 'is_global_delegator' => false],
+            ['role_name' => 'Manager Division',    'hierarchy_level' => 20, 'is_global_delegator' => false],
+            ['role_name' => 'Wakil Manager',       'hierarchy_level' => 25, 'is_global_delegator' => false],
             ['role_name' => 'Supervisor', 'hierarchy_level' => 30, 'is_global_delegator' => false],
             ['role_name' => 'Staff',      'hierarchy_level' => 40, 'is_global_delegator' => false],
         ];

@@ -18,7 +18,7 @@ return new class extends Migration
                 ->constrained('divisions')->nullOnDelete();
             $table->foreignId('task_role_id')->nullable()
                 ->constrained('task_roles')->nullOnDelete();
-            $table->enum('role', ['Admin', 'Manager', 'Staff'])->default('Staff');
+            $table->enum('role', ['Admin', 'User'])->default('User');
             $table->string('icon')->nullable();
             $table->rememberToken();
             $table->timestamps();

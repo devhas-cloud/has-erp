@@ -15,7 +15,7 @@ class TaskCategoriesTableSeeder extends Seeder
 
         $categories = [
             [
-                'name' => 'General Meeting',
+                'name' => 'Visit',
                 'description' => 'Rapat dan meeting umum',
                 'division_id' => null,
             ],
@@ -25,20 +25,12 @@ class TaskCategoriesTableSeeder extends Seeder
                 'division_id' => null,
             ],
             [
-                'name' => 'Bug Fixing',
-                'description' => 'Perbaikan bug dan issue teknis',
-                'division_id' => $itDivision ? $itDivision->id : null,
+                'name' => 'Seminar',
+                'description' => 'Kegiatan seminar dan konferensi',
+                'division_id' => null,
             ],
-            [
-                'name' => 'Development',
-                'description' => 'Pengembangan fitur dan sistem baru',
-                'division_id' => $itDivision ? $itDivision->id : null,
-            ],
-            [
-                'name' => 'Social Media Campaign',
-                'description' => 'Kampanye dan konten media sosial',
-                'division_id' => $marketingDivision ? $marketingDivision->id : null,
-            ],
+
+
         ];
 
         foreach ($categories as $category) {

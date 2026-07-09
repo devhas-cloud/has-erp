@@ -351,7 +351,7 @@
                                 </div>
                             </div>
                             <div class="lead-form-row">
-                                <div class="form-group small">
+                                <div class="form-group">
                                     <label>End User</label>
                                     <select name="end_user" id="lead-end-user">
                                         <option value="">— Pilih —</option>

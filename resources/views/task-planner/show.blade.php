@@ -466,19 +466,36 @@
                             @if ($task->status === 'todo')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
                                     data-id="{{ $task->id }}" data-status="in_progress"
-                                    style="background:#2563eb;font-size:12px">
+                                    style="background:#2563eb;font-size:10px">
                                     <i class="fa fa-play me-1"></i>Start Progress
                                 </button>
                             @endif
                             @if ($task->status === 'in_progress')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
                                     data-id="{{ $task->id }}" data-status="done"
-                                    style="background:#f59e0b;font-size:12px">
+                                    style="background:#f59e0b;font-size:10px">
                                     <i class="fa fa-check me-1"></i>Mark as Done
                                 </button>
                             @endif
                         </div>
                     @endif
+
+                    @if($task->status === 'waiting_approval' && $isCreator)
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+                            <button type="button" class="btn btn-sm btn-accent btn-approve-task"
+                                data-id="{{ $task->id }}" data-status="done"
+                                style="font-size:10px">
+                                <i class="fa fa-check me-1"></i>Approve
+                            </button>
+                            <button type="button" class="btn btn-sm btn-accent btn-reject-task"
+                                data-id="{{ $task->id }}" data-status="in_progress"
+                                style="background:#f51f0b;font-size:10px">
+                                <i class="fa fa-times me-1"></i>Reject
+                            </button>
+                        </div>
+                    @endif
+
+
                 </div>
                 <div class="card-body-custom">
                     @if ($task->assignees->isEmpty())
@@ -635,6 +652,31 @@ $(document).on('click', '.btn-approve-task', function() {
             error: function(xhr) {
                 $btn.prop('disabled', false).html('<i class="fa fa-check"></i><span>Approve</span>');
                 toastr.error(xhr.responseJSON?.message || 'Gagal approve.');
+            }
+        });
+    });
+});
+
+
+$(document).on('click', '.btn-reject-task', function() {
+    var id = $(this).data('id');
+    var $btn = $(this);
+    Swal.fire({
+        title: 'Reject Task?', text: 'Status akan kembali menjadi In Progress.',
+        icon: 'question', showCancelButton: true,
+        confirmButtonText: 'Yes, reject', cancelButtonText: 'Cancel',
+        confirmButtonColor: '#f51f0b', cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Rejecting...');
+        $.ajax({
+            url: '{{ route('task-planner.index') }}/' + id + '/reject',
+            method: 'POST', data: { _token: '{{ csrf_token() }}' },
+            success: function(res) { toastr.success(res.message); location.reload(); },
+            error: function(xhr) {
+                $btn.prop('disabled', false).html('<i class="fa fa-times"></i><span>Reject</span>');
+                toastr.error(xhr.responseJSON?.message || 'Gagal reject.');
             }
         });
     });

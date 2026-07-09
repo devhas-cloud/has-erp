@@ -89,6 +89,7 @@
         <span><i class="fa fa-address-book me-2" style="color:var(--accent)"></i>Contacts List</span>
     </div>
     <div class="card-body-custom p-2">
+        <div class="table-responsive">
         <table id="contacts-table" class="table table-custom align-middle mb-0" style="width:100%">
             <thead>
                 <tr>
@@ -103,6 +104,7 @@
                 </tr>
             </thead>
         </table>
+        </div>
     </div>
 </div>
 @endsection

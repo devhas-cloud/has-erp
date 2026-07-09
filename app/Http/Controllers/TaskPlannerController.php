@@ -40,18 +40,18 @@ class TaskPlannerController extends Controller
     public function data(Request $request): JsonResponse
     {
         $userId = Auth::id();
-        $user = Auth::user()->load('hierarchyRole');
+        $user = Auth::user()->load('hierarchyRole', 'division');
         $userRole = $user->hierarchyRole;
+        $userDivisionId = $user->division_id;
 
         $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees']);
 
         if ($userRole && $userRole->is_global_delegator) {
         } elseif ($userRole) {
             $level = $userRole->hierarchy_level;
-            $query->where(function ($q) use ($userId, $level) {
+            $query->where(function ($q) use ($userId) {
                 $q->where('creator_id', $userId)
-                    ->orWhereHas('assignees', fn ($q) => $q->where('user_id', $userId))
-                    ->orWhereHas('creator.hierarchyRole', fn ($q) => $q->where('hierarchy_level', '>', $level));
+                    ->orWhereHas('assignees', fn ($q) => $q->where('user_id', $userId));
             });
         } else {
             $query->where(function ($q) use ($userId) {
@@ -163,12 +163,19 @@ class TaskPlannerController extends Controller
     public function fetchAssignees(Request $request): JsonResponse
     {
         $userId = Auth::id();
-        $user = User::with('hierarchyRole')->find($userId);
+        $user = User::with(['hierarchyRole', 'division'])->find($userId);
+        $userDivision = $user->division;
         $userRole = $user->hierarchyRole;
-
         $query = User::where('id', '!=', $userId);
 
         if ($userRole && ! $userRole->is_global_delegator) {
+
+            $query->where(function ($q) use ($userDivision) {
+                if ($userDivision) {
+                    $q->where('division_id', $userDivision->id);
+                }
+            });
+
             $query->whereHas('hierarchyRole', function ($q) use ($userRole) {
                 $q->where('hierarchy_level', '>', $userRole->hierarchy_level);
             });
@@ -349,6 +356,23 @@ class TaskPlannerController extends Controller
         $task->update(['status' => 'done']);
 
         return response()->json(['success' => true, 'message' => 'Task disetujui.']);
+    }
+
+    public function reject($id): JsonResponse
+    {
+        $task = Task::findOrFail($id);
+
+        if ($task->creator_id !== Auth::id()) {
+            return response()->json(['success' => false, 'message' => 'Hanya creator yang bisa reject.'], 403);
+        }
+
+        if ($task->status !== 'waiting_approval') {
+            return response()->json(['success' => false, 'message' => 'Task tidak dalam status waiting approval.'], 422);
+        }
+
+        $task->update(['status' => 'in_progress']);
+
+        return response()->json(['success' => true, 'message' => 'Task ditolak, status kembali ke In Progress.']);
     }
 
     public function transition(Request $request, $id): JsonResponse
