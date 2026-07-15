@@ -89,6 +89,11 @@
         z-index: 3;
         box-shadow: 0 2px 8px rgba(37, 99, 235, .3);
     }
+    .lead-path__item--active-unqualified {
+        background: #f59e0b;
+        z-index: 3;
+        box-shadow: 0 2px 8px rgba(245, 158, 11, .3);
+    }
     .lead-path__item--complete {
         background: #d1fae5;
         z-index: 2;
@@ -125,6 +130,9 @@
     /* Active */
     .lead-path__item--active .lead-path__stage { color: #fff; }
     .lead-path__item--active .lead-path__title { color: #fff; font-weight: 700; }
+    /* Active Unqualified */
+    .lead-path__item--active-unqualified .lead-path__stage { color: #fff; }
+    .lead-path__item--active-unqualified .lead-path__title { color: #fff; font-weight: 700; }
     /* Complete */
     .lead-path__item--complete .lead-path__stage { color: #059669; }
     .lead-path__item--complete .lead-path__title { color: #065f46; font-weight: 600; }
@@ -650,10 +658,12 @@
         <p class="page-header-sub">Informasi lengkap data lead</p>
     </div>
     <div class="page-header-actions">
-        @if($canUpdate)
+        @if($canUpdate && $lead->lead_status !== 'Converted')
+
         <button type="button" class="btn-accent" onclick="openEditModal({{ $lead->id }})">
             <i class="fa fa-pen"></i><span>Edit</span>
         </button>
+
         @endif
         <a href="{{ route('leads-management.index') }}" class="btn-ghost">
             <i class="fa fa-arrow-left"></i><span>Kembali</span>
@@ -662,7 +672,7 @@
 </div>
 
 @php
-    $stages = ['New', 'Approach', 'Unqualified', 'Qualified'];
+    $stages = ['New', 'Approach', 'Unqualified', 'Qualified', 'Converted'];
     $currentIdx = array_search($lead->lead_status, $stages);
     if ($currentIdx === false) $currentIdx = -1;
 @endphp
@@ -703,6 +713,21 @@
                     <span><i class="fa fa-clock"></i>Closed: {{ $lead->closed_date->format('d M Y') }}</span>
                     @endif
                 </div>
+
+                <div class="lead-header__meta justify-content-end" style="margin-top:8px; ">
+                    @if($lead->lead_status === 'Approach')
+                    <button type="button" class="btn-accent-danger" onclick="openUnqualifiedModal()">
+                        <i class="fa fa-times-circle"></i><span> Unqualified</span>
+                    </button>
+                    <button type="button" class="btn-accent" onclick="openQualifiedModal()">
+                        <i class="fa fa-check-circle"></i><span> Qualified</span>
+                    </button>
+                    @elseif($lead->lead_status === 'Qualified')
+                    <button type="button" class="btn-accent" onclick="openConvertedModal()">
+                        <i class="fa fa-check-double"></i><span> Converted</span>
+                    </button>
+                    @endif
+                </div>
             </div>
         </div>
 
@@ -715,9 +740,10 @@
                         @php
                             $isActive   = ($i === $currentIdx);
                             $isComplete = ($currentIdx >= 0 && $i < $currentIdx);
+                            $isUnqualifiedActive = $isActive && $stage === 'Unqualified';
                         @endphp
                         <li class="lead-path__item
-                            {{ $isActive ? 'lead-path__item--active' : '' }}
+                            {{ $isUnqualifiedActive ? 'lead-path__item--active-unqualified' : ($isActive ? 'lead-path__item--active' : '') }}
                             {{ $isComplete ? 'lead-path__item--complete' : (!$isActive ? 'lead-path__item--incomplete' : '') }}">
                             <a class="lead-path__link" tabindex="-1">
                                 <span class="lead-path__stage">
@@ -738,6 +764,20 @@
         </div>
 
 
+
+        @if($lead->lead_status === 'Unqualified' && $lead->unqualified_reason)
+        <div class="card-custom fade-in stagger-1 mt-0" style="border-left:4px solid #f59e0b;background:#fffbeb;">
+            <div class="card-body-custom" style="padding:12px 16px">
+                <div style="display:flex;align-items:flex-start;gap:10px">
+                    <i class="fa fa-exclamation-triangle" style="color:#d97706;font-size:16px;margin-top:2px"></i>
+                    <div>
+                        <strong style="color:#92400e;font-size:13px">Unqualified Reason</strong>
+                        <p style="color:#78350f;font-size:13px;margin:4px 0 0">{{ $lead->unqualified_reason }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
 
         <!-- ── Tab Section ── -->
         <div class="card-custom fade-in stagger-2 mt-4">
@@ -815,10 +855,30 @@
                         </div>
                     </div>
                     <div class="tab-pane fade" id="tab-logs" role="tabpanel">
-                        <div class="empty-state">
-                            <i class="fa fa-history"></i>
-                            <p>Belum ada log.</p>
-                        </div>
+                        @php
+                            $leadLogs = $lead->logs()->with('user')->orderByDesc('created_at')->get();
+                        @endphp
+                        @if ($leadLogs->isEmpty())
+                            <div class="empty-state">
+                                <i class="fa fa-history"></i>
+                                <p>Belum ada log.</p>
+                            </div>
+                        @else
+                            <div style="padding:4px 0">
+                                @foreach ($leadLogs as $log)
+                                    <div class="activity-post" style="padding:16px 22px">
+                                        <div class="activity-post-avatar">{{ strtoupper(substr($log->user?->username ?? 'S', 0, 2)) }}</div>
+                                        <div class="activity-post-body">
+                                            <div class="activity-post-header">
+                                                <span class="activity-post-author">{{ $log->user?->username ?? 'System' }}</span>
+                                                <span class="activity-post-time">{{ $log->created_at->diffForHumans() }}</span>
+                                            </div>
+                                            <div class="activity-post-content">{{ $log->description }}</div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -1065,15 +1125,6 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
-                                    <label>Account Type <span class="text-danger">*</span></label>
-                                    <select name="account_types_id" id="lead-account-type">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($accountTypes as $at)
-                                        <option value="{{ $at->id }}">{{ $at->type_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
@@ -1129,7 +1180,7 @@
                                 </div>
                             </div>
                             <div class="lead-form-row">
-                                <div class="form-group small">
+                                <div class="form-group">
                                     <label>End User</label>
                                     <select name="end_user" id="lead-end-user">
                                         <option value="">— Pilih —</option>
@@ -1304,6 +1355,291 @@
     </div>
 </div>
 
+@endpush
+
+@push('modals')
+<div class="modal fade" id="unqualifiedModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:500px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Mark as Unqualified</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Unqualified Reason <span class="text-danger">*</span></label>
+                    <textarea id="unqualified-reason" rows="3" class="form-control" placeholder="Alasan lead tidak memenuhi kualifikasi..." style="width:100%;padding:8px 12px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-confirm-unqualified">
+                    <i class="fa fa-check me-1"></i> Confirm Unqualified
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+
+@push('modals')
+<!-- ── Converted Modal ── -->
+<div class="modal fade" id="convertedModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Convert Lead</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="converted-form">
+                    @csrf
+
+                    <!-- ── Account Information ── -->
+                    <div class="lead-form-section close" style="display: none">
+                        <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
+                            <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Information</span>
+                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                        </div>
+                        <div class="lead-form-section-body">
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Company</label>
+                                    <select id="conv-company" style="width:100%"></select>
+                                    <input type="hidden" id="conv-company-id" value="{{ $lead->account_companies_id }}" data-name="{{ $lead->accountCompany?->account_name }}">
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Field Type</label>
+                                    <select id="conv-field-type">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($typesAccountsCompanies as $tac)
+                                        <option value="{{ $tac->id }}" {{ $lead->accountCompany?->types_accounts_companies_id == $tac->id ? 'selected' : '' }}>{{ $tac->type_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Segmentation</label>
+                                    <select id="conv-segmentation">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($segmentations as $seg)
+                                        <option value="{{ $seg->id }}" {{ $lead->accountCompany?->segmentation_id == $seg->id ? 'selected' : '' }}>{{ $seg->segmentation_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Business Entity</label>
+                                    <select id="conv-biz-entity">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($businessEntities as $be)
+                                        <option value="{{ $be->id }}" {{ $lead->accountCompany?->business_entities_id == $be->id ? 'selected' : '' }}>{{ $be->entity_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Business Value</label>
+                                    <select id="conv-biz-value">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($businessValues as $bv)
+                                        <option value="{{ $bv->id }}" {{ $lead->accountCompany?->business_values_id == $bv->id ? 'selected' : '' }}>{{ $bv->value_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Interaction Level</label>
+                                    <select id="conv-interaction">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($interactionLevels as $il)
+                                        <option value="{{ $il->id }}" {{ $lead->accountCompany?->interaction_levels_id == $il->id ? 'selected' : '' }}>{{ $il->level_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Address Street</label>
+                                    <input type="text" id="conv-addr-street" value="{{ $lead->accountCompany?->address_billing_street }}">
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group"><label>City</label><input type="text" id="conv-addr-city" value="{{ $lead->accountCompany?->address_billing_city }}"></div>
+                                <div class="form-group"><label>Province</label><input type="text" id="conv-addr-province" value="{{ $lead->accountCompany?->address_billing_province }}"></div>
+                                <div class="form-group small"><label>Zip</label><input type="text" id="conv-addr-zip" value="{{ $lead->accountCompany?->address_billing_postal_code }}"></div>
+                                <div class="form-group"><label>Country</label><input type="text" id="conv-addr-country" value="{{ $lead->accountCompany?->address_billing_country }}"></div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>End User</label>
+                                    <select id="conv-end-user">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($accountCompanies as $ac)
+                                        <option value="{{ $ac->id }}" {{ $lead->accountCompany?->end_user == $ac->id ? 'selected' : '' }}>{{ $ac->account_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── BAT Information ── -->
+                    <div class="lead-form-section open">
+                        <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
+                            <span><i class="fa fa-check-circle me-2" style="color:var(--accent)"></i>BAT Information</span>
+                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                        </div>
+                        <div class="lead-form-section-body">
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Probability (%)</label>
+                                    <input type="number" id="conv-probability" value="0" min="0" max="100" style="width:100%;padding:8px 12px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit">
+                                </div>
+                                <div class="form-group">
+                                    <label>Forecast <span class="text-danger">*</span></label>
+                                    <select id="conv-forecast" style="width:100%;padding:8px 12px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($forecasts as $f)
+                                        <option value="{{ $f->id }}">{{ $f->forecast_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <label class="form-check-inline"><input type="checkbox" id="conv-budget" value="1"> Budget</label>
+                                <label class="form-check-inline"><input type="checkbox" id="conv-authorize" value="1"> Authorize</label>
+                                <label class="form-check-inline"><input type="checkbox" id="conv-timeline" value="1"> Timeline</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-accent" id="btn-confirm-converted">
+                    <i class="fa fa-check-double"></i> Confirm Converted
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+
+@push('modals')
+<!-- ── Qualified Modal ── -->
+<div class="modal fade" id="qualifiedModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Qualify Lead</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="qualified-form">
+                    @csrf
+
+                    <div class="lead-form-section open">
+                        <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
+                            <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Information</span>
+                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                        </div>
+                        <div class="lead-form-section-body">
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Company <span class="text-danger">*</span></label>
+                                    <select id="qual-company" style="width:100%" required></select>
+                                    <input type="hidden" id="qual-company-id" value="{{ $lead->account_companies_id }}" data-name="{{ $lead->accountCompany?->account_name }}">
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Field Type <span class="text-danger">*</span></label>
+                                    <select id="qual-field-type" required>
+                                        <option value="">— Pilih —</option>
+                                        @foreach($typesAccountsCompanies as $tac)
+                                        <option value="{{ $tac->id }}" {{ $lead->accountCompany?->types_accounts_companies_id == $tac->id ? 'selected' : '' }}>{{ $tac->type_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Segmentation <span class="text-danger">*</span></label>
+                                    <select id="qual-segmentation" required>
+                                        <option value="">— Pilih —</option>
+                                        @foreach($segmentations as $seg)
+                                        <option value="{{ $seg->id }}" {{ $lead->accountCompany?->segmentation_id == $seg->id ? 'selected' : '' }}>{{ $seg->segmentation_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Business Entity <span class="text-danger">*</span></label>
+                                    <select id="qual-biz-entity" required>
+                                        <option value="">— Pilih —</option>
+                                        @foreach($businessEntities as $be)
+                                        <option value="{{ $be->id }}" {{ $lead->accountCompany?->business_entities_id == $be->id ? 'selected' : '' }}>{{ $be->entity_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Business Value <span class="text-danger">*</span></label>
+                                    <select id="qual-biz-value" required>
+                                        <option value="">— Pilih —</option>
+                                        @foreach($businessValues as $bv)
+                                        <option value="{{ $bv->id }}" {{ $lead->accountCompany?->business_values_id == $bv->id ? 'selected' : '' }}>{{ $bv->value_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Interaction Level <span class="text-danger">*</span></label>
+                                    <select id="qual-interaction" required>
+                                        <option value="">— Pilih —</option>
+                                        @foreach($interactionLevels as $il)
+                                        <option value="{{ $il->id }}" {{ $lead->accountCompany?->interaction_levels_id == $il->id ? 'selected' : '' }}>{{ $il->level_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>Address Street <span class="text-danger">*</span></label>
+                                    <input type="text" id="qual-addr-street" value="{{ $lead->accountCompany?->address_billing_street }}" required>
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group"><label>City <span class="text-danger">*</span></label><input type="text" id="qual-addr-city" value="{{ $lead->accountCompany?->address_billing_city }}" required></div>
+                                <div class="form-group"><label>Province <span class="text-danger">*</span></label><input type="text" id="qual-addr-province" value="{{ $lead->accountCompany?->address_billing_province }}" required></div>
+                                <div class="form-group small"><label>Zip <span class="text-danger">*</span></label><input type="text" id="qual-addr-zip" value="{{ $lead->accountCompany?->address_billing_postal_code }}" required></div>
+                                <div class="form-group"><label>Country <span class="text-danger">*</span></label><input type="text" id="qual-addr-country" value="{{ $lead->accountCompany?->address_billing_country }}" required></div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                    <label>End User </label>
+                                    <select id="qual-end-user" required>
+                                        <option value="">— Pilih —</option>
+                                        @foreach($accountCompanies as $ac)
+                                        <option value="{{ $ac->id }}" {{ $lead->accountCompany?->end_user == $ac->id ? 'selected' : '' }}>{{ $ac->account_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-accent" id="btn-confirm-qualified">
+                    <i class="fa fa-check-circle"></i> Confirm Qualified
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+
+@push('modals')
 <div class="modal fade" id="filePreviewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -1420,7 +1756,6 @@ function openEditModal(id) {
         { field: '#lead-title-acc', label: 'Title' },
         { field: '#lead-field-type', label: 'Field Type' },
         { field: '#lead-segmentation', label: 'Segmentation' },
-        { field: '#lead-account-type', label: 'Account Type' },
         { field: '#lead-follow-up', label: 'Follow Up Date' },
     ];
 
@@ -1591,7 +1926,7 @@ function loadActivities() {
         $('#activity-list').html(html);
         $('#activity-loading').hide();
         if (window.location.hash?.startsWith('#activity-') || sessionStorage.getItem('mention_target')) {
-            setTimeout(scrollToMentionedActivity, 100);
+            setTimeout(scrollToMentionedActivity, 500);
         }
     }).fail(function() {
         $('#activity-loading').html('<span style="color:var(--danger)">Gagal memuat aktivitas.</span>');
@@ -2086,7 +2421,13 @@ function renderMentions(text) {
 loadActivities();
 loadTasks();
 scrollToMentionedActivity();
-$(window).on('hashchange', scrollToMentionedActivity);
+$(window).on('hashchange', function() {
+    if (window.location.hash && window.location.hash.startsWith('#activity-')) {
+        loadActivities();
+    } else {
+        scrollToMentionedActivity();
+    }
+});
 
 function scrollToMentionedActivity() {
     if (window.location.hash && window.location.hash.startsWith('#activity-')) {
@@ -2123,5 +2464,363 @@ function scrollToTarget(id) {
         if (++attempts > 50) clearInterval(checkExist);
     }, 150);
 }
+
+// ── Unqualified Modal ──
+function openUnqualifiedModal() {
+    $('#unqualified-reason').val('');
+    $('#unqualified-reason').removeClass('is-invalid');
+    new bootstrap.Modal(document.getElementById('unqualifiedModal')).show();
+}
+
+$(document).on('click', '#btn-confirm-unqualified', function() {
+    const $btn = $(this);
+    const reason = $('#unqualified-reason').val().trim();
+
+    if (!reason) {
+        $('#unqualified-reason').addClass('is-invalid');
+        toastr.error('Unqualified Reason wajib diisi.');
+        $('#unqualified-reason').focus();
+        return;
+    }
+
+    Swal.fire({
+        title: 'Mark as Unqualified?',
+        text: 'Lead akan ditandai sebagai Unqualified.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Unqualified!',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Processing...');
+
+        $.ajax({
+            url: '{{ route("leads-management.unqualified", $lead->id) }}',
+            type: 'POST',
+            data: {
+                _token: '{{ csrf_token() }}',
+                unqualified_reason: reason,
+            },
+            success: function(res) {
+                toastr.success(res.message);
+                bootstrap.Modal.getInstance(document.getElementById('unqualifiedModal')).hide();
+                location.reload();
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).html('<i class="fa fa-check me-1"></i> Confirm Unqualified');
+                const errors = xhr.responseJSON?.errors;
+                if (errors) {
+                    const first = Object.values(errors)[0];
+                    toastr.error(Array.isArray(first) ? first[0] : first);
+                } else {
+                    toastr.error(xhr.responseJSON?.message || 'Failed to update status.');
+                }
+            }
+        });
+    });
+});
+
+$(document).on('change input', '#unqualified-reason', function() {
+    $(this).removeClass('is-invalid');
+});
+
+// ── Qualified Modal ──
+function openQualifiedModal() {
+    initQualCompanySelect2();
+    new bootstrap.Modal(document.getElementById('qualifiedModal')).show();
+}
+
+function initQualCompanySelect2() {
+    if (!$('#qual-company').hasClass('select2-hidden-accessible')) {
+        const $qualCompany = $('#qual-company');
+        const $qualCompanyId = $('#qual-company-id');
+
+        $qualCompany.select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Ketik nama perusahaan...',
+            allowClear: true,
+            width: '100%',
+            tags: true,
+            createTag: function(params) {
+                return { id: params.term, text: params.term + ' (new)', newTag: true };
+            },
+            dropdownParent: $('#qualifiedModal'),
+            ajax: {
+                url: '{{ route("leads-management.search-companies") }}',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(res) { return { results: res.results }; }
+            }
+        }).on('select2:select', function(e) {
+            var c = e.params.data;
+            if (c.newTag) {
+                $qualCompanyId.val('');
+            } else {
+                $qualCompanyId.val(c.id);
+                if (c.segmentation_id) $('#qual-segmentation').val(c.segmentation_id);
+                if (c.account_types_id) $('#qual-account-type').val(c.account_types_id);
+                if (c.types_accounts_companies_id) $('#qual-field-type').val(c.types_accounts_companies_id);
+                if (c.business_entities_id) $('#qual-biz-entity').val(c.business_entities_id);
+                if (c.business_values_id) $('#qual-biz-value').val(c.business_values_id);
+                if (c.interaction_levels_id) $('#qual-interaction').val(c.interaction_levels_id);
+                if (c.address_billing_street) $('#qual-addr-street').val(c.address_billing_street);
+                if (c.address_billing_city) $('#qual-addr-city').val(c.address_billing_city);
+                if (c.address_billing_province) $('#qual-addr-province').val(c.address_billing_province);
+                if (c.address_billing_postal_code) $('#qual-addr-zip').val(c.address_billing_postal_code);
+                if (c.address_billing_country) $('#qual-addr-country').val(c.address_billing_country);
+            }
+        }).on('select2:clear', function() {
+            $qualCompanyId.val('');
+        });
+
+        var existingId = $qualCompanyId.val();
+        var existingName = $qualCompanyId.data('name');
+        if (existingId && existingName) {
+            var option = new Option(existingName, existingId, true, true);
+            $qualCompany.append(option).trigger('change');
+        }
+    }
+
+    if (!$('#qual-end-user').hasClass('select2-hidden-accessible')) {
+        $('#qual-end-user').select2({
+            theme: 'bootstrap-5',
+            placeholder: '— Pilih —',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#qualifiedModal')
+        });
+    }
+}
+
+$(document).on('click', '#btn-confirm-qualified', function() {
+    const $btn = $(this);
+
+    $('#qualified-form .is-invalid').removeClass('is-invalid');
+
+    const validations = [
+        { field: '#qual-company', label: 'Company' },
+        { field: '#qual-field-type', label: 'Field Type' },
+        { field: '#qual-segmentation', label: 'Segmentation' },
+        { field: '#qual-biz-entity', label: 'Business Entity' },
+        { field: '#qual-biz-value', label: 'Business Value' },
+        { field: '#qual-interaction', label: 'Interaction Level' },
+        { field: '#qual-addr-street', label: 'Address Street' },
+        { field: '#qual-addr-city', label: 'City' },
+        { field: '#qual-addr-province', label: 'Province' },
+        { field: '#qual-addr-zip', label: 'Zip' },
+        { field: '#qual-addr-country', label: 'Country' }
+    ];
+
+    for (let i = 0; i < validations.length; i++) {
+        const v = validations[i];
+        const $el = $(v.field);
+        const val = $el.val() ? $el.val().trim() : '';
+        if (!val) {
+            $el.addClass('is-invalid');
+            const section = $el.closest('.lead-form-section');
+            if (section.length && !section.hasClass('open')) {
+                section.addClass('open');
+            }
+            toastr.error(v.label + ' wajib diisi.');
+            $el.focus();
+            return;
+        }
+    }
+
+    var companyId = $('#qual-company-id').val();
+    var data = {
+        _token: '{{ csrf_token() }}',
+        types_accounts_companies_id: $('#qual-field-type').val(),
+        segmentation_id: $('#qual-segmentation').val(),
+        account_types_id: $('#qual-account-type').val(),
+        business_entities_id: $('#qual-biz-entity').val(),
+        business_values_id: $('#qual-biz-value').val(),
+        interaction_levels_id: $('#qual-interaction').val(),
+        address_street: $('#qual-addr-street').val(),
+        address_city: $('#qual-addr-city').val(),
+        address_province: $('#qual-addr-province').val(),
+        address_zip: $('#qual-addr-zip').val(),
+        address_country: $('#qual-addr-country').val(),
+        end_user: $('#qual-end-user').val(),
+    };
+
+    if (companyId) {
+        data.account_companies_id = companyId;
+    } else {
+        var freeText = $('#qual-company').val();
+        if (freeText && freeText.trim()) data.company = freeText.trim();
+    }
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Processing...');
+
+    $.ajax({
+        url: '{{ route("leads-management.qualified", $lead->id) }}',
+        type: 'POST',
+        data: data,
+        success: function(res) {
+            toastr.success(res.message);
+            bootstrap.Modal.getInstance(document.getElementById('qualifiedModal')).hide();
+            location.reload();
+        },
+        error: function(xhr) {
+            $btn.prop('disabled', false).html('<i class="fa fa-check-circle"></i> Confirm Qualified');
+            var msg = xhr.responseJSON?.message;
+            if (!msg) {
+                var errors = xhr.responseJSON?.errors;
+                if (errors) {
+                    var first = Object.values(errors)[0];
+                    msg = Array.isArray(first) ? first[0] : first;
+                }
+            }
+            toastr.error(msg || 'Failed to qualify lead.');
+        }
+    });
+});
+
+// ── Converted Modal ──
+function openConvertedModal() {
+    initConvCompanySelect2();
+    new bootstrap.Modal(document.getElementById('convertedModal')).show();
+}
+
+function initConvCompanySelect2() {
+    if (!$('#conv-company').hasClass('select2-hidden-accessible')) {
+        const $convCompany = $('#conv-company');
+        const $convCompanyId = $('#conv-company-id');
+
+        $convCompany.select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Ketik nama perusahaan...',
+            allowClear: true,
+            width: '100%',
+            tags: true,
+            createTag: function(params) {
+                return { id: params.term, text: params.term + ' (new)', newTag: true };
+            },
+            dropdownParent: $('#convertedModal'),
+            ajax: {
+                url: '{{ route("leads-management.search-companies") }}',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(res) { return { results: res.results }; }
+            }
+        }).on('select2:select', function(e) {
+            var c = e.params.data;
+            if (c.newTag) {
+                $convCompanyId.val('');
+            } else {
+                $convCompanyId.val(c.id);
+                if (c.segmentation_id) $('#conv-segmentation').val(c.segmentation_id);
+                if (c.account_types_id) $('#conv-account-type').val(c.account_types_id);
+                if (c.types_accounts_companies_id) $('#conv-field-type').val(c.types_accounts_companies_id);
+                if (c.business_entities_id) $('#conv-biz-entity').val(c.business_entities_id);
+                if (c.business_values_id) $('#conv-biz-value').val(c.business_values_id);
+                if (c.interaction_levels_id) $('#conv-interaction').val(c.interaction_levels_id);
+                if (c.address_billing_street) $('#conv-addr-street').val(c.address_billing_street);
+                if (c.address_billing_city) $('#conv-addr-city').val(c.address_billing_city);
+                if (c.address_billing_province) $('#conv-addr-province').val(c.address_billing_province);
+                if (c.address_billing_postal_code) $('#conv-addr-zip').val(c.address_billing_postal_code);
+                if (c.address_billing_country) $('#conv-addr-country').val(c.address_billing_country);
+            }
+        }).on('select2:clear', function() {
+            $convCompanyId.val('');
+        });
+
+        var existingId = $convCompanyId.val();
+        var existingName = $convCompanyId.data('name');
+        if (existingId && existingName) {
+            var option = new Option(existingName, existingId, true, true);
+            $convCompany.append(option).trigger('change');
+        }
+    }
+
+    if (!$('#conv-end-user').hasClass('select2-hidden-accessible')) {
+        $('#conv-end-user').select2({
+            theme: 'bootstrap-5',
+            placeholder: '— Pilih —',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#convertedModal')
+        });
+    }
+}
+
+$(document).on('click', '#btn-confirm-converted', function() {
+    const $btn = $(this);
+
+    $('#converted-form .is-invalid').removeClass('is-invalid');
+
+    if (!$('#conv-forecast').val()) {
+        $('#conv-forecast').addClass('is-invalid');
+        toastr.error('Forecast wajib dipilih.');
+        $('#conv-forecast').focus();
+        return;
+    }
+
+    if (!$('#conv-budget').is(':checked')) {
+        toastr.error('Budget harus dipilih.');
+        return;
+    }
+
+    if (!$('#conv-authorize').is(':checked')) {
+        toastr.error('Authorize harus dipilih.');
+        return;
+    }
+
+    if (!$('#conv-timeline').is(':checked')) {
+        toastr.error('Timeline harus dipilih.');
+        return;
+    }
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Processing...');
+
+    var companyId = $('#conv-company-id').val();
+    var data = {
+        _token: '{{ csrf_token() }}',
+        types_accounts_companies_id: $('#conv-field-type').val(),
+        segmentation_id: $('#conv-segmentation').val(),
+        account_types_id: $('#conv-account-type').val(),
+        business_entities_id: $('#conv-biz-entity').val(),
+        business_values_id: $('#conv-biz-value').val(),
+        interaction_levels_id: $('#conv-interaction').val(),
+        address_street: $('#conv-addr-street').val(),
+        address_city: $('#conv-addr-city').val(),
+        address_province: $('#conv-addr-province').val(),
+        address_zip: $('#conv-addr-zip').val(),
+        address_country: $('#conv-addr-country').val(),
+        end_user: $('#conv-end-user').val(),
+        budget: $('#conv-budget').is(':checked') ? '1' : '0',
+        authorize: $('#conv-authorize').is(':checked') ? '1' : '0',
+        timeline: $('#conv-timeline').is(':checked') ? '1' : '0',
+        close_won_date: $('#conv-close-won-date').val(),
+        probability: $('#conv-probability').val(),
+        forecast_id: $('#conv-forecast').val(),
+    };
+
+    if (companyId) {
+        data.account_companies_id = companyId;
+    }
+
+    $.ajax({
+        url: '{{ route("leads-management.converted", $lead->id) }}',
+        type: 'POST',
+        data: data,
+        success: function(res) {
+            toastr.success(res.message);
+            bootstrap.Modal.getInstance(document.getElementById('convertedModal')).hide();
+            location.reload();
+        },
+        error: function(xhr) {
+            $btn.prop('disabled', false).html('<i class="fa fa-check-double"></i> Confirm Converted');
+            toastr.error(xhr.responseJSON?.message || 'Failed to convert lead.');
+        }
+    });
+});
 </script>
 @endsection

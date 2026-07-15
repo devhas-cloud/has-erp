@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('account_contacts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('account_companies_id')->constrained('account_companies')->cascadeOnDelete();
+            $table->foreignId('account_companies_id')->nullable()->constrained('account_companies')->nullOnDelete();
             $table->string('full_name', 150);
             $table->string('icon')->nullable();
             $table->enum('salutation', ['Ibu', 'Bapak'])->nullable();

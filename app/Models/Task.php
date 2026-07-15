@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Loggable;
 use App\Traits\Notifiable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,11 +11,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Task extends Model
 {
+    use Loggable;
     use Notifiable;
 
     protected $fillable = [
         'creator_id',
         'lead_id',
+        'opportunity_id',
         'activity_id',
         'category_id',
         'whatsapp_group_id',
@@ -72,6 +75,11 @@ class Task extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
+    }
+
+    public function opportunity(): BelongsTo
+    {
+        return $this->belongsTo(Opportunity::class);
     }
 
     public function sourceActivity(): BelongsTo

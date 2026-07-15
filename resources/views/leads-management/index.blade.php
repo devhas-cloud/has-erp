@@ -144,7 +144,7 @@
                         </div>
                         <div class="lead-form-section-body">
                             <div class="lead-form-row">
-                                <div class="form-group small">
+                                <div class="form-group small" style="display: none">
                                     <label>Lead Status <span class="text-danger">*</span></label>
                                     <select name="lead_status" id="lead-status">
                                         <option value="New">New</option>
@@ -153,10 +153,14 @@
                                         <option value="Unqualified">Unqualified</option>
                                     </select>
                                 </div>
-                                <div class="form-group small">
+                                <div class="form-group">
+                                    <label>Title <span class="text-danger">*</span></label>
+                                    <input type="text" name="lead_title" id="lead-title-acc">
+                                </div>
+                                <div class="form-group">
                                     <label>Salutation <span class="text-danger">*</span></label>
                                     <select name="salutation" id="lead-salutation">
-                                        <option value="">—</option>
+                                        <option value="">—Pilih—</option>
                                         <option value="Bapak">Bapak</option>
                                         <option value="Ibu">Ibu</option>
                                     </select>
@@ -172,10 +176,10 @@
                                     <input type="email" name="email" id="lead-email">
                                 </div>
                                 <div class="form-group">
-                                    <label>Mobile</label>
+                                    <label>Mobile  <span class="text-danger">*</span></label>
                                     <input type="text" name="mobile" id="lead-mobile">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display:none">
                                     <label>Phone</label>
                                     <input type="text" name="phone" id="lead-phone">
                                 </div>
@@ -229,7 +233,7 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="lead-form-row">
+                            <div class="lead-form-row" style="display:none;">
                                 <div class="form-group" style="flex:0 0 180px;">
                                     <label>Close Date</label>
                                     <input type="date" name="closed_date" id="lead-close-date">
@@ -241,7 +245,7 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="lead-form-row">
+                            <div class="lead-form-row" style="display:none;">
                                 <div class="form-group">
                                     <label>Unqualified Reason</label>
                                     <textarea name="unqualified_reason" id="lead-unqualified" rows="2"></textarea>
@@ -257,10 +261,7 @@
                         </div>
                         <div class="lead-form-section-body">
                             <div class="lead-form-row">
-                                <div class="form-group">
-                                    <label>Title <span class="text-danger">*</span></label>
-                                    <input type="text" name="lead_title" id="lead-title-acc">
-                                </div>
+
                                 <div class="form-group">
                                     <label>Company</label>
                                     <select id="lead-company" style="width:100%"></select>
@@ -270,7 +271,7 @@
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Field Type <span class="text-danger">*</span></label>
+                                    <label>Field Type <span class="text-danger lead-field-required" style="display: none">*</span></label>
                                     <select name="types_accounts_companies_id" id="lead-field-type">
                                         <option value="">— Pilih —</option>
                                         @foreach($typesAccountsCompanies as $tac)
@@ -279,7 +280,7 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Segmentation <span class="text-danger">*</span></label>
+                                    <label>Segmentation <span class="text-danger lead-field-required" style="display: none">*</span></label>
                                     <select name="segmentation_id" id="lead-segmentation">
                                         <option value="">— Pilih —</option>
                                         @foreach($segmentations as $seg)
@@ -287,7 +288,7 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display:none">
                                     <label>Account Type <span class="text-danger">*</span></label>
                                     <select name="account_types_id" id="lead-account-type">
                                         <option value="">— Pilih —</option>
@@ -477,6 +478,9 @@ function resetLeadForm() {
     $('#lead-form .is-invalid').removeClass('is-invalid');
     $('#lead-company').val('').trigger('change');
     $('#lead-company-id').val('');
+    $(".lead-field-required").hide();
+    $('#lead-field-type').val('').trigger('change');
+    $('#lead-segmentation').val('').trigger('change');
     $('#lead-end-user').val('').trigger('change');
 }
 
@@ -605,7 +609,7 @@ function initLeadsTable() {
                 render: function(data, type, row) {
                     var html = '<div style="display:flex;gap:5px;justify-content:center">';
                     html += '<a href="' + showUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
-                    if (leadsCanUpdate) {
+                    if (leadsCanUpdate && row.lead_status !== 'Converted') {
                         html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
                     if (leadsCanDelete) {
@@ -653,13 +657,11 @@ $(document).on('click', '#btn-save-lead', function() {
         { field: '#lead-salutation', label: 'Salutation' },
         { field: '#lead-full-name', label: 'Full Name' },
         { field: '#lead-email', label: 'Email' },
+        { field: '#lead-mobile', label: 'Mobile' },
         { field: '#lead-job-title', label: 'Job Title' },
         { field: '#lead-division', label: 'Department' },
         { field: '#lead-source', label: 'Lead Source' },
         { field: '#lead-title-acc', label: 'Title' },
-        { field: '#lead-field-type', label: 'Field Type' },
-        { field: '#lead-segmentation', label: 'Segmentation' },
-        { field: '#lead-account-type', label: 'Account Type' },
         { field: '#lead-follow-up', label: 'Follow Up Date' },
     ];
 
@@ -679,6 +681,31 @@ $(document).on('click', '#btn-save-lead', function() {
         }
     }
 
+
+    const companyId = $('#lead-company-id').val();
+    if (companyId) {
+        const companyFields = [
+            { field: '#lead-field-type', label: 'Field Type' },
+            { field: '#lead-segmentation', label: 'Segmentation' },
+        ];
+
+        for (let i = 0; i < companyFields.length; i++) {
+            const v = companyFields[i];
+            const $el = $(v.field);
+            const val = $el.val() ? $el.val().trim() : '';
+            if (!val) {
+                $el.addClass('is-invalid');
+                const section = $el.closest('.lead-form-section');
+                if (section.length && !section.hasClass('open')) {
+                    section.addClass('open');
+                }
+                toastr.error(v.label + ' wajib diisi.');
+                $el.focus();
+                return;
+            }
+        }
+    }
+
     const formData = new FormData(document.getElementById('lead-form'));
     formData.set('all_filed_completed', $('#lead-all-complete').is(':checked') ? '1' : '0');
     formData.set('lead_can_be_contacted', $('#lead-can-contact').is(':checked') ? '1' : '0');
@@ -689,7 +716,6 @@ $(document).on('click', '#btn-save-lead', function() {
         ? '{{ route("leads-management.update", "__ID__") }}'.replace('__ID__', editId)
         : '{{ route("leads-management.store") }}';
 
-    const companyId = $('#lead-company-id').val();
     if (companyId) {
         formData.delete('account_companies_id');
         formData.set('account_companies_id', companyId);
@@ -861,8 +887,19 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
             }
         }).on('select2:select', function(e) {
             var c = e.params.data;
+            $(".lead-field-required").show();
             if (c.newTag) {
                 $('#lead-company-id').val('');
+                $('#lead-field-type').val('').trigger('change');
+                $('#lead-segmentation').val('').trigger('change');
+                $("#lead-biz-entity").val('').trigger('change');
+                $("#lead-biz-value").val('').trigger('change');
+                $("#lead-interaction").val('').trigger('change');
+                $('#lead-addr-street').val('');
+                $('#lead-addr-city').val('');
+                $('#lead-addr-province').val('');
+                $('#lead-addr-zip').val('');
+                $('#lead-addr-country').val('');
             } else {
                 $('#lead-company-id').val(c.id);
                 if (c.segmentation_id) $('#lead-segmentation').val(c.segmentation_id);
@@ -879,6 +916,17 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
             }
         }).on('select2:clear', function() {
             $('#lead-company-id').val('');
+            $(".lead-field-required").hide();
+            $('#lead-field-type').val('').trigger('change');
+            $('#lead-segmentation').val('').trigger('change');
+            $("#lead-biz-entity").val('').trigger('change');
+            $("#lead-biz-value").val('').trigger('change');
+            $("#lead-interaction").val('').trigger('change');
+            $('#lead-addr-street').val('');
+            $('#lead-addr-city').val('');
+            $('#lead-addr-province').val('');
+            $('#lead-addr-zip').val('');
+            $('#lead-addr-country').val('');
         });
     }
 

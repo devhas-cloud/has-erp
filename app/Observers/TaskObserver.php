@@ -4,12 +4,22 @@ namespace App\Observers;
 
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 
 class TaskObserver
 {
     public function updated(Task $task): void
     {
         if (! $task->isDirty('status')) {
+            return;
+        }
+
+        //   Ini akan me-skip seluruh blok notifikasi jika tidak ada assignee lain selain creator. Dengan begitu:
+        // - Task tanpa assign (hanya creator) → tidak ada notif
+        // - Task dengan assignee lain → notifikasi tetap berjalan normal (creator dapat notif saat assignee mengubah status, dan sebaliknya)
+
+        $otherAssignees = $task->assignees->reject(fn ($a) => $a->id === $task->creator_id);
+        if ($otherAssignees->isEmpty()) {
             return;
         }
 
@@ -44,6 +54,9 @@ class TaskObserver
                 if ($assignee->id === $task->creator_id) {
                     continue;
                 }
+                if ($assignee->id === Auth::id()) {
+                    continue;
+                }
                 $task->notify(
                     $assignee,
                     'task_approved',
@@ -57,6 +70,10 @@ class TaskObserver
         }
 
         $notifiedIds = [$task->creator_id];
+        $actorId = Auth::id();
+        if ($actorId) {
+            $notifiedIds[] = $actorId;
+        }
         if ($creator) {
             $task->notify(
                 $creator,

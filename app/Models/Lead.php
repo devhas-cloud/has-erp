@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Loggable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Lead extends Model
 {
+    use Loggable;
+
     protected $fillable = [
         'lead_status',
         'lead_title',

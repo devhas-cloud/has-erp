@@ -7,11 +7,14 @@ use App\Models\BusinessEntity;
 use App\Models\BusinessValue;
 use App\Models\ContactMethod;
 use App\Models\Division;
+use App\Models\Forecast;
 use App\Models\InteractionLevel;
 use App\Models\JobTitle;
+use App\Models\LossReason;
 use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
+use App\Models\Stage;
 use App\Models\TaskCategory;
 use App\Models\TaskRole;
 use App\Models\TypesAccountsCompany;
@@ -229,6 +232,39 @@ class ConfigurationController extends Controller
                         'source' => 'divisions',
                         'source_key' => 'division_name',
                     ],
+                ],
+            ],
+            'forecasts' => [
+                'model' => Forecast::class,
+                'label' => 'Forecast',
+                'slug' => 'forecasts',
+                'columns' => ['forecast_name', 'description', 'status'],
+                'rules' => [
+                    'forecast_name' => 'required|string|max:100',
+                    'description' => 'nullable|string',
+                    'status' => 'required|in:Active,Inactive',
+                ],
+            ],
+            'loss-reasons' => [
+                'model' => LossReason::class,
+                'label' => 'Loss Reason',
+                'slug' => 'loss-reasons',
+                'columns' => ['reason_name', 'description', 'status'],
+                'rules' => [
+                    'reason_name' => 'required|string|max:100',
+                    'description' => 'nullable|string',
+                    'status' => 'required|in:Active,Inactive',
+                ],
+            ],
+            'stages' => [
+                'model' => Stage::class,
+                'label' => 'Stage',
+                'slug' => 'stages',
+                'columns' => ['stage_name', 'description', 'status'],
+                'rules' => [
+                    'stage_name' => 'required|string|max:100',
+                    'description' => 'nullable|string',
+                    'status' => 'required|in:Active,Inactive',
                 ],
             ],
         ];

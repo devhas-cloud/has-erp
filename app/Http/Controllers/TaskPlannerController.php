@@ -8,6 +8,8 @@ use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\WhatsAppGroup;
+use App\Models\Log;
+use App\Models\TaskVisit;
 use App\Services\MentionParser;
 use App\Services\TaskExportService;
 use App\Services\TaskImportService;
@@ -264,6 +266,8 @@ class TaskPlannerController extends Controller
             }
         }
 
+        Log::record('create_task', "Task #{$task->id}: {$task->title}", 'MOD_TASK_PLANNER', $task);
+
         return response()->json([
             'success' => true,
             'message' => 'Task berhasil dibuat.',
@@ -323,6 +327,8 @@ class TaskPlannerController extends Controller
         $task->update($validated);
         $task->assignees()->sync($assigneeIds);
 
+        Log::record('update_task', "Task #{$task->id}: {$task->title}", 'MOD_TASK_PLANNER', $task);
+
         return response()->json([
             'success' => true,
             'message' => 'Task berhasil diupdate.',
@@ -355,6 +361,8 @@ class TaskPlannerController extends Controller
 
         $task->update(['status' => 'done']);
 
+        Log::record('approve_task', "Task #{$task->id}: {$task->title} disetujui", 'MOD_TASK_PLANNER', $task);
+
         return response()->json(['success' => true, 'message' => 'Task disetujui.']);
     }
 
@@ -372,21 +380,51 @@ class TaskPlannerController extends Controller
 
         $task->update(['status' => 'in_progress']);
 
+        Log::record('reject_task', "Task #{$task->id}: {$task->title} ditolak", 'MOD_TASK_PLANNER', $task);
+
         return response()->json(['success' => true, 'message' => 'Task ditolak, status kembali ke In Progress.']);
     }
 
     public function transition(Request $request, $id): JsonResponse
     {
         $task = Task::findOrFail($id);
+
+
         $validated = $request->validate([
             'status' => 'required|in:todo,in_progress,done',
         ]);
 
+
+        // jika task category = "visit" maka wajib record google map location saat transition status done
+        $taskCategory = $task->category;
+        if ($taskCategory && strtolower($taskCategory->name) === 'visit' && $validated['status'] === 'done') {
+            $cekLocation = TaskVisit::where('task_id', $task->id)->where('user_id', Auth::id())->first();
+            if (! $cekLocation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Task kategori Visit harus record lokasi sebelum menandai selesai.',
+                ], 422);
+            }
+        }
+
+
+
         $newStatus = $validated['status'];
+        $oldStatus = $task->status;
         $isCreator = $task->creator_id === Auth::id();
+
+        $statusLabels = [
+            'todo' => 'To Do',
+            'in_progress' => 'In Progress',
+            'waiting_approval' => 'Waiting Approval',
+            'done' => 'Done',
+        ];
 
         if ($task->requires_approval && ! $isCreator && $newStatus === 'done') {
             $task->update(['status' => 'waiting_approval']);
+
+            $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+            Log::record('transition_task', "Task #{$task->id}: {$oldLabel} → Waiting Approval", 'MOD_TASK_PLANNER', $task);
 
             return response()->json([
                 'success' => true,
@@ -395,6 +433,23 @@ class TaskPlannerController extends Controller
         }
 
         $task->update(['status' => $newStatus]);
+
+
+        // cek apakah task terikat dengan lead
+        $lead = $task->lead;
+        // jika status lead adalah "New", dan Task diubah menjadi "done", maka ubah status lead menjadi "approach"
+        if ($lead && $oldStatus !== 'done' && $newStatus === 'done' && $lead->lead_status === 'New') {
+            $lead->update(['lead_status' => 'Approach']);
+        }
+
+        // jika status lead adalah "Unqualified", dan Task diubah menjadi "done", maka ubah status lead menjadi "Qualified"
+        // if ($lead && $oldStatus !== 'done' && $newStatus === 'done' && $lead->lead_status === 'Unqualified') {
+        //     $lead->update(['lead_status' => 'Qualified']);
+        // }
+
+        $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+        $newLabel = $statusLabels[$newStatus] ?? $newStatus;
+        Log::record('transition_task', "Task #{$task->id}: {$oldLabel} → {$newLabel}", 'MOD_TASK_PLANNER', $task);
 
         return response()->json([
             'success' => true,
@@ -501,6 +556,22 @@ class TaskPlannerController extends Controller
             }
         }
 
+        // Notify parent activity author on reply
+        if ($activity->reply_to_id) {
+            $parent = TaskActivity::find($activity->reply_to_id);
+            if ($parent && $parent->user_id !== Auth::id()) {
+                Notification::create([
+                    'user_id' => $parent->user_id,
+                    'type' => 'mention',
+                    'title' => 'Balasan pada aktivitas Anda',
+                    'body' => Auth::user()->username.' membalas: '.Str::limit($activity->content ?? '', 80),
+                    'notifiable_type' => TaskActivity::class,
+                    'notifiable_id' => $parent->id,
+                    'data' => ['activity_id' => $activity->id, 'task_id' => $activity->task_id, 'mentioned_by' => Auth::id()],
+                ]);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Aktivitas ditambahkan.',
@@ -510,6 +581,9 @@ class TaskPlannerController extends Controller
     public function destroy($id): JsonResponse
     {
         $task = Task::findOrFail($id);
+
+        Log::record('delete_task', "Task #{$task->id}: {$task->title} dihapus", 'MOD_TASK_PLANNER', $task);
+
         $task->delete();
 
         return response()->json([
@@ -651,6 +725,39 @@ class TaskPlannerController extends Controller
             'user_id' => Auth::id(),
             'content' => '📍 Recorded a visit (lat: '.$validated['latitude'].', lng: '.$validated['longitude'].')',
         ]);
+
+        // Notify creator and other assignees about the visit
+        $visitorId = Auth::id();
+        $notifiedIds = [$visitorId];
+        $task->load(['creator', 'assignees']);
+
+        if ($task->creator_id !== $visitorId) {
+            Notification::create([
+                'user_id' => $task->creator_id,
+                'type' => 'visit_recorded',
+                'title' => "Kunjungan: {$task->title}",
+                'body' => Auth::user()->username.' merekam kunjungan',
+                'notifiable_type' => Task::class,
+                'notifiable_id' => $task->id,
+                'data' => ['task_id' => $task->id, 'visitor_id' => $visitorId],
+            ]);
+            $notifiedIds[] = $task->creator_id;
+        }
+
+        foreach ($task->assignees as $assignee) {
+            if (in_array($assignee->id, $notifiedIds)) {
+                continue;
+            }
+            Notification::create([
+                'user_id' => $assignee->id,
+                'type' => 'visit_recorded',
+                'title' => "Kunjungan: {$task->title}",
+                'body' => Auth::user()->username.' merekam kunjungan',
+                'notifiable_type' => Task::class,
+                'notifiable_id' => $task->id,
+                'data' => ['task_id' => $task->id, 'visitor_id' => $visitorId],
+            ]);
+        }
 
         $visit->load('user');
 

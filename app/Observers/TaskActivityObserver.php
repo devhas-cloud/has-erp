@@ -11,6 +11,11 @@ class TaskActivityObserver
 {
     public function created(TaskActivity $activity): void
     {
+        // Skip replies — handled by controller-side reply notification
+        if ($activity->reply_to_id) {
+            return;
+        }
+
         $task = $activity->task()->with(['creator', 'assignees'])->first();
         if (! $task) {
             return;

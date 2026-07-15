@@ -34,6 +34,9 @@
             } elseif ($groupType === 'lead') {
                 $groupTitle = $leadTitles->get($first->group_id, 'Lead #' . $first->group_id);
                 $groupIcon = 'fa-flag';
+            } elseif ($groupType === 'opportunity') {
+                $groupTitle = $opportunityTitles->get($first->group_id, 'Opportunity #' . $first->group_id);
+                $groupIcon = 'fa-bullseye';
             } else {
                 $groupTitle = 'Unknown';
                 $groupIcon = 'fa-bell';
@@ -70,6 +73,7 @@
                     $readClass = is_null($n->read_at) ? 'unread' : 'read';
                     $hasTaskId = isset($n->data['task_id']);
                     $hasLeadId = isset($n->data['lead_id']);
+                    $hasOpportunityId = isset($n->data['opportunity_id']);
                     $hasActivityId = isset($n->data['activity_id']);
                 @endphp
                 <div class="notif-card {{ $readClass }}"
@@ -77,6 +81,7 @@
                     data-type="{{ $n->type }}"
                     data-task-id="{{ $hasTaskId ? $n->data['task_id'] : '' }}"
                     data-lead-id="{{ $hasLeadId ? $n->data['lead_id'] : '' }}"
+                    data-opportunity-id="{{ $hasOpportunityId ? $n->data['opportunity_id'] : '' }}"
                     data-activity-id="{{ $hasActivityId ? $n->data['activity_id'] : '' }}"
                     onclick="openNotifFromPage(this)">
                     <div class="notif-card-left">
@@ -412,6 +417,7 @@
         var type = $el.data('type') || 'default';
         var taskId = $el.data('task-id') || null;
         var leadId = $el.data('lead-id') || null;
+        var opportunityId = $el.data('opportunity-id') || null;
         var activityId = $el.data('activity-id') || null;
 
         $.post('{{ url('/notifications') }}/' + notifId + '/read', {
@@ -420,6 +426,8 @@
             var targetUrl = null;
             if (type === 'mention' && leadId) {
                 targetUrl = '{{ url('leads-management') }}/' + leadId;
+            } else if (opportunityId) {
+                targetUrl = '{{ url('opportunity-management') }}/' + opportunityId;
             } else if (taskId) {
                 targetUrl = '{{ url('task-planner') }}/' + taskId;
             }
@@ -429,7 +437,18 @@
             }
 
             if (targetUrl) {
-                window.location.href = targetUrl;
+                var hashIdx = targetUrl.indexOf('#');
+                var targetPath = hashIdx !== -1 ? targetUrl.substring(0, hashIdx) : targetUrl;
+                var currentPath = window.location.href.split('#')[0];
+
+                if (currentPath === targetPath) {
+                    if (activityId) {
+                        sessionStorage.setItem('mention_target', activityId);
+                    }
+                    window.location.reload();
+                } else {
+                    window.location.href = targetUrl;
+                }
             } else {
                 $el.removeClass('unread').addClass('read');
                 $el.find('.notif-card-dot').addClass('read');

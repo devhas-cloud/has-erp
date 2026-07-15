@@ -25,6 +25,9 @@ class DatabaseSeeder extends Seeder
             UsersTableSeeder::class,
             UserAccessControlsTableSeeder::class,
             TaskCategoriesTableSeeder::class,
+            ForecastsTableSeeder::class,
+            LossReasonsTableSeeder::class,
+            StagesTableSeeder::class,
             AccountCompanySeeder::class,
             AccountContactSeeder::class,
         ]);

@@ -36,6 +36,9 @@ class Notification extends Model
         if ($leadId = $this->data['lead_id'] ?? null) {
             return 'lead_'.$leadId;
         }
+        if ($opportunityId = $this->data['opportunity_id'] ?? null) {
+            return 'opportunity_'.$opportunityId;
+        }
 
         return str_replace('\\', '_', $this->notifiable_type).'_'.$this->notifiable_id;
     }
@@ -48,13 +51,16 @@ class Notification extends Model
         if ($this->data['lead_id'] ?? null) {
             return 'lead';
         }
+        if ($this->data['opportunity_id'] ?? null) {
+            return 'opportunity';
+        }
 
         return 'other';
     }
 
     public function getGroupIdAttribute(): ?int
     {
-        return $this->data['task_id'] ?? $this->data['lead_id'] ?? null;
+        return $this->data['task_id'] ?? $this->data['lead_id'] ?? $this->data['opportunity_id'] ?? null;
     }
 
     public function markAsRead(): void

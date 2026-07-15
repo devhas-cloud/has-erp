@@ -10,10 +10,10 @@ return new class extends Migration
     {
         Schema::create('leads', function (Blueprint $table) {
             $table->id();
-            $table->enum('lead_status', ['New', 'Approach', 'Qualified', 'Unqualified'])->default('New');
+            $table->string('lead_status', 50)->default('New');
             $table->string('lead_title', 500);
             $table->foreignId('account_contacts_id')->constrained('account_contacts')->cascadeOnDelete();
-            $table->foreignId('account_companies_id')->constrained('account_companies')->cascadeOnDelete();
+            $table->foreignId('account_companies_id')->nullable()->constrained('account_companies')->nullOnDelete();
             $table->foreignId('source_id')->constrained('sources')->cascadeOnDelete();
             $table->string('unqualified_reason')->nullable();
             $table->date('closed_date')->nullable();

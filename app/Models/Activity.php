@@ -11,6 +11,7 @@ class Activity extends Model
     protected $fillable = [
         'lead_id',
         'task_id',
+        'opportunity_id',
         'user_id',
         'content',
         'reply_to_id',
@@ -24,6 +25,11 @@ class Activity extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    public function opportunity(): BelongsTo
+    {
+        return $this->belongsTo(Opportunity::class);
     }
 
     public function user(): BelongsTo

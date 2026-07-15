@@ -1277,6 +1277,32 @@
             box-shadow: 0 1px 4px var(--accent-glow);
         }
 
+        .btn-accent-danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #ef4444 100%);
+            color: #fff;
+            border: none;
+            padding: 9px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            transition: all 0.3s var(--ease);
+            box-shadow: 0 2px 10px var(--danger-glow), 0 0 0 0 var(--danger-glow);
+        }
+
+        .btn-accent-danger:hover {
+            border-color: rgba(239, 68, 68, 0.25);
+            color: #fff;
+            background: linear-gradient(135deg, var(--danger) 0%, #ef4444 100%);
+            box-shadow: 0 2px 10px var(--danger-glow), 0 0 0 0 var(--danger-glow);
+            transform: translateY(-1px);
+        }
+
+
         .btn-ghost {
             background: var(--card);
             color: var(--text-secondary);
@@ -2381,6 +2407,7 @@
                         var dataAttrs = 'data-id="' + n.id + '" data-type="' + (n.type || 'default') + '"';
                         if (n.task_id) dataAttrs += ' data-task-id="' + n.task_id + '"';
                         if (n.lead_id) dataAttrs += ' data-lead-id="' + n.lead_id + '"';
+                        if (n.opportunity_id) dataAttrs += ' data-opportunity-id="' + n.opportunity_id + '"';
                         if (n.activity_id) dataAttrs += ' data-activity-id="' + n.activity_id + '"';
 
                         html += '<div class="notif-item ' + cls + '" ' + dataAttrs + ' onclick="openNotif(this)" style="cursor:pointer;">';
@@ -2416,12 +2443,28 @@
             return div.innerHTML;
         }
 
+        function navigateToNotifUrl(targetUrl, activityId) {
+            var hashIdx = targetUrl.indexOf('#');
+            var targetPath = hashIdx !== -1 ? targetUrl.substring(0, hashIdx) : targetUrl;
+            var currentPath = window.location.href.split('#')[0];
+
+            if (currentPath === targetPath) {
+                if (activityId) {
+                    sessionStorage.setItem('mention_target', activityId);
+                }
+                window.location.reload();
+            } else {
+                window.location.href = targetUrl;
+            }
+        }
+
         function openNotif(el) {
             var $el = $(el);
             var notifId = parseInt($el.data('id'));
             var type = $el.data('type') || 'default';
             var taskId = $el.data('task-id') || null;
             var leadId = $el.data('lead-id') || null;
+            var opportunityId = $el.data('opportunity-id') || null;
             var activityId = $el.data('activity-id') || null;
 
             $.post('{{ url('/notifications') }}/' + notifId + '/read', {
@@ -2433,6 +2476,8 @@
                 var targetUrl = null;
                 if (type === 'mention' && leadId) {
                     targetUrl = '{{ url('leads-management') }}/' + leadId;
+                } else if (opportunityId) {
+                    targetUrl = '{{ url('opportunity-management') }}/' + opportunityId;
                 } else if (taskId) {
                     targetUrl = '{{ url('task-planner') }}/' + taskId;
                 }
@@ -2442,7 +2487,7 @@
                 }
 
                 if (targetUrl) {
-                    window.location.href = targetUrl;
+                    navigateToNotifUrl(targetUrl, activityId);
                 }
             }).fail(function(err) {
                 console.error('Error marking notification as read:', err);

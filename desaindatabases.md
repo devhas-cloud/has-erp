@@ -217,7 +217,8 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - **Relasi:** Many-to-One ke tabel `account_companies`
    - **Relasi:** Many-to-One ke tabel `sources`
    - **Relasi:** Many-to-One ke tabel `users` (lead_owner)
-   - **Relasi:** Many-to-One ke tabel `users` (assigned_to)
+    - **Relasi:** Many-to-One ke tabel `users` (assigned_to)
+    - **Relasi:** Polymorphic MorphMany ke tabel `logs` (via `App\Traits\Loggable`)
 
 18. **Table WhatsApp Groups (whatsapp_groups)**
    - id (Primary Key)
@@ -236,7 +237,7 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - type (string 50)                             // Cth: "task_assigned"
    - title (string 200)
    - body (text, nullable)
-   - notifiable_type (string 100)                 // Cth: "Task"
+   - notifiable_type (string 100)                 // Cth: "App\Models\Task"
    - notifiable_id (unsigned big integer)
    - data (json, nullable)
    - read_at (timestamp, nullable)
@@ -244,7 +245,26 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - updated_at
    - **Index:** (user_id, read_at), (notifiable_type, notifiable_id)
    - **Relasi:** Many-to-One ke tabel `users`
-   - **Relasi:** Polymorphic ke berbagai model (tasks, leads, dll)
+   - **Relasi:** Polymorphic MorphTo ke Task / TaskActivity / Activity (Lead)
+
+   **Grouping Notifications:**
+   Notifikasi dikelompokkan (grouped) berdasarkan context asalnya — task atau lead.
+   Group key diturunkan dari field `data` (JSON) melalui **Model Accessor** tanpa perlu kolom database tambahan:
+
+   | Accessor | Turunan dari | Contoh |
+   |----------|-------------|--------|
+   | `group_key` | `data['task_id']` → `"task_123"`<br>`data['lead_id']` → `"lead_456"`<br>fallback → `"notifiable_type_notifiable_id"` | `"task_123"` |
+   | `group_type` | `data['task_id']` → `"task"`<br>`data['lead_id']` → `"lead"`<br>lainnya → `"other"` | `"task"` |
+   | `group_id` | `data['task_id']` atau `data['lead_id']` | `123` |
+
+   **Struktur `data` JSON per notifiable_type:**
+
+   | notifiable_type | data fields | Group ke |
+   |---|---|---|
+   | `Task` | `{ task_id, creator?, activity_id? }` | `task_{id}` |
+    | `TaskActivity` | `{ task_id, activity_id, mentioned_by? }` | Parent `task_{id}` (resolve via task_id) |
+    | `Activity` (Lead) | `{ lead_id, activity_id, mentioned_by? }` | `lead_{id}` |
+    | `Activity` (Opportunity) | `{ opportunity_id, activity_id, mentioned_by? }` | `opportunity_{id}` |
 
    **Notification Types:**
    - `task_assigned` — User ditugaskan ke task baru
@@ -254,6 +274,15 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - `task_status_changed` — Status task berubah
    - `mention` — User di-mention (@username) pada aktivitas lead atau task
    - `visit_recorded` — Visit location direkam pada task oleh user
+
+   **Trait Notifiable (`app/Traits/Notifiable.php`):**
+   Digunakan oleh model `Task` dan `TaskActivity` via polymorphic `MorphMany`.
+   Method `notify($user, $type, $title, $body, $data)` membuat notifikasi untuk satu user.
+   Notifikasi juga bisa dibuat langsung via `Notification::create([...])` (untuk mention, dll).
+
+   **Display Behavior:**
+   - **Dropdown (bell icon):** Notifikasi ditampilkan grouped, tiap grup punya header (nama task/lead, icon, badge unread count), child notifications expand default. Grup bisa di-toggle collapse/expand.
+   - **Halaman `/notifications/all`:** Sama grouped, dengan pagination 20 notif per halaman.
 
 
 20. **Table Task Roles (task_roles)**
@@ -301,7 +330,8 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - **Relasi:** Many-to-One ke tabel `whatsapp_groups`
    - **Relasi:** Many-to-Many ke tabel `users` (via `task_assignees`)
    - **Relasi:** One-to-Many ke tabel `task_activities`
-   - **Relasi:** One-to-Many ke tabel `task_visits`
+    - **Relasi:** One-to-Many ke tabel `task_visits`
+    - **Relasi:** Polymorphic MorphMany ke tabel `logs` (via `App\Traits\Loggable`)
 
 23. **Table Task Assignees (task_assignees)** [Pivot]
    - task_id (Foreign Key ke tabel tasks, Composite Primary Key)
@@ -347,7 +377,7 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - reply_to_id (Foreign Key ke tabel activities, nullable) // Untuk reply thread
    - created_at
    - updated_at
-   - **Index:** lead_id, task_id, user_id, created_at
+    - **Index:** lead_id, opportunity_id, task_id, user_id, created_at
    - **Relasi:** Many-to-One ke tabel `leads`
    - **Relasi:** Many-to-One ke tabel `opportunities`
    - **Relasi:** Many-to-One ke tabel `tasks`
@@ -378,4 +408,123 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
    - **Index:** (task_id, created_at)
    - **Relasi:** Many-to-One ke tabel `tasks`
    - **Relasi:** Many-to-One ke tabel `users`
+
+29. **Table Logs (logs)**
+   - id (Primary Key)
+   - module_id (Foreign Key ke tabel modules, nullable)   // Modul terkait aksi
+   - user_id (Foreign Key ke tabel users, nullable)        // Pengguna yang melakukan aksi
+   - action (string 100, nullable)                         // Cth: "create_task", "update_lead", "approve_task"
+   - description (text, nullable)                          // Deskripsi aksi
+   - loggable_type (string 100, nullable)                  // Polymorphic — cth: "App\Models\Task"
+   - loggable_id (unsigned big integer, nullable)          // Polymorphic — ID entity terkait
+   - created_at
+   - updated_at
+   - **Index:** (module_id, user_id, action, created_at)
+   - **Index:** (loggable_type, loggable_id)
+   - **Relasi:** Many-to-One ke tabel `modules`
+   - **Relasi:** Many-to-One ke tabel `users`
+   - **Relasi:** Polymorphic MorphTo `loggable` (Task, Lead, dll)
+
+   **Log Types:**
+   | Action | Module Code | Keterangan |
+   |---|---|---|
+   | `create_task` | `MOD_TASK_PLANNER` | Task dibuat |
+   | `update_task` | `MOD_TASK_PLANNER` | Task diupdate |
+   | `delete_task` | `MOD_TASK_PLANNER` | Task dihapus |
+   | `transition_task` | `MOD_TASK_PLANNER` | Status task berubah |
+   | `approve_task` | `MOD_TASK_PLANNER` | Task disetujui |
+   | `reject_task` | `MOD_TASK_PLANNER` | Task ditolak |
+   | `create_lead` | `MOD_LEADS_MANAGEMENT` | Lead dibuat |
+   | `update_lead` | `MOD_LEADS_MANAGEMENT` | Lead diupdate |
+   | `delete_lead` | `MOD_LEADS_MANAGEMENT` | Lead dihapus |
+    | `qualified_lead` | `MOD_LEADS_MANAGEMENT` | Lead menjadi Qualified |
+    | `unqualified_lead` | `MOD_LEADS_MANAGEMENT` | Lead menjadi Unqualified |
+    | `create_opportunity` | `MOD_OPPORTUNITY_MANAGEMENT` | Opportunity dibuat |
+    | `update_opportunity` | `MOD_OPPORTUNITY_MANAGEMENT` | Opportunity diupdate |
+    | `delete_opportunity` | `MOD_OPPORTUNITY_MANAGEMENT` | Opportunity dihapus |
+
+   **Helper `Log::record()`:**
+   Static helper pada model `Log` untuk one-liner logging dari mana saja:
+   ```php
+   Log::record('create_task', "Task #{$task->id}: {$task->title}", 'MOD_TASK_PLANNER', $task);
+   ```
+   Parameter: `action`, `description`, `moduleCode` (nullable, resolve otomatis ke module_id), `loggable` (nullable polymorphic entity), `user` (nullable, default Auth::id()).
+
+    **Trait Loggable (`app/Traits/Loggable.php`):**
+    Digunakan oleh model `Task`, `Lead`, dan `Opportunity`. Menyediakan relationship `logs(): MorphMany`.
+    ```php
+    $task->logs()->with('user')->orderByDesc('created_at')->get();
+    $lead->logs()->with('user')->orderByDesc('created_at')->get();
+    $opportunity->logs()->with('user')->orderByDesc('created_at')->get();
+    ```
+
+    **Display Behavior:**
+    - **Tab "Log" di halaman detail task:** Menampilkan daftar log terkait task tersebut (create, update, transition, approve, reject).
+    - **Tab "Logs" di halaman detail lead:** Menampilkan daftar log terkait lead tersebut (create, update, qualified, unqualified, delete).
+    - **Tab "Logs" di halaman detail opportunity:** Menampilkan daftar log terkait opportunity tersebut (create, update, delete).
+    - Tidak ada action badge — tampilan minimal dengan avatar, username, timestamp, dan deskripsi.
+
+
+30. **Table Forecasts (forecasts)**
+   - id (Primary Key)
+   - forecast_name (string 100)  // Cth: "Omitted", "Pipeline", "Best Case", "Commit", "Closed" 
+   - description (text, nullable)
+   - status (enum: Active, Inactive)  // default: Active
+   - created_at
+   - updated_at
+
+31. **Table Loss Reasons (loss_reasons)**
+   - id (Primary Key)
+   - reason_name (string 100) Cth: "Lost to Competitor" "No Budget / Lost Funding" "No Decision / Non-Responsive" "Price" "Other"
+   - description (text, nullable)
+   - status (enum: Active, Inactive)  // default: Active
+   - created_at
+   - updated_at
+
+
+32. **Table Stages (stages)**
+   - id (Primary Key)
+   - stage_name (string 100)  // Cth: New, Proposal & Quote, In Review, Negotiation, Closed Won, Closed Lost
+   - description (text, nullable)
+   - status (enum: Active, Inactive)  // default: Active
+   - created_at
+   - updated_at
+
+
+33. **Table Opportunities (opportunities)**
+   - id (Primary Key)
+   - lead_id (Foreign Key ke tabel Leads, nullable)
+   - stage_id (Foreign Key ke tabel Stages, nullable)
+   - probability (unsigned integer, default 0) // Persentase peluang sukses
+   - forecast_id (Foreign Key ke tabel Forecasts, nullable)
+   - opportunity_name (string 150)
+   - loss_reasons_id (Foreign Key ke tabel Loss Reasons, nullable)
+   - quote_ready (boolean, default false)
+   - division_id (Foreign Key ke tabel Divisions, nullable)
+   - account_companies_id (Foreign Key ke tabel Account Companies)
+   - account_contacts_id (Foreign Key ke tabel Account Contacts, nullable)
+   - source_id (Foreign Key ke tabel Sources, nullable)
+   - next_step (text, nullable)
+   - end_user_id (Foreign Key ke tabel Account Companies, nullable)
+   - budget (boolean, default false)
+   - authorize (boolean, default false)
+   - timeline (boolean, default false)
+    - close_won_date (date, nullable)
+    - description (text, nullable)
+    - owner_id (Foreign Key ke tabel Users) // Pemilik opportunity
+    - created_at
+    - updated_at
+    - **Relasi:** Many-to-One ke tabel `leads`
+    - **Relasi:** Many-to-One ke tabel `stages`
+    - **Relasi:** Many-to-One ke tabel `forecasts`
+    - **Relasi:** Many-to-One ke tabel `loss_reasons`
+    - **Relasi:** Many-to-One ke tabel `divisions`
+    - **Relasi:** Many-to-One ke tabel `account_companies`
+    - **Relasi:** Many-to-One ke tabel `account_contacts`
+    - **Relasi:** Many-to-One ke tabel `sources`
+    - **Relasi:** Many-to-One ke tabel `users` (owner)
+    - **Relasi:** Many-to-One self-reference ke `account_companies` (end_user)
+    - **Relasi:** One-to-Many ke tabel `activities` (via `opportunity_id`)
+    - **Relasi:** One-to-Many ke tabel `tasks` (via `opportunity_id`)
+    - **Relasi:** Polymorphic MorphMany ke tabel `logs` (via `App\Traits\Loggable`)
 

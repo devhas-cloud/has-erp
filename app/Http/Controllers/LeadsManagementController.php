@@ -11,10 +11,13 @@ use App\Models\BusinessEntity;
 use App\Models\BusinessValue;
 use App\Models\ContactMethod;
 use App\Models\Division;
+use App\Models\Forecast;
 use App\Models\InteractionLevel;
 use App\Models\JobTitle;
 use App\Models\Lead;
+use App\Models\Log;
 use App\Models\Notification;
+use App\Models\Opportunity;
 use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
@@ -37,7 +40,7 @@ class LeadsManagementController extends Controller
     public function index()
     {
         $jobTitles = JobTitle::where('status', 'Active')->get();
-        $divisions = Division::where('status', 'Active')->get();
+        $divisions = Division::where('status', 'Active')->where('type', 'External')->get();
         $sources = Source::where('status', 'Active')->get();
         $contactMethods = ContactMethod::where('status', 'Active')->get();
         $roleInProjects = RoleInProject::where('status', 'Active')->get();
@@ -61,6 +64,28 @@ class LeadsManagementController extends Controller
     public function data(Request $request): JsonResponse
     {
         $query = Lead::with(['accountContact', 'accountCompany', 'leadOwner']);
+
+        $user = Auth::user();
+        $isSales = $user->division && $user->division->division_name === 'Sales';
+
+        if ($isSales) {
+            // Aturan akses lead khusus divisi Sales:
+            // - Status != Unqualified → lihat jika lead_owner_id ATAU assigned_to = user login
+            // - Status == Unqualified  → lihat HANYA jika lead_owner_id = user login
+            $query->where(function ($q) use ($user) {
+                $q->where(function ($sub) use ($user) {
+                    $sub->where('lead_status', '!=', 'Unqualified')
+                        ->where(function ($sub2) use ($user) {
+                            $sub2->where('lead_owner_id', $user->id)
+                                ->orWhere('assigned_to', $user->id);
+                        });
+                })
+                    ->orWhere(function ($sub) use ($user) {
+                        $sub->where('lead_status', 'Unqualified')
+                            ->where('lead_owner_id', $user->id);
+                    });
+            });
+        }
 
         $recordsTotal = Lead::count();
 
@@ -120,6 +145,7 @@ class LeadsManagementController extends Controller
                 'phone' => $lead->accountContact?->phone ?? '—',
                 'mobile' => $lead->accountContact?->mobile ?? '—',
                 'status_badge' => $this->renderStatusBadge($lead->lead_status),
+                'lead_status' => $lead->lead_status,
                 'owner_name' => $lead->leadOwner?->username ?? '—',
             ];
         }
@@ -136,8 +162,11 @@ class LeadsManagementController extends Controller
     {
         $badgeClass = match ($status) {
             'New' => 'status-pending',
+            'Approach' => 'status-active',
             'Qualified' => 'status-active',
             'Unqualified' => 'status-inactive',
+            'Converted' => 'status-active',
+
             default => '',
         };
 
@@ -186,7 +215,7 @@ class LeadsManagementController extends Controller
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:100|unique:account_contacts,email',
-            'mobile' => 'nullable|string|max:30',
+            'mobile' => 'required|string|max:30|unique:account_contacts,mobile',
             'phone' => 'nullable|string|max:30',
             'job_titles_id' => 'required|exists:job_titles,id',
             'divisions_id' => 'required|exists:divisions,id',
@@ -198,8 +227,8 @@ class LeadsManagementController extends Controller
             'all_filed_completed' => 'boolean',
             'lead_title' => 'required|string|max:500',
             'company' => 'nullable|string|max:150',
-            'segmentation_id' => 'required|exists:segmentations,id',
-            'account_types_id' => 'required|exists:account_types,id',
+            'segmentation_id' => 'nullable|exists:segmentations,id',
+            'account_types_id' => 'nullable|exists:account_types,id',
             'business_entities_id' => 'nullable|exists:business_entities,id',
             'business_values_id' => 'nullable|exists:business_values,id',
             'interaction_levels_id' => 'nullable|exists:interaction_levels,id',
@@ -223,28 +252,33 @@ class LeadsManagementController extends Controller
             if ($request->filled('account_companies_id')) {
                 $company = AccountCompany::findOrFail($request->account_companies_id);
             } else {
-                $company = AccountCompany::create([
-                    'account_name' => $request->company ?: ($request->full_name.' - Company'),
-                    'segmentation_id' => $request->segmentation_id,
-                    'account_types_id' => $request->account_types_id,
-                    'types_accounts_companies_id' => $request->types_accounts_companies_id,
-                    'business_entities_id' => $request->business_entities_id,
-                    'business_values_id' => $request->business_values_id,
-                    'interaction_levels_id' => $request->interaction_levels_id,
-                    'address_billing_street' => $request->address_street,
-                    'address_billing_city' => $request->address_city,
-                    'address_billing_province' => $request->address_province,
-                    'address_billing_postal_code' => $request->address_zip,
-                    'address_billing_country' => $request->address_country,
-                    'end_user' => $request->end_user,
-                    'phone' => $request->phone,
-                    'account_owner_id' => Auth::id(),
-                    'status' => 'Active',
-                ]);
+
+                if ($request->company) {
+                    $company = AccountCompany::create([
+                        'account_name' => $request->company ?: ($request->full_name.' - Company'),
+                        'segmentation_id' => $request->segmentation_id,
+                        'account_types_id' => $request->account_types_id,
+                        'types_accounts_companies_id' => $request->types_accounts_companies_id,
+                        'business_entities_id' => $request->business_entities_id,
+                        'business_values_id' => $request->business_values_id,
+                        'interaction_levels_id' => $request->interaction_levels_id,
+                        'address_billing_street' => $request->address_street,
+                        'address_billing_city' => $request->address_city,
+                        'address_billing_province' => $request->address_province,
+                        'address_billing_postal_code' => $request->address_zip,
+                        'address_billing_country' => $request->address_country,
+                        'end_user' => $request->end_user,
+                        'phone' => $request->phone,
+                        'account_owner_id' => Auth::id(),
+                        'status' => 'Active',
+                    ]);
+                } else {
+                    $company = null;
+                }
             }
 
             $contact = AccountContact::create([
-                'account_companies_id' => $company->id,
+                'account_companies_id' => $company ? $company->id : null,
                 'full_name' => $request->full_name,
                 'salutation' => $request->salutation,
                 'email' => $request->email,
@@ -256,13 +290,13 @@ class LeadsManagementController extends Controller
                 'role_in_projects_id' => $request->role_in_projects_id,
                 'contact_owner_id' => Auth::id(),
                 'lead_status' => $request->lead_status,
-                'status' => 'Active',
+                'status' => 'Inactive',
             ]);
 
-            Lead::create([
+            $lead = Lead::create([
                 'lead_status' => $request->lead_status,
                 'lead_title' => $request->lead_title,
-                'account_companies_id' => $company->id,
+                'account_companies_id' => $company ? $company->id : null,
                 'account_contacts_id' => $contact->id,
                 'source_id' => $request->source_id,
                 'unqualified_reason' => $request->unqualified_reason,
@@ -276,6 +310,8 @@ class LeadsManagementController extends Controller
                 'identification' => $request->input('identification') === '1',
 
             ]);
+
+            Log::record('create_lead', "Lead #{$lead->id}: {$lead->lead_title}", 'MOD_LEADS_MANAGEMENT', $lead);
 
             DB::commit();
 
@@ -330,6 +366,8 @@ class LeadsManagementController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $lead = Lead::findOrFail($id);
+
+        $oldStatus = $lead->lead_status;
 
         $validated = $request->validate([
             'lead_status' => 'required|in:New,Approach,Qualified,Unqualified',
@@ -419,6 +457,16 @@ class LeadsManagementController extends Controller
 
             DB::commit();
 
+            // Log status changes
+            $newStatus = $request->lead_status;
+            if ($newStatus === 'Qualified' && $oldStatus !== 'Qualified') {
+                Log::record('qualified_lead', "Lead #{$lead->id}: {$lead->lead_title} menjadi Qualified", 'MOD_LEADS_MANAGEMENT', $lead);
+            } elseif ($newStatus === 'Unqualified' && $oldStatus !== 'Unqualified') {
+                Log::record('unqualified_lead', "Lead #{$lead->id}: {$lead->lead_title} menjadi Unqualified", 'MOD_LEADS_MANAGEMENT', $lead);
+            } else {
+                Log::record('update_lead', "Lead #{$lead->id}: {$lead->lead_title} All fields updated", 'MOD_LEADS_MANAGEMENT', $lead);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Lead successfully updated.',
@@ -465,13 +513,205 @@ class LeadsManagementController extends Controller
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $typesAccountsCompanies = TypesAccountsCompany::where('status', 'Active')->get();
         $categories = TaskCategory::with('division')->get();
+        $forecasts = Forecast::where('status', 'Active')->get();
 
         return view('leads-management.show', compact(
             'lead', 'jobTitles', 'divisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
             'businessValues', 'interactionLevels', 'users', 'accountCompanies',
-            'typesAccountsCompanies', 'categories'
+            'typesAccountsCompanies', 'categories', 'forecasts'
         ));
+    }
+
+    public function markUnqualified(Request $request, $id): JsonResponse
+    {
+        $lead = Lead::findOrFail($id);
+
+        $validated = $request->validate([
+            'unqualified_reason' => 'required|string|max:1000',
+        ]);
+
+        $oldStatus = $lead->lead_status;
+        $lead->update([
+            'lead_status' => 'Unqualified',
+            'unqualified_reason' => $validated['unqualified_reason'],
+            'closed_date' => now(),
+        ]);
+
+        if ($oldStatus !== 'Unqualified') {
+            Log::record('unqualified_lead', "Lead #{$lead->id}: {$lead->lead_title} menjadi Unqualified", 'MOD_LEADS_MANAGEMENT', $lead);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lead status changed to Unqualified.',
+        ]);
+    }
+
+    public function markQualified(Request $request, $id): JsonResponse
+    {
+        $lead = Lead::with('accountCompany')->findOrFail($id);
+
+        $validated = $request->validate([
+            'account_companies_id' => 'nullable|exists:account_companies,id',
+            'company' => 'nullable|string|max:150',
+            'segmentation_id' => 'required|exists:segmentations,id',
+            'account_types_id' => 'nullable|exists:account_types,id',
+            'types_accounts_companies_id' => 'required|exists:types_accounts_companies,id',
+            'business_entities_id' => 'required|exists:business_entities,id',
+            'business_values_id' => 'required|exists:business_values,id',
+            'interaction_levels_id' => 'required|exists:interaction_levels,id',
+            'address_street' => 'required|string',
+            'address_city' => 'required|string|max:100',
+            'address_province' => 'required|string|max:100',
+            'address_zip' => 'required|string|max:10',
+            'address_country' => 'required|string|max:100',
+            'end_user' => 'nullable|exists:account_companies,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            if ($request->filled('account_companies_id')) {
+                $company = AccountCompany::findOrFail($request->account_companies_id);
+                // No update needed, using existing company
+            } else {
+                $company = AccountCompany::create([
+                    'account_name' => $request->company ?: $lead->lead_title,
+                    'segmentation_id' => $request->segmentation_id,
+                    'account_types_id' => $request->account_types_id,
+                    'types_accounts_companies_id' => $request->types_accounts_companies_id,
+                    'business_entities_id' => $request->business_entities_id,
+                    'business_values_id' => $request->business_values_id,
+                    'interaction_levels_id' => $request->interaction_levels_id,
+                    'address_billing_street' => $request->address_street,
+                    'address_billing_city' => $request->address_city,
+                    'address_billing_province' => $request->address_province,
+                    'address_billing_postal_code' => $request->address_zip,
+                    'address_billing_country' => $request->address_country,
+                    'end_user' => $request->end_user,
+                    'account_owner_id' => Auth::id(),
+                    'status' => 'Active',
+                ]);
+
+            }
+
+            // update contact with the new company ID
+            $lead->accountContact->account_companies_id = $company->id;
+            $lead->accountContact->save();
+
+            // update lead with the new company ID
+            $lead->account_companies_id = $company->id;
+
+            $lead->lead_status = 'Qualified';
+            $lead->save();
+
+            if ($lead->wasChanged('lead_status')) {
+                Log::record('qualified_lead', "Lead #{$lead->id}: {$lead->lead_title} menjadi Qualified", 'MOD_LEADS_MANAGEMENT', $lead);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lead status changed to Qualified.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to qualify lead: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function markConverted(Request $request, $id): JsonResponse
+    {
+        $lead = Lead::with('accountCompany')->findOrFail($id);
+
+        DB::beginTransaction();
+        try {
+            // 1. Update atau buat AccountCompany jika ada data dikirim
+                // if ($request->filled('address_street') || $request->filled('segmentation_id') || $request->filled('account_types_id')) {
+                //     if ($lead->accountCompany) {
+                //         $lead->accountCompany->update([
+                //             'segmentation_id' => $request->segmentation_id,
+                //             'account_types_id' => $request->account_types_id,
+                //             'types_accounts_companies_id' => $request->types_accounts_companies_id,
+                //             'business_entities_id' => $request->business_entities_id,
+                //             'business_values_id' => $request->business_values_id,
+                //             'interaction_levels_id' => $request->interaction_levels_id,
+                //             'address_billing_street' => $request->address_street,
+                //             'address_billing_city' => $request->address_city,
+                //             'address_billing_province' => $request->address_province,
+                //             'address_billing_postal_code' => $request->address_zip,
+                //             'address_billing_country' => $request->address_country,
+                //             'end_user' => $request->end_user,
+                //         ]);
+                //     } else {
+                //         $company = AccountCompany::create([
+                //             'account_name' => $lead->lead_title.' - Company',
+                //             'segmentation_id' => $request->segmentation_id,
+                //             'account_types_id' => $request->account_types_id,
+                //             'types_accounts_companies_id' => $request->types_accounts_companies_id,
+                //             'business_entities_id' => $request->business_entities_id,
+                //             'business_values_id' => $request->business_values_id,
+                //             'interaction_levels_id' => $request->interaction_levels_id,
+                //             'address_billing_street' => $request->address_street,
+                //             'address_billing_city' => $request->address_city,
+                //             'address_billing_province' => $request->address_province,
+                //             'address_billing_postal_code' => $request->address_zip,
+                //             'address_billing_country' => $request->address_country,
+                //             'end_user' => $request->end_user,
+                //             'account_owner_id' => Auth::id(),
+                //             'status' => 'Active',
+                //         ]);
+                //         $lead->account_companies_id = $company->id;
+                //         $lead->save();
+                //     }
+                // }
+
+            // 2. Update lead status
+            $oldStatus = $lead->lead_status;
+            $lead->lead_status = 'Converted';
+            $lead->save();
+
+            // 3. Buat Opportunity
+            $opportunity = Opportunity::create([
+                'lead_id' => $lead->id,
+                'opportunity_name' => $lead->lead_title,
+                'account_companies_id' => $lead->account_companies_id,
+                'account_contacts_id' => $lead->account_contacts_id,
+                'division_id' => $lead->accountContact->divisions_id,
+                'source_id' => $lead->source_id,
+                'budget' => $request->boolean('budget'),
+                'authorize' => $request->boolean('authorize'),
+                'timeline' => $request->boolean('timeline'),
+                'probability' => $request->integer('probability'),
+                'forecast_id' => $request->forecast_id,
+                'owner_id' => Auth::id(),
+                'stage_id' => 1, // Assuming stage_id 1 is the initial stage for new opportunities
+            ]);
+
+            // 4. Log
+            if ($oldStatus !== 'Converted') {
+                Log::record('converted_lead', "Lead #{$lead->id}: {$lead->lead_title} dikonversi menjadi Opportunity #{$opportunity->id}", 'MOD_LEADS_MANAGEMENT', $lead);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lead successfully converted to Opportunity.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to convert lead: '.$e->getMessage(),
+            ], 500);
+        }
     }
 
     public function destroy($id): JsonResponse
@@ -480,6 +720,8 @@ class LeadsManagementController extends Controller
 
         DB::beginTransaction();
         try {
+            Log::record('delete_lead', "Lead #{$lead->id}: {$lead->lead_title} dihapus", 'MOD_LEADS_MANAGEMENT', $lead);
+
             $lead->accountContact?->delete();
             $lead->delete();
             DB::commit();
@@ -616,6 +858,22 @@ class LeadsManagementController extends Controller
             }
         }
 
+        // Notify parent activity author on reply
+        if ($activity->reply_to_id) {
+            $parent = Activity::find($activity->reply_to_id);
+            if ($parent && $parent->user_id !== Auth::id()) {
+                Notification::create([
+                    'user_id' => $parent->user_id,
+                    'type' => 'mention',
+                    'title' => 'Balasan pada aktivitas Anda',
+                    'body' => Auth::user()->username.' membalas: '.Str::limit($activity->content, 80),
+                    'notifiable_type' => Activity::class,
+                    'notifiable_id' => $parent->id,
+                    'data' => ['activity_id' => $activity->id, 'lead_id' => $activity->lead_id, 'mentioned_by' => Auth::id()],
+                ]);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Activity posted.',
@@ -701,9 +959,9 @@ class LeadsManagementController extends Controller
         $otherAssignees = array_values(array_diff($assigneeIds, [Auth::id()]));
         $validated['requires_approval'] = ! empty($otherAssignees);
 
-
         DB::beginTransaction();
         try {
+            $validated['lead_id'] = $lead->id;
             $task = Task::create($validated);
             $task->assignees()->sync($assigneeIds);
 
@@ -729,8 +987,6 @@ class LeadsManagementController extends Controller
                 'user_id' => Auth::id(),
                 'content' => "📋 Created task: {$task->title}",
             ]);
-
-
 
             DB::commit();
 

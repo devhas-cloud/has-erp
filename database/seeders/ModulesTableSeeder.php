@@ -60,6 +60,14 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'CRM',
             ],
             [
+                'module_code' => 'MOD_OPPORTUNITY_MANAGEMENT',
+                'module_name' => 'Opportunity Management',
+                'description' => 'Menu untuk mengelola opportunity',
+                'route_name' => 'opportunity-management',
+                'icon' => 'fa fa-chart-line',
+                'group' => 'CRM',
+            ],
+            [
                 'module_code' => 'MOD_DASHBOARD_TASK_PLANNER',
                 'module_name' => 'Dashboard Task Planner',
                 'description' => 'Dashboard monitoring tugas dan statistik',
