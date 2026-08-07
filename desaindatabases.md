@@ -528,3 +528,19 @@ Langkah pertama dalam pembuatan web aplikasi ERP adalah merancang skema database
     - **Relasi:** One-to-Many ke tabel `tasks` (via `opportunity_id`)
     - **Relasi:** Polymorphic MorphMany ke tabel `logs` (via `App\Traits\Loggable`)
 
+34. **Table Master Products (master_products)**
+   - id (Primary Key)
+   - name (string 150)
+   - code (string 50, unique)
+   - brand (string 100, nullable)
+   - category (string 100, nullable)
+   - division_id (Foreign Key ke tabel Divisions, nullable)
+   - description (text, nullable)
+   - price (decimal(15,2), default 0.00)
+   - status (enum: Active, Inactive)  // default: Active
+   - created_at
+   - updated_at
+   - **Relasi:** Many-to-One ke tabel `divisions`
+
+
+

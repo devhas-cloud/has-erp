@@ -2,13 +2,16 @@
 
 namespace App\Providers;
 
+use App\Models\Activity;
 use App\Models\Module;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\UserAccessControl;
+use App\Observers\ActivityObserver;
 use App\Observers\TaskActivityObserver;
 use App\Observers\TaskObserver;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,8 +24,13 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if (env('FORCE_HTTPS', false)) {
+            URL::forceScheme('https');
+        }
+
         Task::observe(TaskObserver::class);
         TaskActivity::observe(TaskActivityObserver::class);
+        Activity::observe(ActivityObserver::class);
 
         View::composer('*', function ($view) {
             if (! Auth::check()) {

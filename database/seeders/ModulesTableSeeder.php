@@ -75,6 +75,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-chart-pie',
                 'group' => 'Dashboard',
             ],
+            [
+                'module_code' => 'MOD_PRODUCT_MANAGEMENT',
+                'module_name' => 'Product Management',
+                'description' => 'Menu untuk mengelola data master produk',
+                'route_name' => 'product-management',
+                'icon' => 'fa fa-box',
+                'group' => 'Master Data',
+            ],
         ];
 
         foreach ($modules as $module) {

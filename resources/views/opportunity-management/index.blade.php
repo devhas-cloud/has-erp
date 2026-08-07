@@ -465,7 +465,7 @@ function initOpportunityTable() {
             {
                 data: 'stage_name', orderable: false, searchable: true,
                 render: function(data, type, row) {
-                    return '<span class="badge text-bg-primary">' + (data || '—') + '</span>';
+                    return '<span class="status-badge badge-success" style="background:var(--success-soft);color:var(--success)">' + (data || '—') + '</span>';
                 }
             },
             { data: 'close_won_date', orderable: true, searchable: false },

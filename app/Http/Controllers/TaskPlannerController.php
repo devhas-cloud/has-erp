@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
+use App\Models\TaskProposal;
 use App\Models\User;
 use App\Models\WhatsAppGroup;
 use App\Models\Log;
@@ -342,6 +343,7 @@ class TaskPlannerController extends Controller
             'category',
             'whatsappGroup.division',
             'assignees.hierarchyRole',
+            'proposals.uploader',
         ])->findOrFail($id);
 
         return view('task-planner.show', compact('task'));
@@ -357,6 +359,18 @@ class TaskPlannerController extends Controller
 
         if ($task->status !== 'waiting_approval') {
             return response()->json(['success' => false, 'message' => 'Task tidak dalam status waiting approval.'], 422);
+        }
+
+        // jika task category = "proposal" maka wajib ada proposal PDF
+        $taskCategory = $task->category;
+        if ($taskCategory && strtolower($taskCategory->name) === 'proposal') {
+            $hasProposal = TaskProposal::where('task_id', $task->id)->exists();
+            if (! $hasProposal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Task kategori Proposal harus upload file proposal (.pdf) sebelum approve.',
+                ], 422);
+            }
         }
 
         $task->update(['status' => 'done']);
@@ -403,6 +417,17 @@ class TaskPlannerController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Task kategori Visit harus record lokasi sebelum menandai selesai.',
+                ], 422);
+            }
+        }
+
+        // jika task category = "proposal" maka wajib upload proposal PDF sebelum mark as done
+        if ($taskCategory && strtolower($taskCategory->name) === 'proposal' && $validated['status'] === 'done') {
+            $hasProposal = TaskProposal::where('task_id', $task->id)->exists();
+            if (! $hasProposal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Task kategori Proposal harus upload file proposal (.pdf) sebelum menandai selesai.',
                 ], 422);
             }
         }
@@ -781,5 +806,68 @@ class TaskPlannerController extends Controller
             ]);
 
         return response()->json($visits);
+    }
+
+    public function fetchProposals($id): JsonResponse
+    {
+        $proposals = TaskProposal::where('task_id', $id)
+            ->with('uploader')
+            ->orderByDesc('version')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'version' => $p->version,
+                'original_name' => $p->original_name,
+                'notes' => $p->notes,
+                'file_url' => $p->file_url,
+                'file_size' => $p->file_size_formatted,
+                'uploader_name' => $p->uploader?->username ?? '—',
+                'created_at' => $p->created_at->toIso8601String(),
+                'time' => $p->created_at->diffForHumans(),
+            ]);
+
+        return response()->json(['data' => $proposals]);
+    }
+
+    public function storeProposal(Request $request, $id): JsonResponse
+    {
+        $task = Task::findOrFail($id);
+
+        $request->validate([
+            'file' => 'required|file|mimes:pdf|max:20480',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('task-proposals', 'public');
+
+        $latestVersion = TaskProposal::where('task_id', $task->id)->max('version') ?? 0;
+
+        $proposal = TaskProposal::create([
+            'task_id' => $task->id,
+            'file_path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'version' => $latestVersion + 1,
+            'notes' => $request->input('notes'),
+            'uploaded_by' => Auth::id(),
+        ]);
+
+        $proposal->load('uploader');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Proposal berhasil diupload.',
+            'proposal' => [
+                'id' => $proposal->id,
+                'version' => $proposal->version,
+                'original_name' => $proposal->original_name,
+                'notes' => $proposal->notes,
+                'file_url' => $proposal->file_url,
+                'file_size' => $proposal->file_size_formatted,
+                'uploader_name' => $proposal->uploader?->username ?? '—',
+                'created_at' => $proposal->created_at->toIso8601String(),
+                'time' => $proposal->created_at->diffForHumans(),
+            ],
+        ]);
     }
 }

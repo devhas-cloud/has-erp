@@ -7,15 +7,81 @@ use App\Models\Module;
 use App\Models\TaskRole;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UserManagementController extends Controller
 {
     public function index()
     {
-        $users = User::with('division')->paginate(15);
+        return view('user-management.index');
+    }
 
-        return view('user-management.index', compact('users'));
+    public function data(Request $request): JsonResponse
+    {
+        $query = User::with(['division', 'hierarchyRole']);
+
+        $recordsTotal = User::count();
+
+        $searchValue = $request->input('search.value');
+        if ($searchValue) {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('username', 'like', "%{$searchValue}%")
+                    ->orWhere('email', 'like', "%{$searchValue}%")
+                    ->orWhere('role', 'like', "%{$searchValue}%")
+                    ->orWhereHas('division', function ($q) use ($searchValue) {
+                        $q->where('division_name', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('hierarchyRole', function ($q) use ($searchValue) {
+                        $q->where('role_name', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = $query->count();
+
+        $orderColumnIndex = $request->input('order.0.column', 0);
+        $orderDirection = $request->input('order.0.dir', 'asc');
+
+        $columnOrderMap = [
+            1 => 'username',
+            2 => 'email',
+            6 => 'created_at',
+        ];
+
+        if (isset($columnOrderMap[$orderColumnIndex])) {
+            $query->orderBy($columnOrderMap[$orderColumnIndex], $orderDirection);
+        }
+        $query->orderBy('id', 'asc');
+
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+
+        $users = $query->offset($start)->limit($length)->get();
+
+        $data = [];
+        foreach ($users as $i => $user) {
+            $data[] = [
+                'DT_RowIndex' => $start + $i + 1,
+                'id' => $user->id,
+                'username' => $user->username,
+                'initials' => strtoupper(substr($user->username, 0, 2)),
+                'icon' => $user->icon,
+                'email' => $user->email,
+                'division_name' => $user->division?->division_name,
+                'role' => $user->role,
+                'task_role_name' => $user->hierarchyRole?->role_name,
+                'created_at' => $user->created_at->format('d M Y'),
+                'created_at_raw' => $user->created_at->toISOString(),
+            ];
+        }
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
     }
 
     public function create()
@@ -35,7 +101,7 @@ class UserManagementController extends Controller
             'password' => 'required|string|min:6',
             'phone_number' => 'nullable|string|max:20',
             'division_id' => 'nullable|exists:divisions,id',
-            'role' => 'required|in:Admin,Manager,Staff',
+            'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
         ]);
 
@@ -91,7 +157,7 @@ class UserManagementController extends Controller
             'email' => 'required|email|max:255|unique:users,email,'.$user->id,
             'phone_number' => 'nullable|string|max:20',
             'division_id' => 'nullable|exists:divisions,id',
-            'role' => 'required|in:Admin,Manager,Staff',
+            'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
         ]);
 

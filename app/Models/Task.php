@@ -91,4 +91,9 @@ class Task extends Model
     {
         return $this->hasMany(TaskVisit::class);
     }
+
+    public function proposals(): HasMany
+    {
+        return $this->hasMany(TaskProposal::class);
+    }
 }

@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardTaskPlannerController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
+use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +24,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     });
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('user-management/data', [UserManagementController::class, 'data'])->name('user-management.data');
     Route::resource('user-management', UserManagementController::class);
 
     Route::get('/configuration', [ConfigurationController::class, 'index'])->name('configuration.index');
@@ -68,6 +70,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('task-planner/{id}/activities', [TaskPlannerController::class, 'storeActivity'])->name('task-planner.store-activity');
     Route::post('task-planner/{id}/visit', [TaskPlannerController::class, 'storeVisit'])->name('task-planner.visit');
     Route::get('task-planner/{id}/visits', [TaskPlannerController::class, 'visits'])->name('task-planner.visits');
+    Route::get('task-planner/{id}/proposals', [TaskPlannerController::class, 'fetchProposals'])->name('task-planner.proposals');
+    Route::post('task-planner/{id}/proposals', [TaskPlannerController::class, 'storeProposal'])->name('task-planner.store-proposal');
     Route::resource('task-planner', TaskPlannerController::class);
 
     Route::get('opportunity-management/data', [OpportunityManagementController::class, 'data'])->name('opportunity-management.data');
@@ -83,6 +87,12 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('opportunity-management/{opportunity}/tasks', [OpportunityManagementController::class, 'fetchTasks'])->name('opportunity-management.tasks.fetch');
     Route::post('opportunity-management/{opportunity}/tasks', [OpportunityManagementController::class, 'storeTask'])->name('opportunity-management.tasks.store');
     Route::resource('opportunity-management', OpportunityManagementController::class)->except(['edit'])->parameters(['opportunity-management' => 'opportunity']);
+
+    Route::get('product-management/data', [ProductManagementController::class, 'data'])->name('product-management.data');
+    Route::get('product-management/export', [ProductManagementController::class, 'export'])->name('product-management.export');
+    Route::get('product-management/template', [ProductManagementController::class, 'downloadTemplate'])->name('product-management.template');
+    Route::post('product-management/import', [ProductManagementController::class, 'import'])->name('product-management.import');
+    Route::resource('product-management', ProductManagementController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
         ->name('dashboard-task-planner.index');

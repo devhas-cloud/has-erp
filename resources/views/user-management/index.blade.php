@@ -4,12 +4,6 @@
 @section('page-title', 'User Management')
 
 @section('content')
-{{-- <div class="breadcrumb-custom">
-    <a href="">Dashboard</a>
-    <i class="fa-solid fa-chevron-right bc-sep"></i>
-    <span class="bc-current">User Management</span>
-</div> --}}
-
 <div class="page-header">
     <div>
         <h1 class="page-header-title">User Management</h1>
@@ -28,11 +22,10 @@
 <div class="card-custom fade-in">
     <div class="card-header-custom">
         <span><i class="fa-solid fa-users me-2" style="color:var(--accent)"></i>Daftar User</span>
-        <span style="font-size:12px;color:var(--text-muted);font-weight:500;">{{ $users->total() }} total data</span>
     </div>
-    <div class="card-body-custom p-0">
+    <div class="card-body-custom p-2">
         <div class="table-responsive">
-            <table class="table table-custom table-hover align-middle mb-0">
+            <table id="users-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
@@ -45,87 +38,147 @@
                         <th class="text-center" style="width:140px">Aksi</th>
                     </tr>
                 </thead>
-                <tbody>
-                    @forelse ($users as $user)
-                    <tr>
-                        <td style="color:var(--text-muted);font-weight:500">{{ $loop->iteration + $users->firstItem() - 1 }}</td>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:10px">
-                                @if($user->icon)
-                                    <img src="{{ $user->icon }}" class="avatar-circle" alt="" style="background:transparent">
-                                @else
-                                    <div class="avatar-circle">{{ strtoupper(substr($user->username, 0, 2)) }}</div>
-                                @endif
-                                <strong style="color:var(--text-primary);font-weight:600">{{ $user->username }}</strong>
-                            </div>
-                        </td>
-                        <td style="color:var(--text-secondary)">{{ $user->email }}</td>
-                        <td>{!! $user->division?->division_name ?? '<span style="color:var(--text-muted)">—</span>' !!}</td>
-                        <td>
-                            @if ($user->role === 'Admin')
-                                <span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d">
-                                    <i class="fa-solid fa-shield-halved" style="font-size:10px"></i>
-                                    Admin
-                                </span>
-                            @else
-                                <span class="status-badge" style="background:var(--info-soft);color:#1e40af">
-                                    <i class="fa-solid fa-user" style="font-size:10px"></i>
-                                    User
-                                </span>
-                            @endif
-                        </td>
-                        <td>
-                            @if ($user->hierarchyRole)
-                                <span class="status-badge" style="background:var(--accent-soft);color:var(--accent)">
-                                    {{ $user->hierarchyRole->role_name }}
-                                </span>
-                            @else
-                                <span style="color:var(--text-muted)">—</span>
-                            @endif
-                        </td>
-                        <td style="color:var(--text-muted);font-size:13px">{{ $user->created_at->format('d M Y') }}</td>
-                        <td class="text-center">
-                            <div style="display:flex;gap:5px;justify-content:center">
-                                <a href="{{ route('user-management.show', $user->id) }}" class="btn-icon" title="Detail">
-                                    <i class="fa-solid fa-eye"></i>
-                                </a>
-                                @if($canUpdate)
-                                <a href="{{ route('user-management.edit', $user->id) }}" class="btn-icon" title="Edit">
-                                    <i class="fa-solid fa-pen"></i>
-                                </a>
-                                @endif
-                                @if($canDelete)
-                                <form action="{{ route('user-management.destroy', $user->id) }}" method="POST" style="display:inline">
-                                    @csrf @method('DELETE')
-                                    <button type="button" class="btn-icon danger btn-delete" title="Hapus">
-                                        <i class="fa-solid fa-trash-can"></i>
-                                    </button>
-                                </form>
-                                @endif
-                            </div>
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="8">
-                            <div class="empty-state">
-                                <i class="fa-solid fa-users-slash"></i>
-                                <p>Belum ada data user.</p>
-                            </div>
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
             </table>
         </div>
     </div>
-    @if ($users->hasPages())
-    <div style="padding:14px 22px;border-top:1px solid var(--card-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <span style="font-size:12.5px;color:var(--text-muted);font-weight:500">
-            Menampilkan {{ $users->firstItem() }}–{{ $users->lastItem() }} dari {{ $users->total() }}
-        </span>
-        <div>{{ $users->links() }}</div>
-    </div>
-    @endif
 </div>
+@endsection
+
+@push('modals')
+{{-- Delete confirmation modal --}}
+<form id="delete-form" method="POST" style="display:none">
+    @csrf @method('DELETE')
+</form>
+@endpush
+
+@section('scripts')
+<script>
+const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
+const canDelete = {{ $canDelete ? 'true' : 'false' }};
+const showUrl = '{{ route("user-management.show", "__ID__") }}';
+const editUrl = '{{ route("user-management.edit", "__ID__") }}';
+const deleteUrl = '{{ route("user-management.destroy", "__ID__") }}';
+
+let usersTable = null;
+
+function initUsersTable() {
+    if (usersTable) {
+        usersTable.destroy();
+    }
+
+    usersTable = $('#users-table').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: '{{ route("user-management.data") }}',
+        columns: [
+            { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
+            {
+                data: 'username', orderable: true, searchable: true,
+                render: function(data, type, row) {
+                    var avatar = row.icon
+                        ? '<img src="' + row.icon + '" class="avatar-circle" alt="" style="background:transparent">'
+                        : '<div class="avatar-circle">' + row.initials + '</div>';
+                    return '<div style="display:flex;align-items:center;gap:10px">' +
+                        avatar +
+                        '<strong style="color:var(--text-primary);font-weight:600">' + row.username + '</strong>' +
+                        '</div>';
+                }
+            },
+            { data: 'email', orderable: true, searchable: true,
+                render: function(data) {
+                    return '<span style="color:var(--text-secondary)">' + data + '</span>';
+                }
+            },
+            {
+                data: 'division_name', orderable: false, searchable: true,
+                render: function(data) {
+                    return data
+                        ? data
+                        : '<span style="color:var(--text-muted)">—</span>';
+                }
+            },
+            {
+                data: 'role', orderable: true, searchable: true,
+                render: function(data) {
+                    if (data === 'Admin') {
+                        return '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d">' +
+                            '<i class="fa-solid fa-shield-halved" style="font-size:10px"></i> Admin</span>';
+                    }
+                    return '<span class="status-badge" style="background:var(--info-soft);color:#1e40af">' +
+                        '<i class="fa-solid fa-user" style="font-size:10px"></i> User</span>';
+                }
+            },
+            {
+                data: 'task_role_name', orderable: false, searchable: true,
+                render: function(data) {
+                    return data
+                        ? '<span class="status-badge" style="background:var(--accent-soft);color:var(--accent)">' + data + '</span>'
+                        : '<span style="color:var(--text-muted)">—</span>';
+                }
+            },
+            { data: 'created_at', orderable: true, searchable: false,
+                render: function(data) {
+                    return '<span style="color:var(--text-muted);font-size:13px">' + data + '</span>';
+                }
+            },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(data, type, row) {
+                    var html = '<div style="display:flex;gap:5px;justify-content:center">';
+                    html += '<a href="' + showUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Detail"><i class="fa-solid fa-eye"></i></a>';
+                    if (canUpdate) {
+                        html += '<a href="' + editUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Edit"><i class="fa-solid fa-pen"></i></a>';
+                    }
+                    if (canDelete) {
+                        html += '<button type="button" class="btn-icon danger btn-delete-user" title="Hapus" data-id="' + row.id + '"><i class="fa-solid fa-trash-can"></i></button>';
+                    }
+                    html += '</div>';
+                    return html;
+                }
+            }
+        ],
+        order: [[0, 'asc']],
+        pageLength: 10,
+        lengthMenu: [10, 15, 25, 50, 100],
+    });
+}
+
+$(document).on('click', '.btn-delete-user', function() {
+    const id = $(this).data('id');
+    Swal.fire({
+        title: 'Yakin?',
+        text: 'Data yang dihapus tidak dapat dikembalikan!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, hapus!',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: deleteUrl.replace('__ID__', id),
+                type: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    _method: 'DELETE'
+                },
+                success: function(res) {
+                    toastr.success('User berhasil dihapus.');
+                    if (usersTable) usersTable.ajax.reload(null, false);
+                },
+                error: function() {
+                    toastr.error('Gagal menghapus user.');
+                }
+            });
+        }
+    });
+});
+
+initUsersTable();
+</script>
 @endsection

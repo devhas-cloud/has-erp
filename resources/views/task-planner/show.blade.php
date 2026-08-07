@@ -609,6 +609,7 @@
     @php
         $backParam = request('back');
         $backLeadId = $backParam && str_starts_with($backParam, 'lead-') ? str_replace('lead-', '', $backParam) : null;
+        $backOpportunityId = $backParam && str_starts_with($backParam, 'opportunity-') ? str_replace('opportunity-', '', $backParam) : null;
     @endphp
     <div class="page-header">
         <div>
@@ -625,6 +626,10 @@
             @if ($backLeadId)
                 <a href="{{ route('leads-management.show', $backLeadId) }}" class="btn-ghost">
                     <i class="fa fa-arrow-left"></i><span>Kembali ke Lead</span>
+                </a>
+            @elseif ($backOpportunityId)
+                <a href="{{ route('opportunity-management.show', $backOpportunityId) }}" class="btn-ghost">
+                    <i class="fa fa-arrow-left"></i><span>Kembali ke Opportunity</span>
                 </a>
             @else
                 <a href="{{ route('task-planner.index') }}" class="btn-ghost">
@@ -682,8 +687,10 @@
                     </div>
                     @if ($task->description)
                         <hr style="margin:16px 0;opacity:0.3">
-                        <div style="font-size:13.5px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap">
-                            {{ $task->description }}</div>
+                        Description:
+                        <div style="font-size:13.5px;color:var(--text-secondary);">
+                            {{ $task->description }}
+                        </div>
                     @endif
                 </div>
             </div>
@@ -852,6 +859,23 @@
                 </div>
             </div>
 
+            <!-- ── Proposal Files ── -->
+            <div class="card-custom fade-in stagger-3 mt-4">
+                <div class="card-header-custom">
+                    <span><i class="fa fa-file-pdf me-2" style="color:var(--accent)"></i>Proposal Files</span>
+                    @if($task->status !== 'done' && ($isCreator || $isAssignee))
+                    <button type="button" class="btn btn-sm btn-accent" id="btn-upload-proposal"
+                        style="font-size:11px">
+                        <i class="fa fa-upload"></i> Upload Proposal
+                    </button>
+                    @endif
+                </div>
+                <div class="card-body-custom" id="proposal-list">
+                    <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
+                        <i class="fa fa-spinner fa-spin"></i> Loading...
+                    </div>
+                </div>
+            </div>
 
             <div class="card-custom fade-in stagger-2 mt-4">
                 <div class="card-header-custom">
@@ -1059,6 +1083,89 @@
                 });
             });
         });
+
+        // ── Proposal Upload ──
+        var taskId = {{ $task->id }};
+        var proposalBaseUrl = '{{ route('task-planner.index') }}/' + taskId + '/proposals';
+
+        function loadProposals() {
+            $.get(proposalBaseUrl, function(res) {
+                var html = '';
+                if (res.data && res.data.length > 0) {
+                    res.data.forEach(function(p) {
+                        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--card-border)">' +
+                            '<div style="display:flex;align-items:center;gap:10px">' +
+                            '<i class="fa fa-file-pdf" style="color:#dc2626;font-size:18px"></i>' +
+                            '<div>' +
+                            '<div style="font-weight:600;font-size:13px">v' + p.version + ': ' + escapeHtml(p.original_name) + '</div>' +
+                            '<div style="font-size:11px;color:var(--text-muted)">' +
+                            'oleh ' + escapeHtml(p.uploader_name) + ' · ' + p.file_size +
+                            (p.notes ? ' · ' + escapeHtml(p.notes) : '') +
+                            ' · ' + p.time +
+                            '</div></div></div>' +
+                            '<button onclick="openFilePreview(\'' + p.file_url + '\',\'' + escapeHtml(p.original_name) + '\')" class="btn btn-sm btn-outline-secondary" style="font-size:11px;cursor:pointer"><i class=\"fa fa-eye\"></i></button>' +
+                            '</div>';
+                    });
+                } else {
+                    html = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px"><i class="fa fa-file-pdf me-2"></i>Belum ada proposal.</div>';
+                }
+                $('#proposal-list').html(html);
+            });
+        }
+
+        $(document).on('click', '#btn-upload-proposal', function() {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf,application/pdf';
+            input.onchange = function() {
+                var file = input.files[0];
+                if (!file) return;
+                if (file.type !== 'application/pdf') {
+                    toastr.error('Hanya file PDF yang diizinkan.');
+                    return;
+                }
+                if (file.size > 20 * 1024 * 1024) {
+                    toastr.error('Maksimal 20MB.');
+                    return;
+                }
+                Swal.fire({
+                    title: 'Upload Proposal',
+                    input: 'textarea',
+                    inputPlaceholder: 'Catatan revisi (opsional)',
+                    showCancelButton: true,
+                    confirmButtonText: 'Upload',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#10b981',
+                    reverseButtons: true,
+                    preConfirm: function(notes) {
+                        var fd = new FormData();
+                        fd.append('file', file);
+                        fd.append('notes', notes || '');
+                        fd.append('_token', '{{ csrf_token() }}');
+                        return $.ajax({
+                            url: proposalBaseUrl,
+                            type: 'POST',
+                            data: fd,
+                            processData: false,
+                            contentType: false
+                        }).then(function(res) {
+                            return res;
+                        }).catch(function(xhr) {
+                            var msg = xhr.responseJSON?.message || 'Gagal upload.';
+                            Swal.showValidationMessage(msg);
+                        });
+                    }
+                }).then(function(result) {
+                    if (result.isConfirmed) {
+                        toastr.success('Proposal berhasil diupload.');
+                        loadProposals();
+                    }
+                });
+            };
+            input.click();
+        });
+
+        loadProposals();
 
         // ── Activity Feed ──
         var taskId = {{ $task->id }};
