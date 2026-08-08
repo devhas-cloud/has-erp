@@ -1,13 +1,13 @@
 @extends('layouts.app')
 
-@section('title', $quotation ? 'Edit Quotation '.$quotation->quotation_number : 'Buat Quotation')
-@section('page-title', $quotation ? 'Edit Quotation' : 'Buat Quotation')
+@section('title', $quotation ? 'Edit Quote Configuration #'.$quotation->id : 'Buat Quote Configuration')
+@section('page-title', $quotation ? 'Edit Quote Configuration' : 'Buat Quote Configuration')
 
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">{{ $quotation ? 'Edit '.$quotation->quotation_number : 'Buat Quotation Water Configuration' }}</h1>
-        <p class="page-header-sub">Isi data quotation, pilih produk dari master product, lalu simpan sebagai draft.</p>
+        <h1 class="page-header-title">{{ $quotation ? 'Edit Quote Configuration #'.$quotation->id : 'Buat Quote Configuration' }}</h1>
+        <p class="page-header-sub">Pilih task quote, data customer otomatis terambil. Tambahkan item part, lalu simpan sebagai draft.</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ route('water-configuration.index') }}" class="btn btn-secondary btn-sm">
@@ -21,41 +21,66 @@
 
     <div class="card-custom fade-in mb-3">
         <div class="card-header-custom">
-            <span><i class="fa-solid fa-building me-2" style="color:var(--accent)"></i>Informasi Customer</span>
+            <span><i class="fa-solid fa-tasks me-2" style="color:var(--accent)"></i>Task Quote</span>
+        </div>
+        <div class="card-body-custom">
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label class="form-label">Pilih Task Quote <span class="text-danger">*</span></label>
+                    <select id="wc-task" class="form-select" style="width:100%">
+                        <option value="">— Pilih Task —</option>
+                        @foreach($tasks as $task)
+                            <option value="{{ $task->id }}"
+                                {{ $quotation?->task_id == $task->id ? 'selected' : '' }}>
+                                {{ $task->opportunity?->opportunity_name ?? $task->title }}
+                                {{ $task->opportunity?->accountCompany?->account_name ? ' (' . $task->opportunity->accountCompany->account_name . ')' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <input type="hidden" name="task_id" id="wc-task-id" value="{{ $quotation?->task_id }}">
+                    <input type="hidden" name="opportunity_id" id="wc-opportunity-id" value="{{ $quotation?->opportunity_id }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tanggal</label>
+                    <input type="date" id="wc-date" name="date" class="form-control" value="{{ $quotation?->date?->format('Y-m-d') }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-custom fade-in mb-3">
+        <div class="card-header-custom">
+            <span><i class="fa-solid fa-building me-2" style="color:var(--accent)"></i>Informasi Customer <small style="color:var(--text-muted);font-weight:400">(otomatis dari task)</small></span>
         </div>
         <div class="card-body-custom">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">To (Nama Customer)</label>
-                    <input type="text" id="wc-to" name="to_name" class="form-control" placeholder="cth: Kawasan Industri Gresik (Site Tuban)" value="{{ $quotation?->to_name }}">
+                    <label class="form-label">Location / Company</label>
+                    <input type="text" class="form-control" id="wc-location" value="{{ $quotation?->location }}" readonly>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Location</label>
-                    <input type="text" id="wc-location" name="location" class="form-control" placeholder="cth: Site Tuban" value="{{ $quotation?->location }}">
+                    <label class="form-label">To (Contact)</label>
+                    <input type="text" class="form-control" id="wc-to" value="{{ $quotation?->to_name }}" readonly>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Address</label>
-                    <textarea id="wc-address" name="address" class="form-control" rows="2" placeholder="Alamat customer">{{ $quotation?->address }}</textarea>
+                    <textarea class="form-control" rows="2" id="wc-address" readonly>{{ $quotation?->address }}</textarea>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">PIC Name</label>
-                    <input type="text" id="wc-pic-name" name="pic_name" class="form-control" placeholder="Nama PIC" value="{{ $quotation?->pic_name }}">
+                    <input type="text" class="form-control" id="wc-pic-name" value="{{ $quotation?->pic_name }}" readonly>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">PIC Phone</label>
-                    <input type="text" id="wc-pic-phone" name="pic_phone" class="form-control" placeholder="No. HP PIC" value="{{ $quotation?->pic_phone }}">
+                    <input type="text" class="form-control" id="wc-pic-phone" value="{{ $quotation?->pic_phone }}" readonly>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">PIC Email</label>
-                    <input type="email" id="wc-pic-email" name="pic_email" class="form-control" placeholder="Email PIC" value="{{ $quotation?->pic_email }}">
+                    <input type="text" class="form-control" id="wc-pic-email" value="{{ $quotation?->pic_email }}" readonly>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Sales</label>
-                    <input type="text" id="wc-sales" name="sales_name" class="form-control" placeholder="Nama Sales" value="{{ $quotation?->sales_name }}">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Tanggal Quotation</label>
-                    <input type="date" id="wc-date" name="quotation_date" class="form-control" value="{{ $quotation?->quotation_date?->format('Y-m-d') }}">
+                    <label class="form-label">Sales (Pemberi Task)</label>
+                    <input type="text" class="form-control" id="wc-sales" value="{{ $quotation?->sales_name }}" readonly>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Parameter</label>
@@ -78,9 +103,8 @@
                     <thead>
                         <tr>
                             <th style="width:40px">#</th>
-                            <th style="min-width:220px">Produk (Master Product)</th>
+                            <th style="min-width:260px">Produk (Part Number)</th>
                             <th style="width:150px">Kategori</th>
-                            <th style="width:170px">Part Number</th>
                             <th>Deskripsi</th>
                             <th style="width:180px">Qty</th>
                             <th style="width:40px"></th>
@@ -92,14 +116,14 @@
                             <td class="text-center wc-row-num">{{ $loop->iteration }}</td>
                             <td>
                                 <input type="hidden" class="wc-product-id" value="{{ $item->product_id }}">
+                                <input type="hidden" class="wc-part" value="{{ $item->part_number }}">
                                 <select class="form-select form-select-sm wc-product">
                                     @if($item->product)
-                                        <option value="{{ $item->product_id }}" selected>{{ $item->product->name }}</option>
+                                        <option value="{{ $item->product_id }}" selected>{{ $item->part_number ?: $item->product->name }}</option>
                                     @endif
                                 </select>
                             </td>
                             <td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="{{ $item->category }}"></td>
-                            <td><input type="text" class="form-control form-control-sm wc-part" placeholder="Part Number" value="{{ $item->part_number }}"></td>
                             <td><input type="text" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)" value="{{ $item->description }}"></td>
                             <td><input type="number" class="form-control form-control-sm wc-qty" value="{{ $item->qty }}" min="1"></td>
                             <td class="text-center"><button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)"><i class="fa fa-trash" style="color:var(--danger)"></i></button></td>
@@ -117,7 +141,7 @@
             <span><i class="fa-solid fa-note-sticky me-2" style="color:var(--accent)"></i>Catatan</span>
         </div>
         <div class="card-body-custom">
-            <textarea id="wc-notes" name="notes" class="form-control" rows="3" placeholder="Catatan quotation (opsional)">{{ $quotation?->notes }}</textarea>
+            <textarea id="wc-notes" name="notes" class="form-control" rows="3" placeholder="Catatan (opsional)">{{ $quotation?->notes }}</textarea>
         </div>
     </div>
 
@@ -144,6 +168,46 @@ const wcStoreUrl = '{{ route("water-configuration.store") }}';
 const wcUpdateUrl = '{{ route("water-configuration.update", "__ID__") }}';
 const wcIndexUrl = '{{ route("water-configuration.index") }}';
 const wcSearchUrl = '{{ route("water-configuration.search-products") }}';
+const wcFetchTaskUrl = '{{ route("water-configuration.fetch-task") }}';
+
+function applyTaskData(data) {
+    $('#wc-task-id').val(data.task_id || '');
+    $('#wc-opportunity-id').val(data.opportunity_id || '');
+    $('#wc-location').val(data.location || '');
+    $('#wc-to').val(data.to_name || '');
+    $('#wc-address').val(data.address || '');
+    $('#wc-pic-name').val(data.pic_name || '');
+    $('#wc-pic-phone').val(data.pic_phone || '');
+    $('#wc-pic-email').val(data.pic_email || '');
+    $('#wc-sales').val(data.sales_name || '');
+    if (data.date && !$('#wc-date').val()) {
+        $('#wc-date').val(data.date);
+    }
+}
+
+$(document).on('change', '#wc-task', function() {
+    var taskId = $(this).val();
+    if (!taskId) {
+        applyTaskData({
+            task_id: '', opportunity_id: '', location: '', to_name: '',
+            address: '', pic_name: '', pic_phone: '', pic_email: '', sales_name: '', date: ''
+        });
+        return;
+    }
+
+    $.ajax({
+        url: wcFetchTaskUrl,
+        data: { task_id: taskId },
+        dataType: 'json',
+        success: function(res) {
+            applyTaskData(res.data || {});
+        },
+        error: function(xhr) {
+            var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memuat data task.';
+            toastr.error(msg);
+        }
+    });
+});
 
 function initProductSelect($select) {
     $select.select2({
@@ -169,9 +233,9 @@ function initProductSelect($select) {
                 return data.text;
             }
             var html = '<div class="d-flex align-items-center gap-2">';
-            html += '<div><strong>' + data.name + '</strong>';
-            if (data.code) {
-                html += ' <code style="color:var(--accent)">' + data.code + '</code>';
+            html += '<div><strong style="color:var(--accent)">' + (data.code || data.name) + '</strong>';
+            if (data.name && data.code) {
+                html += ' <span style="color:var(--text-secondary);font-size:12px;">' + data.name + '</span>';
             }
             if (data.brand) {
                 html += ' <span style="color:var(--text-muted);font-size:11px;">' + data.brand + '</span>';
@@ -179,11 +243,14 @@ function initProductSelect($select) {
             if (data.category) {
                 html += ' <span style="font-size:10px;background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:999px;margin-left:4px;">' + data.category + '</span>';
             }
+            if (data.description) {
+                html += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + data.description + '</div>';
+            }
             html += '</div></div>';
             return $(html);
         },
         templateSelection: function(data) {
-            return data.name || data.text;
+            return data.code || data.name || data.text;
         }
     });
 
@@ -193,7 +260,7 @@ function initProductSelect($select) {
 
         row.find('.wc-product-id').val(d.id);
         row.find('.wc-part').val(d.code || '');
-        row.find('.wc-desc').val(d.name || '');
+        row.find('.wc-desc').val(d.description || d.name || '');
         if (d.category) {
             row.find('.wc-category').val(d.category);
         }
@@ -201,6 +268,7 @@ function initProductSelect($select) {
 
     $select.on('select2:clear', function() {
         $(this).closest('tr').find('.wc-product-id').val('');
+        $(this).closest('tr').find('.wc-part').val('');
     });
 }
 
@@ -211,13 +279,13 @@ function addItemRow(item) {
     var html = '<tr data-row="' + wcRowIndex + '">';
     html += '<td class="text-center wc-row-num">' + wcRowIndex + '</td>';
     html += '<td><input type="hidden" class="wc-product-id" value="' + (item.product_id || '') + '">';
+    html += '<input type="hidden" class="wc-part" value="' + (item.part_number || '') + '">';
     html += '<select class="form-select form-select-sm wc-product">';
-    if (item.product_id && item.product_name) {
-        html += '<option value="' + item.product_id + '" selected>' + item.product_name + '</option>';
+    if (item.product_id && (item.part_number || item.product_name)) {
+        html += '<option value="' + item.product_id + '" selected>' + (item.part_number || item.product_name) + '</option>';
     }
     html += '</select></td>';
     html += '<td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="' + (item.category || '') + '"></td>';
-    html += '<td><input type="text" class="form-control form-control-sm wc-part" placeholder="Part Number" value="' + (item.part_number || '') + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)" value="' + (item.description || '') + '"></td>';
     html += '<td><input type="number" class="form-control form-control-sm wc-qty" value="' + (item.qty || 1) + '" min="1"></td>';
     html += '<td class="text-center"><button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)"><i class="fa fa-trash" style="color:var(--danger)"></i></button></td>';
@@ -267,6 +335,12 @@ function collectItems() {
 }
 
 $('#btn-save-wc').on('click', function() {
+    var taskId = $('#wc-task-id').val();
+    if (!taskId) {
+        toastr.error('Pilih Task Quote terlebih dahulu.');
+        return;
+    }
+
     var items = collectItems();
     if (!items) {
         toastr.error('Deskripsi item wajib diisi.');
@@ -274,14 +348,8 @@ $('#btn-save-wc').on('click', function() {
     }
 
     var payload = {
-        to_name: $('#wc-to').val(),
-        address: $('#wc-address').val(),
-        location: $('#wc-location').val(),
-        pic_name: $('#wc-pic-name').val(),
-        pic_phone: $('#wc-pic-phone').val(),
-        pic_email: $('#wc-pic-email').val(),
-        sales_name: $('#wc-sales').val(),
-        quotation_date: $('#wc-date').val(),
+        task_id: taskId,
+        date: $('#wc-date').val(),
         parameter_note: $('#wc-parameter').val(),
         notes: $('#wc-notes').val(),
         items: items
@@ -313,6 +381,13 @@ $('#btn-save-wc').on('click', function() {
 });
 
 $(document).ready(function() {
+    $('#wc-task').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: '— Pilih Task —',
+        allowClear: true
+    });
+
     if ($('#wc-items-body tr').length === 0) {
         addItemRow();
     } else {

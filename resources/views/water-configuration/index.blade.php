@@ -1,19 +1,19 @@
 @extends('layouts.app')
 
-@section('title', 'Water Configuration')
-@section('page-title', 'Water Configuration')
+@section('title', 'Quote Configuration')
+@section('page-title', 'Quote Configuration')
 
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Water Configuration</h1>
-        <p class="page-header-sub">Kelola quotation water configuration (pH, Ammonia, COD, TSS dan Debit)</p>
+        <h1 class="page-header-title">Quote Configuration</h1>
+        <p class="page-header-sub">Kelola konfigurasi quotation (pH, Ammonia, COD, TSS dan Debit) dari task quote</p>
     </div>
     @if($canCreate)
     <div class="page-header-actions">
         <a href="{{ route('water-configuration.create') }}" class="btn-accent">
             <i class="fa fa-plus"></i>
-            <span>Buat Quotation</span>
+            <span>Buat Configuration</span>
         </a>
     </div>
     @endif
@@ -21,7 +21,7 @@
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-droplet me-2" style="color:var(--accent)"></i>Daftar Quotation</span>
+        <span><i class="fa-solid fa-droplet me-2" style="color:var(--accent)"></i>Daftar Configuration</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -29,11 +29,9 @@
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
-                        <th>No. Quotation</th>
-                        <th>Kepada</th>
-                        <th>Lokasi</th>
-                        <th>PIC</th>
-                        <th>Sales</th>
+                        <th>Opportunity</th>
+                        <th>Company</th>
+                        <th>To (Contact)</th>
                         <th>Tanggal</th>
                         <th>Item</th>
                         <th>Dibuat Oleh</th>
@@ -98,22 +96,18 @@ function initWcTable() {
         order: [[1, 'desc']],
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
-            { data: 'quotation_number', orderable: true, searchable: true,
+            { data: 'opportunity_name', orderable: false, searchable: true,
                 render: function(data) {
                     return '<strong style="color:var(--text-primary)">' + data + '</strong>';
                 }
             },
-            { data: 'to_name', orderable: true, searchable: true },
             { data: 'location', orderable: false, searchable: true,
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
-            { data: 'pic_name', orderable: false, searchable: true,
+            { data: 'to_name', orderable: false, searchable: true,
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
-            { data: 'sales_name', orderable: false, searchable: true,
-                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
-            },
-            { data: 'quotation_date', orderable: true, searchable: false },
+            { data: 'date', orderable: true, searchable: false },
             { data: 'item_count', orderable: false, searchable: false, className: 'text-center' },
             { data: 'creator_name', orderable: false, searchable: true },
             { data: 'status_badge', orderable: false, searchable: false },
@@ -121,11 +115,11 @@ function initWcTable() {
                 data: 'id', orderable: false, searchable: false, className: 'text-center',
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1">';
-                    btn += '<a href="' + wcShowUrl.replace('__ID__', data) + '" class="btn btn-sm btn-soft" title="Detail"><i class="fa fa-eye"></i></a>';
+                    btn += '<a href="' + wcShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
                     if (row.status === 'draft') {
-                        btn += '<a href="' + wcEditUrl.replace('__ID__', data) + '" class="btn btn-sm btn-soft" title="Edit"><i class="fa fa-pen"></i></a>';
-                        btn += '<button class="btn btn-sm btn-soft" title="Submit Approval" onclick="submitWc(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
-                        btn += '<button class="btn btn-sm btn-soft" title="Hapus" onclick="deleteWc(' + data + ', \'' + row.quotation_number + '\')"><i class="fa fa-trash" style="color:var(--danger)"></i></button>';
+                        btn += '<a href="' + wcEditUrl.replace('__ID__', data) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
+                        btn += '<button class="btn-icon" title="Submit Approval" onclick="submitWc(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
+                        btn += '<button class="btn-icon" title="Hapus" onclick="deleteWc(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
                     btn += '</div>';
                     return btn;
@@ -135,10 +129,10 @@ function initWcTable() {
     });
 }
 
-function deleteWc(id, number) {
+function deleteWc(id) {
     Swal.fire({
-        title: 'Hapus Quotation?',
-        text: 'Quotation ' + number + ' akan dihapus permanen.',
+        title: 'Hapus Configuration?',
+        text: 'Configuration #' + id + ' akan dihapus permanen.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Ya, Hapus',

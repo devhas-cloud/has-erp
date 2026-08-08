@@ -100,8 +100,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('water-configuration/{id}/submit', [WaterConfigurationController::class, 'submit'])->name('water-configuration.submit');
     Route::post('water-configuration/{id}/approve', [WaterConfigurationController::class, 'approve'])->name('water-configuration.approve');
     Route::post('water-configuration/{id}/reject', [WaterConfigurationController::class, 'reject'])->name('water-configuration.reject');
-    Route::get('water-configuration/{id}/print', [WaterConfigurationController::class, 'print'])->name('water-configuration.print');
+    Route::get('water-configuration/{id}/pdf', [WaterConfigurationController::class, 'pdf'])->name('water-configuration.pdf');
     Route::get('water-configuration/search-products', [WaterConfigurationController::class, 'searchProducts'])->name('water-configuration.search-products');
+    Route::get('water-configuration/fetch-task', [WaterConfigurationController::class, 'fetchTask'])->name('water-configuration.fetch-task');
     Route::resource('water-configuration', WaterConfigurationController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class WaterConfiguration extends Model
+class QuoteConfiguration extends Model
 {
     use Notifiable;
 
@@ -26,16 +26,12 @@ class WaterConfiguration extends Model
         self::STATUS_REJECTED => 'Rejected',
     ];
 
+    protected $table = 'quote_configurations';
+
     protected $fillable = [
-        'quotation_number',
-        'to_name',
-        'address',
-        'location',
-        'pic_name',
-        'pic_phone',
-        'pic_email',
-        'sales_name',
-        'quotation_date',
+        'opportunity_id',
+        'task_id',
+        'date',
         'parameter_note',
         'notes',
         'status',
@@ -49,7 +45,7 @@ class WaterConfiguration extends Model
     protected function casts(): array
     {
         return [
-            'quotation_date' => 'date',
+            'date' => 'date',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
         ];
@@ -57,7 +53,7 @@ class WaterConfiguration extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(WaterConfigurationItem::class)->orderBy('sort_order');
+        return $this->hasMany(QuoteConfigurationItem::class)->orderBy('sort_order');
     }
 
     public function creator(): BelongsTo
@@ -68,6 +64,77 @@ class WaterConfiguration extends Model
     public function finalChecker(): BelongsTo
     {
         return $this->belongsTo(User::class, 'final_checked_by');
+    }
+
+    public function opportunity(): BelongsTo
+    {
+        return $this->belongsTo(Opportunity::class);
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
+    }
+
+    // ── Data derived dari task/opportunity ──
+
+    public function getToNameAttribute(): ?string
+    {
+        return $this->contact()?->full_name ?? $this->task?->lead?->accountContact?->full_name;
+    }
+
+    public function getLocationAttribute(): ?string
+    {
+        return $this->company()?->account_name ?? $this->task?->lead?->accountCompany?->account_name;
+    }
+
+    public function getAddressAttribute(): ?string
+    {
+        $company = $this->company() ?? $this->task?->lead?->accountCompany;
+
+        if (! $company) {
+            return null;
+        }
+
+        return collect([
+            $company->address_billing_street,
+            $company->address_billing_city,
+            $company->address_billing_province,
+            $company->address_billing_postal_code,
+            $company->address_billing_country,
+        ])->filter()->join(', ') ?: null;
+    }
+
+    public function getPicNameAttribute(): ?string
+    {
+        return $this->contact()?->full_name ?? $this->task?->lead?->accountContact?->full_name;
+    }
+
+    public function getPicPhoneAttribute(): ?string
+    {
+        $contact = $this->contact() ?? $this->task?->lead?->accountContact;
+
+        return $contact?->mobile ?: $contact?->phone;
+    }
+
+    public function getPicEmailAttribute(): ?string
+    {
+        return $this->contact()?->email ?? $this->task?->lead?->accountContact?->email;
+    }
+
+    public function getSalesNameAttribute(): ?string
+    {
+        return $this->task?->creator?->username;
+    }
+
+    private function company(): ?AccountCompany
+    {
+        return $this->opportunity?->accountCompany;
+    }
+
+    private function contact(): ?AccountContact
+    {
+        return $this->opportunity?->accountContact;
     }
 
     public function getStatusLabelAttribute(): string
@@ -97,22 +164,5 @@ class WaterConfiguration extends Model
     public function totalQty(): int
     {
         return (int) $this->items->sum('qty');
-    }
-
-    public static function nextQuotationNumber(): string
-    {
-        $year = now()->format('Y');
-
-        $numbers = static::query()
-            ->where('quotation_number', 'like', "WC-{$year}-%")
-            ->pluck('quotation_number');
-
-        $maxSequence = 0;
-        foreach ($numbers as $number) {
-            $sequence = (int) substr($number, strrpos($number, '-') + 1);
-            $maxSequence = max($maxSequence, $sequence);
-        }
-
-        return sprintf('WC-%s-%04d', $year, $maxSequence + 1);
     }
 }

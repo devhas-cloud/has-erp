@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Detail Quotation '.$quotation->quotation_number)
-@section('page-title', 'Detail Quotation')
+@section('title', 'Detail Configuration #'.$quotation->id)
+@section('page-title', 'Detail Configuration')
 
 @section('styles')
 <style>
@@ -56,15 +56,17 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">{{ $quotation->quotation_number }}</h1>
-        <p class="page-header-sub">Water Configuration Quotation</p>
+        <h1 class="page-header-title">Configuration #{{ $quotation->id }}
+            <small style="font-size:14px;font-weight:400;color:var(--text-muted)">— {{ $quotation->task?->title ?? '—' }}</small>
+        </h1>
+        <p class="page-header-sub">Quote Configuration dari Task Quote #{{ $quotation->task_id }}</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ route('water-configuration.index') }}" class="btn btn-secondary btn-sm">
             <i class="fa fa-arrow-left me-1"></i> Kembali
         </a>
-        <a href="{{ route('water-configuration.print', $quotation->id) }}" target="_blank" class="btn-accent">
-            <i class="fa fa-print me-1"></i> <span>Cetak</span>
+        <a href="{{ route('water-configuration.pdf', $quotation->id) }}" target="_blank" class="btn-accent">
+            <i class="fa fa-file-pdf me-1"></i> <span>View PDF</span>
         </a>
     </div>
 </div>
@@ -96,7 +98,7 @@
 
 {{-- Actions --}}
 @if($quotation->status === 'draft' && auth()->id() === $quotation->created_by)
-<div class="wc-action-bar">
+<div class="wc-action-bar justify-content-end">
     <a href="{{ route('water-configuration.edit', $quotation->id) }}" class="btn btn-primary btn-sm">
         <i class="fa fa-pen me-1"></i> Edit
     </a>
@@ -108,7 +110,7 @@
 
 @if($quotation->status === 'waiting_approval')
 <div class="wc-action-bar">
-    @if($canApprove)
+    @if($canApprove && $isSameDivisionApprover)
         <button type="button" class="btn btn-success btn-sm" onclick="approveWc({{ $quotation->id }})">
             <i class="fa fa-check me-1"></i> Approve
         </button>
@@ -118,7 +120,7 @@
     @else
         <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:13px">
             <i class="fa fa-lock me-1"></i>
-            Quotation menunggu approval dari user lain satu divisi dengan pembuat (divisi WATER).
+            Configuration menunggu approval dari user lain satu divisi dengan pembuat.
             Pembuat tidak bisa approve dokumennya sendiri.
         </div>
     @endif
@@ -145,14 +147,15 @@
             </div>
             <div class="card-body-custom">
                 <table class="info-table">
+                    <tr><td>Task</td><td>#{{ $quotation->task_id }} — {{ $quotation->task?->title ?? '—' }}</td></tr>
                     <tr><td>To</td><td>{{ $quotation->to_name ?? '—' }}</td></tr>
                     <tr><td>Address</td><td>{{ $quotation->address ?? '—' }}</td></tr>
-                    <tr><td>Location</td><td>{{ $quotation->location ?? '—' }}</td></tr>
+                    <tr><td>Location / Company</td><td>{{ $quotation->location ?? '—' }}</td></tr>
                     <tr><td>PIC</td><td>{{ $quotation->pic_name ?? '—' }}</td></tr>
                     <tr><td>Phone</td><td>{{ $quotation->pic_phone ?? '—' }}</td></tr>
                     <tr><td>Email</td><td>{{ $quotation->pic_email ?? '—' }}</td></tr>
-                    <tr><td>Sales</td><td>{{ $quotation->sales_name ?? '—' }}</td></tr>
-                    <tr><td>Tanggal</td><td>{{ $quotation->quotation_date?->format('d/m/Y') ?? '—' }}</td></tr>
+                    <tr><td>Sales (Pemberi Task)</td><td>{{ $quotation->sales_name ?? '—' }}</td></tr>
+                    <tr><td>Tanggal</td><td>{{ $quotation->date?->format('d/m/Y') ?? '—' }}</td></tr>
                     <tr><td>Parameter</td><td>{{ $quotation->parameter_note ?? '—' }}</td></tr>
                 </table>
             </div>

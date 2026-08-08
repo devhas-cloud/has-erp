@@ -89,7 +89,7 @@ class ModulesTableSeeder extends Seeder
                 'description' => 'Menu quotation water configuration (parameter pH, Ammonia, COD, TSS dan Debit)',
                 'route_name' => 'water-configuration',
                 'icon' => 'fa fa-droplet',
-                'group' => 'Quotation',
+                'group' => 'Water',
             ],
         ];
 

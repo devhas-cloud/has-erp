@@ -102,4 +102,9 @@ class Task extends Model
     {
         return $this->hasMany(TaskProposal::class);
     }
+
+    public function quoteConfigurations(): HasMany
+    {
+        return $this->hasMany(QuoteConfiguration::class);
+    }
 }

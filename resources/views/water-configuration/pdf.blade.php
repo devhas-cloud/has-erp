@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>{{ $quotation->quotation_number }}</title>
+    <title>Quote Configuration #{{ $quotation->id }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -133,26 +133,26 @@
         <div class="npwp">NPWP : 02.593.153.6 027.000</div>
     </div>
 
-    <div class="doc-title">Quotation Water Configuration</div>
+    <div class="doc-title">Quote Configuration</div>
 
     <table class="info">
         <tr>
-            <td class="k">To</td>
-            <td>{{ $quotation->to_name }}</td>
+            <td class="k">Task</td>
+            <td>#{{ $quotation->task_id }} — {{ $quotation->task?->title }}</td>
             <td class="k">Sales</td>
             <td>{{ $quotation->sales_name }}</td>
         </tr>
         <tr>
-            <td class="k">Address</td>
-            <td>{{ $quotation->address }}</td>
+            <td class="k">To</td>
+            <td>{{ $quotation->to_name }}</td>
             <td class="k">Date</td>
-            <td>{{ $quotation->quotation_date?->format('d/m/Y') }}</td>
+            <td>{{ $quotation->date?->format('d/m/Y') }}</td>
         </tr>
         <tr>
-            <td class="k">Location</td>
+            <td class="k">Address</td>
+            <td>{{ $quotation->address }}</td>
+            <td class="k">Company</td>
             <td>{{ $quotation->location }}</td>
-            <td class="k">No. Quotation</td>
-            <td>{{ $quotation->quotation_number }}</td>
         </tr>
         <tr>
             <td class="k">PIC</td>
@@ -236,11 +236,5 @@
             </tr>
         </table>
     </div>
-
-    <script>
-        window.onload = function() {
-            window.print();
-        };
-    </script>
 </body>
 </html>

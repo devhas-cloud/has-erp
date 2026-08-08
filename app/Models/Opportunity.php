@@ -104,4 +104,9 @@ class Opportunity extends Model
     {
         return $this->hasMany(Task::class, 'opportunity_id');
     }
+
+    public function quoteConfigurations(): HasMany
+    {
+        return $this->hasMany(QuoteConfiguration::class);
+    }
 }
