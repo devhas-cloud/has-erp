@@ -9,6 +9,9 @@ class ProductImportService
 {
     private array $divisionLookup = [];
 
+    /** lowercase nama produk => code (untuk cek duplikat nama) */
+    private array $nameMap = [];
+
     private function resolveLookups(): void
     {
         // Build lowercase-keyed lookup for case-insensitive matching
@@ -133,6 +136,15 @@ class ProductImportService
     {
         $this->resolveLookups();
 
+        // Peta nama produk yang sudah ada (case-insensitive) untuk cek duplikat.
+        $this->nameMap = MasterProduct::query()
+            ->whereNotNull('name')
+            ->where('name', '!=', '')
+            ->select('code', 'name')
+            ->get()
+            ->mapWithKeys(fn ($p) => [mb_strtolower(trim($p->name)) => $p->code])
+            ->all();
+
         $handle = fopen($filePath, 'r');
         if (! $handle) {
             return ['success' => 0, 'failed' => 0, 'errors' => ['Cannot open file.']];
@@ -147,7 +159,7 @@ class ProductImportService
         $firstLine = fgets($handle);
         if ($firstLine === false || trim($firstLine) === '') {
             fclose($handle);
-            return ['success' => 0, 'failed' => 0, 'errors' => ['File is empty or invalid. CSV must have at least name and code columns.']];
+            return ['success' => 0, 'failed' => 0, 'errors' => ['File is empty or invalid. CSV must have at least a code column.']];
         }
 
         // Strip BOM (Excel prepends \xEF\xBB\xBF to CSV exports)
@@ -170,7 +182,7 @@ class ProductImportService
                 'success' => 0,
                 'failed' => 0,
                 'errors' => [
-                    "File is empty or invalid. CSV must have at least 'name' and 'code' columns. "
+                    "File is empty or invalid. CSV must have at least a 'code' column. "
                     . "First line read: \"{$display}\" (detected delimiter: '{$delimiter}'). "
                     . "If using Excel, try re-saving your CSV with comma (,) as delimiter instead of semicolon (;).",
                 ],
@@ -184,7 +196,7 @@ class ProductImportService
         $headers = array_map(fn($h) => mb_strtolower(trim($h)), $headers);
 
         // Validate that required headers exist
-        $requiredFields = ['name', 'code'];
+        $requiredFields = ['code'];
         $missingHeaders = [];
         foreach ($requiredFields as $field) {
             if (! in_array($field, $headers, true)) {
@@ -263,8 +275,19 @@ class ProductImportService
                     }
                 }
 
+                // Nama produk boleh kosong, tapi jika terisi tidak boleh duplikat (case-insensitive)
+                $name = $this->nullIfEmpty($data['name'] ?? '', 150);
+                if ($name !== null) {
+                    $nameKey = mb_strtolower($name);
+                    if (isset($this->nameMap[$nameKey]) && $this->nameMap[$nameKey] !== $data['code']) {
+                        $failed++;
+                        $errors[] = "Line {$lineNumber}: Nama produk '{$name}' sudah dipakai oleh produk dengan code {$this->nameMap[$nameKey]}.";
+                        continue;
+                    }
+                }
+
                 $record = [
-                    'name' => mb_substr($data['name'], 0, 150),
+                    'name' => $name,
                     'code' => mb_substr($data['code'], 0, 50),
                     'brand' => $this->nullIfEmpty($data['brand'] ?? '', 100),
                     'category' => $this->nullIfEmpty($data['category'] ?? '', 100),
@@ -277,11 +300,24 @@ class ProductImportService
                 $existing = MasterProduct::where('code', $data['code'])->first();
 
                 if ($existing) {
+                    $oldName = $existing->name;
                     $existing->update($record);
                     $updated++;
+
+                    // Jika nama berubah, hapus entri lama milik produk ini agar peta tetap akurat.
+                    if ($oldName !== null && $oldName !== $name) {
+                        $oldKey = mb_strtolower(trim($oldName));
+                        if (($this->nameMap[$oldKey] ?? null) === $data['code']) {
+                            unset($this->nameMap[$oldKey]);
+                        }
+                    }
                 } else {
                     MasterProduct::create($record);
                     $success++;
+                }
+
+                if ($name !== null) {
+                    $this->nameMap[$nameKey] = $data['code'];
                 }
             } catch (\Exception $e) {
                 $failed++;
