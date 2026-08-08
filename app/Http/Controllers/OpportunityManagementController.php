@@ -7,6 +7,7 @@ use App\Models\AccountContact;
 use App\Models\Activity;
 use App\Models\ActivityAttachment;
 use App\Models\Division;
+use App\Models\DivisionHandler;
 use App\Models\Forecast;
 use App\Models\Lead;
 use App\Models\Log;
@@ -217,7 +218,7 @@ class OpportunityManagementController extends Controller
 
         $data = $contacts->map(fn ($c) => [
             'id' => $c->id,
-            'text' => $c->full_name . ($c->email ? " ({$c->email})" : ''),
+            'text' => $c->full_name.($c->email ? " ({$c->email})" : ''),
         ]);
 
         return response()->json(['results' => $data]);
@@ -305,10 +306,12 @@ class OpportunityManagementController extends Controller
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $accountContacts = AccountContact::where('status', 'Active')->orderBy('full_name')->get();
         $categories = TaskCategory::with('division')->get();
+        $categoryHandlerMap = TaskCategory::pluck('use_division_handler', 'id')
+            ->map(fn ($v) => (bool) $v);
 
         return view('opportunity-management.show', compact(
             'opportunity', 'stages', 'forecasts', 'lossReasons', 'divisions',
-            'sources', 'users', 'accountCompanies', 'accountContacts', 'categories'
+            'sources', 'users', 'accountCompanies', 'accountContacts', 'categories', 'categoryHandlerMap'
         ));
     }
 
@@ -482,6 +485,7 @@ class OpportunityManagementController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
+            'handling_division_id' => 'nullable|exists:divisions,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
@@ -497,6 +501,12 @@ class OpportunityManagementController extends Controller
         $validated['opportunity_id'] = $opportunity->id;
 
         $assigneeIds = $request->input('assignees', []);
+        $handlingDivisionId = $request->input('handling_division_id');
+        if ($handlingDivisionId) {
+            $roster = DivisionHandler::where('division_id', $handlingDivisionId)->pluck('user_id')->all();
+            $assigneeIds = array_values(array_unique(array_merge($assigneeIds, $roster)));
+        }
+
         if (empty($assigneeIds)) {
             $assigneeIds = [Auth::id()];
         }

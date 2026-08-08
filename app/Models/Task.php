@@ -20,6 +20,7 @@ class Task extends Model
         'opportunity_id',
         'activity_id',
         'category_id',
+        'handling_division_id',
         'whatsapp_group_id',
         'title',
         'description',
@@ -48,6 +49,11 @@ class Task extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(TaskCategory::class, 'category_id');
+    }
+
+    public function handlingDivision(): BelongsTo
+    {
+        return $this->belongsTo(Division::class, 'handling_division_id');
     }
 
     public function division(): BelongsTo

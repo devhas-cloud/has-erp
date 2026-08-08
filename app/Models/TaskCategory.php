@@ -14,6 +14,11 @@ class TaskCategory extends Model
         'name',
         'description',
         'division_id',
+        'use_division_handler',
+    ];
+
+    protected $casts = [
+        'use_division_handler' => 'boolean',
     ];
 
     public function division(): BelongsTo

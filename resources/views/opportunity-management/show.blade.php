@@ -1100,6 +1100,20 @@
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="task-form-section-body">
+
+                            <div class="task-form-row" id="task-handling-division-container" style="display:none">
+                                <div class="form-group">
+                                    <label>Divisi</label>
+                                    <select name="handling_division_id" id="task-handling-division" style="width:100%">
+                                        <option value="">— Pilih Divisi —</option>
+                                        @foreach ($divisions as $d)
+                                            <option value="{{ $d->id }}">{{ $d->division_name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Anggota tim divisi akan otomatis menjadi assignee task.</div>
+                                </div>
+                            </div>
+
                             <div class="task-form-row">
                                 <div class="form-group">
                                     <label>Assign To</label>
@@ -1419,6 +1433,38 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
             minimumInputLength: 1
         });
     }
+});
+
+const categoryHandlerMap = @json($categoryHandlerMap);
+const fetchDivisionHandlersUrl = '{{ route('task-planner.fetch-division-handlers') }}';
+
+$(document).on('change', '#task-category-id', function() {
+    var enabled = categoryHandlerMap[$(this).val()] ? true : false;
+    $('#task-handling-division-container').toggle(enabled);
+    if (!enabled) {
+        $('#task-handling-division').val('');
+    }
+});
+
+$(document).on('change', '#task-handling-division', function() {
+    var divisionId = $(this).val();
+    if (!divisionId) return;
+    var $assignees = $('#task-assignees');
+    $.ajax({
+        url: fetchDivisionHandlersUrl,
+        data: { division_id: divisionId },
+        dataType: 'json',
+        success: function(res) {
+            $assignees.empty();
+            (res.results || []).forEach(function(u) {
+                $assignees.append(new Option(u.text, u.id, true, true));
+            });
+            $assignees.trigger('change');
+        },
+        error: function() {
+            toastr.error('Gagal memuat anggota divisi.');
+        }
+    });
 });
 
 const opportunityId = {{ $opportunity->id }};
@@ -1753,6 +1799,8 @@ function openCreateTaskModal() {
     $('#task-form')[0].reset();
     document.getElementById('taskModalTitle').textContent = 'Add Task';
     $('#task-assignees').val(null).trigger('change');
+    $('#task-handling-division-container').hide();
+    $('#task-handling-division').val('');
     new bootstrap.Modal(document.getElementById('taskModal')).show();
 }
 
@@ -1775,6 +1823,7 @@ $(document).on('click', '#btn-save-opportunity-task', function() {
             title: title,
             description: $('#task-description').val(),
             category_id: category,
+            handling_division_id: $('#task-handling-division').val(),
             due_date: dueDate,
             time: $('#task-time').val(),
             assignees: $('#task-assignees').val(),

@@ -11,6 +11,7 @@ use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\WaterConfigurationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -62,6 +63,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('task-planner/import-template', [TaskPlannerController::class, 'downloadTemplate'])->name('task-planner.template');
     Route::post('task-planner/import', [TaskPlannerController::class, 'import'])->name('task-planner.import');
     Route::get('task-planner/fetch-assignees', [TaskPlannerController::class, 'fetchAssignees'])->name('task-planner.fetch-assignees');
+    Route::get('task-planner/fetch-division-handlers', [TaskPlannerController::class, 'fetchDivisionHandlers'])->name('task-planner.fetch-division-handlers');
     Route::get('task-planner/fetch-whatsapp-groups', [TaskPlannerController::class, 'fetchWhatsAppGroups'])->name('task-planner.fetch-whatsapp-groups');
     Route::post('task-planner/{id}/approve', [TaskPlannerController::class, 'approve'])->name('task-planner.approve');
     Route::post('task-planner/{id}/reject', [TaskPlannerController::class, 'reject'])->name('task-planner.reject');
@@ -93,6 +95,14 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('product-management/template', [ProductManagementController::class, 'downloadTemplate'])->name('product-management.template');
     Route::post('product-management/import', [ProductManagementController::class, 'import'])->name('product-management.import');
     Route::resource('product-management', ProductManagementController::class);
+
+    Route::get('water-configuration/data', [WaterConfigurationController::class, 'data'])->name('water-configuration.data');
+    Route::post('water-configuration/{id}/submit', [WaterConfigurationController::class, 'submit'])->name('water-configuration.submit');
+    Route::post('water-configuration/{id}/approve', [WaterConfigurationController::class, 'approve'])->name('water-configuration.approve');
+    Route::post('water-configuration/{id}/reject', [WaterConfigurationController::class, 'reject'])->name('water-configuration.reject');
+    Route::get('water-configuration/{id}/print', [WaterConfigurationController::class, 'print'])->name('water-configuration.print');
+    Route::get('water-configuration/search-products', [WaterConfigurationController::class, 'searchProducts'])->name('water-configuration.search-products');
+    Route::resource('water-configuration', WaterConfigurationController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
         ->name('dashboard-task-planner.index');

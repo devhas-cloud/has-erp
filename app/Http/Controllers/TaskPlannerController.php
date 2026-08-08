@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DivisionHandler;
+use App\Models\Log;
 use App\Models\Notification;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\TaskProposal;
+use App\Models\TaskVisit;
 use App\Models\User;
 use App\Models\WhatsAppGroup;
-use App\Models\Log;
-use App\Models\TaskVisit;
 use App\Services\MentionParser;
 use App\Services\TaskExportService;
 use App\Services\TaskImportService;
@@ -37,7 +38,9 @@ class TaskPlannerController extends Controller
                 ->orWhere('division_id', $userDivisionId);
         })->get();
 
-        return view('task-planner.index', compact('whatsappGroups', 'users', 'categories', 'userId'));
+        return view('task-planner.index', compact(
+            'whatsappGroups', 'users', 'categories', 'userId'
+        ));
     }
 
     public function data(Request $request): JsonResponse
@@ -152,6 +155,17 @@ class TaskPlannerController extends Controller
         ]);
     }
 
+    private function mergeDivisionHandlerAssignees(array $assigneeIds, $handlingDivisionId): array
+    {
+        if (! $handlingDivisionId) {
+            return $assigneeIds;
+        }
+
+        $roster = DivisionHandler::where('division_id', $handlingDivisionId)->pluck('user_id')->all();
+
+        return array_values(array_unique(array_merge($assigneeIds, $roster)));
+    }
+
     private function renderStatusBadge(string $status): string
     {
         return match ($status) {
@@ -200,6 +214,23 @@ class TaskPlannerController extends Controller
         return response()->json(['results' => $results]);
     }
 
+    public function fetchDivisionHandlers(Request $request): JsonResponse
+    {
+        $request->validate([
+            'division_id' => 'required|exists:divisions,id',
+        ]);
+
+        $users = DivisionHandler::where('division_id', $request->input('division_id'))
+            ->with(['user.hierarchyRole'])
+            ->get()
+            ->map(fn ($dh) => [
+                'id' => $dh->user->id,
+                'text' => $dh->user->username.($dh->user->hierarchyRole ? ' ('.$dh->user->hierarchyRole->role_name.')' : ''),
+            ]);
+
+        return response()->json(['results' => $users]);
+    }
+
     public function fetchWhatsAppGroups(Request $request): JsonResponse
     {
         $query = WhatsAppGroup::with('division')->where('status', 'Active');
@@ -226,6 +257,7 @@ class TaskPlannerController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
+            'handling_division_id' => 'nullable|exists:divisions,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
@@ -240,6 +272,7 @@ class TaskPlannerController extends Controller
         $validated['status'] = 'todo';
 
         $assigneeIds = $request->input('assignees', []);
+        $assigneeIds = $this->mergeDivisionHandlerAssignees($assigneeIds, $request->input('handling_division_id'));
 
         if (empty($assigneeIds)) {
             $assigneeIds = [Auth::id()];
@@ -296,6 +329,7 @@ class TaskPlannerController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
+            'handling_division_id' => 'nullable|exists:divisions,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
@@ -318,6 +352,8 @@ class TaskPlannerController extends Controller
         }
 
         $assigneeIds = $request->input('assignees', []);
+        $assigneeIds = $this->mergeDivisionHandlerAssignees($assigneeIds, $request->input('handling_division_id'));
+
         if (empty($assigneeIds)) {
             $assigneeIds = [$task->creator_id];
         }
@@ -344,6 +380,7 @@ class TaskPlannerController extends Controller
             'whatsappGroup.division',
             'assignees.hierarchyRole',
             'proposals.uploader',
+            'handlingDivision.handlerUsers',
         ])->findOrFail($id);
 
         return view('task-planner.show', compact('task'));
@@ -403,11 +440,9 @@ class TaskPlannerController extends Controller
     {
         $task = Task::findOrFail($id);
 
-
         $validated = $request->validate([
             'status' => 'required|in:todo,in_progress,done',
         ]);
-
 
         // jika task category = "visit" maka wajib record google map location saat transition status done
         $taskCategory = $task->category;
@@ -431,8 +466,6 @@ class TaskPlannerController extends Controller
                 ], 422);
             }
         }
-
-
 
         $newStatus = $validated['status'];
         $oldStatus = $task->status;
@@ -458,7 +491,6 @@ class TaskPlannerController extends Controller
         }
 
         $task->update(['status' => $newStatus]);
-
 
         // cek apakah task terikat dengan lead
         $lead = $task->lead;

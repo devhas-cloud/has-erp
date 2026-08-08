@@ -333,8 +333,13 @@
         </div>
     </div>
 
+    <!-- Divisi Penanganan -->
+
     <div class="config-accordion" id="config-accordion">
         @foreach ($config as $key => $cfg)
+            @if (!empty($cfg['hidden']))
+                @continue
+            @endif
             <div class="config-card" id="card-{{ $key }}" data-table="{{ $key }}">
                 <div class="config-card-header" onclick="toggleSection('{{ $key }}')">
                     <div class="config-card-header-left">
@@ -394,7 +399,7 @@
                 <form id="config-form" autocomplete="off">
                     <input type="hidden" id="edit-id">
                     <input type="hidden" id="active-table">
-                    <div class="mb-3">
+                    <div class="mb-3" id="field-name-group">
                         <label for="field-name" class="form-label" id="label-name">Name</label>
                         <input type="text" class="form-control" id="field-name" name="name" required>
                     </div>
@@ -516,10 +521,13 @@
 
             if (!thead || !tbody) return;
 
+            const cfgMeta = configMeta[table] || {};
             const colLabels = columns.map(function(c) {
-                return c.replace(/_/g, ' ').replace(/\b\w/g, function(l) {
-                    return l.toUpperCase();
-                });
+                return (cfgMeta.column_labels && cfgMeta.column_labels[c]) ?
+                    cfgMeta.column_labels[c] :
+                    c.replace(/_/g, ' ').replace(/\b\w/g, function(l) {
+                        return l.toUpperCase();
+                    });
             });
 
             let theadHtml = '<tr><th style="width:50px;">#</th>';
@@ -708,8 +716,10 @@
             const hasStatus = cfg && cfg.rules && Object.keys(cfg.rules).includes('status');
             const descGroup = getElement('field-desc-group');
             const statusGroup = getElement('field-status-group');
+            const nameGroup = getElement('field-name-group');
             if (descGroup) descGroup.style.display = hasDesc ? '' : 'none';
             if (statusGroup) statusGroup.style.display = hasStatus ? '' : 'none';
+            if (nameGroup) nameGroup.style.display = (cfg && cfg.no_name_field) ? 'none' : '';
 
             if (mode === 'create') {
                 if (modalTitle) modalTitle.textContent = 'Tambah ' + label;
@@ -824,6 +834,40 @@
                         });
                         if (mode === 'edit' && itemData && itemData[key] !== undefined) {
                             sel.value = itemData[key];
+                        }
+                    });
+
+                    return;
+                } else if (ef.type === 'multi_select' && ef.source) {
+                    input = document.createElement('select');
+                    input.className = 'form-select';
+                    input.id = fieldId;
+                    input.name = key + '[]';
+                    input.multiple = true;
+                    div.appendChild(label);
+                    div.appendChild(input);
+                    container.appendChild(div);
+
+                    $.get('{{ route("configuration.list", ["table" => "__FK__"]) }}'.replace('__FK__', ef.source), { per_page: 100 }, function(res) {
+                        var sel = document.getElementById(fieldId);
+                        if (!sel) return;
+                        var nameCol = res.columns[0];
+                        res.data.forEach(function(item) {
+                            var opt = document.createElement('option');
+                            opt.value = item.id;
+                            opt.textContent = item[nameCol];
+                            sel.appendChild(opt);
+                        });
+                        $(sel).select2({
+                            theme: 'bootstrap-5',
+                            placeholder: 'Pilih anggota...',
+                            allowClear: true,
+                            width: '100%',
+                            dropdownParent: $('#configModal')
+                        });
+                        if (mode === 'edit' && itemData && itemData[key]) {
+                            var vals = Array.isArray(itemData[key]) ? itemData[key] : [itemData[key]];
+                            $(sel).val(vals).trigger('change');
                         }
                     });
 
@@ -961,7 +1005,11 @@
                 return;
             }
 
-            if (!nameVal) {
+            const cfg = configMeta[table];
+            const noNameField = cfg && cfg.no_name_field;
+            const firstCol = cfg && cfg.columns && cfg.columns[0] ? cfg.columns[0] : 'name';
+
+            if (!noNameField && !nameVal) {
                 $nameField.addClass('is-invalid').focus();
                 toastr.error('Field ' + ($('#label-name').text() || 'Name') + ' wajib diisi.');
                 return;
@@ -972,9 +1020,7 @@
             const data = {
                 _token: '{{ csrf_token() }}'
             };
-            const cfg = configMeta[table];
-            const firstCol = cfg && cfg.columns && cfg.columns[0] ? cfg.columns[0] : 'name';
-            data[firstCol] = nameVal;
+            if (!noNameField) data[firstCol] = nameVal;
             data.description = $('#field-description').val().trim();
             data.status = $('#field-status').val();
 
@@ -987,7 +1033,7 @@
                     var ef = cfg.extra_fields[key];
                     var input = document.getElementById('extra-' + key);
                     if (input) {
-                        data[key] = input.value;
+                        data[key] = (ef.type === 'multi_select') ? ($(input).val() || []) : input.value;
                     }
                 });
             }
@@ -1067,6 +1113,8 @@
         $(document).on('hidden.bs.modal', '#configModal', function() {
             resetModalForm();
         });
+
+        // ===================== DIVISI PENANGANAN =====================
 
         // Load counts on page init
         Object.keys(configMeta).forEach(function(table) {

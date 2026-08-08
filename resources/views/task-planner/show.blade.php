@@ -780,7 +780,14 @@
         <div class="col-lg-3">
             <div class="card-custom fade-in stagger-1">
                 <div class="card-header-custom">
-                    <span><i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees</span>
+                    <span>
+                        <i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees
+                        @if ($task->handlingDivision)
+                            <span class="assignee-badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px;padding:3px 8px">
+                                <i class="fa fa-building"></i> {{ $task->handlingDivision->division_name }}
+                            </span>
+                        @endif
+                    </span>
 
                     @php
                         $isCreator = $task->creator_id === Auth::id();
@@ -943,6 +950,16 @@
                                 </span>
                             </td>
                         </tr>
+                        @if ($task->handlingDivision)
+                            <tr>
+                                <td>Divisi Penanganan</td>
+                                <td>
+                                    <span class="assignee-badge" style="background:var(--accent-soft);color:var(--accent)">
+                                        <i class="fa fa-building"></i> {{ $task->handlingDivision->division_name }}
+                                    </span>
+                                </td>
+                            </tr>
+                        @endif
                         <tr>
                             <td>Division</td>
                             <td>{{ $task->division?->division_name ?? 'Global' }}</td>
