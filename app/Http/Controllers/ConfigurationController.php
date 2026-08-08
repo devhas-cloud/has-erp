@@ -18,6 +18,7 @@ use App\Models\Stage;
 use App\Models\TaskCategory;
 use App\Models\TaskRole;
 use App\Models\TypesAccountsCompany;
+use App\Models\User;
 use App\Models\WhatsAppGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,6 +47,43 @@ class ConfigurationController extends Controller
                         'type' => 'select',
                         'options' => ['Internal', 'External'],
                         'default' => 'Internal',
+                    ],
+                ],
+            ],
+            'users' => [
+                'model' => User::class,
+                'label' => 'User',
+                'slug' => 'users',
+                'columns' => ['username'],
+                'hidden' => true,
+            ],
+            'division-handlers' => [
+                'model' => Division::class,
+                'label' => 'Divisi Penanganan',
+                'slug' => 'division-handlers',
+                'columns' => ['division_name', 'members'],
+                'column_labels' => [
+                    'division_name' => 'Divisi',
+                    'members' => 'Anggota Penanganan',
+                ],
+                'rules' => [
+                    'division_id' => 'required|exists:divisions,id',
+                    'user_ids' => 'nullable|array',
+                    'user_ids.*' => 'exists:users,id',
+                ],
+                'no_name_field' => true,
+                'extra_fields' => [
+                    'division_id' => [
+                        'label' => 'Divisi',
+                        'type' => 'select_fk',
+                        'source' => 'divisions',
+                        'source_key' => 'division_name',
+                    ],
+                    'user_ids' => [
+                        'label' => 'Anggota Terlibat',
+                        'type' => 'multi_select',
+                        'source' => 'users',
+                        'source_key' => 'username',
                     ],
                 ],
             ],
@@ -216,11 +254,12 @@ class ConfigurationController extends Controller
                 'model' => TaskCategory::class,
                 'label' => 'Task Category',
                 'slug' => 'task-categories',
-                'columns' => ['name', 'description', 'division_id'],
+                'columns' => ['name', 'description', 'division_id', 'use_division_handler'],
                 'rules' => [
                     'name' => 'required|string|max:50',
                     'description' => 'nullable|string',
                     'division_id' => 'nullable|exists:divisions,id',
+                    'use_division_handler' => 'required|in:Yes,No',
                 ],
                 'display_map' => [
                     'division_id' => 'division.division_name',
@@ -231,6 +270,12 @@ class ConfigurationController extends Controller
                         'type' => 'select_fk',
                         'source' => 'divisions',
                         'source_key' => 'division_name',
+                    ],
+                    'use_division_handler' => [
+                        'label' => 'Divisi Penanganan',
+                        'type' => 'select',
+                        'options' => ['No', 'Yes'],
+                        'default' => 'No',
                     ],
                 ],
             ],
@@ -282,6 +327,10 @@ class ConfigurationController extends Controller
         $cfg = $this->getConfig($table);
         if (! $cfg) {
             return response()->json(['error' => 'Invalid table'], 404);
+        }
+
+        if ($table === 'division-handlers') {
+            return $this->listDivisionHandlers($request);
         }
 
         $search = $request->get('search', '');
@@ -348,6 +397,18 @@ class ConfigurationController extends Controller
             return response()->json(['error' => 'Invalid table'], 404);
         }
 
+        if ($table === 'division-handlers') {
+            $validated = $request->validate($cfg['rules']);
+            $division = Division::findOrFail($validated['division_id']);
+            $division->handlerUsers()->sync($validated['user_ids'] ?? []);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Divisi Penanganan {$division->division_name} berhasil disimpan.",
+                'data' => $division,
+            ]);
+        }
+
         $validated = $request->validate($cfg['rules']);
 
         $record = $cfg['model']::create($validated);
@@ -364,6 +425,18 @@ class ConfigurationController extends Controller
         $cfg = $this->getConfig($table);
         if (! $cfg) {
             return response()->json(['error' => 'Invalid table'], 404);
+        }
+
+        if ($table === 'division-handlers') {
+            $validated = $request->validate($cfg['rules']);
+            $division = Division::findOrFail($id);
+            $division->handlerUsers()->sync($validated['user_ids'] ?? []);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Divisi Penanganan {$division->division_name} berhasil diperbarui.",
+                'data' => $division,
+            ]);
         }
 
         $record = $cfg['model']::findOrFail($id);
@@ -386,12 +459,58 @@ class ConfigurationController extends Controller
             return response()->json(['error' => 'Invalid table'], 404);
         }
 
+        if ($table === 'division-handlers') {
+            $division = Division::findOrFail($id);
+            $division->handlerUsers()->sync([]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Divisi Penanganan {$division->division_name} berhasil dikosongkan.",
+            ]);
+        }
+
         $record = $cfg['model']::findOrFail($id);
         $record->delete();
 
         return response()->json([
             'success' => true,
             'message' => $cfg['label'].' berhasil dihapus.',
+        ]);
+    }
+
+    private function listDivisionHandlers(Request $request): JsonResponse
+    {
+        $search = $request->get('search', '');
+
+        $query = Division::whereHas('handlerUsers')->with('handlerUsers')->orderBy('division_name');
+
+        if ($search) {
+            $query->where('division_name', 'like', "%{$search}%");
+        }
+
+        $records = $query->paginate(15);
+
+        $data = collect($records->items())->map(function (Division $division) {
+            $division->members = $division->handlerUsers->pluck('username')->join(', ');
+            $division->division_id = $division->id;
+            $division->user_ids = $division->handlerUsers->pluck('id')->all();
+
+            return $division;
+        })->all();
+
+        return response()->json([
+            'data' => $data,
+            'pagination' => [
+                'current_page' => $records->currentPage(),
+                'last_page' => $records->lastPage(),
+                'per_page' => $records->perPage(),
+                'total' => $records->total(),
+                'from' => $records->firstItem(),
+                'to' => $records->lastItem(),
+            ],
+            'columns' => ['division_name', 'members'],
+            'label' => 'Divisi Penanganan',
+            'display_map' => null,
         ]);
     }
 

@@ -83,6 +83,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-box',
                 'group' => 'Master Data',
             ],
+            [
+                'module_code' => 'MOD_WATER_CONFIGURATION',
+                'module_name' => 'Water Configuration',
+                'description' => 'Menu quotation water configuration (parameter pH, Ammonia, COD, TSS dan Debit)',
+                'route_name' => 'water-configuration',
+                'icon' => 'fa fa-droplet',
+                'group' => 'Quotation',
+            ],
         ];
 
         foreach ($modules as $module) {

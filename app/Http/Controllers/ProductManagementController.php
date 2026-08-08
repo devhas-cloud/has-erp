@@ -93,7 +93,7 @@ class ProductManagementController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:150',
+            'name' => 'nullable|string|max:150|unique:master_products,name',
             'code' => 'required|string|max:50|unique:master_products,code',
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
@@ -118,10 +118,11 @@ class ProductManagementController extends Controller
 
     public function edit($id): JsonResponse
     {
-        $product = MasterProduct::findOrFail($id);
+        $product = MasterProduct::with('division')->findOrFail($id);
 
         $data = $product->toArray();
         $data['image_url'] = $product->image_url;
+        $data['division_name'] = $product->division?->division_name;
 
         return response()->json([
             'success' => true,
@@ -129,12 +130,20 @@ class ProductManagementController extends Controller
         ]);
     }
 
+    /**
+     * Detail produk ditampilkan via modal di halaman index (bukan view terpisah).
+     */
+    public function show($id): JsonResponse
+    {
+        return $this->edit($id);
+    }
+
     public function update(Request $request, $id): JsonResponse
     {
         $product = MasterProduct::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:150',
+            'name' => 'nullable|string|max:150|unique:master_products,name,'.$product->id,
             'code' => 'required|string|max:50|unique:master_products,code,'.$product->id,
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
@@ -158,13 +167,6 @@ class ProductManagementController extends Controller
             'success' => true,
             'message' => 'Product berhasil diupdate.',
         ]);
-    }
-
-    public function show($id)
-    {
-        $product = MasterProduct::with('division')->findOrFail($id);
-
-        return view('product-management.show', compact('product'));
     }
 
     public function destroy($id): JsonResponse
