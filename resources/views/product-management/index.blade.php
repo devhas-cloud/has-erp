@@ -24,14 +24,6 @@
 @endsection
 
 @section('content')
-@php
-    $user = Auth::user();
-    $canCreate = $user->role === 'Admin'
-        || \App\Models\UserAccessControl::where('user_id', $user->id)
-            ->whereHas('module', fn ($q) => $q->where('module_code', 'MOD_PRODUCT_MANAGEMENT'))
-            ->where('can_create', true)
-            ->exists();
-@endphp
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Product Management</h1>
@@ -271,9 +263,11 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+                @if($canUpdate)
                 <button type="button" class="btn btn-primary btn-sm" id="btn-detail-edit">
                     <i class="fa-solid fa-pen me-1"></i> Edit
                 </button>
+                @endif
             </div>
         </div>
     </div>
@@ -344,8 +338,12 @@ function initProductTable() {
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1">';
                     btn += '<button class="btn-icon" title="Detail" onclick="openDetailModal(' + data + ')"><i class="fa-solid fa-eye"></i></button>';
+                    @if($canUpdate)
                     btn += '<button class="btn-icon" title="Edit" onclick="openEditModal(' + data + ')"><i class="fa-solid fa-pen"></i></button>';
+                    @endif
+                    @if($canDelete)
                     btn += '<button class="btn-icon danger" title="Hapus" onclick="deleteProduct(' + data + ', \'' + row.name + '\')"><i class="fa-solid fa-trash-can"></i></button>';
+                    @endif
                     btn += '</div>';
                     return btn;
                 }
