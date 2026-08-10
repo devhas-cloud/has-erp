@@ -91,6 +91,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-droplet',
                 'group' => 'Water',
             ],
+            [
+                'module_code' => 'MOD_IMS_CONFIGURATION',
+                'module_name' => 'IMS Configuration',
+                'description' => 'Menu konfigurasi IMS yang berkaitan dengan material',
+                'route_name' => 'ims-configuration',
+                'icon' => 'fa fa-industry',
+                'group' => 'IMS',
+            ],
         ];
 
         foreach ($modules as $module) {

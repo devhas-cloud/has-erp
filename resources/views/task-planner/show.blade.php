@@ -915,7 +915,12 @@
                                     <td>{{ $qc->division?->division_name ?? '—' }}</td>
                                     <td>{!! $qc->statusBadgeHtml() !!}</td>
                                     <td class="text-center">
-                                        <a href="{{ route('water-configuration.show', ['water_configuration' => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
+                                        @php
+                                            $isImsConfig = strtolower($qc->division?->division_name ?? '') === 'ims';
+                                            $configShowRoute = $isImsConfig ? 'ims-configuration.show' : 'water-configuration.show';
+                                            $configShowParam = $isImsConfig ? 'ims_configuration' : 'water_configuration';
+                                        @endphp
+                                        <a href="{{ route($configShowRoute, [$configShowParam => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
                                     </td>
                                 </tr>
                                 @endforeach

@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\DashboardTaskPlannerController;
+use App\Http\Controllers\ImsConfigurationController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
@@ -108,6 +109,18 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('water-configuration/search-products', [WaterConfigurationController::class, 'searchProducts'])->name('water-configuration.search-products');
     Route::get('water-configuration/fetch-task', [WaterConfigurationController::class, 'fetchTask'])->name('water-configuration.fetch-task');
     Route::resource('water-configuration', WaterConfigurationController::class);
+
+    Route::get('ims-configuration/data', [ImsConfigurationController::class, 'data'])->name('ims-configuration.data');
+    Route::post('ims-configuration/{id}/submit', [ImsConfigurationController::class, 'submit'])->name('ims-configuration.submit');
+    Route::post('ims-configuration/{id}/approve', [ImsConfigurationController::class, 'approve'])->name('ims-configuration.approve');
+    Route::post('ims-configuration/{id}/reject', [ImsConfigurationController::class, 'reject'])->name('ims-configuration.reject');
+    Route::post('ims-configuration/{id}/unlock', [ImsConfigurationController::class, 'unlock'])->name('ims-configuration.unlock');
+    Route::post('ims-configuration/{id}/revise', [ImsConfigurationController::class, 'revise'])->name('ims-configuration.revise');
+    Route::get('ims-configuration/{id}/versions', [ImsConfigurationController::class, 'versions'])->name('ims-configuration.versions');
+    Route::get('ims-configuration/{id}/pdf', [ImsConfigurationController::class, 'pdf'])->name('ims-configuration.pdf');
+    Route::get('ims-configuration/search-products', [ImsConfigurationController::class, 'searchProducts'])->name('ims-configuration.search-products');
+    Route::get('ims-configuration/fetch-task', [ImsConfigurationController::class, 'fetchTask'])->name('ims-configuration.fetch-task');
+    Route::resource('ims-configuration', ImsConfigurationController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
         ->name('dashboard-task-planner.index');
