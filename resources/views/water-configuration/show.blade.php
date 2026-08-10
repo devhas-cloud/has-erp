@@ -148,9 +148,8 @@
             <div class="card-body-custom">
                 <table class="info-table">
                     <tr><td>Task</td><td>#{{ $quotation->task_id }} — {{ $quotation->task?->title ?? '—' }}</td></tr>
-                    <tr><td>To</td><td>{{ $quotation->to_name ?? '—' }}</td></tr>
+                    <tr><td>To</td><td>{{ $quotation->location ?? '—' }}</td></tr>
                     <tr><td>Address</td><td>{{ $quotation->address ?? '—' }}</td></tr>
-                    <tr><td>Location / Company</td><td>{{ $quotation->location ?? '—' }}</td></tr>
                     <tr><td>PIC</td><td>{{ $quotation->pic_name ?? '—' }}</td></tr>
                     <tr><td>Phone</td><td>{{ $quotation->pic_phone ?? '—' }}</td></tr>
                     <tr><td>Email</td><td>{{ $quotation->pic_email ?? '—' }}</td></tr>

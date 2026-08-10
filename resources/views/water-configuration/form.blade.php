@@ -55,12 +55,8 @@
         <div class="card-body-custom">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Location / Company</label>
-                    <input type="text" class="form-control" id="wc-location" value="{{ $quotation?->location }}" readonly>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">To (Contact)</label>
-                    <input type="text" class="form-control" id="wc-to" value="{{ $quotation?->to_name }}" readonly>
+                    <label class="form-label">To <small style="color:var(--text-muted);font-weight:400">(company)</small></label>
+                    <input type="text" class="form-control" id="wc-to" value="{{ $quotation?->location }}" readonly>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Address</label>
@@ -173,8 +169,7 @@ const wcFetchTaskUrl = '{{ route("water-configuration.fetch-task") }}';
 function applyTaskData(data) {
     $('#wc-task-id').val(data.task_id || '');
     $('#wc-opportunity-id').val(data.opportunity_id || '');
-    $('#wc-location').val(data.location || '');
-    $('#wc-to').val(data.to_name || '');
+    $('#wc-to').val(data.location || '');
     $('#wc-address').val(data.address || '');
     $('#wc-pic-name').val(data.pic_name || '');
     $('#wc-pic-phone').val(data.pic_phone || '');
@@ -189,7 +184,7 @@ $(document).on('change', '#wc-task', function() {
     var taskId = $(this).val();
     if (!taskId) {
         applyTaskData({
-            task_id: '', opportunity_id: '', location: '', to_name: '',
+            task_id: '', opportunity_id: '', to_name: '',
             address: '', pic_name: '', pic_phone: '', pic_email: '', sales_name: '', date: ''
         });
         return;

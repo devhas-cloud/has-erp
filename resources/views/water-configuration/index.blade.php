@@ -30,8 +30,7 @@
                     <tr>
                         <th style="width:50px">#</th>
                         <th>Opportunity</th>
-                        <th>Company</th>
-                        <th>To (Contact)</th>
+                        <th>To (Company)</th>
                         <th>Tanggal</th>
                         <th>Item</th>
                         <th>Dibuat Oleh</th>
@@ -102,9 +101,6 @@ function initWcTable() {
                 }
             },
             { data: 'location', orderable: false, searchable: true,
-                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
-            },
-            { data: 'to_name', orderable: false, searchable: true,
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'date', orderable: true, searchable: false },

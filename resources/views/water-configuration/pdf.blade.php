@@ -144,15 +144,15 @@
         </tr>
         <tr>
             <td class="k">To</td>
-            <td>{{ $quotation->to_name }}</td>
+            <td>{{ $quotation->location }}</td>
             <td class="k">Date</td>
             <td>{{ $quotation->date?->format('d/m/Y') }}</td>
         </tr>
         <tr>
             <td class="k">Address</td>
             <td>{{ $quotation->address }}</td>
-            <td class="k">Company</td>
-            <td>{{ $quotation->location }}</td>
+            <td></td>
+            <td></td>
         </tr>
         <tr>
             <td class="k">PIC</td>
