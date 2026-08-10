@@ -134,17 +134,22 @@ class WaterConfigurationController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        // Hanya tampilkan versi terbaru tiap group (group_id null => versi tunggal lama).
+        $divisionId = Division::where('division_name', 'WATER')->value('id');
+
+        // Hanya tampilkan versi terbaru tiap group milik divisi WATER.
         $latestIds = QuoteConfiguration::query()
             ->selectRaw('MAX(id) as id')
+            ->where('division_id', $divisionId)
             ->groupBy('group_id')
             ->pluck('id');
 
         $query = QuoteConfiguration::whereIn('id', $latestIds)
+            ->where('division_id', $divisionId)
             ->with(['creator', 'task', 'opportunity.accountCompany', 'opportunity.accountContact']);
 
         $recordsTotal = QuoteConfiguration::query()
             ->selectRaw('MAX(id) as id')
+            ->where('division_id', $divisionId)
             ->groupBy('group_id')
             ->get()
             ->count();
