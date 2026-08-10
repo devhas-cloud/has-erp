@@ -846,6 +846,8 @@
             </div>
 
             <!-- ── Visit Location ── -->
+            <!-- Tampil Jika category task visiting -->
+            @if (strtolower($task->category->name) === 'visiting' or strtolower($task->category->name) === 'visit')
             <div class="card-custom fade-in stagger-4 mt-4">
                 <div class="card-header-custom">
                     <span><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Visit Location</span>
@@ -865,8 +867,10 @@
                     <div class="visit-empty"><i class="fa fa-spinner fa-spin"></i> Loading...</div>
                 </div>
             </div>
+            @endif
 
             <!-- ── Proposal Files ── -->
+            @if (strtolower($task->category->name) === 'proposal')
             <div class="card-custom fade-in stagger-3 mt-4">
                 <div class="card-header-custom">
                     <span><i class="fa fa-file-pdf me-2" style="color:var(--accent)"></i>Proposal Files</span>
@@ -883,6 +887,44 @@
                     </div>
                 </div>
             </div>
+            @endif
+
+            <!-- ── Quote Configuration ── -->
+            @if (strtolower($task->category?->name) === 'quote')
+            <div class="card-custom fade-in stagger-3 mt-4">
+                <div class="card-header-custom">
+                    <span><i class="fa fa-clipboard-check me-2" style="color:var(--accent)"></i>Configuration</span>
+                </div>
+                <div class="card-body-custom">
+                    @if ($quoteConfigurations->isEmpty())
+                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">Belum ada configuration.</div>
+                    @else
+                        <table class="table table-sm align-middle mb-0" style="font-size:12.5px">
+                            <thead>
+                                <tr style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">
+                                    <th style="width:36px">No</th>
+                                    <th>Divisi</th>
+                                    <th>Status</th>
+                                    <th class="text-center" style="width:44px">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($quoteConfigurations as $i => $qc)
+                                <tr>
+                                    <td>{{ $i + 1 }}</td>
+                                    <td>{{ $qc->division?->division_name ?? '—' }}</td>
+                                    <td>{!! $qc->statusBadgeHtml() !!}</td>
+                                    <td class="text-center">
+                                        <a href="{{ route('water-configuration.show', ['water_configuration' => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    @endif
+                </div>
+            </div>
+            @endif
 
             <div class="card-custom fade-in stagger-2 mt-4">
                 <div class="card-header-custom">
@@ -1104,14 +1146,14 @@
         // ── Proposal Upload ──
         var taskId = {{ $task->id }};
         var proposalBaseUrl = '{{ route('task-planner.index') }}/' + taskId + '/proposals';
+        var proposalMaxUpload = {{ \Symfony\Component\HttpFoundation\File\UploadedFile::getMaxFilesize() }};
 
         function loadProposals() {
             $.get(proposalBaseUrl, function(res) {
                 var html = '';
                 if (res.data && res.data.length > 0) {
                     res.data.forEach(function(p) {
-                        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--card-border)">' +
-                            '<div style="display:flex;align-items:center;gap:10px">' +
+                        var fileBlock = '<div style="display:flex;align-items:center;gap:10px">' +
                             '<i class="fa fa-file-pdf" style="color:#dc2626;font-size:18px"></i>' +
                             '<div>' +
                             '<div style="font-weight:600;font-size:13px">v' + p.version + ': ' + escapeHtml(p.original_name) + '</div>' +
@@ -1119,8 +1161,15 @@
                             'oleh ' + escapeHtml(p.uploader_name) + ' · ' + p.file_size +
                             (p.notes ? ' · ' + escapeHtml(p.notes) : '') +
                             ' · ' + p.time +
-                            '</div></div></div>' +
-                            '<button onclick="openFilePreview(\'' + p.file_url + '\',\'' + escapeHtml(p.original_name) + '\')" class="btn btn-sm btn-outline-secondary" style="font-size:11px;cursor:pointer"><i class=\"fa fa-eye\"></i></button>' +
+                            '</div></div></div>';
+                        var actionBlock = '';
+                        if (p.exists) {
+                            actionBlock = '<button onclick="openFilePreview(\'' + p.file_url + '\',\'' + escapeHtml(p.original_name) + '\')" class="btn btn-sm btn-outline-secondary" style="font-size:11px;cursor:pointer"><i class="fa fa-eye"></i></button>';
+                        } else {
+                            actionBlock = '<span class="badge" style="background:#fee2e2;color:#b91c1c;font-size:10px"><i class="fa fa-triangle-exclamation"></i> File tidak ditemukan</span>';
+                        }
+                        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--card-border)">' +
+                            fileBlock + actionBlock +
                             '</div>';
                     });
                 } else {
@@ -1141,8 +1190,9 @@
                     toastr.error('Hanya file PDF yang diizinkan.');
                     return;
                 }
-                if (file.size > 20 * 1024 * 1024) {
-                    toastr.error('Maksimal 20MB.');
+                var maxMb = Math.round(proposalMaxUpload / 1024 / 1024);
+                if (file.size > proposalMaxUpload) {
+                    toastr.error('Maksimal ' + maxMb + 'MB.');
                     return;
                 }
                 Swal.fire({
@@ -1168,7 +1218,9 @@
                         }).then(function(res) {
                             return res;
                         }).catch(function(xhr) {
-                            var msg = xhr.responseJSON?.message || 'Gagal upload.';
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : 'Gagal upload (HTTP ' + xhr.status + '). Periksa ukuran file atau coba lagi.';
                             Swal.showValidationMessage(msg);
                         });
                     }

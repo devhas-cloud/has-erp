@@ -8,9 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('tasks', function (Blueprint $table) {
-            $table->foreignId('handling_division_id')->nullable()
-                ->after('category_id')
+        Schema::table('quote_configurations', function (Blueprint $table) {
+            $table->foreignId('division_id')->nullable()->after('id')
                 ->constrained('divisions')
                 ->nullOnDelete();
         });
@@ -18,8 +17,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('tasks', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('handling_division_id');
+        Schema::table('quote_configurations', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('division_id');
         });
     }
 };

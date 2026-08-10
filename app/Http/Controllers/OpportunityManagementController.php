@@ -33,7 +33,7 @@ class OpportunityManagementController extends Controller
         $stages = Stage::where('status', 'Active')->get();
         $forecasts = Forecast::where('status', 'Active')->get();
         $lossReasons = LossReason::where('status', 'Active')->get();
-        $divisions = Division::where('status', 'Active')->get();
+        $divisions = Division::where('type', 'External')->where('status', 'Active')->get();
         $sources = Source::where('status', 'Active')->get();
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();

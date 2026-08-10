@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DivisionHandler;
 use App\Models\Log;
 use App\Models\Notification;
+use App\Models\QuoteConfiguration;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
@@ -19,8 +20,10 @@ use App\Services\TaskXlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class TaskPlannerController extends Controller
 {
@@ -383,7 +386,19 @@ class TaskPlannerController extends Controller
             'handlingDivision.handlerUsers',
         ])->findOrFail($id);
 
-        return view('task-planner.show', compact('task'));
+        // Config terbaru per group (riwayat/versi) untuk task ini.
+        $latestIds = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('task_id', $task->id)
+            ->groupBy(DB::raw('COALESCE(group_id, id)'))
+            ->pluck('id');
+
+        $quoteConfigurations = QuoteConfiguration::with('division')
+            ->whereIn('id', $latestIds)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('task-planner.show', compact('task', 'quoteConfigurations'));
     }
 
     public function approve($id): JsonResponse
@@ -851,27 +866,67 @@ class TaskPlannerController extends Controller
                 'version' => $p->version,
                 'original_name' => $p->original_name,
                 'notes' => $p->notes,
-                'file_url' => $p->file_url,
+                'file_url' => route('task-planner.proposal-view', ['id' => $id, 'proposal' => $p->id], false),
                 'file_size' => $p->file_size_formatted,
                 'uploader_name' => $p->uploader?->username ?? '—',
                 'created_at' => $p->created_at->toIso8601String(),
                 'time' => $p->created_at->diffForHumans(),
+                'exists' => $p->file_path && Storage::disk('public')->exists($p->file_path),
             ]);
 
         return response()->json(['data' => $proposals]);
+    }
+
+    /**
+     * Sajikan file proposal lewat route Laravel (streaming inline), menghindari
+     * ketergantungan static /storage yang bisa 403 karena origin/proxy.
+     */
+    public function viewProposal($id, $proposal)
+    {
+        $proposal = TaskProposal::where('id', $proposal)->where('task_id', $id)->firstOrFail();
+
+        if (! Storage::disk('public')->exists($proposal->file_path)) {
+            abort(404, 'File proposal tidak ditemukan.');
+        }
+
+        return Storage::disk('public')->response($proposal->file_path, $proposal->original_name, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$proposal->original_name.'"',
+        ]);
     }
 
     public function storeProposal(Request $request, $id): JsonResponse
     {
         $task = Task::findOrFail($id);
 
+        $maxUpload = UploadedFile::getMaxFilesize();
+
         $request->validate([
             'file' => 'required|file|mimes:pdf|max:20480',
             'notes' => 'nullable|string|max:500',
+        ], [
+            'file.uploaded' => 'File gagal diupload oleh server. Kemungkinan file melebihi batas upload server ('.round($maxUpload / 1024 / 1024).' MB). Periksa ukuran file lalu coba lagi.',
+            'file.mimes' => 'File harus berformat PDF.',
+            'file.max' => 'Ukuran file tidak boleh lebih dari 20MB.',
         ]);
 
         $file = $request->file('file');
+
+        if (! $file || ! $file->isValid()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File gagal diupload oleh server. Kemungkinan file melebihi batas upload server ('.round($maxUpload / 1024 / 1024).' MB). Periksa ukuran file lalu coba lagi.',
+            ], 422);
+        }
+
         $path = $file->store('task-proposals', 'public');
+
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan file ke server. Coba lagi atau hubungi administrator.',
+            ], 422);
+        }
 
         $latestVersion = TaskProposal::where('task_id', $task->id)->max('version') ?? 0;
 
@@ -894,7 +949,7 @@ class TaskPlannerController extends Controller
                 'version' => $proposal->version,
                 'original_name' => $proposal->original_name,
                 'notes' => $proposal->notes,
-                'file_url' => $proposal->file_url,
+                'file_url' => route('task-planner.proposal-view', ['id' => $id, 'proposal' => $proposal->id], false),
                 'file_size' => $proposal->file_size_formatted,
                 'uploader_name' => $proposal->uploader?->username ?? '—',
                 'created_at' => $proposal->created_at->toIso8601String(),

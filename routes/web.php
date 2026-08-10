@@ -74,6 +74,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('task-planner/{id}/visits', [TaskPlannerController::class, 'visits'])->name('task-planner.visits');
     Route::get('task-planner/{id}/proposals', [TaskPlannerController::class, 'fetchProposals'])->name('task-planner.proposals');
     Route::post('task-planner/{id}/proposals', [TaskPlannerController::class, 'storeProposal'])->name('task-planner.store-proposal');
+    Route::get('task-planner/{id}/proposals/{proposal}/view', [TaskPlannerController::class, 'viewProposal'])->name('task-planner.proposal-view');
     Route::resource('task-planner', TaskPlannerController::class);
 
     Route::get('opportunity-management/data', [OpportunityManagementController::class, 'data'])->name('opportunity-management.data');
@@ -100,6 +101,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('water-configuration/{id}/submit', [WaterConfigurationController::class, 'submit'])->name('water-configuration.submit');
     Route::post('water-configuration/{id}/approve', [WaterConfigurationController::class, 'approve'])->name('water-configuration.approve');
     Route::post('water-configuration/{id}/reject', [WaterConfigurationController::class, 'reject'])->name('water-configuration.reject');
+    Route::post('water-configuration/{id}/unlock', [WaterConfigurationController::class, 'unlock'])->name('water-configuration.unlock');
+    Route::post('water-configuration/{id}/revise', [WaterConfigurationController::class, 'revise'])->name('water-configuration.revise');
+    Route::get('water-configuration/{id}/versions', [WaterConfigurationController::class, 'versions'])->name('water-configuration.versions');
     Route::get('water-configuration/{id}/pdf', [WaterConfigurationController::class, 'pdf'])->name('water-configuration.pdf');
     Route::get('water-configuration/search-products', [WaterConfigurationController::class, 'searchProducts'])->name('water-configuration.search-products');
     Route::get('water-configuration/fetch-task', [WaterConfigurationController::class, 'fetchTask'])->name('water-configuration.fetch-task');

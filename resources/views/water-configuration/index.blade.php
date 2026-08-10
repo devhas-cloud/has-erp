@@ -68,6 +68,41 @@
         </div>
     </div>
 </div>
+
+{{-- Modal Track / Riwayat Versi --}}
+<div class="modal fade" id="wcTrackModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa-solid fa-clock-rotate-left me-2" style="color:var(--accent)"></i>Riwayat Versi</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Versi</th>
+                                <th>Status</th>
+                                <th>Tanggal</th>
+                                <th>Item</th>
+                                <th>Dibuat Oleh</th>
+                                <th class="text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wc-track-body">
+                            <tr>
+                                <td colspan="6" class="config-card-empty">
+                                    <span class="config-spinner"></span>Memuat...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endpush
 
 @section('scripts')
@@ -75,6 +110,7 @@
 let wcRejectModalInstance = null;
 let wcTable = null;
 let wcRejectId = null;
+let wcTrackModalInstance = null;
 
 const wcShowUrl = '{{ route("water-configuration.show", "__ID__") }}';
 const wcEditUrl = '{{ route("water-configuration.edit", "__ID__") }}';
@@ -82,6 +118,40 @@ const wcDeleteUrl = '{{ route("water-configuration.destroy", "__ID__") }}';
 const wcSubmitUrl = '{{ route("water-configuration.submit", "__ID__") }}';
 const wcApproveUrl = '{{ route("water-configuration.approve", "__ID__") }}';
 const wcRejectUrl = '{{ route("water-configuration.reject", "__ID__") }}';
+const wcVersionsUrl = '{{ route("water-configuration.versions", "__ID__") }}';
+const wcShowUrlBase = '{{ route("water-configuration.show", "__ID__") }}';
+
+function openTrackModal(id) {
+    $('#wc-track-body').html('<tr><td colspan="6" class="config-card-empty"><span class="config-spinner"></span>Memuat...</td></tr>');
+
+    $.get(wcVersionsUrl.replace('__ID__', id), function(res) {
+        var versions = res.versions || [];
+        if (versions.length === 0) {
+            $('#wc-track-body').html('<tr><td colspan="6" class="config-card-empty"><i class="fa-solid fa-inbox"></i>Belum ada riwayat versi.</td></tr>');
+        } else {
+            var html = '';
+            versions.forEach(function(v) {
+                var current = v.is_current ? ' <span class="badge" style="background:var(--accent);color:#fff;font-size:10px">AKTIF</span>' : '';
+                html += '<tr>';
+                html += '<td><strong>Versi ' + v.version + '</strong>' + current + '</td>';
+                html += '<td>' + v.status_badge + '</td>';
+                html += '<td>' + v.date + '</td>';
+                html += '<td class="text-center">' + v.item_count + '</td>';
+                html += '<td>' + v.creator_name + '</td>';
+                html += '<td class="text-center"><a href="' + v.show_url + '" class="btn-icon" title="View"><i class="fa fa-eye"></i></a></td>';
+                html += '</tr>';
+            });
+            $('#wc-track-body').html(html);
+        }
+    }).fail(function() {
+        $('#wc-track-body').html('<tr><td colspan="6" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Gagal memuat riwayat.</td></tr>');
+    });
+
+    if (!wcTrackModalInstance) {
+        wcTrackModalInstance = new bootstrap.Modal(document.getElementById('wcTrackModal'));
+    }
+    wcTrackModalInstance.show();
+}
 
 function initWcTable() {
     if (wcTable) {
@@ -96,8 +166,9 @@ function initWcTable() {
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
             { data: 'opportunity_name', orderable: false, searchable: true,
-                render: function(data) {
-                    return '<strong style="color:var(--text-primary)">' + data + '</strong>';
+                render: function(data, type, row) {
+                    var badge = row.version > 1 ? ' <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px;vertical-align:middle">v' + row.version + '</span>' : '';
+                    return '<strong style="color:var(--text-primary)">' + data + '</strong>' + badge;
                 }
             },
             { data: 'location', orderable: false, searchable: true,
@@ -111,6 +182,7 @@ function initWcTable() {
                 data: 'id', orderable: false, searchable: false, className: 'text-center',
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1">';
+                    btn += '<button class="btn-icon" title="Track / Riwayat" onclick="openTrackModal(' + data + ')"><i class="fa fa-clock-rotate-left"></i></button>';
                     btn += '<a href="' + wcShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
                     if (row.status === 'draft') {
                         btn += '<a href="' + wcEditUrl.replace('__ID__', data) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';

@@ -34,8 +34,8 @@ class TaskProposal extends Model
 
     public function getFileSizeFormattedAttribute(): string
     {
-        $path = Storage::path($this->file_path);
-        if (! file_exists($path)) {
+        $path = Storage::disk('public')->path($this->file_path);
+        if (! $path || ! file_exists($path)) {
             return '—';
         }
         $bytes = filesize($path);

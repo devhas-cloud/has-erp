@@ -134,9 +134,20 @@ class WaterConfigurationController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = QuoteConfiguration::with(['creator', 'task', 'opportunity.accountCompany', 'opportunity.accountContact']);
+        // Hanya tampilkan versi terbaru tiap group (group_id null => versi tunggal lama).
+        $latestIds = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('group_id')
+            ->pluck('id');
 
-        $recordsTotal = QuoteConfiguration::count();
+        $query = QuoteConfiguration::whereIn('id', $latestIds)
+            ->with(['creator', 'task', 'opportunity.accountCompany', 'opportunity.accountContact']);
+
+        $recordsTotal = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('group_id')
+            ->get()
+            ->count();
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {
@@ -172,6 +183,8 @@ class WaterConfigurationController extends Controller
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $quotation->id,
+                'group_id' => $quotation->group_id,
+                'version' => $quotation->version,
                 'opportunity_name' => $quotation->opportunity?->opportunity_name ?? $quotation->task?->title ?? '—',
                 'location' => $quotation->location ?? '—',
                 'to_name' => $quotation->to_name ?? '—',
@@ -182,6 +195,7 @@ class WaterConfigurationController extends Controller
                 'status' => $quotation->status,
                 'status_label' => $quotation->status_label,
                 'status_badge' => $quotation->statusBadgeHtml(),
+                'locked' => $quotation->isLocked(),
             ];
         }
 
@@ -213,6 +227,7 @@ class WaterConfigurationController extends Controller
                 $task = Task::findOrFail($validated['task_id']);
 
                 $quotation = QuoteConfiguration::create([
+                    'division_id' => Auth::user()->division_id,
                     'opportunity_id' => $task->opportunity_id,
                     'task_id' => $task->id,
                     'date' => $validated['date'] ?? $task->due_date,
@@ -220,7 +235,12 @@ class WaterConfigurationController extends Controller
                     'notes' => $validated['notes'] ?? null,
                     'status' => QuoteConfiguration::STATUS_DRAFT,
                     'created_by' => Auth::id(),
+                    'group_id' => null,
+                    'version' => 1,
+                    'is_current' => true,
                 ]);
+
+                $quotation->update(['group_id' => $quotation->id]);
 
                 $this->syncItems($quotation, $validated['items']);
 
@@ -248,15 +268,16 @@ class WaterConfigurationController extends Controller
     }
 
     /**
-     * Halaman form edit. Bisa diedit saat status Draft atau Rejected (untuk revisi).
+     * Halaman form edit. Hanya configuration berstatus Draft yang bisa diedit.
+     * Konfigurasi rejected/approved direvisi lewat "Buat Revisi" (revise).
      */
     public function edit($id)
     {
         $quotation = QuoteConfiguration::with(['items.product', 'task'])->findOrFail($id);
 
-        if (! in_array($quotation->status, [QuoteConfiguration::STATUS_DRAFT, QuoteConfiguration::STATUS_REJECTED])) {
+        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
             return redirect()->route('water-configuration.index')
-                ->with('error', 'Quote configuration yang disetujui atau menunggu approval tidak bisa diedit.');
+                ->with('error', 'Quote configuration yang bukan Draft tidak bisa diedit langsung. Gunakan Buat Revisi.');
         }
 
         $categories = $this->categorySuggestions();
@@ -344,10 +365,10 @@ class WaterConfigurationController extends Controller
     {
         $quotation = QuoteConfiguration::findOrFail($id);
 
-        if (! in_array($quotation->status, [QuoteConfiguration::STATUS_DRAFT, QuoteConfiguration::STATUS_REJECTED])) {
+        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
             return response()->json([
                 'success' => false,
-                'message' => 'Quote configuration yang disetujui atau menunggu approval tidak bisa diedit.',
+                'message' => 'Hanya configuration berstatus Draft yang bisa diedit. Gunakan Buat Revisi untuk configuration yang ditolak/approved.',
             ], 422);
         }
 
@@ -368,23 +389,13 @@ class WaterConfigurationController extends Controller
             DB::transaction(function () use ($quotation, $validated) {
                 $task = Task::findOrFail($validated['task_id']);
 
-                $data = [
+                $quotation->update([
                     'opportunity_id' => $task->opportunity_id,
                     'task_id' => $task->id,
                     'date' => $validated['date'] ?? $task->due_date,
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
-                ];
-
-                // Revisi konfigurasi yang ditolak => kembali ke Draft dan bersihkan data penolakan.
-                if ($quotation->status === QuoteConfiguration::STATUS_REJECTED) {
-                    $data['status'] = QuoteConfiguration::STATUS_DRAFT;
-                    $data['approval_note'] = null;
-                    $data['rejected_at'] = null;
-                    $data['final_checked_by'] = null;
-                }
-
-                $quotation->update($data);
+                ]);
 
                 $this->syncItems($quotation, $validated['items']);
             });
@@ -448,7 +459,9 @@ class WaterConfigurationController extends Controller
 
         $isSameDivisionApprover = $this->isSameDivisionApprover($quotation);
 
-        return view('water-configuration.show', compact('quotation', 'isSameDivisionApprover'));
+        $back = request('back');
+
+        return view('water-configuration.show', compact('quotation', 'isSameDivisionApprover', 'back'));
     }
 
     /**
@@ -523,11 +536,26 @@ class WaterConfigurationController extends Controller
             ], 403);
         }
 
-        $quotation->update([
-            'status' => QuoteConfiguration::STATUS_APPROVED,
-            'final_checked_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
+        DB::transaction(function () use ($quotation) {
+            $quotation->update([
+                'status' => QuoteConfiguration::STATUS_APPROVED,
+                'final_checked_by' => Auth::id(),
+                'approved_at' => now(),
+                'is_current' => true,
+            ]);
+
+            // Versi approved lain dalam group menjadi riwayat (bukan current) & diarsipkan.
+            if ($quotation->group_id) {
+                QuoteConfiguration::where('group_id', $quotation->group_id)
+                    ->where('id', '!=', $quotation->id)
+                    ->update(['is_current' => false]);
+
+                QuoteConfiguration::where('group_id', $quotation->group_id)
+                    ->where('id', '!=', $quotation->id)
+                    ->where('status', QuoteConfiguration::STATUS_APPROVED)
+                    ->update(['status' => QuoteConfiguration::STATUS_ARCHIVED]);
+            }
+        });
 
         $this->notifyCreator(
             $quotation,
@@ -595,6 +623,153 @@ class WaterConfigurationController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Quote configuration ditolak.',
+        ]);
+    }
+
+    /**
+     * Buka kunci konfigurasi yang sudah approved agar bisa direvisi (hanya approver divisi).
+     */
+    public function unlock($id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::with('creator')->findOrFail($id);
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_APPROVED) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya configuration berstatus Approved yang bisa dibuka kunci.',
+            ], 422);
+        }
+
+        if (! $this->isSameDivisionApprover($quotation)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya approver (user lain satu divisi dengan pembuat) yang bisa membuka kunci.',
+            ], 403);
+        }
+
+        $quotation->update([
+            'unlocked_by' => Auth::id(),
+            'unlocked_at' => now(),
+        ]);
+
+        Log::record(
+            'unlock_water_configuration',
+            "Quote Configuration #{$quotation->id} dibuka kunci oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kunci dibuka. Pembuat dapat membuat revisi baru.',
+        ]);
+    }
+
+    /**
+     * Buat versi baru (revisi) dari konfigurasi approved (setelah unlock) atau rejected.
+     * Header + detail disalin ke baris baru; versi lama tetap sebagai riwayat.
+     */
+    public function revise($id): JsonResponse
+    {
+        $source = QuoteConfiguration::with('items')->findOrFail($id);
+
+        $canRevise = $source->status === QuoteConfiguration::STATUS_REJECTED
+            || ($source->status === QuoteConfiguration::STATUS_APPROVED && $source->unlocked_at);
+
+        if (! $canRevise) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Configuration ini belum bisa direvisi. Kunci harus dibuka oleh approver terlebih dahulu.',
+            ], 422);
+        }
+
+        if ($source->created_by !== Auth::id() && Auth::user()->role !== 'Admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pembuat configuration yang bisa membuat revisi.',
+            ], 403);
+        }
+
+        $revision = DB::transaction(function () use ($source) {
+            // Sumber yang sudah approved menjadi riwayat (Archived) saat revisi dibuat.
+            if ($source->status === QuoteConfiguration::STATUS_APPROVED) {
+                $source->update([
+                    'status' => QuoteConfiguration::STATUS_ARCHIVED,
+                    'is_current' => false,
+                ]);
+            }
+
+            $revision = QuoteConfiguration::create([
+                'division_id' => Auth::user()->division_id,
+                'group_id' => $source->group_id ?: $source->id,
+                'version' => $source->nextVersion(),
+                'parent_id' => $source->id,
+                'is_current' => false,
+                'opportunity_id' => $source->opportunity_id,
+                'task_id' => $source->task_id,
+                'date' => $source->date,
+                'parameter_note' => $source->parameter_note,
+                'notes' => $source->notes,
+                'status' => QuoteConfiguration::STATUS_DRAFT,
+                'created_by' => Auth::id(),
+            ]);
+
+            foreach ($source->items as $item) {
+                $revision->items()->create([
+                    'product_id' => $item->product_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                    'sort_order' => $item->sort_order,
+                ]);
+            }
+
+            return $revision;
+        });
+
+        Log::record(
+            'revise_water_configuration',
+            "Revisi dibuat dari Configuration #{$source->id} menjadi #{$revision->id}",
+            self::MODULE_CODE,
+            $revision
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Revisi (versi '.$revision->version.') berhasil dibuat.',
+            'id' => $revision->id,
+        ]);
+    }
+
+    /**
+     * Daftar versi (riwayat) satu group configuration untuk modal Track.
+     */
+    public function versions($id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::findOrFail($id);
+        $groupId = $quotation->group_id ?: $quotation->id;
+
+        $versions = QuoteConfiguration::with(['creator', 'finalChecker'])
+            ->where('group_id', $groupId)
+            ->orderBy('version', 'desc')
+            ->get()
+            ->map(fn ($v) => [
+                'id' => $v->id,
+                'version' => $v->version,
+                'status' => $v->status,
+                'status_badge' => $v->statusBadgeHtml(),
+                'date' => $v->created_at?->format('d/m/Y H:i') ?? '—',
+                'creator_name' => $v->creator?->username ?? '—',
+                'item_count' => $v->items()->count(),
+                'is_current' => (bool) $v->is_current,
+                'show_url' => route('water-configuration.show', $v->id),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'versions' => $versions,
         ]);
     }
 

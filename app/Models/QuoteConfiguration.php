@@ -19,16 +19,26 @@ class QuoteConfiguration extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    public const STATUS_ARCHIVED = 'archived';
+
     public const STATUS_LABELS = [
         self::STATUS_DRAFT => 'Draft',
         self::STATUS_WAITING_APPROVAL => 'Waiting Approval',
         self::STATUS_APPROVED => 'Approved',
         self::STATUS_REJECTED => 'Rejected',
+        self::STATUS_ARCHIVED => 'Archived',
     ];
 
     protected $table = 'quote_configurations';
 
     protected $fillable = [
+        'division_id',
+        'group_id',
+        'version',
+        'parent_id',
+        'is_current',
+        'unlocked_by',
+        'unlocked_at',
         'opportunity_id',
         'task_id',
         'date',
@@ -48,6 +58,8 @@ class QuoteConfiguration extends Model
             'date' => 'date',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
+            'unlocked_at' => 'datetime',
+            'is_current' => 'boolean',
         ];
     }
 
@@ -71,9 +83,39 @@ class QuoteConfiguration extends Model
         return $this->belongsTo(Opportunity::class);
     }
 
+    public function division(): BelongsTo
+    {
+        return $this->belongsTo(Division::class);
+    }
+
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function revisionChildren(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    public function groupVersions(): HasMany
+    {
+        return $this->hasMany(self::class, 'group_id', 'group_id')->orderBy('version');
+    }
+
+    public function isLocked(): bool
+    {
+        return $this->status === self::STATUS_APPROVED && ! $this->unlocked_at;
+    }
+
+    public function nextVersion(): int
+    {
+        return ((int) $this->groupVersions()->max('version')) + 1;
     }
 
     // ── Data derived dari task/opportunity ──
@@ -149,6 +191,7 @@ class QuoteConfiguration extends Model
             self::STATUS_WAITING_APPROVAL => '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Waiting Approval</span>',
             self::STATUS_APPROVED => '<span class="status-badge status-active">Approved</span>',
             self::STATUS_REJECTED => '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Rejected</span>',
+            self::STATUS_ARCHIVED => '<span class="status-badge" style="background:#e2e8f0;color:#475569;">Archived</span>',
             default => '<span class="status-badge">'.ucfirst($this->status).'</span>',
         };
     }

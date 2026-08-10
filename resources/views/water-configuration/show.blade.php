@@ -54,6 +54,9 @@
 @endsection
 
 @section('content')
+@php
+    $backTaskId = $back && str_starts_with($back, 'task-') ? str_replace('task-', '', $back) : null;
+@endphp
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Configuration #{{ $quotation->id }}
@@ -62,9 +65,15 @@
         <p class="page-header-sub">Quote Configuration dari Task Quote #{{ $quotation->task_id }}</p>
     </div>
     <div class="page-header-actions">
-        <a href="{{ route('water-configuration.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
-        </a>
+        @if ($backTaskId)
+            <a href="{{ route('task-planner.show', $backTaskId) }}" class="btn btn-secondary btn-sm">
+                <i class="fa fa-arrow-left me-1"></i> Kembali ke Task
+            </a>
+        @else
+            <a href="{{ route('water-configuration.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fa fa-arrow-left me-1"></i> Kembali
+            </a>
+        @endif
         <a href="{{ route('water-configuration.pdf', $quotation->id) }}" target="_blank" class="btn-accent">
             <i class="fa fa-file-pdf me-1"></i> <span>View PDF</span>
         </a>
@@ -93,21 +102,52 @@
         @endif
     </div>
     <div class="spacer"></div>
+    <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px">Versi {{ $quotation->version }}</span>
+    <button type="button" class="btn btn-sm btn-soft" style="font-size:12px" onclick="openTrackModal()">
+        <i class="fa fa-clock-rotate-left me-1"></i> Riwayat
+    </button>
     <span>{!! $quotation->statusBadgeHtml() !!}</span>
+    @if($quotation->status === 'approved' && $quotation->isLocked())
+        <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px"><i class="fa fa-lock me-1"></i>Terkunci</span>
+    @elseif($quotation->status === 'approved')
+        <span class="badge" style="background:#fef3c7;color:#92400e;font-size:11px"><i class="fa fa-lock-open me-1"></i>Unlocked</span>
+    @endif
 </div>
 
 {{-- Actions --}}
-@if(in_array($quotation->status, ['draft', 'rejected']) && auth()->id() === $quotation->created_by)
+@if($quotation->status === 'draft' && auth()->id() === $quotation->created_by)
 <div class="wc-action-bar justify-content-end">
     <a href="{{ route('water-configuration.edit', $quotation->id) }}" class="btn btn-primary btn-sm">
-        <i class="fa fa-pen me-1"></i> {{ $quotation->status === 'rejected' ? 'Revisi & Edit' : 'Edit' }}
+        <i class="fa fa-pen me-1"></i> Edit
     </a>
-    @if($quotation->status === 'draft')
     <button type="button" class="btn btn-primary btn-sm" onclick="submitWc({{ $quotation->id }})">
         <i class="fa fa-paper-plane me-1"></i> Submit Approval
     </button>
-    @endif
 </div>
+@endif
+
+@if($quotation->status === 'rejected' && auth()->id() === $quotation->created_by)
+<div class="wc-action-bar justify-content-end">
+    <button type="button" class="btn btn-primary btn-sm" onclick="reviseWc({{ $quotation->id }})">
+        <i class="fa fa-copy me-1"></i> Buat Revisi
+    </button>
+</div>
+@endif
+
+@if($quotation->status === 'approved')
+    @if($quotation->isLocked() && $canApprove && $isSameDivisionApprover)
+    <div class="wc-action-bar justify-content-end">
+        <button type="button" class="btn btn-warning btn-sm" onclick="unlockWc({{ $quotation->id }})">
+            <i class="fa fa-lock-open me-1"></i> Buka Kunci
+        </button>
+    </div>
+    @elseif(! $quotation->isLocked() && auth()->id() === $quotation->created_by)
+    <div class="wc-action-bar justify-content-end">
+        <button type="button" class="btn btn-primary btn-sm" onclick="reviseWc({{ $quotation->id }})">
+            <i class="fa fa-copy me-1"></i> Buat Revisi
+        </button>
+    </div>
+    @endif
 @endif
 
 @if($quotation->status === 'waiting_approval')
@@ -261,16 +301,133 @@
         </div>
     </div>
 </div>
+
+{{-- Modal Track / Riwayat Versi --}}
+<div class="modal fade" id="wcTrackModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa-solid fa-clock-rotate-left me-2" style="color:var(--accent)"></i>Riwayat Versi</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Versi</th>
+                                <th>Status</th>
+                                <th>Tanggal</th>
+                                <th>Item</th>
+                                <th>Dibuat Oleh</th>
+                                <th class="text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wc-track-body">
+                            <tr>
+                                <td colspan="6" class="config-card-empty">
+                                    <span class="config-spinner"></span>Memuat...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endpush
 
 @section('scripts')
 <script>
 let wcRejectModalInstance = null;
 let wcRejectId = null;
+let wcTrackModalInstance = null;
 
 const wcSubmitUrl = '{{ route("water-configuration.submit", "__ID__") }}';
 const wcApproveUrl = '{{ route("water-configuration.approve", "__ID__") }}';
 const wcRejectUrl = '{{ route("water-configuration.reject", "__ID__") }}';
+const wcUnlockUrl = '{{ route("water-configuration.unlock", "__ID__") }}';
+const wcReviseUrl = '{{ route("water-configuration.revise", "__ID__") }}';
+const wcVersionsUrl = '{{ route("water-configuration.versions", "__ID__") }}';
+const wcEditUrl = '{{ route("water-configuration.edit", "__ID__") }}';
+
+function unlockWc(id) {
+    Swal.fire({
+        title: 'Buka Kunci?',
+        text: 'Pembuat akan dapat membuat revisi baru dari configuration ini.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Buka Kunci',
+        cancelButtonText: 'Batal'
+    }).then(function(result) {
+        if (!result.isConfirmed) {
+            return;
+        }
+        $.post(wcUnlockUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
+            .done(function(res) {
+                toastr.success(res.message || 'Kunci dibuka.');
+                setTimeout(function() { window.location.reload(); }, 800);
+            }).fail(function(xhr) {
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal membuka kunci.');
+            });
+    });
+}
+
+function reviseWc(id) {
+    Swal.fire({
+        title: 'Buat Revisi?',
+        text: 'Header & detail akan disalin menjadi versi baru (Draft). Versi lama tetap sebagai riwayat.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Buat Revisi',
+        cancelButtonText: 'Batal'
+    }).then(function(result) {
+        if (!result.isConfirmed) {
+            return;
+        }
+        $.post(wcReviseUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
+            .done(function(res) {
+                toastr.success(res.message || 'Revisi dibuat.');
+                setTimeout(function() { window.location.href = wcEditUrl.replace('__ID__', res.id); }, 800);
+            }).fail(function(xhr) {
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal membuat revisi.');
+            });
+    });
+}
+
+function openTrackModal() {
+    var id = {{ $quotation->id }};
+    $('#wc-track-body').html('<tr><td colspan="6" class="config-card-empty"><span class="config-spinner"></span>Memuat...</td></tr>');
+
+    $.get(wcVersionsUrl.replace('__ID__', id), function(res) {
+        var versions = res.versions || [];
+        if (versions.length === 0) {
+            $('#wc-track-body').html('<tr><td colspan="6" class="config-card-empty"><i class="fa-solid fa-inbox"></i>Belum ada riwayat versi.</td></tr>');
+        } else {
+            var html = '';
+            versions.forEach(function(v) {
+                var current = v.is_current ? ' <span class="badge" style="background:var(--accent);color:#fff;font-size:10px">AKTIF</span>' : '';
+                html += '<tr>';
+                html += '<td><strong>Versi ' + v.version + '</strong>' + current + '</td>';
+                html += '<td>' + v.status_badge + '</td>';
+                html += '<td>' + v.date + '</td>';
+                html += '<td class="text-center">' + v.item_count + '</td>';
+                html += '<td>' + v.creator_name + '</td>';
+                html += '<td class="text-center"><a href="' + v.show_url + '" class="btn-icon" title="View"><i class="fa fa-eye"></i></a></td>';
+                html += '</tr>';
+            });
+            $('#wc-track-body').html(html);
+        }
+    }).fail(function() {
+        $('#wc-track-body').html('<tr><td colspan="6" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Gagal memuat riwayat.</td></tr>');
+    });
+
+    if (!wcTrackModalInstance) {
+        wcTrackModalInstance = new bootstrap.Modal(document.getElementById('wcTrackModal'));
+    }
+    wcTrackModalInstance.show();
+}
 
 function submitWc(id) {
     Swal.fire({
