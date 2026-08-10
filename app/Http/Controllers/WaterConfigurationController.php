@@ -248,15 +248,15 @@ class WaterConfigurationController extends Controller
     }
 
     /**
-     * Halaman form edit. Hanya configuration berstatus Draft yang bisa diedit.
+     * Halaman form edit. Bisa diedit saat status Draft atau Rejected (untuk revisi).
      */
     public function edit($id)
     {
         $quotation = QuoteConfiguration::with(['items.product', 'task'])->findOrFail($id);
 
-        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
+        if (! in_array($quotation->status, [QuoteConfiguration::STATUS_DRAFT, QuoteConfiguration::STATUS_REJECTED])) {
             return redirect()->route('water-configuration.index')
-                ->with('error', 'Quote configuration yang sudah dikirim untuk approval tidak bisa diedit.');
+                ->with('error', 'Quote configuration yang disetujui atau menunggu approval tidak bisa diedit.');
         }
 
         $categories = $this->categorySuggestions();
@@ -288,12 +288,14 @@ class WaterConfigurationController extends Controller
     }
 
     /**
-     * Pencarian produk dari master_products untuk picker item.
-     * Hanya produk aktif milik divisi WATER.
+     * Pencarian produk master_products (hanya aktif milik divisi WATER).
+     * Format DataTables server-side agar bisa dipaginasi 100 baris/halaman.
      */
     public function searchProducts(Request $request): JsonResponse
     {
-        $q = trim((string) $request->input('q'));
+        $searchValue = $request->input('search.value', '');
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 100);
 
         $waterId = Division::where('division_name', 'WATER')->value('id');
 
@@ -302,26 +304,39 @@ class WaterConfigurationController extends Controller
             ->where('division_id', $waterId)
             ->orderBy('name');
 
-        if ($q !== '') {
-            $query->where(function ($builder) use ($q) {
-                $builder->where('name', 'like', "%{$q}%")
-                    ->orWhere('code', 'like', "%{$q}%")
-                    ->orWhere('brand', 'like', "%{$q}%");
+        $recordsTotal = $query->count();
+
+        if ($searchValue) {
+            $query->where(function ($builder) use ($searchValue) {
+                $builder->where('name', 'like', "%{$searchValue}%")
+                    ->orWhere('code', 'like', "%{$searchValue}%")
+                    ->orWhere('brand', 'like', "%{$searchValue}%")
+                    ->orWhere('category', 'like', "%{$searchValue}%")
+                    ->orWhere('description', 'like', "%{$searchValue}%");
             });
         }
 
-        $products = $query->limit(20)->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+        $recordsFiltered = $query->count();
+
+        $products = $query
+            ->skip($start)
+            ->take($length)
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+
+        $data = $products->map(fn ($product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'code' => $product->code,
+            'brand' => $product->brand,
+            'category' => $product->category,
+            'description' => $product->description,
+        ])->all();
 
         return response()->json([
-            'results' => $products->map(fn ($product) => [
-                'id' => $product->id,
-                'text' => $product->name,
-                'name' => $product->name,
-                'code' => $product->code,
-                'brand' => $product->brand,
-                'category' => $product->category,
-                'description' => $product->description,
-            ]),
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
         ]);
     }
 
@@ -329,10 +344,10 @@ class WaterConfigurationController extends Controller
     {
         $quotation = QuoteConfiguration::findOrFail($id);
 
-        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
+        if (! in_array($quotation->status, [QuoteConfiguration::STATUS_DRAFT, QuoteConfiguration::STATUS_REJECTED])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Quote configuration yang sudah dikirim untuk approval tidak bisa diedit.',
+                'message' => 'Quote configuration yang disetujui atau menunggu approval tidak bisa diedit.',
             ], 422);
         }
 
@@ -353,13 +368,23 @@ class WaterConfigurationController extends Controller
             DB::transaction(function () use ($quotation, $validated) {
                 $task = Task::findOrFail($validated['task_id']);
 
-                $quotation->update([
+                $data = [
                     'opportunity_id' => $task->opportunity_id,
                     'task_id' => $task->id,
                     'date' => $validated['date'] ?? $task->due_date,
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
-                ]);
+                ];
+
+                // Revisi konfigurasi yang ditolak => kembali ke Draft dan bersihkan data penolakan.
+                if ($quotation->status === QuoteConfiguration::STATUS_REJECTED) {
+                    $data['status'] = QuoteConfiguration::STATUS_DRAFT;
+                    $data['approval_note'] = null;
+                    $data['rejected_at'] = null;
+                    $data['final_checked_by'] = null;
+                }
+
+                $quotation->update($data);
 
                 $this->syncItems($quotation, $validated['items']);
             });

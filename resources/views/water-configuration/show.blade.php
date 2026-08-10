@@ -97,14 +97,16 @@
 </div>
 
 {{-- Actions --}}
-@if($quotation->status === 'draft' && auth()->id() === $quotation->created_by)
+@if(in_array($quotation->status, ['draft', 'rejected']) && auth()->id() === $quotation->created_by)
 <div class="wc-action-bar justify-content-end">
     <a href="{{ route('water-configuration.edit', $quotation->id) }}" class="btn btn-primary btn-sm">
-        <i class="fa fa-pen me-1"></i> Edit
+        <i class="fa fa-pen me-1"></i> {{ $quotation->status === 'rejected' ? 'Revisi & Edit' : 'Edit' }}
     </a>
+    @if($quotation->status === 'draft')
     <button type="button" class="btn btn-primary btn-sm" onclick="submitWc({{ $quotation->id }})">
         <i class="fa fa-paper-plane me-1"></i> Submit Approval
     </button>
+    @endif
 </div>
 @endif
 
@@ -135,6 +137,11 @@
     <div>
         <div style="font-weight:600;font-size:13px;color:#7f1d1d">Alasan Penolakan</div>
         <div style="font-size:13px;color:#7f1d1d">{{ $quotation->approval_note }}</div>
+        @if(auth()->id() === $quotation->created_by)
+        <div style="font-size:12px;color:#92400e;margin-top:2px">
+            <i class="fa fa-info-circle me-1"></i>Silakan revisi untuk di-submit ulang.
+        </div>
+        @endif
     </div>
 </div>
 @endif
@@ -318,7 +325,7 @@ function openRejectModal(id) {
     wcRejectModalInstance.show();
 }
 
-$('#btn-reject-wc').on('click', function() {
+$(document).on('click', '#btn-reject-wc', function() {
     var note = $('#wc-reject-note').val().trim();
     if (!note) {
         toastr.error('Alasan penolakan wajib diisi.');

@@ -203,7 +203,7 @@ function openRejectModal(id) {
     wcRejectModalInstance.show();
 }
 
-$('#btn-reject-wc').on('click', function() {
+$(document).on('click', '#btn-reject-wc', function() {
     var note = $('#wc-reject-note').val().trim();
     if (!note) {
         toastr.error('Alasan penolakan wajib diisi.');
