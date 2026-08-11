@@ -84,7 +84,7 @@
                             <tr>
                                 <th>Versi</th>
                                 <th>Status</th>
-                                <th>Tanggal</th>
+                                <th>Tanggal Dibuat</th>
                                 <th>Item</th>
                                 <th>Dibuat Oleh</th>
                                 <th class="text-center">Aksi</th>

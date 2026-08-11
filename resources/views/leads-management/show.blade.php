@@ -648,6 +648,13 @@
         .page-header-actions .btn-accent,
         .page-header-actions .btn-ghost { flex: 1; justify-content: center; }
     }
+
+    /* ── Collapsible Cards ── */
+    .card-collapsible .card-header-custom { cursor: pointer; }
+    .card-collapsible .card-body-custom { display: block; }
+    .card-collapsible.collapsed .card-body-custom { display: none; }
+    .card-collapsible .card-header-custom .chevron i { transition: transform .25s var(--ease); }
+    .card-collapsible:not(.collapsed) .card-header-custom .chevron i { transform: rotate(180deg); }
 </style>
 @endsection
 
@@ -789,11 +796,6 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-task" type="button" role="tab">
-                            <i class="fa fa-tasks me-1"></i> Task
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-noted" type="button" role="tab">
                             <i class="fa fa-sticky-note me-1"></i> Noted
                         </button>
@@ -836,18 +838,6 @@
                                 </div>
                             </div>
                     </div>
-                    <div class="tab-pane fade" id="tab-task" role="tabpanel">
-                        <div style="padding:12px 16px 0;display:flex;justify-content:flex-end">
-                            <button type="button" class="btn btn-sm btn-accent" style="height: 25px;" onclick="openCreateTaskModal()">
-                                <i class="fa fa-plus"></i> Add Task
-                            </button>
-                        </div>
-                        <div id="task-list">
-                            <div style="text-align:center;padding:20px;color:var(--text-muted)">
-                                <i class="fa fa-spinner fa-spin"></i> Loading...
-                            </div>
-                        </div>
-                    </div>
                     <div class="tab-pane fade" id="tab-noted" role="tabpanel">
                         <div class="empty-state">
                             <i class="fa fa-sticky-note"></i>
@@ -888,10 +878,32 @@
     <!-- ═══════════════ Right Column ═══════════════ -->
     <div class="col-sm-12 col-lg-3">
 
+        <!-- ── Task Card ── -->
+        <div class="card-custom fade-in stagger-1 card-collapsible">
+            <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
+                <span><i class="fa fa-tasks me-2" style="color:var(--accent)"></i>Task</span>
+                <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+            </div>
+            <div class="card-body-custom">
+                <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+                    <button type="button" class="btn btn-sm btn-accent" style="height: 25px;" onclick="openCreateTaskModal()">
+                        <i class="fa fa-plus"></i> Add Task
+                    </button>
+                </div>
+                <div id="task-list">
+                    <div style="text-align:center;padding:20px;color:var(--text-muted)">
+                        <i class="fa fa-spinner fa-spin"></i> Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+        <br>
+
         <!-- ── Contact Information ── -->
-        <div class="card-custom fade-in stagger-1">
-            <div class="card-header-custom">
+        <div class="card-custom fade-in stagger-1 card-collapsible collapsed">
+            <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
                 <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Contact Information</span>
+                <span class="chevron"><i class="fa fa-chevron-down"></i></span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
                 <div class="table-responsive">
@@ -911,9 +923,10 @@
         </div>
 
         <!-- ── Account Information ── -->
-        <div class="card-custom fade-in stagger-2 mt-4">
-            <div class="card-header-custom">
+        <div class="card-custom fade-in stagger-2 mt-4 card-collapsible collapsed">
+            <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
                 <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Information</span>
+                <span class="chevron"><i class="fa fa-chevron-down"></i></span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
                 <div class="table-responsive">
@@ -941,9 +954,10 @@
         </div>
 
         <!-- ── Additional Information ── -->
-        <div class="card-custom fade-in stagger-3 mt-4">
-            <div class="card-header-custom">
+        <div class="card-custom fade-in stagger-3 mt-4 card-collapsible collapsed">
+            <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
                 <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Info</span>
+                <span class="chevron"><i class="fa fa-chevron-down"></i></span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
                 <table class="table table-sm table-borderless mb-0 info-table">
@@ -2241,6 +2255,10 @@ function openFilePreview(url, name) {
 // ── Task ──
 function toggleTaskSection(header) {
     header.closest('.task-form-section').classList.toggle('open');
+}
+
+function toggleCard(el) {
+    $(el).closest('.card-collapsible').toggleClass('collapsed');
 }
 
 function openCreateTaskModal() {
