@@ -62,6 +62,9 @@ class WaterConfigurationController extends Controller
             ->where(function ($q) {
                 $q->whereNotNull('opportunity_id')->orWhereNotNull('lead_id');
             })
+            ->whereDoesntHave('quoteConfigurations', function ($q) {
+                $q->where('division_id', Auth::user()->division_id);
+            })
             ->orderByDesc('id')
             ->get();
     }
@@ -227,6 +230,15 @@ class WaterConfigurationController extends Controller
             'items.*.qty' => 'required|integer|min:1',
         ]);
 
+        if (QuoteConfiguration::where('task_id', $validated['task_id'])
+            ->where('division_id', Auth::user()->division_id)
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Divisi ini sudah memiliki configuration untuk task tersebut. Tidak bisa membuat configuration ganda.',
+            ], 422);
+        }
+
         try {
             $quotation = DB::transaction(function () use ($validated) {
                 $task = Task::findOrFail($validated['task_id']);
@@ -389,6 +401,16 @@ class WaterConfigurationController extends Controller
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
         ]);
+
+        if (QuoteConfiguration::where('task_id', $validated['task_id'])
+            ->where('division_id', Auth::user()->division_id)
+            ->where('group_id', '!=', $quotation->group_id)
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Divisi ini sudah memiliki configuration untuk task tersebut. Tidak bisa membuat configuration ganda.',
+            ], 422);
+        }
 
         try {
             DB::transaction(function () use ($quotation, $validated) {

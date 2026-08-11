@@ -31,13 +31,11 @@ class ImsConfigurationController extends Controller
      */
     public function create()
     {
-        $categories = $this->categorySuggestions();
         $tasks = $this->quoteTasks();
 
         return view('ims-configuration.form', [
             'quotation' => null,
             'items' => [],
-            'categories' => $categories,
             'tasks' => $tasks,
         ]);
     }
@@ -61,6 +59,9 @@ class ImsConfigurationController extends Controller
             ->where('status', 'in_progress')
             ->where(function ($q) {
                 $q->whereNotNull('opportunity_id')->orWhereNotNull('lead_id');
+            })
+            ->whereDoesntHave('quoteConfigurations', function ($q) {
+                $q->where('division_id', Auth::user()->division_id);
             })
             ->orderByDesc('id')
             ->get();
@@ -219,15 +220,23 @@ class ImsConfigurationController extends Controller
         $validated = $request->validate([
             'task_id' => 'required|exists:tasks,id',
             'date' => 'nullable|date',
-            'parameter_note' => 'required|string|max:255',
+            'parameter_note' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'nullable|exists:master_products,id',
-            'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
         ]);
+
+        if (QuoteConfiguration::where('task_id', $validated['task_id'])
+            ->where('division_id', Auth::user()->division_id)
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Divisi ini sudah memiliki configuration untuk task tersebut. Tidak bisa membuat configuration ganda.',
+            ], 422);
+        }
 
         try {
             $quotation = DB::transaction(function () use ($validated) {
@@ -287,7 +296,6 @@ class ImsConfigurationController extends Controller
                 ->with('error', 'Quote configuration yang bukan Draft tidak bisa diedit langsung. Gunakan Buat Revisi.');
         }
 
-        $categories = $this->categorySuggestions();
         $tasks = $this->quoteTasks();
 
         // Jika task yang direferensikan sudah 'done', tetap tampilkan agar bisa dipertahankan saat edit.
@@ -310,7 +318,6 @@ class ImsConfigurationController extends Controller
         return view('ims-configuration.form', [
             'quotation' => $quotation,
             'items' => $quotation->items,
-            'categories' => $categories,
             'tasks' => $tasks,
         ]);
     }
@@ -358,6 +365,7 @@ class ImsConfigurationController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
+            'price' => $product->price,
         ])->all();
 
         return response()->json([
@@ -382,15 +390,24 @@ class ImsConfigurationController extends Controller
         $validated = $request->validate([
             'task_id' => 'required|exists:tasks,id',
             'date' => 'nullable|date',
-            'parameter_note' => 'required|string|max:255',
+            'parameter_note' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'nullable|exists:master_products,id',
-            'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
         ]);
+
+        if (QuoteConfiguration::where('task_id', $validated['task_id'])
+            ->where('division_id', Auth::user()->division_id)
+            ->where('group_id', '!=', $quotation->group_id)
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Divisi ini sudah memiliki configuration untuk task tersebut. Tidak bisa membuat configuration ganda.',
+            ], 422);
+        }
 
         try {
             DB::transaction(function () use ($quotation, $validated) {
@@ -455,7 +472,7 @@ class ImsConfigurationController extends Controller
     public function show($id)
     {
         $quotation = QuoteConfiguration::with([
-            'items',
+            'items.product',
             'creator',
             'finalChecker',
             'task.opportunity.accountCompany',
@@ -783,7 +800,7 @@ class ImsConfigurationController extends Controller
     public function pdf($id)
     {
         $quotation = QuoteConfiguration::with([
-            'items',
+            'items.product',
             'creator',
             'finalChecker',
             'task.opportunity.accountCompany',
