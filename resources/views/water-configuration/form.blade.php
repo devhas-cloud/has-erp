@@ -134,7 +134,7 @@
                                 <code class="wc-part-display" style="color:var(--accent)">{{ $item->part_number ?: ($item->product?->code ?: '—') }}</code>
                             </td>
                             <td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="{{ $item->category }}"></td>
-                            <td><input type="text" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)" value="{{ $item->description }}"></td>
+                            <td><textarea rows="2" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)">{{ $item->description }}</textarea></td>
                             <td><input type="number" class="form-control form-control-sm wc-qty" value="{{ $item->qty }}" min="1"></td>
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
@@ -290,7 +290,7 @@ function addItemRow(item) {
     html += '<input type="hidden" class="wc-part" value="' + (item.code || item.part_number || '') + '">';
     html += '<code class="wc-part-display" style="color:var(--accent)">' + (item.code || item.part_number || '—') + '</code></td>';
     html += '<td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="' + (item.category || '') + '"></td>';
-    html += '<td><input type="text" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)" value="' + (item.description || item.name || '') + '"></td>';
+    html += '<td><textarea rows="2" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</textarea></td>';
     html += '<td><input type="number" class="form-control form-control-sm wc-qty" value="1" min="1"></td>';
     html += '<td class="text-center"><div class="d-flex justify-content-center gap-1">';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
@@ -519,7 +519,11 @@ $(document).ready(function() {
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'description', orderable: false, searchable: true,
-                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
+                render: function(data) {
+                    if (!data) return '<span style="color:var(--text-muted)">—</span>';
+                    var escaped = $('<div>').text(data).html();
+                    return escaped.replace(/\n/g, '<br>');
+                }
             }
         ]
     });

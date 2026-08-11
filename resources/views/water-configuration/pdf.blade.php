@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Quote Configuration #{{ $quotation->id }}</title>
+    <title>Quote Configuration {{ $quotation->opportunity->opportunity_name ?? 'N/A' }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -91,7 +91,6 @@
         .note {
             margin-top: 12px;
             font-size: 10.5px;
-            white-space: pre-line;
         }
         .sign {
             width: 100%;
@@ -138,7 +137,7 @@
     <table class="info">
         <tr>
             <td class="k">Task</td>
-            <td>#{{ $quotation->task_id }} — {{ $quotation->task?->title }}</td>
+            <td>{{ $quotation->opportunity->opportunity_name ?? 'N/A' }}</td>
             <td class="k">Sales</td>
             <td>{{ $quotation->sales_name }}</td>
         </tr>
@@ -200,7 +199,7 @@
                     <tr>
                         <td class="no-col">{{ $no++ }}</td>
                         <td class="pn-col">{{ $item->part_number }}</td>
-                        <td>{{ $item->description }}</td>
+                        <td>{!! nl2br(e($item->description)) !!}</td>
                         <td class="qty-col">{{ $item->qty }}</td>
                     </tr>
                 @endforeach
@@ -209,7 +208,7 @@
     </table>
 
     @if($quotation->notes)
-        <div class="note">Note :<br>{{ $quotation->notes }}</div>
+        <div class="note">Note :<br>{!! nl2br(e($quotation->notes)) !!}</div>
     @endif
 
     <div class="sign">

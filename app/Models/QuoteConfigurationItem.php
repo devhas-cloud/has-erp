@@ -16,6 +16,8 @@ class QuoteConfigurationItem extends Model
         'part_number',
         'description',
         'qty',
+        'price',
+        'unit',
         'sort_order',
     ];
 

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Detail Configuration #'.$quotation->id)
+@section('title', 'Detail Configuration '.$quotation->opportunity->opportunity_name)
 @section('page-title', 'Detail Configuration')
 
 @section('styles')
@@ -59,7 +59,7 @@
 @endphp
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Configuration #{{ $quotation->id }}
+        <h1 class="page-header-title">Configuration {{ $quotation->opportunity->opportunity_name }}
             <small style="font-size:14px;font-weight:400;color:var(--text-muted)">— {{ $quotation->task?->title ?? '—' }}</small>
         </h1>
         <p class="page-header-sub">IMS Configuration dari Task Quote #{{ $quotation->task_id }}</p>
@@ -194,7 +194,6 @@
             </div>
             <div class="card-body-custom">
                 <table class="info-table">
-                    <tr><td>Task</td><td>#{{ $quotation->task_id }} — {{ $quotation->task?->title ?? '—' }}</td></tr>
                     <tr><td>To</td><td>{{ $quotation->location ?? '—' }}</td></tr>
                     <tr><td>Address</td><td>{{ $quotation->address ?? '—' }}</td></tr>
                     <tr><td>PIC</td><td>{{ $quotation->pic_name ?? '—' }}</td></tr>
@@ -202,7 +201,6 @@
                     <tr><td>Email</td><td>{{ $quotation->pic_email ?? '—' }}</td></tr>
                     <tr><td>Sales (Pemberi Task)</td><td>{{ $quotation->sales_name ?? '—' }}</td></tr>
                     <tr><td>Tanggal</td><td>{{ $quotation->date?->format('d/m/Y') ?? '—' }}</td></tr>
-                    <tr><td>Parameter</td><td>{{ $quotation->parameter_note ?? '—' }}</td></tr>
                 </table>
             </div>
         </div>
@@ -221,8 +219,8 @@
                 </table>
                 <div class="alert alert-info py-2 px-3 mt-3 mb-0" style="font-size:12px">
                     <i class="fa fa-circle-info me-1"></i>
-                    Aturan: user divisi WATER (pembuat) tidak bisa approve dokumennya sendiri. Approval hanya dapat
-                    dilakukan oleh user lain yang satu divisi dengan pembuat (divisi WATER).
+                    Aturan: user divisi IMS (pembuat) tidak bisa approve dokumennya sendiri. Approval hanya dapat
+                    dilakukan oleh user lain yang satu divisi dengan pembuat (divisi IMS).
                 </div>
             </div>
         </div>
@@ -234,32 +232,44 @@
                 <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument ({{ $quotation->items->count() }} item)</span>
             </div>
             <div class="card-body-custom p-2">
-                @php $groups = $quotation->itemsGroupedByCategory(); $no = 1; @endphp
-                @foreach($groups as $category => $items)
-                    <div class="cat-title">{{ $category }}</div>
-                    <div class="table-responsive">
-                        <table class="table table-custom align-middle mb-0">
-                            <thead>
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:45px">No</th>
+                                <th>Produk</th>
+                                <th>Deskripsi</th>
+                                <th style="width:80px" class="text-center">Qty</th>
+                                <th style="width:150px" class="text-end">Harga</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $totalPrice = 0; @endphp
+                            @foreach($quotation->items as $no => $item)
+                                @php $totalPrice = $totalPrice + ($item->price * $item->qty); @endphp
                                 <tr>
-                                    <th style="width:45px">No</th>
-                                    <th style="width:170px">Part Number</th>
-                                    <th>Deskripsi</th>
-                                    <th style="width:60px" class="text-center">Qty</th>
+                                    <td class="text-center">{{ $no + 1 }}</td>
+                                    <td>
+                                        <strong>{{ $item->product?->name ?? ($item->part_number ?: '—') }}</strong>
+                                        @if($item->part_number)
+                                            <div style="font-size:11px;color:var(--text-muted)">{{ $item->part_number }}</div>
+                                        @endif
+                                    </td>
+                                    <td>{!! nl2br(e($item->description)) !!}</td>
+                                    <td class="text-center">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
+                                    @php $price = $item->price ?? $item->product?->price; @endphp
+                                    <td class="text-end">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($items as $item)
-                                    <tr>
-                                        <td class="text-center">{{ $no++ }}</td>
-                                        <td><code>{{ $item->part_number ?? '—' }}</code></td>
-                                        <td>{{ $item->description }}</td>
-                                        <td class="text-center">{{ $item->qty }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @endforeach
+                            @endforeach
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4" class="text-end"><strong>Total </strong></td>
+                                <td class="text-end"><strong> Rp {{ number_format($totalPrice, 0, ',', '.') }}</strong></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -269,7 +279,7 @@
                 <span><i class="fa-solid fa-note-sticky me-2" style="color:var(--accent)"></i>Catatan</span>
             </div>
             <div class="card-body-custom">
-                <p class="mb-0" style="white-space:pre-line;font-size:13px">{{ $quotation->notes }}</p>
+                <p class="mb-0" style="white-space:pre-line;font-size:13px">{!! nl2br(e($quotation->notes)) !!}</p>
             </div>
         </div>
         @endif

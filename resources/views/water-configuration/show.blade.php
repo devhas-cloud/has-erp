@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Detail Configuration #'.$quotation->id)
+@section('title', 'Detail Configuration '.$quotation->opportunity->opportunity_name)
 @section('page-title', 'Detail Configuration')
 
 @section('styles')
@@ -59,7 +59,7 @@
 @endphp
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Configuration #{{ $quotation->id }}
+        <h1 class="page-header-title">Configuration {{ $quotation->opportunity->opportunity_name }}
             <small style="font-size:14px;font-weight:400;color:var(--text-muted)">— {{ $quotation->task?->title ?? '—' }}</small>
         </h1>
         <p class="page-header-sub">Quote Configuration dari Task Quote #{{ $quotation->task_id }}</p>
@@ -194,7 +194,6 @@
             </div>
             <div class="card-body-custom">
                 <table class="info-table">
-                    <tr><td>Task</td><td>#{{ $quotation->task_id }} — {{ $quotation->task?->title ?? '—' }}</td></tr>
                     <tr><td>To</td><td>{{ $quotation->location ?? '—' }}</td></tr>
                     <tr><td>Address</td><td>{{ $quotation->address ?? '—' }}</td></tr>
                     <tr><td>PIC</td><td>{{ $quotation->pic_name ?? '—' }}</td></tr>

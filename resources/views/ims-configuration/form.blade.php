@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', $quotation ? 'Edit IMS Configuration #'.$quotation->id : 'Buat IMS Configuration')
+@section('title', $quotation ? 'Edit IMS Configuration '.$quotation->opportunity->opportunity_name : 'Buat IMS Configuration')
 @section('page-title', $quotation ? 'Edit IMS Configuration' : 'Buat IMS Configuration')
 
 @section('styles')
@@ -24,7 +24,7 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">{{ $quotation ? 'Edit IMS Configuration #'.$quotation->id : 'Buat IMS Configuration' }}</h1>
+        <h1 class="page-header-title">{{ $quotation ? 'Edit IMS Configuration '.$quotation->opportunity->opportunity_name : 'Buat IMS Configuration' }}</h1>
         <p class="page-header-sub">Pilih task quote, data customer otomatis terambil. Tambahkan item part, lalu simpan sebagai draft.</p>
     </div>
     <div class="page-header-actions">
@@ -96,10 +96,6 @@
                     <label class="form-label">Sales (Pemberi Task)</label>
                     <input type="text" class="form-control" id="wc-sales" value="{{ $quotation?->sales_name }}" readonly>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Parameter</label>
-                    <input type="text" id="wc-parameter" name="parameter_note" class="form-control" placeholder="cth: pH, Ammonia, COD, TSS dan Debit" value="{{ $quotation?->parameter_note }}">
-                </div>
             </div>
         </div>
     </div>
@@ -117,10 +113,11 @@
                     <thead>
                         <tr>
                             <th style="width:40px">#</th>
-                            <th style="min-width:260px">Produk (Part Number)</th>
-                            <th style="width:150px">Kategori</th>
+                            <th style="min-width:140px">Produk</th>
                             <th>Deskripsi</th>
-                            <th style="width:120px">Qty</th>
+                            <th style="width:90px">Qty</th>
+                            <th style="width:120px">Unit</th>
+                            <th style="width:160px">Harga</th>
                             <th class="text-center" style="width:130px">Aksi</th>
                         </tr>
                     </thead>
@@ -131,11 +128,18 @@
                             <td>
                                 <input type="hidden" class="wc-product-id" value="{{ $item->product_id }}">
                                 <input type="hidden" class="wc-part" value="{{ $item->part_number }}">
-                                <code class="wc-part-display" style="color:var(--accent)">{{ $item->part_number ?: ($item->product?->code ?: '—') }}</code>
+                                <strong style="font-size:13px">{{ $item->product?->name ?? ($item->part_number ?: '—') }}</strong>
+                                @if ($item->part_number)
+                                    <div style="font-size:11px;color:var(--text-muted)">{{ $item->part_number }}</div>
+                                @endif
                             </td>
-                            <td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="{{ $item->category }}"></td>
-                            <td><input type="text" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)" value="{{ $item->description }}"></td>
+                            <td><textarea rows="2" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)">{{ $item->description }}</textarea>
                             <td><input type="number" class="form-control form-control-sm wc-qty" value="{{ $item->qty }}" min="1"></td>
+                            <td><input type="text" class="form-control form-control-sm wc-unit" placeholder="cth: pcs, lot" value="{{ $item->unit }}"></td>
+                            <td>
+                                <input type="hidden" class="wc-price" value="{{ $item->price ?? $item->product?->price }}">
+                                <input type="text" class="form-control form-control-sm wc-price-display" value="{{ ($item->price ?? $item->product?->price) ? number_format($item->price ?? $item->product?->price, 0, ',', '.') : '—' }}" readonly>
+                            </td>
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
                                     <button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>
@@ -168,12 +172,6 @@
         </button>
     </div>
 </form>
-
-<datalist id="wc-category-list">
-    @foreach($categories as $category)
-        <option value="{{ $category }}"></option>
-    @endforeach
-</datalist>
 @endsection
 
 @push('modals')
@@ -284,14 +282,23 @@ function addItemRow(item) {
     item = item || {};
     wcRowIndex++;
 
+    var priceRaw = (item.price != null && item.price !== '') ? item.price : '';
+    var priceDisplay = priceRaw !== '' ? numberFormat(Number(priceRaw)) : '—';
+
     var html = '<tr data-row="' + wcRowIndex + '" class="wc-item-row">';
     html += '<td class="text-center wc-row-num">' + wcRowIndex + '</td>';
     html += '<td><input type="hidden" class="wc-product-id" value="' + (item.id || item.product_id || '') + '">';
     html += '<input type="hidden" class="wc-part" value="' + (item.code || item.part_number || '') + '">';
-    html += '<code class="wc-part-display" style="color:var(--accent)">' + (item.code || item.part_number || '—') + '</code></td>';
-    html += '<td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="' + (item.category || '') + '"></td>';
-    html += '<td><input type="text" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)" value="' + (item.description || item.name || '') + '"></td>';
+    html += '<strong style="font-size:13px">' + (item.name || item.code || '—') + '</strong>';
+    if (item.code) {
+        html += '<div style="font-size:11px;color:var(--text-muted)">' + item.code + '</div>';
+    }
+    html += '</td>';
+    html += '<td><textarea rows="2" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</textarea></td>';
     html += '<td><input type="number" class="form-control form-control-sm wc-qty" value="1" min="1"></td>';
+    html += '<td><input type="text" class="form-control form-control-sm wc-unit" placeholder="cth: pcs, lot" value=""></td>';
+    html += '<td><input type="hidden" class="wc-price" value="' + priceRaw + '">';
+    html += '<input type="text" class="form-control form-control-sm wc-price-display" value="' + priceDisplay + '" readonly></td>';
     html += '<td class="text-center"><div class="d-flex justify-content-center gap-1">';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>';
@@ -300,6 +307,10 @@ function addItemRow(item) {
     html += '</tr>';
 
     $('#wc-items-body').append(html);
+}
+
+function numberFormat(n) {
+    return n.toLocaleString('id-ID');
 }
 
 function removeItemRow(btn) {
@@ -312,41 +323,6 @@ function renumberItems() {
     $('#wc-items-body tr.wc-item-row').each(function() {
         n++;
         $(this).find('.wc-row-num').text(n);
-    });
-}
-
-function buildGroupHeader(cat) {
-    return '<tr class="wc-group-row">' +
-        '<td colspan="6" style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;padding:8px 14px;">' +
-        '<i class="fa fa-tag me-1"></i>' + (cat || 'Lainnya') +
-        '</td></tr>';
-}
-
-function applyGrouping() {
-    var $tbody = $('#wc-items-body');
-    var $rows = $tbody.find('tr.wc-item-row');
-    if ($rows.length === 0) {
-        $tbody.find('tr.wc-group-row').remove();
-        return;
-    }
-
-    var groups = [];
-    var groupIndex = {};
-    $rows.each(function() {
-        var cat = ($(this).find('.wc-category').val() || '').trim();
-        if (!(cat in groupIndex)) {
-            groupIndex[cat] = groups.length;
-            groups.push({ cat: cat, rows: [] });
-        }
-        groups[groupIndex[cat]].rows.push(this);
-    });
-
-    $tbody.empty();
-    groups.forEach(function(g) {
-        $tbody.append(buildGroupHeader(g.cat));
-        g.rows.forEach(function(r) {
-            $tbody.append(r);
-        });
     });
 }
 
@@ -370,7 +346,7 @@ function setEmptyState() {
     if ($('#wc-items-body tr.wc-item-row').length === 0) {
         if ($empty.length === 0) {
             $('#wc-items-body').html(
-                '<tr class="wc-empty-row"><td colspan="6" class="text-center" style="padding:24px;color:var(--text-muted);font-size:13px">Belum ada part. Klik <strong>Tambah Item</strong> untuk memilih.</td></tr>'
+                '<tr class="wc-empty-row"><td colspan="7" class="text-center" style="padding:24px;color:var(--text-muted);font-size:13px">Belum ada part. Klik <strong>Tambah Item</strong> untuk memilih.</td></tr>'
             );
         }
     } else if ($empty.length) {
@@ -379,7 +355,6 @@ function setEmptyState() {
 }
 
 function refreshItems() {
-    applyGrouping();
     renumberItems();
     setEmptyState();
 }
@@ -392,11 +367,6 @@ $(document).on('click', '.wc-move-up', function(e) {
 $(document).on('click', '.wc-move-down', function(e) {
     e.stopPropagation();
     moveItemRow($(this).closest('tr.wc-item-row'), 'down');
-});
-
-$(document).on('change', '.wc-category', function() {
-    applyGrouping();
-    renumberItems();
 });
 
 function collectItems() {
@@ -416,10 +386,11 @@ function collectItems() {
 
         items.push({
             product_id: $(this).find('.wc-product-id').val() || null,
-            category: $(this).find('.wc-category').val().trim(),
             part_number: $(this).find('.wc-part').val().trim(),
             description: desc,
-            qty: isNaN(qty) || qty < 1 ? 1 : qty
+            qty: isNaN(qty) || qty < 1 ? 1 : qty,
+            price: $(this).find('.wc-price').val().trim() || null,
+            unit: $(this).find('.wc-unit').val().trim() || null
         });
     });
 
@@ -442,7 +413,6 @@ $('#btn-save-wc').on('click', function() {
     var payload = {
         task_id: taskId,
         date: $('#wc-date').val(),
-        parameter_note: $('#wc-parameter').val(),
         notes: $('#wc-notes').val(),
         items: items
     };
@@ -519,7 +489,11 @@ $(document).ready(function() {
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'description', orderable: false, searchable: true,
-                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
+                render: function(data) {
+                    if (!data) return '<span style="color:var(--text-muted)">—</span>';
+                    var escaped = $('<div>').text(data).html();
+                    return escaped.replace(/\n/g, '<br>');
+                }
             }
         ]
     });
@@ -553,8 +527,8 @@ $(document).ready(function() {
                     id: rowData.id,
                     code: rowData.code,
                     name: rowData.name,
-                    category: rowData.category,
-                    description: rowData.description
+                    description: rowData.description,
+                    price: rowData.price
                 };
             }
         } else {

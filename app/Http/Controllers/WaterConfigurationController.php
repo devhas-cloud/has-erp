@@ -228,6 +228,8 @@ class WaterConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.unit' => 'nullable|string|max:50',
         ]);
 
         if (QuoteConfiguration::where('task_id', $validated['task_id'])
@@ -368,6 +370,7 @@ class WaterConfigurationController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
+            'price' => $product->price,
         ])->all();
 
         return response()->json([
@@ -400,6 +403,8 @@ class WaterConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.unit' => 'nullable|string|max:50',
         ]);
 
         if (QuoteConfiguration::where('task_id', $validated['task_id'])
@@ -748,6 +753,8 @@ class WaterConfigurationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
+                    'price' => $item->price,
+                    'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
             }
@@ -909,6 +916,8 @@ class WaterConfigurationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => $item['description'],
                 'qty' => (int) ($item['qty'] ?? 1),
+                'price' => $item['price'] ?? null,
+                'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
                 'updated_at' => now(),

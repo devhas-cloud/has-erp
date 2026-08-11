@@ -227,6 +227,8 @@ class ImsConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.unit' => 'nullable|string|max:50',
         ]);
 
         if (QuoteConfiguration::where('task_id', $validated['task_id'])
@@ -264,7 +266,7 @@ class ImsConfigurationController extends Controller
             });
 
             Log::record(
-                'create_water_configuration',
+                'create_ims_configuration',
                 "Quote Configuration #{$quotation->id} dibuat untuk task {$quotation->task?->title}",
                 self::MODULE_CODE,
                 $quotation
@@ -332,11 +334,11 @@ class ImsConfigurationController extends Controller
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 100);
 
-        $waterId = Division::where('division_name', 'IMS')->value('id');
+        $imsId = Division::where('division_name', 'IMS')->value('id');
 
         $query = MasterProduct::query()
             ->where('status', 'Active')
-            ->where('division_id', $waterId)
+            ->where('division_id', $imsId)
             ->orderBy('name');
 
         $recordsTotal = $query->count();
@@ -397,6 +399,8 @@ class ImsConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.unit' => 'nullable|string|max:50',
         ]);
 
         if (QuoteConfiguration::where('task_id', $validated['task_id'])
@@ -425,7 +429,7 @@ class ImsConfigurationController extends Controller
             });
 
             Log::record(
-                'update_water_configuration',
+                'update_ims_configuration',
                 "Quote Configuration #{$quotation->id} diupdate",
                 self::MODULE_CODE,
                 $quotation
@@ -457,7 +461,7 @@ class ImsConfigurationController extends Controller
         $quotation->delete();
 
         Log::record(
-            'delete_water_configuration',
+            'delete_ims_configuration',
             "Quote Configuration #{$quotation->id} dihapus",
             self::MODULE_CODE,
             $quotation
@@ -523,7 +527,7 @@ class ImsConfigurationController extends Controller
         $this->notifyApprovers($quotation);
 
         Log::record(
-            'submit_water_configuration',
+            'submit_ims_configuration',
             "Quote Configuration #{$quotation->id} dikirim untuk approval",
             self::MODULE_CODE,
             $quotation
@@ -589,7 +593,7 @@ class ImsConfigurationController extends Controller
         );
 
         Log::record(
-            'approve_water_configuration',
+            'approve_ims_configuration',
             "Quote Configuration #{$quotation->id} disetujui oleh ".Auth::user()->username,
             self::MODULE_CODE,
             $quotation
@@ -638,7 +642,7 @@ class ImsConfigurationController extends Controller
         );
 
         Log::record(
-            'reject_water_configuration',
+            'reject_ims_configuration',
             "Quote Configuration #{$quotation->id} ditolak oleh ".Auth::user()->username,
             self::MODULE_CODE,
             $quotation
@@ -677,7 +681,7 @@ class ImsConfigurationController extends Controller
         ]);
 
         Log::record(
-            'unlock_water_configuration',
+            'unlock_ims_configuration',
             "Quote Configuration #{$quotation->id} dibuka kunci oleh ".Auth::user()->username,
             self::MODULE_CODE,
             $quotation
@@ -745,6 +749,8 @@ class ImsConfigurationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
+                    'price' => $item->price,
+                    'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
             }
@@ -753,7 +759,7 @@ class ImsConfigurationController extends Controller
         });
 
         Log::record(
-            'revise_water_configuration',
+            'revise_ims_configuration',
             "Revisi dibuat dari Configuration #{$source->id} menjadi #{$revision->id}",
             self::MODULE_CODE,
             $revision
@@ -809,7 +815,7 @@ class ImsConfigurationController extends Controller
             'task.creator',
         ])->findOrFail($id);
 
-        $pdf = Pdf::loadView('water-configuration.pdf', compact('quotation'))
+        $pdf = Pdf::loadView('ims-configuration.pdf', compact('quotation'))
             ->setPaper('a4', 'portrait');
 
         return $pdf->stream('Quote-Configuration-'.$quotation->id.'.pdf');
@@ -906,6 +912,8 @@ class ImsConfigurationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => $item['description'],
                 'qty' => (int) ($item['qty'] ?? 1),
+                'price' => $item['price'] ?? null,
+                'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
                 'updated_at' => now(),

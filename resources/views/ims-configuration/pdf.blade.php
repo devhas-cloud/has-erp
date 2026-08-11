@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>IMS Configuration #{{ $quotation->id }}</title>
+    <title>IMS Configuration {{ $quotation->opportunity->opportunity_name ?? 'N/A' }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -84,6 +84,8 @@
         .no-col { width: 34px; text-align: center; }
         .pn-col { width: 130px; }
         .qty-col { width: 48px; text-align: center; }
+        .unit-col { width: 60px; text-align: center; }
+        .price-col { width: 90px; text-align: right; }
         .parameter {
             font-weight: 700;
             margin: 8px 0 8px;
@@ -91,7 +93,6 @@
         .note {
             margin-top: 12px;
             font-size: 10.5px;
-            white-space: pre-line;
         }
         .sign {
             width: 100%;
@@ -138,7 +139,7 @@
     <table class="info">
         <tr>
             <td class="k">Task</td>
-            <td>#{{ $quotation->task_id }} — {{ $quotation->task?->title }}</td>
+            <td>{{ $quotation->opportunity->opportunity_name ?? 'N/A' }}</td>
             <td class="k">Sales</td>
             <td>{{ $quotation->sales_name }}</td>
         </tr>
@@ -174,42 +175,43 @@
         </tr>
     </table>
 
-    <div class="parameter">Parameter {{ $quotation->parameter_note }}</div>
-
     @php
-        $groups = $quotation->itemsGroupedByCategory();
-        $no = 1;
         $totalItems = $quotation->items->count();
+        $totalPrice = 0;
     @endphp
 
     <table class="parts">
         <thead>
             <tr>
                 <th class="no-col">No</th>
-                <th class="pn-col">Part Number</th>
+                <th style="width:200px">Produk</th>
                 <th>List Part Instrument</th>
                 <th class="qty-col">Qty</th>
+                <th class="price-col">Harga</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($groups as $category => $items)
-                <tr class="cat-row">
-                    <td colspan="4">{{ $category }}</td>
+            @foreach($quotation->items as $no => $item)
+                <tr>
+                    <td class="no-col">{{ $no + 1 }}</td>
+                    <td>{{ $item->product?->name ?? ($item->part_number ?: '—') }}</td>
+                    <td>{!! nl2br(e($item->description)) !!}</td>
+                    <td class="qty-col">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
+                    @php $price = $item->price ?? $item->product?->price; @endphp
+                    <td class="price-col">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
                 </tr>
-                @foreach($items as $item)
-                    <tr>
-                        <td class="no-col">{{ $no++ }}</td>
-                        <td class="pn-col">{{ $item->part_number }}</td>
-                        <td>{{ $item->description }}</td>
-                        <td class="qty-col">{{ $item->qty }}</td>
-                    </tr>
-                @endforeach
             @endforeach
         </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" class="text-end"><strong>Total </strong></td>
+                <td class="price-col"><strong>{{ 'Rp '.number_format($quotation->items->sum(fn($item) => ($item->price ?? $item->product?->price) * $item->qty), 0, ',', '.') }}</strong></td>
+            </tr>
+        </tfoot>
     </table>
 
     @if($quotation->notes)
-        <div class="note">Note :<br>{{ $quotation->notes }}</div>
+        <div class="note">Note :<br>{!! nl2br(e($quotation->notes)) !!}</div>
     @endif
 
     <div class="sign">
