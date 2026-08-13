@@ -1,7 +1,54 @@
 @extends('layouts.app')
 
-@section('title', $quotation ? 'Edit Quotation #'.$quotation->id : 'Buat Quotation')
+@section('title', $quotation ? 'Edit Quotation '.$quotation->opportunity->opportunity_name : 'Buat Quotation')
 @section('page-title', $quotation ? 'Edit Quotation' : 'Buat Quotation')
+
+@section('styles')
+<style>
+    .qt-desc[contenteditable="true"],
+    .qc-desc[contenteditable="true"] {
+        border: 1px solid var(--card-border, #ced4da);
+        border-radius: .25rem;
+        padding: .25rem .5rem;
+        min-height: 58px;
+        background: #fff;
+        font-size: .85rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+    }
+    .qt-desc[contenteditable="true"]:focus,
+    .qc-desc[contenteditable="true"]:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .qt-desc[contenteditable="true"]:empty::before,
+    .qc-desc[contenteditable="true"]:empty::before {
+        content: attr(data-placeholder);
+        color: #999;
+    }
+    .qt-desc-wrap { position: relative; }
+    .qt-desc-toolbar {
+        position: absolute;
+        top: 2px;
+        right: 4px;
+        display: flex;
+        gap: 2px;
+        opacity: .55;
+    }
+    .qt-desc-toolbar button {
+        border: 1px solid var(--card-border, #ced4da);
+        background: #fff;
+        border-radius: 3px;
+        font-size: 11px;
+        line-height: 1;
+        padding: 2px 5px;
+        cursor: pointer;
+        color: var(--text-primary);
+    }
+    .qt-desc-toolbar button:hover { background: var(--bg); opacity: 1; }
+    .qt-desc-wrap:hover .qt-desc-toolbar { opacity: 1; }
+</style>
+@endsection
 
 @section('content')
 <div class="page-header">
@@ -191,10 +238,16 @@
                                             .' data-parent="'.$parentKey.'"'
                                             .' data-depth="'.$depth.'">';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-no" value="'.e($item['item_no'] ?? '').'" placeholder="1 / 1.1"></td>';
-                                        echo '<td><textarea class="form-control form-control-sm qt-desc" rows="3" style="margin-left:'.($depth * 18).'px" required>'.e($item['description'] ?? '').'</textarea></td>';
-                                        echo '<td><input type="number" min="0" class="form-control form-control-sm qt-qty" value="'.($item['qty'] ?? '').'"></td>';
+                                        echo '<td><div class="qt-desc-wrap" style="margin-left:'.($depth * 18).'px">';
+                                        echo '<div class="qt-desc" contenteditable="true" data-placeholder="Deskripsi item...">'.\App\Models\Quotation::renderDescription($item['description'] ?? '').'</div>';
+                                        echo '<div class="qt-desc-toolbar">';
+                                        echo '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+                                        echo '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+                                        echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+                                        echo '</div></div></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" value="'.($item['qty'] ?? '').'"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="number" min="0" step="any" class="form-control form-control-sm qt-price text-end" value="'.($item['price'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" value="'.($item['price'] ?? '').'"></td>';
                                         echo '<td class="qt-amount text-end"></td>';
                                         echo '<td class="text-center">';
                                         echo '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtChild(this)"><i class="fa fa-plus"></i></button>';
@@ -247,7 +300,7 @@
                         </div>
                         <div class="col-12 mt-2">
                             <label class="form-label">Term &amp; Conditions</label>
-                            <textarea class="form-control" rows="9" id="qt-terms" name="terms" style="font-family:monospace;font-size:12px">{{ $terms }}</textarea>
+                            <textarea class="form-control" rows="16" id="qt-terms" name="terms" style="font-family:monospace;font-size:12px">{{ $terms }}</textarea>
                         </div>
                     </div>
                 </div>
@@ -256,16 +309,30 @@
                         <table class="table table-custom align-middle mb-0">
                             <tbody>
                                 <tr>
-                                    <td style="width:50%">Subtotal</td>
+                                    <td style="width:40%">Subtotal</td>
                                     <td class="text-end fw-bold" id="qt-subtotal">0</td>
                                 </tr>
                                 <tr>
-                                    <td>DPP Pajak</td>
+                                    <td>Diskon</td>
+                                    <td>
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <input type="number" id="qt-disc-pct" class="form-control form-control-sm" min="0" max="100" step="any" placeholder="%" style="width:80px" value="{{ $quotation?->discount_percent }}">
+                                            <input type="text" inputmode="decimal" id="qt-disc-amt" class="form-control form-control-sm text-end" min="0" step="any" placeholder="Nominal" style="width:150px" value="{{ $quotation?->discount_amount }}">
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Netto / DPP Pajak</td>
                                     <td class="text-end" id="qt-dpp">0</td>
                                 </tr>
                                 <tr>
                                     <td>PPN</td>
-                                    <td class="text-end" id="qt-ppn">0</td>
+                                    <td>
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <input type="number" id="qt-ppn-pct" class="form-control form-control-sm" min="0" max="100" step="any" placeholder="%" style="width:80px" value="{{ $quotation?->ppn_percent ?? 11 }}">
+                                            <input type="text" inputmode="decimal" id="qt-ppn-amt" class="form-control form-control-sm text-end" min="0" step="any" placeholder="Nominal" style="width:150px" value="{{ $quotation?->ppn_amount }}">
+                                        </div>
+                                    </td>
                                 </tr>
                                 <tr style="background:var(--accent-soft)">
                                     <td class="fw-bold">Full Amount</td>
@@ -274,17 +341,18 @@
                             </tbody>
                         </table>
                     </div>
-                    <small style="color:var(--text-muted)">Subtotal dihitung dari Qty × Unit Price setiap baris yang diisi keduanya (induk ikut dihitung bila diisi). PPN 11%; DPP = PPN / 12%; Full Amount = Subtotal + PPN.</small>
+                    <small style="color:var(--text-muted)">Diskon &amp; PPN: isi persen untuk menghitung nominal otomatis, atau isi nominal manual. PPN dihitung dari Netto (Subtotal − Diskon).</small>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="d-flex gap-2 mb-4">
+    <div class="d-flex gap-2 mb-4 justify-content-end">
+        <a href="{{ route('quotation.index') }}" class="btn btn-secondary">Batal</a>
         <button type="submit" class="btn-accent" id="qt-save-btn">
             <i class="fa fa-save me-1"></i> <span>{{ $quotation ? 'Simpan Perubahan' : 'Simpan Quotation' }}</span>
         </button>
-        <a href="{{ route('quotation.index') }}" class="btn btn-secondary">Batal</a>
+
     </div>
 </form>
 @endsection
@@ -301,6 +369,42 @@ function qtNewKey() {
     return 'new-' + (++qtKeySeq);
 }
 
+function qtToRaw(str) {
+    return String(str ?? '').replace(/,/g, '');
+}
+
+function qtFormatInput(str) {
+    var s = qtToRaw(str).replace(/[^\d.]/g, '');
+    if (s === '') return '';
+    var neg = s.charAt(0) === '-' ? '-' : '';
+    if (neg) s = s.slice(1);
+    var parts = s.split('.');
+    var int = parts[0] === '' ? '' : Number(parts[0]).toLocaleString('en-US');
+    var dec = parts.length > 1 ? '.' + (parts[1] || '') : '';
+    return neg + int + dec;
+}
+
+function qtFormatNum(el) {
+    var $el = $(el);
+    var start = el.selectionStart || 0;
+    var before = qtToRaw($el.val()).slice(0, start);
+    var digitsBefore = before.replace(/\D/g, '').length;
+    var formatted = qtFormatInput($el.val());
+    var caret = 0, seen = 0;
+    for (var i = 0; i < formatted.length && seen < digitsBefore; i++) {
+        caret = i + 1;
+        if (/\d/.test(formatted[i])) seen++;
+    }
+    $el.val(formatted);
+    try { el.setSelectionRange(caret, caret); } catch (e) {}
+}
+
+function qtFormatAllNumeric() {
+    $('.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt').each(function() {
+        $(this).val(qtFormatInput($(this).val()));
+    });
+}
+
 function qtFmt(n) {
     var v = Number(n || 0);
     return v.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
@@ -309,19 +413,33 @@ function qtFmt(n) {
 function qtRecalc() {
     var subtotal = 0;
     $('#qt-items-body tr').each(function() {
-        var qty = parseFloat($(this).find('.qt-qty').val()) || 0;
-        var price = parseFloat($(this).find('.qt-price').val()) || 0;
+        var qty = parseFloat(qtToRaw($(this).find('.qt-qty').val())) || 0;
+        var price = parseFloat(qtToRaw($(this).find('.qt-price').val())) || 0;
         var amount = (qty > 0 && price > 0) ? qty * price : 0;
         $(this).find('.qt-amount').text(amount ? qtFmt(amount) : '');
         subtotal += amount;
     });
-    var ppn = Math.round(subtotal * 0.11 * 100) / 100;
-    var dpp = Math.round((ppn / 0.12) * 100) / 100;
-    var total = subtotal + ppn;
+    subtotal = Math.round(subtotal * 100) / 100;
+
+    var discPct = parseFloat(qtToRaw($('#qt-disc-pct').val())) || 0;
+    var discAmt = parseFloat(qtToRaw($('#qt-disc-amt').val())) || 0;
+    var discount = discPct > 0 ? Math.round(subtotal * discPct / 100 * 100) / 100 : discAmt;
+    var netto = Math.round((subtotal - discount) * 100) / 100;
+
+    var ppnPct = parseFloat(qtToRaw($('#qt-ppn-pct').val())) || 0;
+    var ppnAmt = parseFloat(qtToRaw($('#qt-ppn-amt').val())) || 0;
+    var ppn = ppnPct > 0 ? Math.round(netto * ppnPct / 100 * 100) / 100 : ppnAmt;
+    var total = Math.round((netto + ppn) * 100) / 100;
+
+    if (discPct > 0) {
+        $('#qt-disc-amt').val(qtFormatInput(discount.toFixed(0)));
+    }
+    if (ppnPct > 0) {
+        $('#qt-ppn-amt').val(qtFormatInput(ppn.toFixed(0)));
+    }
 
     $('#qt-subtotal').text(qtFmt(subtotal));
-    $('#qt-dpp').text(qtFmt(dpp));
-    $('#qt-ppn').text(qtFmt(ppn));
+    $('#qt-dpp').text(qtFmt(netto));
     $('#qt-total').text(qtFmt(total));
 }
 
@@ -335,10 +453,16 @@ function addQtRow(item, parentKey) {
 
     var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '">';
     html += '<td><input type="text" class="form-control form-control-sm qt-no" value="' + (item.item_no || '') + '" placeholder="1 / 1.1"></td>';
-    html += '<td><textarea class="form-control form-control-sm qt-desc" rows="3" style="margin-left:' + (depth * 18) + 'px" required>' + (item.description || '') + '</textarea></td>';
-    html += '<td><input type="number" min="0" class="form-control form-control-sm qt-qty" value="' + (item.qty != null ? item.qty : '') + '"></td>';
+    html += '<td><div class="qt-desc-wrap" style="margin-left:' + (depth * 18) + 'px">';
+    html += '<div class="qt-desc" contenteditable="true" data-placeholder="Deskripsi item...">' + (item.description || '') + '</div>';
+    html += '<div class="qt-desc-toolbar">';
+    html += '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+    html += '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+    html += '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+    html += '</div></div></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" value="' + (item.qty != null ? item.qty : '') + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-unit" value="' + (item.unit || '') + '"></td>';
-    html += '<td><input type="number" min="0" step="any" class="form-control form-control-sm qt-price text-end" value="' + (item.price != null ? item.price : '') + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" value="' + (item.price != null ? item.price : '') + '"></td>';
     html += '<td class="qt-amount text-end"></td>';
     html += '<td class="text-center">';
     html += '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtChild(this)"><i class="fa fa-plus"></i></button>';
@@ -364,6 +488,7 @@ function addQtRow(item, parentKey) {
         $('#qt-items-body').append(html);
     }
     $('#qt-items-empty').hide();
+    qtFormatAllNumeric();
     qtRecalc();
     return key;
 }
@@ -416,9 +541,9 @@ function qtCollectItems() {
             parent_key: $(this).attr('data-parent'),
             item_no: $(this).find('.qt-no').val(),
             quote_configuration_id: $(this).attr('data-config'),
-            description: $(this).find('.qt-desc').val(),
-            qty: $(this).find('.qt-qty').val(),
-            price: $(this).find('.qt-price').val(),
+            description: $(this).find('.qt-desc').html(),
+            qty: qtToRaw($(this).find('.qt-qty').val()),
+            price: qtToRaw($(this).find('.qt-price').val()),
             unit: $(this).find('.qt-unit').val()
         });
     });
@@ -483,9 +608,10 @@ function buildConfigBlockHtml(configId, label, items) {
             html += '<tr class="qc-item" data-cat="' + cat + '">';
             html += '<td class="qc-no text-center"></td>';
             html += '<td><input type="text" class="form-control form-control-sm qc-pn" value="' + (it.part_number || '') + '"></td>';
-            html += '<td><textarea class="form-control form-control-sm qc-desc" rows="2">' + (it.description || '') + '</textarea></td>';
-            html += '<td><input type="number" min="0" class="form-control form-control-sm qc-qty" value="' + (it.qty != null ? it.qty : '') + '"></td>';
-            html += '<td><input type="number" min="0" step="any" class="form-control form-control-sm qc-price text-end" value="' + (it.price != null ? it.price : '') + '"></td>';
+            html += '<td><div class="qt-desc-wrap"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item...">' + (it.description || '') + '</div>';
+            html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
+            html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" value="' + (it.qty != null ? it.qty : '') + '"></td>';
+            html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" value="' + (it.price != null ? it.price : '') + '"></td>';
             html += '<td class="qc-amount text-end"></td>';
             html += '</tr>';
         });
@@ -502,8 +628,8 @@ function qcRecalcBlock(block) {
     var total = 0;
     var cats = {};
     $(block).find('tr.qc-item').each(function() {
-        var qty = parseFloat($(this).find('.qc-qty').val()) || 0;
-        var price = parseFloat($(this).find('.qc-price').val()) || 0;
+        var qty = parseFloat(qtToRaw($(this).find('.qc-qty').val())) || 0;
+        var price = parseFloat(qtToRaw($(this).find('.qc-price').val())) || 0;
         var amount = (qty > 0 && price > 0) ? qty * price : 0;
         $(this).find('.qc-amount').text(amount ? qtFmt(amount) : '');
         total += amount;
@@ -540,6 +666,7 @@ function renderQtConfigLists(data) {
     });
     $('#qt-configs-empty').hide();
     $('.qt-config-block').each(function() { qcRecalcBlock(this); });
+    qtFormatAllNumeric();
 }
 
 function addQtConfigRow(btn) {
@@ -547,13 +674,15 @@ function addQtConfigRow(btn) {
     var html = '<tr class="qc-item" data-cat="">';
     html += '<td class="qc-no text-center"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qc-pn"></td>';
-    html += '<td><textarea class="form-control form-control-sm qc-desc" rows="2"></textarea></td>';
-    html += '<td><input type="number" min="0" class="form-control form-control-sm qc-qty"></td>';
-    html += '<td><input type="number" min="0" step="any" class="form-control form-control-sm qc-price text-end"></td>';
+    html += '<td><div class="qt-desc-wrap"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item..."></div>';
+    html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end"></td>';
     html += '<td class="qc-amount text-end"></td>';
     html += '</tr>';
     $(html).insertBefore($(block).find('.qc-total'));
     qcRecalcBlock(block);
+    qtFormatAllNumeric();
 }
 
 // Escape nilai untuk aman diletakkan dalam atribut HTML/onclick.
@@ -568,9 +697,10 @@ function addQtConfigRowToCat(btn, cat) {
     var html = '<tr class="qc-item" data-cat="' + catAttr + '">';
     html += '<td class="qc-no text-center"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qc-pn"></td>';
-    html += '<td><textarea class="form-control form-control-sm qc-desc" rows="2"></textarea></td>';
-    html += '<td><input type="number" min="0" class="form-control form-control-sm qc-qty"></td>';
-    html += '<td><input type="number" min="0" step="any" class="form-control form-control-sm qc-price text-end"></td>';
+    html += '<td><div class="qt-desc-wrap"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item..."></div>';
+    html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end"></td>';
     html += '<td class="qc-amount text-end"></td>';
     html += '</tr>';
 
@@ -585,6 +715,7 @@ function addQtConfigRowToCat(btn, cat) {
         $(html).insertBefore($(block).find('.qc-total'));
     }
     qcRecalcBlock(block);
+    qtFormatAllNumeric();
 }
 
 function showConfigListBlock(configId) {
@@ -596,6 +727,7 @@ function showConfigListBlock(configId) {
     $('#qt-config-lists').append(buildConfigBlockHtml(configId, c.label, items));
     $('#qt-configs-empty').hide();
     qcRecalcBlock($('.qt-config-block[data-config="' + configId + '"]'));
+    qtFormatAllNumeric();
 }
 
 function hideConfigListBlock(configId) {
@@ -611,9 +743,9 @@ function qtCollectConfigItems() {
                 quote_configuration_id: cfgId,
                 category: $(this).attr('data-cat'),
                 part_number: $(this).find('.qc-pn').val(),
-                description: $(this).find('.qc-desc').val(),
-                qty: $(this).find('.qc-qty').val(),
-                price: $(this).find('.qc-price').val(),
+                description: $(this).find('.qc-desc').html(),
+                qty: qtToRaw($(this).find('.qc-qty').val()),
+                price: qtToRaw($(this).find('.qc-price').val()),
                 unit: ''
             });
         });
@@ -737,8 +869,55 @@ $(document).ready(function() {
         });
     });
 
-    $(document).on('input', '#qt-items-body input, #qt-items-body textarea', qtRecalc);
-    $(document).on('input', '.qt-config-block input, .qt-config-block textarea', function() {
+    $(document).on('input', '#qt-items-body input, #qt-items-body textarea, #qt-items-body [contenteditable]', qtRecalc);
+
+    $(document).on('input', '.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt', function() {
+        qtFormatNum(this);
+        var block = $(this).closest('.qt-config-block');
+        if (block.length) {
+            qcRecalcBlock(block);
+        } else {
+            qtRecalc();
+        }
+    });
+
+    $(document).on('input', '#qt-disc-pct', function() {
+        // Saat persen diisi, kosongkan nominal manual.
+        $('#qt-disc-amt').val('');
+        qtRecalc();
+    });
+    $(document).on('input', '#qt-disc-amt', function() {
+        // Saat nominal manual diisi, kosongkan persen.
+        if ($(this).val() !== '') {
+            $('#qt-disc-pct').val('');
+        }
+        qtRecalc();
+    });
+    $(document).on('input', '#qt-ppn-pct', function() {
+        $('#qt-ppn-amt').val('');
+        qtRecalc();
+    });
+    $(document).on('input', '#qt-ppn-amt', function() {
+        if ($(this).val() !== '') {
+            $('#qt-ppn-pct').val('');
+        }
+        qtRecalc();
+    });
+
+    $(document).on('mousedown', '.qt-desc-toolbar button', function(e) {
+        e.preventDefault();
+    });
+
+    $(document).on('click', '.qt-desc-toolbar button', function() {
+        document.execCommand($(this).data('cmd'), false, null);
+        var block = $(this).closest('.qt-config-block');
+        if (block.length) {
+            qcRecalcBlock(block);
+        } else {
+            $('#qt-items-body').trigger('input');
+        }
+    });
+    $(document).on('input', '.qt-config-block input, .qt-config-block textarea, .qt-config-block [contenteditable]', function() {
         qcRecalcBlock($(this).closest('.qt-config-block'));
     });
 
@@ -751,7 +930,8 @@ $(document).ready(function() {
             return;
         }
         for (var i = 0; i < items.length; i++) {
-            if (!items[i].description || !items[i].description.trim()) {
+            var plain = $('<div>').html(items[i].description || '').text().trim();
+            if (!plain) {
                 toastr.error('Deskripsi item wajib diisi.');
                 return;
             }
@@ -793,6 +973,10 @@ $(document).ready(function() {
                 parameter_note: $('#qt-parameter').val(),
                 notes: $('#qt-notes').val(),
                 terms: $('#qt-terms').val(),
+                discount_percent: $('#qt-disc-pct').val(),
+                discount_amount: qtToRaw($('#qt-disc-amt').val()),
+                ppn_percent: $('#qt-ppn-pct').val(),
+                ppn_amount: qtToRaw($('#qt-ppn-amt').val()),
                 items: items,
                 config_items: qtCollectConfigItems()
             }, { _token: '{{ csrf_token() }}' })
@@ -838,6 +1022,9 @@ $(document).ready(function() {
                 });
         }
     @endif
+
+    // Format semua input angka (pemisah ribuan) saat load (edit mode / prefill).
+    qtFormatAllNumeric();
 
     qtRecalc();
 });

@@ -6,6 +6,7 @@ use App\Models\Division;
 use App\Models\Log;
 use App\Models\MasterProduct;
 use App\Models\Module;
+use App\Models\Quotation;
 use App\Models\QuoteConfiguration;
 use App\Models\QuoteConfigurationItem;
 use App\Models\Task;
@@ -914,7 +915,7 @@ class WaterConfigurationController extends Controller
                 'product_id' => $item['product_id'] ?? null,
                 'category' => $item['category'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
-                'description' => $item['description'],
+                'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => (int) ($item['qty'] ?? 1),
                 'price' => $item['price'] ?? null,
                 'unit' => $item['unit'] ?? null,

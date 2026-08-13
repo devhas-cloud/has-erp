@@ -18,6 +18,24 @@
     #pp-table tbody tr:hover code {
         color: #065f46;
     }
+    .wc-desc[contenteditable="true"] {
+        border: 1px solid var(--card-border, #ced4da);
+        border-radius: .25rem;
+        padding: .25rem .5rem;
+        min-height: 58px;
+        background: #fff;
+        font-size: .85rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+    }
+    .wc-desc[contenteditable="true"]:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .wc-desc[contenteditable="true"]:empty::before {
+        content: attr(data-placeholder);
+        color: #999;
+    }
 </style>
 @endsection
 
@@ -133,7 +151,7 @@
                                     <div style="font-size:11px;color:var(--text-muted)">{{ $item->part_number }}</div>
                                 @endif
                             </td>
-                            <td><textarea rows="2" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)">{{ $item->description }}</textarea>
+                            <td><div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">{!! \App\Models\Quotation::renderDescription($item->description) !!}</div></td>
                             <td><input type="number" class="form-control form-control-sm wc-qty" value="{{ $item->qty }}" min="1"></td>
                             <td><input type="text" class="form-control form-control-sm wc-unit" placeholder="cth: pcs, lot" value="{{ $item->unit }}"></td>
                             <td>
@@ -294,7 +312,7 @@ function addItemRow(item) {
         html += '<div style="font-size:11px;color:var(--text-muted)">' + item.code + '</div>';
     }
     html += '</td>';
-    html += '<td><textarea rows="2" class="form-control form-control-sm wc-desc" placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</textarea></td>';
+    html += '<td><div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</div></td>';
     html += '<td><input type="number" class="form-control form-control-sm wc-qty" value="1" min="1"></td>';
     html += '<td><input type="text" class="form-control form-control-sm wc-unit" placeholder="cth: pcs, lot" value=""></td>';
     html += '<td><input type="hidden" class="wc-price" value="' + priceRaw + '">';
@@ -374,20 +392,22 @@ function collectItems() {
     var valid = true;
 
     $('#wc-items-body tr.wc-item-row').each(function() {
-        var desc = $(this).find('.wc-desc').val().trim();
+        var $desc = $(this).find('.wc-desc');
+        var descHtml = $desc.html() || '';
+        var descText = $('<div>').html(descHtml).text().trim();
         var qty = parseInt($(this).find('.wc-qty').val(), 10);
 
         $(this).find('.is-invalid').removeClass('is-invalid');
 
-        if (!desc) {
-            $(this).find('.wc-desc').addClass('is-invalid');
+        if (!descText) {
+            $desc.addClass('is-invalid');
             valid = false;
         }
 
         items.push({
             product_id: $(this).find('.wc-product-id').val() || null,
             part_number: $(this).find('.wc-part').val().trim(),
-            description: desc,
+            description: descHtml,
             qty: isNaN(qty) || qty < 1 ? 1 : qty,
             price: $(this).find('.wc-price').val().trim() || null,
             unit: $(this).find('.wc-unit').val().trim() || null

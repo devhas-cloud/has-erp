@@ -199,7 +199,7 @@
                     <tr>
                         <td class="no-col">{{ $no++ }}</td>
                         <td class="pn-col">{{ $item->part_number }}</td>
-                        <td>{!! nl2br(e($item->description)) !!}</td>
+                        <td>{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
                         <td class="qty-col">{{ $item->qty }}</td>
                     </tr>
                 @endforeach

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Log;
+use App\Models\Module;
 use App\Models\Quotation;
 use App\Models\QuotationConfigItem;
 use App\Models\QuotationItem;
 use App\Models\QuoteConfiguration;
 use App\Models\Task;
+use App\Models\UserAccessControl;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,8 +54,11 @@ class QuotationController extends Controller
     }
 
     /**
-     * Task quote yang bisa dijadikan quotation: status in_progress dan memiliki
-     * minimal 1 quote configuration Approved versi terakhir (IMS maupun WATER).
+     * Task quote yang bisa dijadikan quotation: status in_progress.
+     * Syarat config (dinamis): SEMUA configuration versi terakhir (is_current)
+     * milik task harus berstatus Approved. Jika ada 2 config, keduanya harus
+     * approved; jika hanya 1 config, config itu harus approved.
+     * Task yang sudah punya quotation tidak ditampilkan sebagai task baru.
      */
     private function quotationTasks()
     {
@@ -75,6 +80,13 @@ class QuotationController extends Controller
                 $q->where('status', QuoteConfiguration::STATUS_APPROVED)
                     ->where('is_current', true);
             })
+            // Semua config versi terakhir (is_current) harus approved.
+            ->whereDoesntHave('quoteConfigurations', function ($q) {
+                $q->where('is_current', true)
+                    ->where('status', '!=', QuoteConfiguration::STATUS_APPROVED);
+            })
+            // Task yang sudah punya quotation tidak tampil kembali.
+            ->whereDoesntHave('quotations')
             ->orderByDesc('id')
             ->get();
     }
@@ -104,6 +116,19 @@ class QuotationController extends Controller
             ->whereIn('id', $latestIds)
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * Cek apakah task masih memiliki configuration versi terakhir (is_current)
+     * yang BELUM approved. Jika ada, quotation tidak boleh disimpan.
+     */
+    private function taskHasUnapprovedConfiguration(Task $task): bool
+    {
+        return QuoteConfiguration::query()
+            ->where('task_id', $task->id)
+            ->where('is_current', true)
+            ->where('status', '!=', QuoteConfiguration::STATUS_APPROVED)
+            ->exists();
     }
 
     public function create(Request $request)
@@ -297,9 +322,20 @@ class QuotationController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = Quotation::with(['creator', 'task', 'configurations']);
+        // Hanya tampilkan versi terakhir tiap group (pola water/ims configuration).
+        $latestIds = Quotation::query()
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('group_id')
+            ->pluck('id');
 
-        $recordsTotal = Quotation::count();
+        $query = Quotation::with(['creator', 'task', 'configurations'])
+            ->whereIn('id', $latestIds);
+
+        $recordsTotal = Quotation::query()
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('group_id')
+            ->get()
+            ->count();
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {
@@ -338,6 +374,7 @@ class QuotationController extends Controller
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $quotation->id,
+                'version' => $quotation->version,
                 'quotation_number' => $quotation->quotation_number ?? '—',
                 'to_name' => $quotation->to_name ?? '—',
                 'date' => $quotation->date?->format('d/m/Y') ?? '—',
@@ -351,6 +388,10 @@ class QuotationController extends Controller
                 'status_label' => $quotation->status_label,
                 'status_badge' => $quotation->statusBadgeHtml(),
                 'locked' => $quotation->isLocked(),
+                'can_approve' => $this->isApprover(),
+                'can_revise' => ($quotation->status === Quotation::STATUS_REJECTED
+                    || ($quotation->status === Quotation::STATUS_APPROVED && $quotation->unlocked_at)),
+                'is_creator' => (int) $quotation->created_by === (int) Auth::id(),
                 'task_title' => $quotation->task?->title ?? '—',
                 'source_config' => $quotation->configurations->isNotEmpty()
                     ? count($quotation->configurations).' config ('.$quotation->configurations->implode('division.division_name', ' + ').')'
@@ -376,6 +417,21 @@ class QuotationController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Task tidak valid.',
+            ], 422);
+        }
+
+        if ($this->taskHasUnapprovedConfiguration($task)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Masih ada Quote Configuration versi terakhir yang belum Approved pada task ini. Semua configuration harus disetujui sebelum quotation disimpan.',
+            ], 422);
+        }
+
+        if (Quotation::where('task_id', $validated['task_id'])
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Quotation untuk task ini sudah ada. Hanya boleh membuat 1 quotation per task.',
             ], 422);
         }
 
@@ -413,15 +469,30 @@ class QuotationController extends Controller
                     'notes' => $validated['notes'] ?? null,
                     'terms' => $validated['terms'] ?? self::DEFAULT_TERMS,
                     'status' => Quotation::STATUS_DRAFT,
+                    'group_id' => null,
+                    'version' => 1,
+                    'is_current' => true,
+                    'discount_percent' => $validated['discount_percent'] ?? null,
+                    'discount_amount' => $validated['discount_amount'] ?? null,
+                    'ppn_percent' => $validated['ppn_percent'] ?? null,
+                    'ppn_amount' => $validated['ppn_amount'] ?? null,
                     'created_by' => Auth::id(),
                 ]);
+
+                $quotation->update(['group_id' => $quotation->id]);
 
                 $quotation->configurations()->sync($selectedIds);
 
                 $this->syncItems($quotation, $validated['items']);
                 $this->syncConfigItems($quotation, $validated['config_items'] ?? []);
 
-                $totals = Quotation::calculateTotals($validated['items']);
+                $totals = Quotation::calculateTotals(
+                    $validated['items'],
+                    isset($validated['discount_percent']) && $validated['discount_percent'] !== '' ? (float) $validated['discount_percent'] : null,
+                    isset($validated['discount_amount']) && $validated['discount_amount'] !== '' ? (float) $validated['discount_amount'] : null,
+                    isset($validated['ppn_percent']) && $validated['ppn_percent'] !== '' ? (float) $validated['ppn_percent'] : null,
+                    isset($validated['ppn_amount']) && $validated['ppn_amount'] !== '' ? (float) $validated['ppn_amount'] : null,
+                );
                 $quotation->update($totals);
 
                 $quotation->update([
@@ -455,9 +526,9 @@ class QuotationController extends Controller
     {
         $quotation = Quotation::with(['items', 'configItems', 'configurations', 'task'])->findOrFail($id);
 
-        if ($quotation->isLocked()) {
+        if ($quotation->status !== Quotation::STATUS_DRAFT) {
             return redirect()->route('quotation.index')
-                ->with('error', 'Quotation yang sudah Issued tidak bisa diedit.');
+                ->with('error', 'Hanya quotation berstatus Draft yang bisa diedit. Gunakan Buat Revisi untuk quotation yang ditolak/approved.');
         }
 
         $tasks = $this->quotationTasks();
@@ -510,10 +581,10 @@ class QuotationController extends Controller
     {
         $quotation = Quotation::findOrFail($id);
 
-        if ($quotation->isLocked()) {
+        if ($quotation->status !== Quotation::STATUS_DRAFT) {
             return response()->json([
                 'success' => false,
-                'message' => 'Quotation yang sudah Issued tidak bisa diedit.',
+                'message' => 'Hanya quotation berstatus Draft yang bisa diedit. Gunakan Buat Revisi untuk quotation yang ditolak/approved.',
             ], 422);
         }
 
@@ -525,6 +596,13 @@ class QuotationController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Task tidak valid.',
+            ], 422);
+        }
+
+        if ($this->taskHasUnapprovedConfiguration($task)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Masih ada Quote Configuration versi terakhir yang belum Approved pada task ini. Semua configuration harus disetujui sebelum quotation disimpan.',
             ], 422);
         }
 
@@ -561,6 +639,10 @@ class QuotationController extends Controller
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
                     'terms' => $validated['terms'] ?? self::DEFAULT_TERMS,
+                    'discount_percent' => $validated['discount_percent'] ?? null,
+                    'discount_amount' => $validated['discount_amount'] ?? null,
+                    'ppn_percent' => $validated['ppn_percent'] ?? null,
+                    'ppn_amount' => $validated['ppn_amount'] ?? null,
                 ]);
 
                 $quotation->configurations()->sync($selectedIds);
@@ -568,7 +650,13 @@ class QuotationController extends Controller
                 $this->syncItems($quotation, $validated['items']);
                 $this->syncConfigItems($quotation, $validated['config_items'] ?? []);
 
-                $totals = Quotation::calculateTotals($validated['items']);
+                $totals = Quotation::calculateTotals(
+                    $validated['items'],
+                    isset($validated['discount_percent']) && $validated['discount_percent'] !== '' ? (float) $validated['discount_percent'] : null,
+                    isset($validated['discount_amount']) && $validated['discount_amount'] !== '' ? (float) $validated['discount_amount'] : null,
+                    isset($validated['ppn_percent']) && $validated['ppn_percent'] !== '' ? (float) $validated['ppn_percent'] : null,
+                    isset($validated['ppn_amount']) && $validated['ppn_amount'] !== '' ? (float) $validated['ppn_amount'] : null,
+                );
                 $quotation->update($totals);
 
                 if (! $quotation->quotation_number) {
@@ -616,7 +704,7 @@ class QuotationController extends Controller
     {
         $quotation = Quotation::findOrFail($id);
 
-        if ($quotation->isLocked()) {
+        if ($quotation->status !== Quotation::STATUS_DRAFT) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya quotation berstatus Draft yang bisa dihapus.',
@@ -641,37 +729,378 @@ class QuotationController extends Controller
     /**
      * Terbitkan quotation (draft -> issued). Setelah issued, dokumen terkunci.
      */
-    public function issue($id): JsonResponse
+    // ── Approval & Versioning (mirip alur Quote Configuration) ──
+
+    /**
+     * Kirim quotation untuk approval (draft -> waiting_approval).
+     */
+    public function submit($id): JsonResponse
     {
         $quotation = Quotation::findOrFail($id);
 
-        if ($quotation->isLocked()) {
+        if ($quotation->created_by !== Auth::id() && Auth::user()->role !== 'Admin') {
             return response()->json([
                 'success' => false,
-                'message' => 'Quotation sudah dalam status Issued.',
+                'message' => 'Hanya pembuat quotation yang bisa submit untuk approval.',
+            ], 403);
+        }
+
+        if ($quotation->status !== Quotation::STATUS_DRAFT) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Quotation tidak dalam status Draft.',
             ], 422);
         }
 
         if ($quotation->items()->count() === 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Quotation harus memiliki minimal 1 item sebelum di-issue.',
+                'message' => 'Quotation harus memiliki minimal 1 item sebelum di-submit.',
             ], 422);
         }
 
-        $quotation->update(['status' => Quotation::STATUS_ISSUED]);
+        $quotation->update(['status' => Quotation::STATUS_WAITING_APPROVAL]);
 
         Log::record(
-            'issue_quotation',
-            "Quotation #{$quotation->id} ({$quotation->quotation_number}) diterbitkan oleh ".Auth::user()->username,
+            'submit_quotation',
+            "Quotation #{$quotation->id} ({$quotation->quotation_number}) dikirim untuk approval",
             self::MODULE_CODE,
             $quotation
         );
 
         return response()->json([
             'success' => true,
-            'message' => 'Quotation diterbitkan (Issued).',
+            'message' => 'Quotation dikirim untuk approval.',
         ]);
+    }
+
+    /**
+     * Approve quotation. User dengan hak approve (can_approve / Admin) boleh approve,
+     * termasuk quotation yang dibuat oleh dirinya sendiri.
+     */
+    public function approve($id): JsonResponse
+    {
+        $quotation = Quotation::with('creator')->findOrFail($id);
+
+        if ($quotation->status !== Quotation::STATUS_WAITING_APPROVAL) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Quotation tidak dalam status Waiting Approval.',
+            ], 422);
+        }
+
+        if (! $this->isApprover()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak approve quotation ini.',
+            ], 403);
+        }
+
+        DB::transaction(function () use ($quotation) {
+            $quotation->update([
+                'status' => Quotation::STATUS_APPROVED,
+                'final_checked_by' => Auth::id(),
+                'approved_at' => now(),
+                'is_current' => true,
+            ]);
+
+            // Versi approved lain dalam group menjadi riwayat.
+            if ($quotation->group_id) {
+                Quotation::where('group_id', $quotation->group_id)
+                    ->where('id', '!=', $quotation->id)
+                    ->update(['is_current' => false]);
+
+                Quotation::where('group_id', $quotation->group_id)
+                    ->where('id', '!=', $quotation->id)
+                    ->where('status', Quotation::STATUS_APPROVED)
+                    ->update(['status' => Quotation::STATUS_ARCHIVED]);
+            }
+        });
+
+        Log::record(
+            'approve_quotation',
+            "Quotation #{$quotation->id} ({$quotation->quotation_number}) disetujui oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Quotation disetujui.',
+        ]);
+    }
+
+    public function reject(Request $request, $id): JsonResponse
+    {
+        $quotation = Quotation::with('creator')->findOrFail($id);
+
+        if ($quotation->status !== Quotation::STATUS_WAITING_APPROVAL) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Quotation tidak dalam status Waiting Approval.',
+            ], 422);
+        }
+
+        if (! $this->isApprover()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak menolak quotation ini.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'approval_note' => 'required|string|max:1000',
+        ]);
+
+        $quotation->update([
+            'status' => Quotation::STATUS_REJECTED,
+            'final_checked_by' => Auth::id(),
+            'approval_note' => $validated['approval_note'],
+            'rejected_at' => now(),
+        ]);
+
+        Log::record(
+            'reject_quotation',
+            "Quotation #{$quotation->id} ({$quotation->quotation_number}) ditolak oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Quotation ditolak.',
+        ]);
+    }
+
+    /**
+     * Buka kunci quotation approved agar bisa direvisi (hanya user berhak approve).
+     */
+    public function unlock($id): JsonResponse
+    {
+        $quotation = Quotation::with('creator')->findOrFail($id);
+
+        if ($quotation->status !== Quotation::STATUS_APPROVED) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya quotation berstatus Approved yang bisa dibuka kunci.',
+            ], 422);
+        }
+
+        if (! $this->isApprover()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya user dengan hak approve yang bisa membuka kunci.',
+            ], 403);
+        }
+
+        $quotation->update([
+            'unlocked_by' => Auth::id(),
+            'unlocked_at' => now(),
+        ]);
+
+        Log::record(
+            'unlock_quotation',
+            "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuka kunci oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kunci dibuka. Quotation dapat direvisi.',
+        ]);
+    }
+
+    /**
+     * Buat versi baru (revisi) dari quotation rejected atau approved yang sudah di-unlock.
+     * Setelah unlock, siapa pun yang memiliki akses modul bisa membuat revisi.
+     */
+    public function revise($id): JsonResponse
+    {
+        $source = Quotation::with(['items', 'configItems', 'configurations'])->findOrFail($id);
+
+        $canRevise = $source->status === Quotation::STATUS_REJECTED
+            || ($source->status === Quotation::STATUS_APPROVED && $source->unlocked_at);
+
+        if (! $canRevise) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Quotation ini belum bisa direvisi. Kunci harus dibuka oleh approver terlebih dahulu.',
+            ], 422);
+        }
+
+        if (! $this->hasModuleAccess()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki akses untuk membuat revisi quotation.',
+            ], 403);
+        }
+
+        $revision = DB::transaction(function () use ($source) {
+            if ($source->status === Quotation::STATUS_APPROVED) {
+                $source->update([
+                    'status' => Quotation::STATUS_ARCHIVED,
+                    'is_current' => false,
+                ]);
+            }
+
+            $revision = Quotation::create([
+                'quote_configuration_id' => $source->quote_configuration_id,
+                'opportunity_id' => $source->opportunity_id,
+                'task_id' => $source->task_id,
+                'group_id' => $source->group_id ?: $source->id,
+                'version' => $source->nextVersion(),
+                'parent_id' => $source->id,
+                'is_current' => false,
+                'quotation_number' => $source->quotation_number,
+                'date' => $source->date,
+                'currency' => $source->currency,
+                'your_ref' => $source->your_ref,
+                'no_of_pages' => $source->no_of_pages,
+                'to_name' => $source->to_name,
+                'address' => $source->address,
+                'attn_name' => $source->attn_name,
+                'attn_phone' => $source->attn_phone,
+                'attn_email' => $source->attn_email,
+                'from_name' => $source->from_name,
+                'contact_phone' => $source->contact_phone,
+                'parameter_note' => $source->parameter_note,
+                'notes' => $source->notes,
+                'terms' => $source->terms,
+                'subtotal' => $source->subtotal,
+                'dpp' => $source->dpp,
+                'ppn' => $source->ppn,
+                'grand_total' => $source->grand_total,
+                'discount_percent' => $source->discount_percent,
+                'discount_amount' => $source->discount_amount,
+                'ppn_percent' => $source->ppn_percent,
+                'ppn_amount' => $source->ppn_amount,
+                'status' => Quotation::STATUS_DRAFT,
+                'created_by' => Auth::id(),
+            ]);
+
+            foreach ($source->items as $item) {
+                $revision->items()->create([
+                    'item_no' => $item->item_no,
+                    'quote_configuration_id' => $item->quote_configuration_id,
+                    'parent_id' => $item->parent_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                    'price' => $item->price,
+                    'unit' => $item->unit,
+                    'sort_order' => $item->sort_order,
+                ]);
+            }
+
+            foreach ($source->configItems as $item) {
+                $revision->configItems()->create([
+                    'quote_configuration_id' => $item->quote_configuration_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                    'price' => $item->price,
+                    'unit' => $item->unit,
+                    'sort_order' => $item->sort_order,
+                ]);
+            }
+
+            foreach ($source->configurations as $config) {
+                $revision->configurations()->attach($config->id);
+            }
+
+            return $revision;
+        });
+
+        Log::record(
+            'revise_quotation',
+            "Revisi dibuat dari Quotation #{$source->id} menjadi #{$revision->id}",
+            self::MODULE_CODE,
+            $revision
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Revisi (versi '.$revision->version.') berhasil dibuat.',
+            'id' => $revision->id,
+        ]);
+    }
+
+    /**
+     * Daftar versi (riwayat) satu group quotation untuk modal Track.
+     */
+    public function versions($id): JsonResponse
+    {
+        $quotation = Quotation::findOrFail($id);
+        $groupId = $quotation->group_id ?: $quotation->id;
+
+        $versions = Quotation::with(['creator', 'finalChecker'])
+            ->where('group_id', $groupId)
+            ->orderBy('version', 'desc')
+            ->get()
+            ->map(fn ($v) => [
+                'id' => $v->id,
+                'version' => $v->version,
+                'status' => $v->status,
+                'status_badge' => $v->statusBadgeHtml(),
+                'date' => $v->created_at?->format('d/m/Y H:i') ?? '—',
+                'creator_name' => $v->creator?->username ?? '—',
+                'item_count' => $v->items()->count(),
+                'is_current' => (bool) $v->is_current,
+                'show_url' => route('quotation.show', $v->id),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'versions' => $versions,
+        ]);
+    }
+
+    /**
+     * User berhak approve modul Quotation (UAC can_approve atau Admin).
+     */
+    private function isApprover(): bool
+    {
+        $user = Auth::user();
+
+        if ($user->role === 'Admin') {
+            return true;
+        }
+
+        $module = Module::where('module_code', self::MODULE_CODE)->first();
+        if (! $module) {
+            return false;
+        }
+
+        return UserAccessControl::where('user_id', $user->id)
+            ->where('module_id', $module->id)
+            ->where('can_approve', true)
+            ->exists();
+    }
+
+    /**
+     * User memiliki akses modul Quotation (can_create / can_update / Admin).
+     */
+    private function hasModuleAccess(): bool
+    {
+        $user = Auth::user();
+
+        if ($user->role === 'Admin') {
+            return true;
+        }
+
+        $module = Module::where('module_code', self::MODULE_CODE)->first();
+        if (! $module) {
+            return false;
+        }
+
+        return UserAccessControl::where('user_id', $user->id)
+            ->where('module_id', $module->id)
+            ->where(fn ($q) => $q->where('can_create', true)->orWhere('can_update', true))
+            ->exists();
     }
 
     public function pdf($id)
@@ -712,6 +1141,10 @@ class QuotationController extends Controller
             'parameter_note' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
+            'discount_percent' => 'nullable|numeric|min:0|max:100',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'ppn_percent' => 'nullable|numeric|min:0|max:100',
+            'ppn_amount' => 'nullable|numeric|min:0',
             'items' => 'required|array|min:1',
             'items.*._key' => 'required|string',
             'items.*.parent_key' => 'nullable|string',
@@ -754,7 +1187,7 @@ class QuotationController extends Controller
                 'parent_id' => null,
                 'category' => $item['category'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
-                'description' => $item['description'],
+                'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'price' => $item['price'] ?? null,
                 'unit' => $item['unit'] ?? null,
@@ -817,7 +1250,7 @@ class QuotationController extends Controller
                 'quote_configuration_id' => $item['quote_configuration_id'] ?? null,
                 'category' => $item['category'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
-                'description' => $item['description'] ?? null,
+                'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'price' => $item['price'] ?? null,
                 'unit' => $item['unit'] ?? null,

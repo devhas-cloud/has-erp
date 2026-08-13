@@ -77,15 +77,6 @@
         <a href="{{ route('water-configuration.pdf', $quotation->id) }}" target="_blank" class="btn-accent">
             <i class="fa fa-file-pdf me-1"></i> <span>View PDF</span>
         </a>
-        @php
-            $qtModule = \App\Models\Module::where('route_name', 'quotation')->first();
-            $canCreateQuotation = Auth::user()->role === 'Admin' || ($qtModule && \App\Models\UserAccessControl::where('user_id', Auth::id())->where('module_id', $qtModule->id)->where('can_create', true)->exists());
-        @endphp
-        @if($quotation->status === 'approved' && $canCreateQuotation)
-            <a href="{{ route('quotation.create', ['quote_configuration_id' => $quotation->id]) }}" class="btn-accent">
-                <i class="fa fa-file-invoice me-1"></i> <span>Buat Quotation</span>
-            </a>
-        @endif
     </div>
 </div>
 
@@ -260,7 +251,7 @@
                                     <tr>
                                         <td class="text-center">{{ $no++ }}</td>
                                         <td><code>{{ $item->part_number ?? '—' }}</code></td>
-                                        <td>{{ $item->description }}</td>
+                                        <td>{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
                                         <td class="text-center">{{ $item->qty }}</td>
                                     </tr>
                                 @endforeach

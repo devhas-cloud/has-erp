@@ -195,7 +195,7 @@
                 <tr>
                     <td class="no-col">{{ $no + 1 }}</td>
                     <td>{{ $item->product?->name ?? ($item->part_number ?: '—') }}</td>
-                    <td>{!! nl2br(e($item->description)) !!}</td>
+                    <td>{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
                     <td class="qty-col">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
                     @php $price = $item->price ?? $item->product?->price; @endphp
                     <td class="price-col">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>

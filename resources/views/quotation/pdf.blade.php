@@ -256,7 +256,7 @@
                     <td class="no-col">{{ $item->item_no }}</td>
                     <td>
                         <div style="padding-left:{{ $depth * 14 }}px">
-                            {!! nl2br(e($item->description)) !!}
+                            {!! \App\Models\Quotation::renderDescription($item->description) !!}
                             @if($item->part_number)
                                 <div style="font-size:9px;color:#444">Part Number : {{ $item->part_number }}</div>
                             @endif
@@ -287,12 +287,18 @@
                 <td class="l">Subtotal</td>
                 <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->subtotal) }}</td>
             </tr>
+            @if($quotation->discount_amount > 0)
+            <tr>
+                <td class="l">Discount</td>
+                <td class="v">({{ \App\Models\Quotation::formatMoney($quotation->discount_amount) }})</td>
+            </tr>
+            @endif
             <tr>
                 <td class="l">DPP Pajak</td>
                 <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->dpp) }}</td>
             </tr>
             <tr>
-                <td class="l">PPN</td>
+                <td class="l">PPN{{ $quotation->ppn_percent ? ' ('.$quotation->ppn_percent.'%)' : '' }}</td>
                 <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->ppn) }}</td>
             </tr>
             <tr class="grand">

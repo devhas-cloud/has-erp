@@ -126,7 +126,12 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('quotation/data', [QuotationController::class, 'data'])->name('quotation.data');
     Route::get('quotation/fetch-task', [QuotationController::class, 'fetchTask'])->name('quotation.fetch-task');
     Route::get('quotation/fetch-template', [QuotationController::class, 'fetchTemplate'])->name('quotation.fetch-template');
-    Route::post('quotation/{id}/issue', [QuotationController::class, 'issue'])->name('quotation.issue');
+    Route::post('quotation/{id}/submit', [QuotationController::class, 'submit'])->name('quotation.submit');
+    Route::post('quotation/{id}/approve', [QuotationController::class, 'approve'])->name('quotation.approve');
+    Route::post('quotation/{id}/reject', [QuotationController::class, 'reject'])->name('quotation.reject');
+    Route::post('quotation/{id}/unlock', [QuotationController::class, 'unlock'])->name('quotation.unlock');
+    Route::post('quotation/{id}/revise', [QuotationController::class, 'revise'])->name('quotation.revise');
+    Route::get('quotation/{id}/versions', [QuotationController::class, 'versions'])->name('quotation.versions');
     Route::get('quotation/{id}/pdf', [QuotationController::class, 'pdf'])->name('quotation.pdf');
     Route::resource('quotation', QuotationController::class);
 
