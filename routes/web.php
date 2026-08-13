@@ -10,6 +10,7 @@ use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\ProductManagementController;
+use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\WaterConfigurationController;
@@ -121,6 +122,13 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('ims-configuration/search-products', [ImsConfigurationController::class, 'searchProducts'])->name('ims-configuration.search-products');
     Route::get('ims-configuration/fetch-task', [ImsConfigurationController::class, 'fetchTask'])->name('ims-configuration.fetch-task');
     Route::resource('ims-configuration', ImsConfigurationController::class);
+
+    Route::get('quotation/data', [QuotationController::class, 'data'])->name('quotation.data');
+    Route::get('quotation/fetch-task', [QuotationController::class, 'fetchTask'])->name('quotation.fetch-task');
+    Route::get('quotation/fetch-template', [QuotationController::class, 'fetchTemplate'])->name('quotation.fetch-template');
+    Route::post('quotation/{id}/issue', [QuotationController::class, 'issue'])->name('quotation.issue');
+    Route::get('quotation/{id}/pdf', [QuotationController::class, 'pdf'])->name('quotation.pdf');
+    Route::resource('quotation', QuotationController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
         ->name('dashboard-task-planner.index');

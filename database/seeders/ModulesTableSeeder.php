@@ -99,6 +99,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-industry',
                 'group' => 'IMS',
             ],
+            [
+                'module_code' => 'MOD_QUOTATION',
+                'module_name' => 'Quotation',
+                'description' => 'Menu pembuatan dokumen quotation dari quote configuration yang sudah disetujui',
+                'route_name' => 'quotation',
+                'icon' => 'fa fa-file-invoice',
+                'group' => 'Admin',
+            ],
         ];
 
         foreach ($modules as $module) {
