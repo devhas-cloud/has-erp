@@ -155,6 +155,7 @@ class QuotationController extends Controller
             'items' => $items,
             'configItems' => [],
             'costItems' => [],
+            'formula' => null,
             'templates' => $this->templateList(),
             'terms' => self::DEFAULT_TERMS,
         ]);
@@ -479,6 +480,7 @@ class QuotationController extends Controller
                     'discount_amount' => $validated['discount_amount'] ?? null,
                     'ppn_percent' => $validated['ppn_percent'] ?? null,
                     'ppn_amount' => $validated['ppn_amount'] ?? null,
+                    'formula' => array_filter($validated['formula'] ?? []),
                     'created_by' => Auth::id(),
                 ]);
 
@@ -566,6 +568,7 @@ class QuotationController extends Controller
                 'qty' => $item->qty,
                 'price' => $item->price,
                 'unit' => $item->unit,
+                'formula' => $item->formula,
             ])->all(),
             'configItems' => $quotation->configItems->map(fn ($item) => [
                 'quote_configuration_id' => $item->quote_configuration_id,
@@ -575,6 +578,7 @@ class QuotationController extends Controller
                 'qty' => $item->qty,
                 'price' => $item->price,
                 'unit' => $item->unit,
+                'formula' => $item->formula,
             ])->all(),
             'costItems' => $quotation->costItems->map(fn ($item) => [
                 'id' => $item->id,
@@ -585,7 +589,9 @@ class QuotationController extends Controller
                 'qty' => $item->qty,
                 'price' => $item->price,
                 'unit' => $item->unit,
+                'formula' => $item->formula,
             ])->all(),
+            'formula' => $quotation->formula,
             'templates' => $this->templateList(),
             'terms' => $quotation->terms ?? self::DEFAULT_TERMS,
         ]);
@@ -658,6 +664,7 @@ class QuotationController extends Controller
                     'discount_amount' => $validated['discount_amount'] ?? null,
                     'ppn_percent' => $validated['ppn_percent'] ?? null,
                     'ppn_amount' => $validated['ppn_amount'] ?? null,
+                    'formula' => array_filter($validated['formula'] ?? []),
                 ]);
 
                 $quotation->configurations()->sync($selectedIds);
@@ -994,6 +1001,7 @@ class QuotationController extends Controller
                 'discount_amount' => $source->discount_amount,
                 'ppn_percent' => $source->ppn_percent,
                 'ppn_amount' => $source->ppn_amount,
+                'formula' => $source->formula ?: null,
                 'status' => Quotation::STATUS_DRAFT,
                 'created_by' => Auth::id(),
             ]);
@@ -1012,6 +1020,7 @@ class QuotationController extends Controller
                     'qty' => $item->qty,
                     'price' => $item->price,
                     'unit' => $item->unit,
+                    'formula' => $item->formula ?: null,
                     'sort_order' => $item->sort_order,
                 ]);
                 $itemIdMap[$item->id] = $new->id;
@@ -1026,6 +1035,7 @@ class QuotationController extends Controller
                     'qty' => $item->qty,
                     'price' => $item->price,
                     'unit' => $item->unit,
+                    'formula' => $item->formula ?: null,
                     'sort_order' => $item->sort_order,
                 ]);
             }
@@ -1041,6 +1051,7 @@ class QuotationController extends Controller
                     'qty' => $item->qty,
                     'price' => $item->price,
                     'unit' => $item->unit,
+                    'formula' => $item->formula ?: null,
                     'sort_order' => $item->sort_order,
                 ]);
                 $costIdMap[$item->id] = $new->id;
@@ -1208,6 +1219,9 @@ class QuotationController extends Controller
             'discount_amount' => 'nullable|numeric|min:0',
             'ppn_percent' => 'nullable|numeric|min:0|max:100',
             'ppn_amount' => 'nullable|numeric|min:0',
+            'formula' => 'nullable|array',
+            'formula.discount_amount' => 'nullable|string|max:255',
+            'formula.ppn_amount' => 'nullable|string|max:255',
             'items' => 'required|array|min:1',
             'items.*._key' => 'required|string',
             'items.*.parent_key' => 'nullable|string',
@@ -1219,6 +1233,9 @@ class QuotationController extends Controller
             'items.*.qty' => 'nullable|integer|min:0',
             'items.*.price' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
+            'items.*.formula' => 'nullable|array',
+            'items.*.formula.qty' => 'nullable|string|max:255',
+            'items.*.formula.price' => 'nullable|string|max:255',
             'config_items' => 'nullable|array',
             'config_items.*.quote_configuration_id' => 'nullable|integer|exists:quote_configurations,id',
             'config_items.*.category' => 'nullable|string|max:100',
@@ -1227,6 +1244,9 @@ class QuotationController extends Controller
             'config_items.*.qty' => 'nullable|integer|min:0',
             'config_items.*.price' => 'nullable|numeric|min:0',
             'config_items.*.unit' => 'nullable|string|max:50',
+            'config_items.*.formula' => 'nullable|array',
+            'config_items.*.formula.qty' => 'nullable|string|max:255',
+            'config_items.*.formula.price' => 'nullable|string|max:255',
             'cost_items' => 'nullable|array',
             'cost_items.*._key' => 'required|string',
             'cost_items.*.parent_key' => 'nullable|string',
@@ -1236,6 +1256,9 @@ class QuotationController extends Controller
             'cost_items.*.qty' => 'nullable|integer|min:0',
             'cost_items.*.price' => 'nullable|numeric|min:0',
             'cost_items.*.unit' => 'nullable|string|max:50',
+            'cost_items.*.formula' => 'nullable|array',
+            'cost_items.*.formula.qty' => 'nullable|string|max:255',
+            'cost_items.*.formula.price' => 'nullable|string|max:255',
         ]);
     }
 
@@ -1263,6 +1286,7 @@ class QuotationController extends Controller
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'price' => $item['price'] ?? null,
                 'unit' => $item['unit'] ?? null,
+                'formula' => isset($item['formula']) && is_array($item['formula']) ? json_encode(array_filter($item['formula'])) : null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -1326,6 +1350,7 @@ class QuotationController extends Controller
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'price' => $item['price'] ?? null,
                 'unit' => $item['unit'] ?? null,
+                'formula' => isset($item['formula']) && is_array($item['formula']) ? json_encode(array_filter($item['formula'])) : null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -1360,6 +1385,7 @@ class QuotationController extends Controller
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'price' => $item['price'] ?? null,
                 'unit' => $item['unit'] ?? null,
+                'formula' => isset($item['formula']) && is_array($item['formula']) ? json_encode(array_filter($item['formula'])) : null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
                 'updated_at' => now(),

@@ -18,6 +18,7 @@ class QuotationConfigItem extends Model
         'qty',
         'price',
         'unit',
+        'formula',
         'sort_order',
     ];
 
@@ -26,6 +27,7 @@ class QuotationConfigItem extends Model
         return [
             'qty' => 'integer',
             'price' => 'float',
+            'formula' => 'array',
         ];
     }
 

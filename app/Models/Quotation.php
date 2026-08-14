@@ -78,6 +78,7 @@ class Quotation extends Model
         'discount_amount',
         'ppn_percent',
         'ppn_amount',
+        'formula',
         'status',
         'created_by',
         'final_checked_by',
@@ -103,6 +104,7 @@ class Quotation extends Model
             'discount_amount' => 'float',
             'ppn_percent' => 'float',
             'ppn_amount' => 'float',
+            'formula' => 'array',
         ];
     }
 

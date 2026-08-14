@@ -10,7 +10,7 @@
         border: 1px solid var(--card-border, #ced4da);
         border-radius: .25rem;
         padding: .25rem .5rem;
-        min-height: 58px;
+        min-height: 30px;
         background: #fff;
         font-size: .85rem;
         line-height: 1.45;
@@ -47,6 +47,47 @@
     }
     .qt-desc-toolbar button:hover { background: var(--bg); opacity: 1; }
     .qt-desc-wrap:hover .qt-desc-toolbar { opacity: 1; }
+
+    .qt-fx-wrap { position: relative; }
+    .qt-fx-btn {
+        position: absolute;
+        top: 1px;
+        right: 2px;
+        border: 1px solid var(--card-border, #ced4da);
+        background: #fff;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 2px 4px;
+        cursor: pointer;
+        color: var(--text-muted);
+        opacity: .6;
+        z-index: 2;
+    }
+    .qt-fx-btn:hover { opacity: 1; color: var(--accent); border-color: var(--accent); }
+    .qt-fx-wrap.has-fx .qt-fx-btn::after {
+        content: '●';
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        font-size: 8px;
+        color: var(--accent);
+    }
+    .qt-fx-wrap.has-fx input { border-color: var(--accent); }
+    .qt-fx-wrap input.fx-editing { border-color: #f59e0b; background: #fffbeb; }
+    .qt-fx-wrap input.fx-editing { font-family: monospace; }
+
+    .qt-row-col {
+        width: 26px;
+        min-width: 26px;
+        max-width: 26px;
+        padding: 14px 4px !important;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 11px;
+        white-space: nowrap;
+    }
 </style>
 @endsection
 
@@ -214,6 +255,7 @@
                         <table class="table table-custom align-middle mb-0" id="qt-items-table">
                             <thead>
                                 <tr>
+                                    <th class="text-center qt-row-col">#</th>
                                     <th style="width:6%">No</th>
                                     <th style="width:42%">Deskripsi</th>
                                     <th style="width:7%">Qty</th>
@@ -239,9 +281,12 @@
                                         $parentKey = ($item['parent_id'] ?? null)
                                             ? 'db-'.$item['parent_id']
                                             : ($item['_parent'] ?? '');
+                                        $fxQty = isset($item['formula']['qty']) ? ' data-fx="'.e($item['formula']['qty']).'"' : '';
+                                        $fxPrice = isset($item['formula']['price']) ? ' data-fx="'.e($item['formula']['price']).'"' : '';
                                         echo '<tr data-key="'.$key.'"'
                                             .' data-parent="'.$parentKey.'"'
                                             .' data-depth="'.$depth.'">';
+                                        echo '<td class="text-center qt-row-col qt-row-num"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-no" value="'.e($item['item_no'] ?? '').'" placeholder="1 / 1.1"></td>';
                                         echo '<td><div class="qt-desc-wrap" style="margin-left:'.($depth * 18).'px">';
                                         echo '<div class="qt-desc" contenteditable="true" data-placeholder="Deskripsi item...">'.\App\Models\Quotation::renderDescription($item['description'] ?? '').'</div>';
@@ -250,9 +295,9 @@
                                         echo '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
                                         echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
                                         echo '</div></div></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" value="'.($item['qty'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" data-fx-table="items"'.$fxQty.' value="'.($item['qty'] ?? '').'"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" value="'.($item['price'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" data-fx-table="items"'.$fxPrice.' value="'.($item['price'] ?? '').'"></td>';
                                         echo '<td class="qt-amount text-end"></td>';
                                         echo '<td class="text-center">';
                                         echo '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtChild(this)"><i class="fa fa-plus"></i></button>';
@@ -305,6 +350,7 @@
                         <table class="table table-custom align-middle mb-0" id="qt-costs-table">
                             <thead>
                                 <tr>
+                                    <th class="text-center qt-row-col">#</th>
                                     <th style="width:6%">No</th>
                                     <th style="width:45%">Judul / Deskripsi</th>
                                     <th style="width:7%">Qty</th>
@@ -330,10 +376,13 @@
                                         $parentKey = ($item['parent_id'] ?? null)
                                             ? 'cost-db-'.$item['parent_id']
                                             : ($item['_parent'] ?? '');
+                                        $fxCQty = isset($item['formula']['qty']) ? ' data-fx="'.e($item['formula']['qty']).'"' : '';
+                                        $fxCPrice = isset($item['formula']['price']) ? ' data-fx="'.e($item['formula']['price']).'"' : '';
                                         echo '<tr data-key="'.$key.'"'
                                             .' data-parent="'.$parentKey.'"'
                                             .' data-depth="'.$depth.'"'
                                             .' data-type="'.(($item['title'] ?? null) ? 'title' : 'item').'">';
+                                        echo '<td class="text-center qt-row-col qt-cost-row-num"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-cost-no" value="'.e($item['item_no'] ?? '').'" placeholder="1 / 1.1"></td>';
                                         echo '<td><div class="qt-desc-wrap" style="margin-left:'.($depth * 18).'px">';
                                         echo '<div class="qt-desc" contenteditable="true" data-placeholder="Deskripsi / judul biaya...">'.\App\Models\Quotation::renderDescription($item['title'] ?? $item['description'] ?? '').'</div>';
@@ -342,9 +391,9 @@
                                         echo '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
                                         echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
                                         echo '</div></div></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" value="'.($item['qty'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" data-fx-table="costs"'.$fxCQty.' value="'.($item['qty'] ?? '').'"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-cost-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" value="'.($item['price'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" data-fx-table="costs"'.$fxCPrice.' value="'.($item['price'] ?? '').'"></td>';
                                         echo '<td class="qt-cost-amount text-end"></td>';
                                         echo '<td class="text-center">';
                                         echo '<button type="button" class="btn-icon" title="Tambah Judul" onclick="addQtCostTitle(this)"><i class="fa fa-tag"></i></button>';
@@ -437,7 +486,7 @@
                                     <td>
                                         <div class="d-flex gap-1 justify-content-end">
                                             <input type="number" id="qt-ppn-pct" class="form-control form-control-sm" min="0" max="100" step="any" placeholder="%" style="width:80px" value="{{ $quotation?->ppn_percent ?? 11 }}">
-                                            <input type="text" inputmode="decimal" id="qt-ppn-amt" class="form-control form-control-sm text-end" min="0" step="any" placeholder="Nominal" style="width:150px" value="{{ $quotation?->ppn_amount }}">
+                                            <input type="text" inputmode="decimal" id="qt-ppn-amt" class="form-control form-control-sm text-end" min="0" step="any" placeholder="Nominal" style="width:150px" value="{{ $quotation?->ppn_amount }}" data-fx-table="summary" @if(isset($formula['ppn_amount']) && $formula['ppn_amount']) data-fx="{{ $formula['ppn_amount'] }}" @endif>
                                         </div>
                                     </td>
                                 </tr>
@@ -510,7 +559,318 @@ function qtFormatAllNumeric() {
     $('.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt, .qt-cost-qty, .qt-cost-price').each(function() {
         $(this).val(qtFormatInput($(this).val()));
     });
+    fxInitWraps();
+    qtRenumberRows();
 }
+
+// ── Nomor baris (kolom #) ──
+function qtRenumberRows() {
+    $('#qt-items-body tr').each(function(i) { $(this).find('.qt-row-num').text(i + 1); });
+    $('#qt-costs-body tr').each(function(i) { $(this).find('.qt-cost-row-num').text(i + 1); });
+    $('.qt-config-block').each(function() {
+        $(this).find('tbody tr.qc-item').each(function(i) { $(this).find('.qc-row-num').text(i + 1); });
+    });
+}
+
+// ── Engine Rumus Excel (A1-style) ──
+
+function fxInitWraps(scope) {
+    var $scope = scope ? $(scope) : $(document);
+    $scope.find('.qt-qty, .qt-price, .qc-qty, .qc-price, .qt-cost-qty, .qt-cost-price, #qt-ppn-amt').each(function() {
+        var $input = $(this);
+        if ($input.closest('.qt-fx-wrap').length) return;
+        $input.wrap('<div class="qt-fx-wrap"></div>');
+        var $wrap = $input.closest('.qt-fx-wrap');
+        var btn = $('<button type="button" class="qt-fx-btn" title="Rumus (Excel)">ƒx</button>');
+        $wrap.append(btn);
+        var fx = $input.attr('data-fx');
+        if (fx) {
+            $input.data('fx-formula', fx);
+            $wrap.addClass('has-fx');
+        }
+        fxSetReadonly($input);
+    });
+}
+
+function fxSetReadonly($input) {
+    $input.prop('readonly', !!$input.data('fx-formula'));
+}
+
+function fxTokenize(str) {
+    var tokens = [];
+    var s = String(str || '').replace(/^=/, '').trim();
+    var i = 0;
+    while (i < s.length) {
+        var c = s[i];
+        if (c === ' ' || c === '\t') { i++; continue; }
+        if ('+-*/%(),:'.indexOf(c) !== -1) { tokens.push({ t: 'op', v: c }); i++; continue; }
+        var m = s.slice(i).match(/^(\d+(\.\d+)?|\.\d+)/);
+        if (m) { tokens.push({ t: 'num', v: parseFloat(m[0]) }); i += m[0].length; continue; }
+        var r = s.slice(i).match(/^([A-Za-z]+)(\d+)/);
+        if (r) { tokens.push({ t: 'ref', col: r[1].toUpperCase(), row: parseInt(r[2], 10) }); i += r[0].length; continue; }
+        var id = s.slice(i).match(/^([A-Za-z]+)/);
+        if (id) { tokens.push({ t: 'id', v: id[1].toUpperCase() }); i += id[0].length; continue; }
+        throw new Error('Sintaks tidak dikenal');
+    }
+    return tokens;
+}
+
+function fxParse(tokens) {
+    var pos = 0;
+    function peek() { return tokens[pos]; }
+    function next() { return tokens[pos++]; }
+    function expectOp(v) { var t = next(); if (!t || t.t !== 'op' || t.v !== v) throw new Error('Sintaks'); }
+    function parseExpression() {
+        var left = parseTerm();
+        while (peek() && peek().t === 'op' && (peek().v === '+' || peek().v === '-')) {
+            var op = next().v;
+            left = { t: 'bin', op: op, l: left, r: parseTerm() };
+        }
+        return left;
+    }
+    function parseTerm() {
+        var left = parseFactor();
+        while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) {
+            var op = next().v;
+            left = { t: 'bin', op: op, l: left, r: parseFactor() };
+        }
+        return left;
+    }
+    function parseFactor() {
+        var t = peek();
+        if (!t) throw new Error('Unexpected end');
+        if (t.t === 'num') { next(); return { t: 'num', v: t.v }; }
+        if (t.t === 'op' && t.v === '(') { next(); var e = parseExpression(); expectOp(')'); return e; }
+        if (t.t === 'op' && t.v === '-') { next(); return { t: 'neg', e: parseFactor() }; }
+        if (t.t === 'ref') { next(); return { t: 'ref', col: t.col, row: t.row }; }
+        if (t.t === 'id') {
+            var name = t.v;
+            next();
+            expectOp('(');
+            var args = [];
+            if (!(peek() && peek().t === 'op' && peek().v === ')')) {
+                args.push(parseArg());
+                while (peek() && peek().t === 'op' && peek().v === ',') { next(); args.push(parseArg()); }
+            }
+            expectOp(')');
+            return { t: 'fn', name: name, args: args };
+        }
+        throw new Error('Sintaks');
+    }
+    function parseArg() {
+        if (peek() && peek().t === 'ref' && tokens[pos + 1] && tokens[pos + 1].t === 'op' && tokens[pos + 1].v === ':') {
+            var a = next();
+            next();
+            var b = next();
+            if (!b || b.t !== 'ref') throw new Error('Sintaks range');
+            return { t: 'range', a: a, b: b };
+        }
+        return parseExpression();
+    }
+    var ast = parseExpression();
+    if (pos < tokens.length) throw new Error('Sintaks sisa');
+    return ast;
+}
+
+function fxGetRow(tableKey, row) {
+    if (tableKey === 'items') return $('#qt-items-body tr').eq(row - 1);
+    if (tableKey === 'costs') return $('#qt-costs-body tr').eq(row - 1);
+    if (tableKey.indexOf('config:') === 0) {
+        var cid = tableKey.slice(7);
+        return $('.qt-config-block[data-config="' + cid + '"] tbody tr.qc-item').eq(row - 1);
+    }
+    return $();
+}
+
+function fxFieldValue(tr, field) {
+    var el = tr.find(field === 'qty' ? '.qt-qty, .qc-qty, .qt-cost-qty' : '.qt-price, .qc-price, .qt-cost-price');
+    return parseFloat(qtToRaw(el.val())) || 0;
+}
+
+function fxGetCellValue(tableKey, col, row, visited) {
+    var key = tableKey + '|' + col + row;
+    if (visited && visited[key]) throw new Error('#CIRC!');
+    if (tableKey === 'summary') {
+        switch (col + row) {
+            case 'A1': return parseFloat(qtToRaw($('#qt-subtotal').text())) || 0;
+            case 'A2': return parseFloat(qtToRaw($('#qt-disc-amt').val())) || 0;
+            case 'A3': return parseFloat(qtToRaw($('#qt-dpp').text())) || 0;
+            case 'A4': return parseFloat(qtToRaw($('#qt-ppn-amt').val())) || 0;
+            case 'A5': return parseFloat(qtToRaw($('#qt-total').text())) || 0;
+            default: return 0;
+        }
+    }
+    var tr = fxGetRow(tableKey, row);
+    if (!tr || !tr.length) return 0;
+    if (col === 'C') return fxFieldValue(tr, 'qty') * fxFieldValue(tr, 'price');
+    if (col === 'A') return fxFieldValue(tr, 'qty');
+    if (col === 'B') return fxFieldValue(tr, 'price');
+    return 0;
+}
+
+function fxRangeValues(tableKey, a, b, visited) {
+    var c1 = Math.min(a.col.charCodeAt(0), b.col.charCodeAt(0));
+    var c2 = Math.max(a.col.charCodeAt(0), b.col.charCodeAt(0));
+    var r1 = Math.min(a.row, b.row);
+    var r2 = Math.max(a.row, b.row);
+    var vals = [];
+    for (var c = c1; c <= c2; c++) {
+        for (var r = r1; r <= r2; r++) {
+            vals.push(fxGetCellValue(tableKey, String.fromCharCode(c), r, visited));
+        }
+    }
+    return vals;
+}
+
+function fxEvalAst(tableKey, ast, visited) {
+    switch (ast.t) {
+        case 'num': return ast.v;
+        case 'neg': return -fxEvalAst(tableKey, ast.e, visited);
+        case 'bin': {
+            var l = fxEvalAst(tableKey, ast.l, visited);
+            var r = fxEvalAst(tableKey, ast.r, visited);
+            switch (ast.op) {
+                case '+': return l + r;
+                case '-': return l - r;
+                case '*': return l * r;
+                case '/': return r === 0 ? 0 : l / r;
+                case '%': return l % r;
+            }
+            throw new Error('Sintaks');
+        }
+        case 'ref': return fxGetCellValue(tableKey, ast.col, ast.row, visited);
+        case 'range': return fxRangeValues(tableKey, ast.a, ast.b, visited);
+        case 'fn': {
+            var vals = [];
+            for (var i = 0; i < ast.args.length; i++) {
+                var v = fxEvalAst(tableKey, ast.args[i], visited);
+                if (Array.isArray(v)) vals = vals.concat(v); else vals.push(v);
+            }
+            switch (ast.name) {
+                case 'SUM': return vals.reduce(function (a, b) { return a + (isNaN(b) ? 0 : b); }, 0);
+                case 'AVG': return vals.length ? vals.reduce(function (a, b) { return a + (isNaN(b) ? 0 : b); }, 0) / vals.length : 0;
+                case 'MIN': return vals.length ? Math.min.apply(null, vals) : 0;
+                case 'MAX': return vals.length ? Math.max.apply(null, vals) : 0;
+                default: throw new Error('Fungsi tidak dikenal');
+            }
+        }
+    }
+    throw new Error('Sintaks');
+}
+
+function fxEvalCell(tableKey, ownRef, formula) {
+    var visited = {};
+    visited[tableKey + '|' + ownRef.col + ownRef.row] = true;
+    var tokens = fxTokenize(formula);
+    var ast = fxParse(tokens);
+    return fxEvalAst(tableKey, ast, visited);
+}
+
+function fxTableFormulaCells(tableKey) {
+    var result = [];
+    var selector, rows;
+    if (tableKey === 'items') { selector = '.qt-qty, .qt-price'; rows = $('#qt-items-body tr'); }
+    else if (tableKey === 'costs') { selector = '.qt-cost-qty, .qt-cost-price'; rows = $('#qt-costs-body tr'); }
+    else if (tableKey.indexOf('config:') === 0) {
+        var cid = tableKey.slice(7);
+        selector = '.qc-qty, .qc-price';
+        rows = $('.qt-config-block[data-config="' + cid + '"] tbody tr.qc-item');
+    }
+    if (tableKey === 'summary') {
+        var ppnEl = $('#qt-ppn-amt');
+        if (ppnEl.data('fx-formula')) result.push({ el: ppnEl, ref: { col: 'A', row: 4 } });
+        return result;
+    }
+    rows.each(function (idx) {
+        $(this).find(selector).each(function () {
+            if ($(this).data('fx-formula')) {
+                var isQty = $(this).hasClass('qt-qty') || $(this).hasClass('qc-qty') || $(this).hasClass('qt-cost-qty');
+                result.push({ el: $(this), ref: { col: isQty ? 'A' : 'B', row: idx + 1 } });
+            }
+        });
+    });
+    return result;
+}
+
+function fxRecalcTable(tableKey) {
+    var cells = fxTableFormulaCells(tableKey);
+    for (var pass = 0; pass < 10; pass++) {
+        var changed = false;
+        cells.forEach(function (item) {
+            var formula = item.el.data('fx-formula');
+            if (!formula) return;
+            try {
+                var val = fxEvalCell(tableKey, item.ref, formula);
+                var newVal = qtFormatInput(String(Math.round(val * 100) / 100));
+                if (item.el.val() !== newVal) {
+                    item.el.val(newVal);
+                    changed = true;
+                }
+                item.el.closest('.qt-fx-wrap').addClass('has-fx').removeClass('fx-error');
+            } catch (e) {
+                item.el.closest('.qt-fx-wrap').addClass('has-fx fx-error').attr('title', e.message || '#ERR!');
+                item.el.val('');
+            }
+        });
+        if (!changed) break;
+    }
+}
+
+function fxRecalcAll() {
+    fxRecalcTable('items');
+    $('.qt-config-block').each(function () { fxRecalcTable('config:' + $(this).attr('data-config')); });
+    fxRecalcTable('costs');
+    qtRecalc();
+    $('.qt-config-block').each(function () { qcRecalcBlock(this); });
+    qtCostRecalc();
+    // Ringkasan: rumus nominal PPN.
+    if ($('#qt-ppn-amt').data('fx-formula')) $('#qt-ppn-pct').val('');
+    fxRecalcTable('summary');
+    qtRecalc();
+}
+
+function fxCommit($input) {
+    var val = $input.val().trim();
+    var $wrap = $input.closest('.qt-fx-wrap');
+    if (val.indexOf('=') === 0) {
+        $input.data('fx-formula', val);
+        $wrap.addClass('has-fx').removeClass('fx-error');
+    } else {
+        $input.data('fx-formula', null);
+        $wrap.removeClass('has-fx').removeAttr('title');
+    }
+    $input.removeClass('fx-editing');
+    fxSetReadonly($input);
+    fxRecalcAll();
+}
+
+$(document).on('click', '.qt-fx-btn', function (e) {
+    e.preventDefault();
+    var $wrap = $(this).closest('.qt-fx-wrap');
+    var $input = $wrap.find('input');
+    if ($input.hasClass('fx-editing')) {
+        fxCommit($input);
+        return;
+    }
+    $input.attr('data-orig', $input.val())
+        .prop('readonly', false)
+        .addClass('fx-editing')
+        .val($input.data('fx-formula') || '=');
+    $input.focus();
+    try { $input[0].setSelectionRange($input.val().length, $input.val().length); } catch (err) {}
+});
+
+$(document).on('keydown', '.qt-fx-wrap input.fx-editing', function (e) {
+    var $input = $(this);
+    if (e.key === 'Enter') { e.preventDefault(); fxCommit($input); }
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        var $wrap = $input.closest('.qt-fx-wrap');
+        $input.val($input.attr('data-orig') || '').removeClass('fx-editing');
+        fxSetReadonly($input);
+        fxRecalcAll();
+    }
+});
 
 function qtFmt(n) {
     var v = Number(n || 0);
@@ -530,18 +890,18 @@ function qtRecalc() {
 
     var discPct = parseFloat(qtToRaw($('#qt-disc-pct').val())) || 0;
     var discAmt = parseFloat(qtToRaw($('#qt-disc-amt').val())) || 0;
-    var discount = discPct > 0 ? Math.round(subtotal * discPct / 100 * 100) / 100 : discAmt;
+    var discount = (discPct > 0 && !$('#qt-disc-amt').data('fx-formula')) ? Math.round(subtotal * discPct / 100 * 100) / 100 : discAmt;
     var netto = Math.round((subtotal - discount) * 100) / 100;
 
     var ppnPct = parseFloat(qtToRaw($('#qt-ppn-pct').val())) || 0;
     var ppnAmt = parseFloat(qtToRaw($('#qt-ppn-amt').val())) || 0;
-    var ppn = ppnPct > 0 ? Math.round(netto * ppnPct / 100 * 100) / 100 : ppnAmt;
+    var ppn = (ppnPct > 0 && !$('#qt-ppn-amt').data('fx-formula')) ? Math.round(netto * ppnPct / 100 * 100) / 100 : ppnAmt;
     var total = Math.round((netto + ppn) * 100) / 100;
 
-    if (discPct > 0) {
+    if (discPct > 0 && !$('#qt-disc-amt').data('fx-formula')) {
         $('#qt-disc-amt').val(qtFormatInput(discount.toFixed(0)));
     }
-    if (ppnPct > 0) {
+    if (ppnPct > 0 && !$('#qt-ppn-amt').data('fx-formula')) {
         $('#qt-ppn-amt').val(qtFormatInput(ppn.toFixed(0)));
     }
 
@@ -559,6 +919,7 @@ function addQtRow(item, parentKey) {
     }
 
     var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '">';
+    html += '<td class="text-center qt-row-col qt-row-num"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-no" value="' + (item.item_no || '') + '" placeholder="1 / 1.1"></td>';
     html += '<td><div class="qt-desc-wrap" style="margin-left:' + (depth * 18) + 'px">';
     html += '<div class="qt-desc" contenteditable="true" data-placeholder="Deskripsi item...">' + (item.description || '') + '</div>';
@@ -567,9 +928,9 @@ function addQtRow(item, parentKey) {
     html += '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
     html += '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
     html += '</div></div></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" value="' + (item.qty != null ? item.qty : '') + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" data-fx-table="items" value="' + (item.qty != null ? item.qty : '') + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-unit" value="' + (item.unit || '') + '"></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" value="' + (item.price != null ? item.price : '') + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" data-fx-table="items" value="' + (item.price != null ? item.price : '') + '"></td>';
     html += '<td class="qt-amount text-end"></td>';
     html += '<td class="text-center">';
     html += '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtChild(this)"><i class="fa fa-plus"></i></button>';
@@ -624,6 +985,7 @@ function removeQtItem(btn) {
     row.remove();
     qtRecalc();
     qtSyncEmpty();
+    qtRenumberRows();
 }
 
 function qtSyncEmpty() {
@@ -643,15 +1005,21 @@ function collectKeys() {
 function qtCollectItems() {
     var items = [];
     $('#qt-items-body tr').each(function() {
+        var $qty = $(this).find('.qt-qty');
+        var $price = $(this).find('.qt-price');
+        var formula = {};
+        if ($qty.data('fx-formula')) formula.qty = $qty.data('fx-formula');
+        if ($price.data('fx-formula')) formula.price = $price.data('fx-formula');
         items.push({
             _key: $(this).attr('data-key'),
             parent_key: $(this).attr('data-parent'),
             item_no: $(this).find('.qt-no').val(),
             quote_configuration_id: $(this).attr('data-config'),
             description: $(this).find('.qt-desc').html(),
-            qty: qtToRaw($(this).find('.qt-qty').val()),
-            price: qtToRaw($(this).find('.qt-price').val()),
-            unit: $(this).find('.qt-unit').val()
+            qty: qtToRaw($qty.val()),
+            price: qtToRaw($price.val()),
+            unit: $(this).find('.qt-unit').val(),
+            formula: formula
         });
     });
     return items;
@@ -689,31 +1057,32 @@ function buildConfigBlockHtml(configId, label, items) {
     html += '<button type="button" class="btn btn-secondary btn-sm" onclick="addQtConfigRow(this)"><i class="fa fa-plus me-1"></i> Tambah Item</button>';
     html += '</div>';
     html += '<div class="table-responsive"><table class="table table-custom align-middle mb-0"><thead><tr>';
-    html += '<th style="width:30px">No</th><th style="width:200px">Part Number</th><th>Deskripsi</th><th style="width:100px">Qty</th><th style="width:200px">Unit Price</th><th class="text-end" style="width:130px">Amount</th>';
+    html += '<th class="text-center qt-row-col">#</th><th style="width:30px">No</th><th style="width:200px">Part Number</th><th>Deskripsi</th><th style="width:100px">Qty</th><th style="width:200px">Unit Price</th><th class="text-end" style="width:130px">Amount</th>';
     html += '</tr></thead><tbody>';
 
     order.forEach(function(cat) {
         if (cat !== '') {
             html += '<tr class="qc-cat" data-cat="' + cat + '">';
-            html += '<td colspan="6"><strong style="font-size:13px;color:var(--accent)">Category : ' + cat + '</strong>';
+            html += '<td colspan="7"><strong style="font-size:13px;color:var(--accent)">Category : ' + cat + '</strong>';
             html += '<button type="button" class="btn-icon ms-2" title="Tambah Item di Kategori Ini" onclick="addQtConfigRowToCat(this, \'' + qcEscapeAttr(cat) + '\')"><i class="fa fa-plus"></i></button>';
             html += '</td></tr>';
         }
         groups[cat].forEach(function(it) {
             html += '<tr class="qc-item" data-cat="' + cat + '">';
+            html += '<td class="text-center qt-row-col qc-row-num"></td>';
             html += '<td class="qc-no text-center"></td>';
             html += '<td><input type="text" class="form-control form-control-sm qc-pn" value="' + (it.part_number || '') + '"></td>';
             html += '<td><div class="qt-desc-wrap"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item...">' + (it.description || '') + '</div>';
             html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
-            html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" value="' + (it.qty != null ? it.qty : '') + '"></td>';
-            html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" value="' + (it.price != null ? it.price : '') + '"></td>';
+            html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" data-fx-table="config:' + configId + '"' + (it.formula && it.formula.qty ? ' data-fx="' + String(it.formula.qty).replace(/"/g, '&quot;') + '"' : '') + ' value="' + (it.qty != null ? it.qty : '') + '"></td>';
+            html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + (it.formula && it.formula.price ? ' data-fx="' + String(it.formula.price).replace(/"/g, '&quot;') + '"' : '') + ' value="' + (it.price != null ? it.price : '') + '"></td>';
             html += '<td class="qc-amount text-end"></td>';
             html += '</tr>';
         });
-        html += '<tr class="qc-sub" data-cat="' + cat + '"><td colspan="5" class="text-end"><strong>' + (cat ? 'Sub Total ' + cat : 'Sub Total') + '</strong></td><td class="qc-sub-val text-end"></td></tr>';
+        html += '<tr class="qc-sub" data-cat="' + cat + '"><td colspan="6" class="text-end"><strong>' + (cat ? 'Sub Total ' + cat : 'Sub Total') + '</strong></td><td class="qc-sub-val text-end"></td></tr>';
     });
 
-    html += '<tr class="qc-total"><td colspan="5" class="text-end fw-bold">Total</td><td class="qc-total-val text-end fw-bold"></td></tr>';
+    html += '<tr class="qc-total"><td colspan="6" class="text-end fw-bold">Total</td><td class="qc-total-val text-end fw-bold"></td></tr>';
     html += '</tbody></table></div></div>';
 
     return html;
@@ -766,13 +1135,15 @@ function renderQtConfigLists(data) {
 
 function addQtConfigRow(btn) {
     var block = $(btn).closest('.qt-config-block');
+    var configId = block.attr('data-config');
     var html = '<tr class="qc-item" data-cat="">';
+    html += '<td class="text-center qt-row-col qc-row-num"></td>';
     html += '<td class="qc-no text-center"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qc-pn"></td>';
     html += '<td><div class="qt-desc-wrap"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item..."></div>';
     html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty"></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" data-fx-table="config:' + configId + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"></td>';
     html += '<td class="qc-amount text-end"></td>';
     html += '</tr>';
     $(html).insertBefore($(block).find('.qc-total'));
@@ -788,14 +1159,16 @@ function qcEscapeAttr(s) {
 // Tambah baris kosong ke dalam kategori tertentu (baris qc-cat) pada blok config.
 function addQtConfigRowToCat(btn, cat) {
     var block = $(btn).closest('.qt-config-block');
+    var configId = block.attr('data-config');
     var catAttr = qcEscapeAttr(cat);
     var html = '<tr class="qc-item" data-cat="' + catAttr + '">';
+    html += '<td class="text-center qt-row-col qc-row-num"></td>';
     html += '<td class="qc-no text-center"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qc-pn"></td>';
     html += '<td><div class="qt-desc-wrap"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item..."></div>';
     html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty"></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" data-fx-table="config:' + configId + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"></td>';
     html += '<td class="qc-amount text-end"></td>';
     html += '</tr>';
 
@@ -818,14 +1191,20 @@ function qtCollectConfigItems() {
     $('.qt-config-block').each(function() {
         var cfgId = $(this).attr('data-config');
         $(this).find('tr.qc-item').each(function() {
+            var $qty = $(this).find('.qc-qty');
+            var $price = $(this).find('.qc-price');
+            var formula = {};
+            if ($qty.data('fx-formula')) formula.qty = $qty.data('fx-formula');
+            if ($price.data('fx-formula')) formula.price = $price.data('fx-formula');
             items.push({
                 quote_configuration_id: cfgId,
                 category: $(this).attr('data-cat'),
                 part_number: $(this).find('.qc-pn').val(),
                 description: $(this).find('.qc-desc').html(),
-                qty: qtToRaw($(this).find('.qc-qty').val()),
-                price: qtToRaw($(this).find('.qc-price').val()),
-                unit: ''
+                qty: qtToRaw($qty.val()),
+                price: qtToRaw($price.val()),
+                unit: '',
+                formula: formula
             });
         });
     });
@@ -861,6 +1240,7 @@ function qtCostRowHtml(item, parentKey, isTitle) {
     }
     var desc = isTitle ? (item.title || '') : (item.description || '');
     var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" data-type="' + (isTitle ? 'title' : 'item') + '">';
+    html += '<td class="text-center qt-row-col qt-cost-row-num"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-cost-no" value="' + (item.item_no || '') + '" placeholder="1 / 1.1"></td>';
     html += '<td><div class="qt-desc-wrap" style="margin-left:' + (depth * 18) + 'px">';
     html += '<div class="qt-desc" contenteditable="true" data-placeholder="' + (isTitle ? 'Judul biaya...' : 'Deskripsi biaya...') + '">' + (desc || '') + '</div>';
@@ -869,9 +1249,9 @@ function qtCostRowHtml(item, parentKey, isTitle) {
     html += '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
     html += '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
     html += '</div></div></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" value="' + (isTitle ? '' : (item.qty != null ? item.qty : '')) + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" data-fx-table="costs"' + (item.formula && item.formula.qty ? ' data-fx="' + String(item.formula.qty).replace(/"/g, '&quot;') + '"' : '') + ' value="' + (isTitle ? '' : (item.qty != null ? item.qty : '')) + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-cost-unit" value="' + (item.unit || '') + '"></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" value="' + (isTitle ? '' : (item.price != null ? item.price : '')) + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" data-fx-table="costs"' + (item.formula && item.formula.price ? ' data-fx="' + String(item.formula.price).replace(/"/g, '&quot;') + '"' : '') + ' value="' + (isTitle ? '' : (item.price != null ? item.price : '')) + '"></td>';
     html += '<td class="qt-cost-amount text-end"></td>';
     html += '<td class="text-center">';
     html += '<button type="button" class="btn-icon" title="Tambah Judul" onclick="addQtCostTitle(this)"><i class="fa fa-tag"></i></button>';
@@ -925,6 +1305,7 @@ function removeQtCostItem(btn) {
     toRemove.forEach(function(el) { $(el).remove(); });
     row.remove();
     qtCostRecalc();
+    qtRenumberRows();
 }
 
 function qtCollectCostItems() {
@@ -932,15 +1313,21 @@ function qtCollectCostItems() {
     $('#qt-costs-body tr').each(function() {
         var isTitle = $(this).attr('data-type') === 'title';
         var desc = $(this).find('.qt-desc').html();
+        var $qty = $(this).find('.qt-cost-qty');
+        var $price = $(this).find('.qt-cost-price');
+        var formula = {};
+        if ($qty.data('fx-formula')) formula.qty = $qty.data('fx-formula');
+        if ($price.data('fx-formula')) formula.price = $price.data('fx-formula');
         items.push({
             _key: $(this).attr('data-key'),
             parent_key: $(this).attr('data-parent'),
             item_no: $(this).find('.qt-cost-no').val(),
             title: isTitle ? desc : '',
             description: isTitle ? '' : desc,
-            qty: qtToRaw($(this).find('.qt-cost-qty').val()),
-            price: qtToRaw($(this).find('.qt-cost-price').val()),
-            unit: $(this).find('.qt-cost-unit').val()
+            qty: qtToRaw($qty.val()),
+            price: qtToRaw($price.val()),
+            unit: $(this).find('.qt-cost-unit').val(),
+            formula: formula
         });
     });
     return items;
@@ -969,6 +1356,14 @@ $(document).ready(function() {
     // Ringkasan Harga hanya tampil saat tab "List Item Quotation" aktif.
     $(document).on('shown.bs.tab', 'button[data-bs-toggle="tab"]', function(e) {
         $('#qt-price-summary').toggle($(e.target).attr('data-bs-target') === '#qt-tab-items');
+    });
+
+    // Cegah Enter mentriger submit (kecuali textarea/contenteditable/ƒx editing).
+    $(document).on('keydown', '#qt-form input, #qt-form select', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            return false;
+        }
     });
 
     $('#qt-task').select2({
@@ -1057,15 +1452,9 @@ $(document).ready(function() {
     $(document).on('input', '#qt-items-body input, #qt-items-body textarea, #qt-items-body [contenteditable]', qtRecalc);
 
     $(document).on('input', '.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt, .qt-cost-qty, .qt-cost-price', function() {
+        if ($(this).hasClass('fx-editing')) return; // sedang edit rumus
         qtFormatNum(this);
-        var block = $(this).closest('.qt-config-block');
-        if (block.length) {
-            qcRecalcBlock(block);
-        } else if ($(this).hasClass('qt-cost-qty') || $(this).hasClass('qt-cost-price')) {
-            qtCostRecalc();
-        } else {
-            qtRecalc();
-        }
+        fxRecalcAll();
     });
 
     $(document).on('input', '#qt-disc-pct', function() {
@@ -1134,60 +1523,75 @@ $(document).ready(function() {
         }
 
         var editId = $('#qt-edit-id').val();
-        var url = editId
-            ? '{{ route("quotation.update", "__ID__") }}'.replace('__ID__', editId)
-            : '{{ route("quotation.store") }}';
-        var method = editId ? 'PUT' : 'POST';
 
-        $('#qt-save-btn').prop('disabled', true);
+        Swal.fire({
+            title: editId ? 'Simpan Perubahan?' : 'Simpan Quotation?',
+            text: 'Pastikan data sudah benar sebelum disimpan.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, Simpan',
+            cancelButtonText: 'Batal'
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
 
-        $.ajax({
-            url: url,
-            method: method,
-            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-            data: $.extend({
-                task_id: $('#qt-task-id').val(),
-                quote_configuration_ids: configIds,
-                date: $('#qt-date').val(),
-                currency: $('#qt-currency').val(),
-                your_ref: $('#qt-your-ref').val(),
-                no_of_pages: $('#qt-pages').val(),
-                to_name: $('#qt-to').val(),
-                address: $('#qt-address').val(),
-                attn_name: $('#qt-attn').val(),
-                attn_phone: $('#qt-phone').val(),
-                attn_email: $('#qt-email').val(),
-                from_name: $('#qt-from').val(),
-                contact_phone: $('#qt-contact-phone').val(),
-                parameter_note: $('#qt-parameter').val(),
-                notes: $('#qt-notes').val(),
-                terms: $('#qt-terms').val(),
-                discount_percent: $('#qt-disc-pct').val(),
-                discount_amount: qtToRaw($('#qt-disc-amt').val()),
-                ppn_percent: $('#qt-ppn-pct').val(),
-                ppn_amount: qtToRaw($('#qt-ppn-amt').val()),
-                items: items,
-                config_items: qtCollectConfigItems(),
-                cost_items: qtCollectCostItems(),
-                cost_notes: $('#qt-cost-notes').val()
-            }, { _token: '{{ csrf_token() }}' })
-        }).done(function(res) {
-            toastr.success(res.message || 'Quotation disimpan.');
-            setTimeout(function() {
-                window.location.href = '{{ route("quotation.show", "__ID__") }}'.replace('__ID__', res.id || editId);
-            }, 700);
-        }).fail(function(xhr) {
-            var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menyimpan quotation.';
-            var errors = xhr.responseJSON && xhr.responseJSON.errors;
-            if (errors) {
-                var keys = Object.keys(errors);
-                if (keys.length) {
-                    msg = errors[keys[0]][0];
+            var url = editId
+                ? '{{ route("quotation.update", "__ID__") }}'.replace('__ID__', editId)
+                : '{{ route("quotation.store") }}';
+            var method = editId ? 'PUT' : 'POST';
+
+            $('#qt-save-btn').prop('disabled', true);
+
+            $.ajax({
+                url: url,
+                method: method,
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                data: $.extend({
+                    task_id: $('#qt-task-id').val(),
+                    quote_configuration_ids: configIds,
+                    date: $('#qt-date').val(),
+                    currency: $('#qt-currency').val(),
+                    your_ref: $('#qt-your-ref').val(),
+                    no_of_pages: $('#qt-pages').val(),
+                    to_name: $('#qt-to').val(),
+                    address: $('#qt-address').val(),
+                    attn_name: $('#qt-attn').val(),
+                    attn_phone: $('#qt-phone').val(),
+                    attn_email: $('#qt-email').val(),
+                    from_name: $('#qt-from').val(),
+                    contact_phone: $('#qt-contact-phone').val(),
+                    parameter_note: $('#qt-parameter').val(),
+                    notes: $('#qt-notes').val(),
+                    terms: $('#qt-terms').val(),
+                    discount_percent: $('#qt-disc-pct').val(),
+                    discount_amount: qtToRaw($('#qt-disc-amt').val()),
+                    ppn_percent: $('#qt-ppn-pct').val(),
+                    ppn_amount: qtToRaw($('#qt-ppn-amt').val()),
+                    formula: {
+                        ppn_amount: $('#qt-ppn-amt').data('fx-formula') || null
+                    },
+                    items: items,
+                    config_items: qtCollectConfigItems(),
+                    cost_items: qtCollectCostItems(),
+                    cost_notes: $('#qt-cost-notes').val()
+                }, { _token: '{{ csrf_token() }}' })
+            }).done(function(res) {
+                toastr.success(res.message || 'Quotation disimpan.');
+                setTimeout(function() {
+                    window.location.href = '{{ route("quotation.show", "__ID__") }}'.replace('__ID__', res.id || editId);
+                }, 700);
+            }).fail(function(xhr) {
+                var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menyimpan quotation.';
+                var errors = xhr.responseJSON && xhr.responseJSON.errors;
+                if (errors) {
+                    var keys = Object.keys(errors);
+                    if (keys.length) {
+                        msg = errors[keys[0]][0];
+                    }
                 }
-            }
-            toastr.error(msg);
-        }).always(function() {
-            $('#qt-save-btn').prop('disabled', false);
+                toastr.error(msg);
+            }).always(function() {
+                $('#qt-save-btn').prop('disabled', false);
+            });
         });
     });
 
@@ -1219,6 +1623,7 @@ $(document).ready(function() {
 
     qtRecalc();
     qtCostRecalc();
+    fxRecalcAll();
 });
 </script>
 @endsection
