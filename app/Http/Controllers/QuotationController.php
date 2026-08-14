@@ -6,6 +6,7 @@ use App\Models\Log;
 use App\Models\Module;
 use App\Models\Quotation;
 use App\Models\QuotationConfigItem;
+use App\Models\QuotationCostItem;
 use App\Models\QuotationItem;
 use App\Models\QuoteConfiguration;
 use App\Models\Task;
@@ -153,6 +154,7 @@ class QuotationController extends Controller
             'preselected' => $preselected,
             'items' => $items,
             'configItems' => [],
+            'costItems' => [],
             'templates' => $this->templateList(),
             'terms' => self::DEFAULT_TERMS,
         ]);
@@ -467,6 +469,7 @@ class QuotationController extends Controller
                     'contact_phone' => $validated['contact_phone'] ?? null,
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
+                    'cost_notes' => $validated['cost_notes'] ?? null,
                     'terms' => $validated['terms'] ?? self::DEFAULT_TERMS,
                     'status' => Quotation::STATUS_DRAFT,
                     'group_id' => null,
@@ -485,6 +488,7 @@ class QuotationController extends Controller
 
                 $this->syncItems($quotation, $validated['items']);
                 $this->syncConfigItems($quotation, $validated['config_items'] ?? []);
+                $this->syncCostItems($quotation, $validated['cost_items'] ?? []);
 
                 $totals = Quotation::calculateTotals(
                     $validated['items'],
@@ -524,7 +528,7 @@ class QuotationController extends Controller
 
     public function edit($id)
     {
-        $quotation = Quotation::with(['items', 'configItems', 'configurations', 'task'])->findOrFail($id);
+        $quotation = Quotation::with(['items', 'configItems', 'costItems', 'configurations', 'task'])->findOrFail($id);
 
         if ($quotation->status !== Quotation::STATUS_DRAFT) {
             return redirect()->route('quotation.index')
@@ -567,6 +571,16 @@ class QuotationController extends Controller
                 'quote_configuration_id' => $item->quote_configuration_id,
                 'category' => $item->category,
                 'part_number' => $item->part_number,
+                'description' => $item->description,
+                'qty' => $item->qty,
+                'price' => $item->price,
+                'unit' => $item->unit,
+            ])->all(),
+            'costItems' => $quotation->costItems->map(fn ($item) => [
+                'id' => $item->id,
+                'parent_id' => $item->parent_id,
+                'item_no' => $item->item_no,
+                'title' => $item->title,
                 'description' => $item->description,
                 'qty' => $item->qty,
                 'price' => $item->price,
@@ -638,6 +652,7 @@ class QuotationController extends Controller
                     'contact_phone' => $validated['contact_phone'] ?? null,
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
+                    'cost_notes' => $validated['cost_notes'] ?? null,
                     'terms' => $validated['terms'] ?? self::DEFAULT_TERMS,
                     'discount_percent' => $validated['discount_percent'] ?? null,
                     'discount_amount' => $validated['discount_amount'] ?? null,
@@ -649,6 +664,7 @@ class QuotationController extends Controller
 
                 $this->syncItems($quotation, $validated['items']);
                 $this->syncConfigItems($quotation, $validated['config_items'] ?? []);
+                $this->syncCostItems($quotation, $validated['cost_items'] ?? []);
 
                 $totals = Quotation::calculateTotals(
                     $validated['items'],
@@ -689,6 +705,8 @@ class QuotationController extends Controller
     {
         $quotation = Quotation::with([
             'items',
+            'configItems',
+            'costItems',
             'creator',
             'configurations.division',
             'quoteConfiguration.creator',
@@ -917,7 +935,7 @@ class QuotationController extends Controller
      */
     public function revise($id): JsonResponse
     {
-        $source = Quotation::with(['items', 'configItems', 'configurations'])->findOrFail($id);
+        $source = Quotation::with(['items', 'configItems', 'costItems', 'configurations'])->findOrFail($id);
 
         $canRevise = $source->status === Quotation::STATUS_REJECTED
             || ($source->status === Quotation::STATUS_APPROVED && $source->unlocked_at);
@@ -966,6 +984,7 @@ class QuotationController extends Controller
                 'contact_phone' => $source->contact_phone,
                 'parameter_note' => $source->parameter_note,
                 'notes' => $source->notes,
+                'cost_notes' => $source->cost_notes,
                 'terms' => $source->terms,
                 'subtotal' => $source->subtotal,
                 'dpp' => $source->dpp,
@@ -979,11 +998,14 @@ class QuotationController extends Controller
                 'created_by' => Auth::id(),
             ]);
 
+            // Salin item dengan remap parent_id (induk selalu muncul sebelum anak
+            // karena urutan sort_order / DFS).
+            $itemIdMap = [];
             foreach ($source->items as $item) {
-                $revision->items()->create([
+                $new = $revision->items()->create([
                     'item_no' => $item->item_no,
                     'quote_configuration_id' => $item->quote_configuration_id,
-                    'parent_id' => $item->parent_id,
+                    'parent_id' => $item->parent_id ? ($itemIdMap[$item->parent_id] ?? null) : null,
                     'category' => $item->category,
                     'part_number' => $item->part_number,
                     'description' => $item->description,
@@ -992,6 +1014,7 @@ class QuotationController extends Controller
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
+                $itemIdMap[$item->id] = $new->id;
             }
 
             foreach ($source->configItems as $item) {
@@ -1005,6 +1028,22 @@ class QuotationController extends Controller
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
+            }
+
+            // Salin biaya dengan remap parent_id.
+            $costIdMap = [];
+            foreach ($source->costItems as $item) {
+                $new = $revision->costItems()->create([
+                    'item_no' => $item->item_no,
+                    'parent_id' => $item->parent_id ? ($costIdMap[$item->parent_id] ?? null) : null,
+                    'title' => $item->title,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                    'price' => $item->price,
+                    'unit' => $item->unit,
+                    'sort_order' => $item->sort_order,
+                ]);
+                $costIdMap[$item->id] = $new->id;
             }
 
             foreach ($source->configurations as $config) {
@@ -1107,6 +1146,7 @@ class QuotationController extends Controller
     {
         $quotation = Quotation::with([
             'items',
+            'costItems',
             'creator',
             'configurations.division',
             'quoteConfiguration',
@@ -1119,6 +1159,28 @@ class QuotationController extends Controller
             ->setPaper('a4', 'portrait');
 
         return $pdf->stream('Quotation-'.$quotation->id.'.pdf');
+    }
+
+    /**
+     * PDF khusus tabel biaya (terpisah dari PDF quotation).
+     */
+    public function pdfCost($id)
+    {
+        $quotation = Quotation::with([
+            'items',
+            'costItems',
+            'creator',
+            'configurations.division',
+            'quoteConfiguration',
+            'opportunity.accountCompany',
+            'opportunity.accountContact',
+            'task.creator',
+        ])->findOrFail($id);
+
+        $pdf = Pdf::loadView('quotation.pdf-cost', compact('quotation'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->stream('Biaya-Quotation-'.$quotation->id.'.pdf');
     }
 
     private function validateQuotation(Request $request): array
@@ -1140,6 +1202,7 @@ class QuotationController extends Controller
             'contact_phone' => 'nullable|string|max:50',
             'parameter_note' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
+            'cost_notes' => 'nullable|string',
             'terms' => 'nullable|string',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
             'discount_amount' => 'nullable|numeric|min:0',
@@ -1164,6 +1227,15 @@ class QuotationController extends Controller
             'config_items.*.qty' => 'nullable|integer|min:0',
             'config_items.*.price' => 'nullable|numeric|min:0',
             'config_items.*.unit' => 'nullable|string|max:50',
+            'cost_items' => 'nullable|array',
+            'cost_items.*._key' => 'required|string',
+            'cost_items.*.parent_key' => 'nullable|string',
+            'cost_items.*.item_no' => 'nullable|string|max:50',
+            'cost_items.*.title' => 'nullable|string|max:200',
+            'cost_items.*.description' => 'nullable|string',
+            'cost_items.*.qty' => 'nullable|integer|min:0',
+            'cost_items.*.price' => 'nullable|numeric|min:0',
+            'cost_items.*.unit' => 'nullable|string|max:50',
         ]);
     }
 
@@ -1262,6 +1334,77 @@ class QuotationController extends Controller
 
         if (! empty($payload)) {
             QuotationConfigItem::insert($payload);
+        }
+    }
+
+    /**
+     * Simpan item biaya (Tab Biaya) dengan hierarki parent-child.
+     * Dua-pass: insert semua baris tanpa parent, lalu pasang parent_id
+     * berdasarkan parent_key. Nilai biaya TIDAK memengaruhi subtotal.
+     */
+    private function syncCostItems(Quotation $quotation, array $costItems): void
+    {
+        $quotation->costItems()->delete();
+
+        $keyMap = [];
+        $payload = [];
+
+        foreach (array_values($costItems) as $i => $item) {
+            $keyMap[$item['_key']] = $i;
+            $payload[] = [
+                'quotation_id' => $quotation->id,
+                'item_no' => $item['item_no'] ?? null,
+                'parent_id' => null,
+                'title' => $item['title'] ?? null,
+                'description' => $item['description'] ?? null,
+                'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
+                'price' => $item['price'] ?? null,
+                'unit' => $item['unit'] ?? null,
+                'sort_order' => $i + 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+
+        if (empty($payload)) {
+            return;
+        }
+
+        QuotationCostItem::insert($payload);
+
+        $inserted = QuotationCostItem::where('quotation_id', $quotation->id)
+            ->orderBy('id')
+            ->get();
+
+        $updates = [];
+
+        foreach ($costItems as $item) {
+            $parentKey = $item['parent_key'] ?? null;
+
+            if (! $parentKey || ! array_key_exists($parentKey, $keyMap)) {
+                continue;
+            }
+
+            $childIndex = $keyMap[$item['_key']];
+            $parentIndex = $keyMap[$parentKey];
+
+            if ($childIndex === $parentIndex) {
+                continue;
+            }
+
+            $child = $inserted[$childIndex] ?? null;
+            $parent = $inserted[$parentIndex] ?? null;
+
+            if ($child && $parent) {
+                $updates[] = [
+                    'id' => $child->id,
+                    'parent_id' => $parent->id,
+                ];
+            }
+        }
+
+        foreach ($updates as $update) {
+            QuotationCostItem::where('id', $update['id'])->update(['parent_id' => $update['parent_id']]);
         }
     }
 }

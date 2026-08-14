@@ -92,11 +92,6 @@
                     <input type="date" id="qt-date" name="date" class="form-control"
                         value="{{ $quotation?->date?->format('Y-m-d') ?? now()->format('Y-m-d') }}">
                 </div>
-                <div class="col-12" id="qt-configs-wrap" style="{{ $preselected ? '' : 'display:none' }}">
-                    <label class="form-label">Configuration (gabungan IMS / WATER) <span class="text-danger">*</span></label>
-                    <div id="qt-configs" class="d-flex flex-wrap gap-2"></div>
-                    <small style="color:var(--text-muted)">Centang config yang ingin digabung sebagai sumber item quotation.</small>
-                </div>
             </div>
         </div>
     </div>
@@ -187,6 +182,16 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-tab-configs" type="button" role="tab">
                         List Configuration
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-tab-costs" type="button" role="tab">
+                        Biaya
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-tab-notes" type="button" role="tab">
+                        Catatan
                     </button>
                 </li>
             </ul>
@@ -282,11 +287,117 @@
                         <i class="fa-solid fa-inbox"></i> Belum ada list configuration. Pilih task di atas untuk menampilkan configuration yang terikat.
                     </div>
                 </div>
+                <div class="tab-pane fade" id="qt-tab-costs" role="tabpanel">
+                    <div class="d-flex justify-content-end gap-2 mb-2">
+                        @if($quotation)
+                            <a href="{{ route('quotation.pdf-cost', $quotation->id) }}" target="_blank" class="btn btn-sm btn-soft">
+                                <i class="fa fa-file-pdf me-1"></i> View PDF Biaya
+                            </a>
+                        @endif
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="addQtCostTitle(null)">
+                            <i class="fa fa-tag me-1"></i> Tambah Judul
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="addQtCostItem(null)">
+                            <i class="fa fa-plus me-1"></i> Tambah Baris Manual
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-custom align-middle mb-0" id="qt-costs-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:6%">No</th>
+                                    <th style="width:45%">Judul / Deskripsi</th>
+                                    <th style="width:7%">Qty</th>
+                                    <th style="width:7%">Unit</th>
+                                    <th style="width:15%">Harga</th>
+                                    <th class="text-end" style="width:8%">Amount</th>
+                                    <th class="text-center" style="width:10%">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qt-costs-body">
+                                @php
+                                    $cRendered = [];
+                                    $cKeySeq = 0;
+                                    $cByParent = $costItems ? collect($costItems)->groupBy(fn ($it) => $it['parent_id'] ?? 'root') : collect();
+                                    $renderCost = function ($item, $depth, $cByParent, &$cRendered) use (&$renderCost, &$cKeySeq) {
+                                        if ($item['id'] && in_array($item['id'], $cRendered)) {
+                                            return;
+                                        }
+                                        if ($item['id']) {
+                                            $cRendered[] = $item['id'];
+                                        }
+                                        $key = $item['id'] ? 'cost-db-'.$item['id'] : 'cost-new-'.($item['_key'] ?? (++$cKeySeq));
+                                        $parentKey = ($item['parent_id'] ?? null)
+                                            ? 'cost-db-'.$item['parent_id']
+                                            : ($item['_parent'] ?? '');
+                                        echo '<tr data-key="'.$key.'"'
+                                            .' data-parent="'.$parentKey.'"'
+                                            .' data-depth="'.$depth.'"'
+                                            .' data-type="'.(($item['title'] ?? null) ? 'title' : 'item').'">';
+                                        echo '<td><input type="text" class="form-control form-control-sm qt-cost-no" value="'.e($item['item_no'] ?? '').'" placeholder="1 / 1.1"></td>';
+                                        echo '<td><div class="qt-desc-wrap" style="margin-left:'.($depth * 18).'px">';
+                                        echo '<div class="qt-desc" contenteditable="true" data-placeholder="Deskripsi / judul biaya...">'.\App\Models\Quotation::renderDescription($item['title'] ?? $item['description'] ?? '').'</div>';
+                                        echo '<div class="qt-desc-toolbar">';
+                                        echo '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+                                        echo '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+                                        echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+                                        echo '</div></div></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" value="'.($item['qty'] ?? '').'"></td>';
+                                        echo '<td><input type="text" class="form-control form-control-sm qt-cost-unit" value="'.e($item['unit'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" value="'.($item['price'] ?? '').'"></td>';
+                                        echo '<td class="qt-cost-amount text-end"></td>';
+                                        echo '<td class="text-center">';
+                                        echo '<button type="button" class="btn-icon" title="Tambah Judul" onclick="addQtCostTitle(this)"><i class="fa fa-tag"></i></button>';
+                                        echo '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtCostItem(this)"><i class="fa fa-plus"></i></button>';
+                                        echo '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="removeQtCostItem(this)"><i class="fa fa-trash"></i></button>';
+                                        echo '</td></tr>';
+                                        foreach (($cByParent[$item['id'] ?? null] ?? []) as $child) {
+                                            $renderCost($child, $depth + 1, $cByParent, $cRendered);
+                                        }
+                                    };
+                                    foreach ($cByParent['root'] ?? [] as $item) {
+                                        $renderCost($item, 0, $cByParent, $cRendered);
+                                    }
+                                    foreach ($costItems as $item) {
+                                        if (! in_array($item['id'] ?? null, $cRendered)) {
+                                            $renderCost($item, 0, $cByParent, $cRendered);
+                                        }
+                                    }
+                                @endphp
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex justify-content-end mt-2">
+                        <table class="table table-custom align-middle mb-0" style="max-width:340px">
+                            <tr>
+                                <td class="text-end"><strong>Total Price Biaya</strong></td>
+                                <td class="text-end fw-bold" id="qt-cost-total">0</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label">Catatan Biaya</label>
+                        <textarea class="form-control" rows="3" id="qt-cost-notes" name="cost_notes"
+                            placeholder="Catatan untuk biaya (opsional)">{{ $quotation?->cost_notes }}</textarea>
+                    </div>
+                    @if(empty($costItems))
+                        <div class="config-card-empty" id="qt-costs-empty">
+                            <i class="fa-solid fa-inbox"></i> Belum ada biaya. Tambahkan judul biaya atau baris manual.
+                        </div>
+                    @endif
+                </div>
+                <div class="tab-pane fade" id="qt-tab-notes" role="tabpanel">
+                    <div class="mb-2">
+                        <label class="form-label">Catatan Pembuatan Quotation</label>
+                        <textarea class="form-control" rows="10" id="qt-notes" name="notes"
+                            placeholder="Tulis catatan selama pembuatan quotation agar lebih paham tentang apa yang sedang dibuat.">{{ $quotation?->notes }}</textarea>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card-custom fade-in mb-3">
+    <div class="card-custom fade-in mb-3" id="qt-price-summary">
         <div class="card-header-custom">
             <span><i class="fa-solid fa-calculator me-2" style="color:var(--accent)"></i>Ringkasan Harga</span>
         </div>
@@ -294,10 +405,6 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <div class="row g-2">
-                        <div class="col-6" style="display:none"><label class="form-label">Notes / Catatan</label></div>
-                        <div class="col-12" style="display:none">
-                            <textarea class="form-control" rows="4" id="qt-notes" name="notes" placeholder="Catatan tambahan untuk customer (opsional)">{{ $quotation?->notes }}</textarea>
-                        </div>
                         <div class="col-12 mt-2">
                             <label class="form-label">Term &amp; Conditions</label>
                             <textarea class="form-control" rows="16" id="qt-terms" name="terms" style="font-family:monospace;font-size:12px">{{ $terms }}</textarea>
@@ -400,7 +507,7 @@ function qtFormatNum(el) {
 }
 
 function qtFormatAllNumeric() {
-    $('.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt').each(function() {
+    $('.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt, .qt-cost-qty, .qt-cost-price').each(function() {
         $(this).val(qtFormatInput($(this).val()));
     });
 }
@@ -560,18 +667,6 @@ function qtFillForm(data) {
     $('#qt-from').val(data.from_name || '');
     $('#qt-contact-phone').val(data.contact_phone || '');
     if (data.date) $('#qt-date').val(data.date);
-
-    // Render checkbox config
-    var wrap = $('#qt-configs');
-    wrap.empty();
-    (data.configs || []).forEach(function(c) {
-        var isChecked = qtSelectedConfigs.indexOf(c.id) !== -1;
-        var chk = $('<label class="form-check form-check-inline" style="font-size:13px">');
-        chk.append('<input type="checkbox" class="form-check-input qt-config-chk" value="' + c.id + '" ' + (isChecked ? 'checked' : '') + '>');
-        chk.append('<span class="form-check-label">' + c.label + '</span>');
-        wrap.append(chk);
-    });
-    $('#qt-configs-wrap').show();
 }
 
 // ── List Configuration (Tab 2) ──
@@ -718,22 +813,6 @@ function addQtConfigRowToCat(btn, cat) {
     qtFormatAllNumeric();
 }
 
-function showConfigListBlock(configId) {
-    if (!qtTaskData) return;
-    var c = (qtTaskData.configs || []).find(function(x) { return x.id == configId; });
-    if (!c) return;
-    if ($('.qt-config-block[data-config="' + configId + '"]').length) return;
-    var items = (qtTaskData.items || []).filter(function(it) { return it.quote_configuration_id == configId; });
-    $('#qt-config-lists').append(buildConfigBlockHtml(configId, c.label, items));
-    $('#qt-configs-empty').hide();
-    qcRecalcBlock($('.qt-config-block[data-config="' + configId + '"]'));
-    qtFormatAllNumeric();
-}
-
-function hideConfigListBlock(configId) {
-    $('.qt-config-block[data-config="' + configId + '"]').remove();
-}
-
 function qtCollectConfigItems() {
     var items = [];
     $('.qt-config-block').each(function() {
@@ -748,6 +827,120 @@ function qtCollectConfigItems() {
                 price: qtToRaw($(this).find('.qc-price').val()),
                 unit: ''
             });
+        });
+    });
+    return items;
+}
+
+// ── Biaya (Tab 3) ──
+
+let qtCostKeySeq = 0;
+
+function qtCostNewKey() {
+    return 'cost-new-' + (++qtCostKeySeq);
+}
+
+function qtCostRecalc() {
+    var total = 0;
+    $('#qt-costs-body tr').each(function() {
+        var qty = parseFloat(qtToRaw($(this).find('.qt-cost-qty').val())) || 0;
+        var price = parseFloat(qtToRaw($(this).find('.qt-cost-price').val())) || 0;
+        var amount = (qty > 0 && price > 0) ? qty * price : 0;
+        $(this).find('.qt-cost-amount').text(amount ? qtFmt(amount) : '');
+        total += amount;
+    });
+    $('#qt-cost-total').text(qtFmt(total));
+}
+
+function qtCostRowHtml(item, parentKey, isTitle) {
+    var key = item._key || qtCostNewKey();
+    var depth = 0;
+    if (parentKey) {
+        var parentRow = $('tr[data-key="' + parentKey + '"]');
+        depth = (parseInt(parentRow.attr('data-depth')) || 0) + 1;
+    }
+    var desc = isTitle ? (item.title || '') : (item.description || '');
+    var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" data-type="' + (isTitle ? 'title' : 'item') + '">';
+    html += '<td><input type="text" class="form-control form-control-sm qt-cost-no" value="' + (item.item_no || '') + '" placeholder="1 / 1.1"></td>';
+    html += '<td><div class="qt-desc-wrap" style="margin-left:' + (depth * 18) + 'px">';
+    html += '<div class="qt-desc" contenteditable="true" data-placeholder="' + (isTitle ? 'Judul biaya...' : 'Deskripsi biaya...') + '">' + (desc || '') + '</div>';
+    html += '<div class="qt-desc-toolbar">';
+    html += '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+    html += '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+    html += '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+    html += '</div></div></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" value="' + (isTitle ? '' : (item.qty != null ? item.qty : '')) + '"></td>';
+    html += '<td><input type="text" class="form-control form-control-sm qt-cost-unit" value="' + (item.unit || '') + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" value="' + (isTitle ? '' : (item.price != null ? item.price : '')) + '"></td>';
+    html += '<td class="qt-cost-amount text-end"></td>';
+    html += '<td class="text-center">';
+    html += '<button type="button" class="btn-icon" title="Tambah Judul" onclick="addQtCostTitle(this)"><i class="fa fa-tag"></i></button>';
+    html += '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtCostItem(this)"><i class="fa fa-plus"></i></button>';
+    html += '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="removeQtCostItem(this)"><i class="fa fa-trash"></i></button>';
+    html += '</td></tr>';
+
+    if (parentKey) {
+        var last = $('tr[data-key="' + parentKey + '"]');
+        var stack = [parentKey];
+        while (stack.length) {
+            var cur = stack.pop();
+            $('tr[data-key="' + cur + '"]').nextAll('tr').each(function() {
+                var p = $(this).attr('data-parent');
+                if (p === cur) {
+                    last = this;
+                    stack.push($(this).attr('data-key'));
+                }
+            });
+        }
+        $(html).insertAfter(last);
+    } else {
+        $('#qt-costs-body').append(html);
+    }
+    $('#qt-costs-empty').hide();
+    qtFormatAllNumeric();
+    qtCostRecalc();
+}
+
+function addQtCostTitle(btn) {
+    var parentKey = btn ? $(btn).closest('tr').attr('data-key') : null;
+    qtCostRowHtml({ title: '', item_no: '' }, parentKey, true);
+}
+
+function addQtCostItem(btn) {
+    var parentKey = btn ? $(btn).closest('tr').attr('data-key') : null;
+    qtCostRowHtml({ description: '', qty: '', price: '', unit: '', item_no: '' }, parentKey, false);
+}
+
+function removeQtCostItem(btn) {
+    var row = $(btn).closest('tr');
+    var key = row.attr('data-key');
+    var toRemove = [];
+    var walk = function(k) {
+        $('tr[data-parent="' + k + '"]').each(function() {
+            toRemove.push(this);
+            walk($(this).attr('data-key'));
+        });
+    };
+    walk(key);
+    toRemove.forEach(function(el) { $(el).remove(); });
+    row.remove();
+    qtCostRecalc();
+}
+
+function qtCollectCostItems() {
+    var items = [];
+    $('#qt-costs-body tr').each(function() {
+        var isTitle = $(this).attr('data-type') === 'title';
+        var desc = $(this).find('.qt-desc').html();
+        items.push({
+            _key: $(this).attr('data-key'),
+            parent_key: $(this).attr('data-parent'),
+            item_no: $(this).find('.qt-cost-no').val(),
+            title: isTitle ? desc : '',
+            description: isTitle ? '' : desc,
+            qty: qtToRaw($(this).find('.qt-cost-qty').val()),
+            price: qtToRaw($(this).find('.qt-cost-price').val()),
+            unit: $(this).find('.qt-cost-unit').val()
         });
     });
     return items;
@@ -773,6 +966,11 @@ function qtFillFormKeepItems(data) {
 }
 
 $(document).ready(function() {
+    // Ringkasan Harga hanya tampil saat tab "List Item Quotation" aktif.
+    $(document).on('shown.bs.tab', 'button[data-bs-toggle="tab"]', function(e) {
+        $('#qt-price-summary').toggle($(e.target).attr('data-bs-target') === '#qt-tab-items');
+    });
+
     $('#qt-task').select2({
         placeholder: '— Pilih Task —',
         allowClear: true,
@@ -788,8 +986,6 @@ $(document).ready(function() {
         var id = $(this).val();
         if (!id) {
             $('#qt-task-id').val('');
-            $('#qt-configs').empty();
-            $('#qt-configs-wrap').hide();
             return;
         }
         $.get(qtFetchTaskUrl, { task_id: id })
@@ -816,17 +1012,6 @@ $(document).ready(function() {
             .fail(function(xhr) {
                 toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memuat task.');
             });
-    });
-
-    $(document).on('change', '.qt-config-chk', function() {
-        var configId = $(this).val();
-        if ($(this).is(':checked')) {
-            qtSelectedConfigs.push(configId);
-            showConfigListBlock(configId);
-        } else {
-            qtSelectedConfigs = qtSelectedConfigs.filter(function(id) { return String(id) !== String(configId); });
-            hideConfigListBlock(configId);
-        }
     });
 
     $('#qt-template').on('change', function() {
@@ -871,11 +1056,13 @@ $(document).ready(function() {
 
     $(document).on('input', '#qt-items-body input, #qt-items-body textarea, #qt-items-body [contenteditable]', qtRecalc);
 
-    $(document).on('input', '.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt', function() {
+    $(document).on('input', '.qt-qty, .qt-price, .qc-qty, .qc-price, #qt-disc-amt, #qt-ppn-amt, .qt-cost-qty, .qt-cost-price', function() {
         qtFormatNum(this);
         var block = $(this).closest('.qt-config-block');
         if (block.length) {
             qcRecalcBlock(block);
+        } else if ($(this).hasClass('qt-cost-qty') || $(this).hasClass('qt-cost-price')) {
+            qtCostRecalc();
         } else {
             qtRecalc();
         }
@@ -913,10 +1100,13 @@ $(document).ready(function() {
         var block = $(this).closest('.qt-config-block');
         if (block.length) {
             qcRecalcBlock(block);
+        } else if ($(this).closest('#qt-costs-body').length) {
+            qtCostRecalc();
         } else {
             $('#qt-items-body').trigger('input');
         }
     });
+    $(document).on('input', '#qt-costs-body [contenteditable]', qtCostRecalc);
     $(document).on('input', '.qt-config-block input, .qt-config-block textarea, .qt-config-block [contenteditable]', function() {
         qcRecalcBlock($(this).closest('.qt-config-block'));
     });
@@ -937,8 +1127,7 @@ $(document).ready(function() {
             }
         }
 
-        var configIds = [];
-        $('.qt-config-chk:checked').each(function() { configIds.push($(this).val()); });
+        var configIds = (qtSelectedConfigs || []).slice();
         if (configIds.length === 0) {
             toastr.error('Pilih minimal 1 configuration.');
             return;
@@ -978,7 +1167,9 @@ $(document).ready(function() {
                 ppn_percent: $('#qt-ppn-pct').val(),
                 ppn_amount: qtToRaw($('#qt-ppn-amt').val()),
                 items: items,
-                config_items: qtCollectConfigItems()
+                config_items: qtCollectConfigItems(),
+                cost_items: qtCollectCostItems(),
+                cost_notes: $('#qt-cost-notes').val()
             }, { _token: '{{ csrf_token() }}' })
         }).done(function(res) {
             toastr.success(res.message || 'Quotation disimpan.');
@@ -1027,6 +1218,7 @@ $(document).ready(function() {
     qtFormatAllNumeric();
 
     qtRecalc();
+    qtCostRecalc();
 });
 </script>
 @endsection

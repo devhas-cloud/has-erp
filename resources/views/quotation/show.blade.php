@@ -571,53 +571,184 @@
 
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item Quotation</span>
+        <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Detail Quotation</span>
     </div>
     <div class="card-body-custom p-2">
-        <div class="table-responsive">
-            <table class="table table-custom align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th style="width:45px">No</th>
-                        <th>Deskripsi</th>
-                        <th style="width:80px" class="text-center">Qty</th>
-                        <th style="width:140px" class="text-end">Unit Price</th>
-                        <th style="width:150px" class="text-end">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @php $rows = $quotation->flattenTree(); @endphp
-                    @forelse($rows as $row)
-                        @php
-                            $item = $row['item'];
-                            $depth = $row['depth'];
-                        @endphp
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#qt-show-items" type="button" role="tab">
+                    List Item Quotation
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-configs" type="button" role="tab">
+                    List Configuration
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-costs" type="button" role="tab">
+                    Biaya
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-notes" type="button" role="tab">
+                    Catatan
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content pt-3">
+            <div class="tab-pane fade show active" id="qt-show-items" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:45px">No</th>
+                                <th>Deskripsi</th>
+                                <th style="width:80px" class="text-center">Qty</th>
+                                <th style="width:140px" class="text-end">Unit Price</th>
+                                <th style="width:150px" class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $rows = $quotation->flattenTree(); @endphp
+                            @forelse($rows as $row)
+                                @php
+                                    $item = $row['item'];
+                                    $depth = $row['depth'];
+                                @endphp
+                                <tr>
+                                    <td class="text-center" style="padding-left:{{ 8 + $depth * 20 }}px">{{ $item->item_no }}</td>
+                                    <td>
+                                        <div style="margin-left:{{ $depth * 20 }}px">
+                                            {!! \App\Models\Quotation::renderDescription($item->description) !!}
+                                            @if($item->part_number)
+                                                <div><small style="color:var(--text-muted)">PN: {{ $item->part_number }}</small></div>
+                                            @endif
+                                        </div>
+                                    </td>
+                                    <td class="text-center">{{ $item->qty ?: '' }} {{ $item->qty ? $item->unit : '' }}</td>
+                                    <td class="text-end">{{ $item->price ? \App\Models\Quotation::formatMoney($item->price) : '' }}</td>
+                                    <td class="text-end">{{ $item->qty && $item->price ? \App\Models\Quotation::formatMoney($item->qty * $item->price) : '' }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="qt-show-configs" role="tabpanel">
+                @php $configItems = $quotation->configItems; @endphp
+                @if($configItems->isNotEmpty())
+                    @php $groups = $configItems->groupBy(fn ($it) => $it->category ?: 'Lainnya'); @endphp
+                    @foreach($groups as $category => $citems)
+                        <div style="font-size:13px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;padding:10px 14px 6px">{{ $category }}</div>
+                        <div class="table-responsive">
+                            <table class="table table-custom align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width:45px">No</th>
+                                        <th>Part Number</th>
+                                        <th>Deskripsi</th>
+                                        <th style="width:80px" class="text-center">Qty</th>
+                                        <th style="width:140px" class="text-end">Unit Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($citems as $idx => $it)
+                                        <tr>
+                                            <td class="text-center">{{ $idx + 1 }}</td>
+                                            <td><code>{{ $it->part_number ?? '—' }}</code></td>
+                                            <td>{!! \App\Models\Quotation::renderDescription($it->description) !!}</td>
+                                            <td class="text-center">{{ $it->qty ?: '' }} {{ $it->unit ?: '' }}</td>
+                                            <td class="text-end">{{ $it->price ? \App\Models\Quotation::formatMoney($it->price) : '' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endforeach
+                @else
+                    <div class="text-center" style="color:var(--text-muted);padding:16px">Belum ada list configuration.</div>
+                @endif
+            </div>
+            <div class="tab-pane fade" id="qt-show-costs" role="tabpanel">
+                <div class="d-flex justify-content-end mb-2">
+                    <a href="{{ route('quotation.pdf-cost', $quotation->id) }}" target="_blank" class="btn btn-sm btn-soft">
+                        <i class="fa fa-file-pdf me-1"></i> View PDF Biaya
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:45px">No</th>
+                                <th>Judul / Deskripsi</th>
+                                <th style="width:100px" class="text-center">Qty</th>
+                                <th style="width:140px" class="text-end">Harga</th>
+                                <th style="width:150px" class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $costRows = $quotation->flattenCostTree(); @endphp
+                            @forelse($costRows as $row)
+                                @php
+                                    $citem = $row['item'];
+                                    $cdepth = $row['depth'];
+                                    $isTitle = (bool) $citem->title;
+                                    $desc = $isTitle ? $citem->title : $citem->description;
+                                @endphp
+                                <tr>
+                                    <td class="text-center" style="padding-left:{{ 8 + $cdepth * 20 }}px">{{ $citem->item_no }}</td>
+                                    <td>
+                                        <div style="margin-left:{{ $cdepth * 20 }}px;{{ $isTitle ? 'font-weight:700;' : '' }}">
+                                            {!! \App\Models\Quotation::renderDescription($desc) !!}
+                                        </div>
+                                    </td>
+                                    <td class="text-center">{{ $citem->qty ?: '' }} {{ $citem->qty ? $citem->unit : '' }}</td>
+                                    <td class="text-end">{{ $citem->price ? \App\Models\Quotation::formatMoney($citem->price) : '' }}</td>
+                                    <td class="text-end">{{ $citem->qty && $citem->price ? \App\Models\Quotation::formatMoney($citem->qty * $citem->price) : '' }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="text-center" style="color:var(--text-muted);padding:16px">Belum ada biaya.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+                @php
+                    $costTotal = $quotation->costItems->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->price ?? 0)), 0);
+                @endphp
+                <div class="d-flex justify-content-end mt-2">
+                    <table class="table table-custom align-middle mb-0" style="max-width:340px">
                         <tr>
-                            <td class="text-center" style="padding-left:{{ 8 + $depth * 20 }}px">{{ $item->item_no }}</td>
-                            <td>
-                                <div style="margin-left:{{ $depth * 20 }}px">
-                                    {!! \App\Models\Quotation::renderDescription($item->description) !!}
-                                    @if($item->part_number)
-                                        <div><small style="color:var(--text-muted)">PN: {{ $item->part_number }}</small></div>
-                                    @endif
-                                </div>
-                            </td>
-                            <td class="text-center">{{ $item->qty ?: '' }} {{ $item->qty ? $item->unit : '' }}</td>
-                            <td class="text-end">{{ $item->price ? \App\Models\Quotation::formatMoney($item->price) : '' }}</td>
-                            <td class="text-end">{{ $item->qty && $item->price ? \App\Models\Quotation::formatMoney($item->qty * $item->price) : '' }}</td>
+                            <td class="text-end fw-bold">Total Price Biaya</td>
+                            <td class="text-end fw-bold">{{ \App\Models\Quotation::formatMoney($costTotal) }}</td>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </table>
+                </div>
+                @if($quotation->cost_notes)
+                    <div class="mt-3 p-3" style="background:var(--bg);border:1px solid var(--card-border);border-radius:8px">
+                        <strong style="font-size:13px">Catatan Biaya</strong>
+                        <div style="font-size:13px;white-space:pre-line;margin-top:4px">{!! e($quotation->cost_notes) !!}</div>
+                    </div>
+                @endif
+            </div>
+            <div class="tab-pane fade" id="qt-show-notes" role="tabpanel">
+                @if($quotation->notes)
+                    <div style="font-size:13px;white-space:pre-line;padding:14px">{!! nl2br(e($quotation->notes)) !!}</div>
+                @else
+                    <div class="text-center" style="color:var(--text-muted);padding:16px">Belum ada catatan.</div>
+                @endif
+            </div>
         </div>
     </div>
 </div>
 
-<div class="card-custom fade-in mb-3">
+<div class="card-custom fade-in mb-3" id="qt-show-price-summary">
     <div class="card-header-custom">
         <span><i class="fa-solid fa-calculator me-2" style="color:var(--accent)"></i>Ringkasan Harga</span>
     </div>
@@ -738,6 +869,13 @@
 let qtRejectModalInstance = null;
 let qtTrackModalInstance = null;
 const qtId = {{ $quotation->id }};
+
+$(document).ready(function() {
+    // Ringkasan Harga hanya tampil saat tab "List Item Quotation" aktif.
+    $(document).on('shown.bs.tab', 'button[data-bs-toggle="tab"]', function(e) {
+        $('#qt-show-price-summary').toggle($(e.target).attr('data-bs-target') === '#qt-show-items');
+    });
+});
 
 const quotationSubmitUrl = '{{ route("quotation.submit", "__ID__") }}';
 const quotationApproveUrl = '{{ route("quotation.approve", "__ID__") }}';

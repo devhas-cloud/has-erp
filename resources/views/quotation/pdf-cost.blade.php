@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Quotation {{ $quotation->quotation_number }}</title>
+    <title>Biaya Quotation {{ $quotation->quotation_number }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -13,7 +13,6 @@
             line-height: 1.45;
         }
 
-        /* Header diulang otomatis di setiap halaman oleh DomPDF */
         .doc-header {
             position: fixed;
             top: 0;
@@ -114,42 +113,6 @@
         }
         .catatan .catatan-title { font-weight: 700; }
 
-        .totals {
-            width: 260px;
-            margin-left: auto;
-            margin-bottom: 14px;
-        }
-        .totals table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .totals td {
-            padding: 3px 6px;
-            font-size: 10.5px;
-            border: 1px solid #999;
-        }
-        .totals td.l { font-weight: 600; }
-        .totals td.v { text-align: right; }
-        .totals tr.grand td {
-            background: #e8e8e8;
-            font-weight: 800;
-            font-size: 11.5px;
-        }
-
-        .terms {
-            margin: 12px 0 8px;
-            font-size: 9.5px;
-        }
-        .terms .terms-title {
-            font-weight: 700;
-            text-decoration: underline;
-            margin-bottom: 4px;
-        }
-        .terms .closing {
-            margin-top: 8px;
-            font-weight: 700;
-        }
-
         .sign {
             width: 100%;
             margin-top: 48px;
@@ -188,18 +151,12 @@
         <div class="npwp">NPWP : 02.593.153.6 027.000</div>
     </div>
 
-    <div class="doc-title">QUOTATION</div>
+    <div class="doc-title">COST / BIAYA</div>
 
     <table class="info">
         <tr>
             <td class="k">To</td>
             <td>{{ $quotation->to_name ?? '—' }}</td>
-            <td class="kr">From</td>
-            <td class="right">{{ $quotation->from_name ?? '—' }}</td>
-        </tr>
-        <tr>
-            <td class="k">Address</td>
-            <td>{!! nl2br(e($quotation->address ?? '—')) !!}</td>
             <td class="kr">Date</td>
             <td class="right">{{ $quotation->date?->format('d F Y') ?? '—' }}</td>
         </tr>
@@ -209,32 +166,9 @@
             <td class="kr">Our Ref</td>
             <td class="right">{{ $quotation->quotation_number ?? '—' }}</td>
         </tr>
-        <tr>
-            <td class="k">Telp</td>
-            <td>{{ $quotation->attn_phone ?? '—' }}</td>
-            <td class="kr">Currency</td>
-            <td class="right">{{ $quotation->currency ?? 'Rupiah' }}</td>
-        </tr>
-        <tr>
-            <td class="k">Email</td>
-            <td>{{ $quotation->attn_email ?? '—' }}</td>
-            <td class="kr">Your Ref</td>
-            <td class="right">{{ $quotation->your_ref ?? '' }}</td>
-        </tr>
-        <tr>
-            <td class="k"></td>
-            <td></td>
-            <td class="kr">No of Pages</td>
-            <td class="right">{{ $quotation->no_of_pages }} {{ $quotation->no_of_pages > 1 ? 'Pages' : 'Page' }}</td>
-        </tr>
     </table>
 
-    <div class="salutation">
-        Dear Customer,<br>
-        Thank you for your inquiry &amp; we are pleased to quote as follow :
-    </div>
-
-    @php $rows = $quotation->flattenTree(); @endphp
+    @php $costRows = $quotation->flattenCostTree(); @endphp
 
     <table class="parts">
         <thead>
@@ -247,65 +181,43 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($rows as $row)
+            @forelse($costRows as $row)
                 @php
-                    $item = $row['item'];
-                    $depth = $row['depth'];
+                    $citem = $row['item'];
+                    $cdepth = $row['depth'];
+                    $isTitle = (bool) $citem->title;
+                    $desc = $isTitle ? $citem->title : $citem->description;
                 @endphp
                 <tr>
-                    <td class="no-col">{{ $item->item_no }}</td>
+                    <td class="no-col">{{ $citem->item_no }}</td>
                     <td>
-                        <div style="padding-left:{{ $depth * 14 }}px">
-                            {!! \App\Models\Quotation::renderDescription($item->description) !!}
-                            @if($item->part_number)
-                                <div style="font-size:9px;color:#444">Part Number : {{ $item->part_number }}</div>
-                            @endif
+                        <div style="padding-left:{{ $cdepth * 14 }}px;{{ $isTitle ? 'font-weight:700;' : '' }}">
+                            {!! \App\Models\Quotation::renderDescription($desc) !!}
                         </div>
                     </td>
-                    <td class="qty-col">{{ $item->qty ?: '' }} {{ $item->qty ? $item->unit : '' }}</td>
-                    <td class="price-col">{{ $item->price ? \App\Models\Quotation::formatMoney($item->price) : '' }}</td>
-                    <td class="amount-col">{{ $item->qty && $item->price ? \App\Models\Quotation::formatMoney($item->qty * $item->price) : '' }}</td>
+                    <td class="qty-col">{{ $citem->qty ?: '' }} {{ $citem->qty ? $citem->unit : '' }}</td>
+                    <td class="price-col">{{ $citem->price ? \App\Models\Quotation::formatMoney($citem->price) : '' }}</td>
+                    <td class="amount-col">{{ $citem->qty && $citem->price ? \App\Models\Quotation::formatMoney($citem->qty * $citem->price) : '' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" style="text-align:center;color:#999">Tidak ada item.</td>
+                    <td colspan="5" style="text-align:center;color:#999">Belum ada biaya.</td>
                 </tr>
             @endforelse
         </tbody>
+        <tfoot>
+            @php $costTotal = $quotation->costItems->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->price ?? 0)), 0); @endphp
+            <tr class="cat-row">
+                <td colspan="4" style="text-align:right">Total Price Biaya</td>
+                <td style="text-align:right">{{ \App\Models\Quotation::formatMoney($costTotal) }}</td>
+            </tr>
+        </tfoot>
     </table>
 
-    <div class="totals">
-        <table>
-            <tr>
-                <td class="l">Subtotal</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->subtotal) }}</td>
-            </tr>
-            @if($quotation->discount_amount > 0)
-            <tr>
-                <td class="l">Discount</td>
-                <td class="v">({{ \App\Models\Quotation::formatMoney($quotation->discount_amount) }})</td>
-            </tr>
-            @endif
-            <tr>
-                <td class="l">DPP Pajak</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->dpp) }}</td>
-            </tr>
-            <tr>
-                <td class="l">PPN{{ $quotation->ppn_percent ? ' ('.$quotation->ppn_percent.'%)' : '' }}</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->ppn) }}</td>
-            </tr>
-            <tr class="grand">
-                <td class="l">Full Amount</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->grand_total) }}</td>
-            </tr>
-        </table>
-    </div>
-
-    @if($quotation->terms)
-        <div class="terms">
-            <div class="terms-title">Term &amp; Conditions :</div>
-             <div style="font-family:monospace;font-size:10px; white-space: pre-wrap;">{!! e($quotation->terms) !!}</div>
-            <div class="closing">Goods has been Purchased can not be Returned, Refunded or Exchanged</div>
+    @if($quotation->cost_notes)
+        <div class="catatan">
+            <span class="catatan-title">Catatan Biaya :</span><br>
+            {!! nl2br(e($quotation->cost_notes)) !!}
         </div>
     @endif
 

@@ -68,6 +68,7 @@ class Quotation extends Model
         'contact_phone',
         'parameter_note',
         'notes',
+        'cost_notes',
         'terms',
         'subtotal',
         'dpp',
@@ -113,6 +114,11 @@ class Quotation extends Model
     public function configItems(): HasMany
     {
         return $this->hasMany(QuotationConfigItem::class)->orderBy('sort_order');
+    }
+
+    public function costItems(): HasMany
+    {
+        return $this->hasMany(QuotationCostItem::class)->orderBy('sort_order');
     }
 
     public function configurations(): BelongsToMany
@@ -199,6 +205,28 @@ class Quotation extends Model
     public function flattenTree(): array
     {
         $all = $this->items->keyBy('id');
+        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
+
+        $walk = function ($parentId, int $depth, &$rows) use (&$walk, $children) {
+            foreach ($children[$parentId] ?? [] as $item) {
+                $rows[] = ['item' => $item, 'depth' => $depth];
+                $walk($item->id, $depth + 1, $rows);
+            }
+        };
+
+        $rows = [];
+        $walk('_root', 0, $rows);
+
+        return $rows;
+    }
+
+    /**
+     * Item biaya (quotation_cost_items) diratakan DFS untuk ditampilkan
+     * dengan indentasi sesuai kedalaman. Judul (title) adalah baris header.
+     */
+    public function flattenCostTree(): array
+    {
+        $all = $this->costItems->keyBy('id');
         $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
 
         $walk = function ($parentId, int $depth, &$rows) use (&$walk, $children) {

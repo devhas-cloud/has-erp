@@ -133,6 +133,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('quotation/{id}/revise', [QuotationController::class, 'revise'])->name('quotation.revise');
     Route::get('quotation/{id}/versions', [QuotationController::class, 'versions'])->name('quotation.versions');
     Route::get('quotation/{id}/pdf', [QuotationController::class, 'pdf'])->name('quotation.pdf');
+    Route::get('quotation/{id}/pdf-cost', [QuotationController::class, 'pdfCost'])->name('quotation.pdf-cost');
     Route::resource('quotation', QuotationController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
