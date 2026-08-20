@@ -80,6 +80,7 @@
             padding: 4px 6px;
             border: 1px solid #999;
             font-size: 11px;
+            text-align: center;
         }
         .no-col { width: 34px; text-align: center; }
         .pn-col { width: 130px; }
@@ -175,11 +176,44 @@
 
     <div class="parameter">Parameter {{ $quotation->parameter_note }}</div>
 
-    @php
-        $groups = $quotation->itemsGroupedByCategory();
-        $no = 1;
-        $totalItems = $quotation->items->count();
-    @endphp
+@php
+    $all = $quotation->items->keyBy('id');
+    $children = $all->groupBy(fn ($i) => $i->parent_id ?: '_root');
+
+    // Kelompokkan per root (parent) berdasarkan kategori, urut kemunculan pertama.
+    $groupMap = [];
+    $groupOrder = [];
+    foreach ($children['_root'] ?? [] as $root) {
+        $cat = $root->category ?: 'Lainnya';
+        if (! isset($groupMap[$cat])) {
+            $groupMap[$cat] = [];
+            $groupOrder[] = $cat;
+        }
+        $groupMap[$cat][] = $root;
+    }
+
+    $groups = [];
+    foreach ($groupOrder as $cat) {
+        $catRows = [];
+        $walk = function ($parentId, $depth) use (&$walk, &$catRows, $children) {
+            foreach ($children[$parentId] ?? [] as $item) {
+                $catRows[] = ['item' => $item, 'depth' => $depth];
+                $walk($item->id, $depth + 1);
+            }
+        };
+        foreach ($groupMap[$cat] as $root) {
+            $kids = $children[$root->id] ?? collect();
+            if ($kids->isEmpty()) {
+                // Root tanpa children: render sebagai baris data.
+                $catRows[] = ['item' => $root, 'depth' => 0];
+            } else {
+                // Root = header kategori; children mulai kedalaman 1.
+                $walk($root->id, 1);
+            }
+        }
+        $groups[] = ['category' => $cat, 'rows' => $catRows];
+    }
+@endphp
 
     <table class="parts">
         <thead>
@@ -191,19 +225,29 @@
             </tr>
         </thead>
         <tbody>
-            @foreach($groups as $category => $items)
+            @forelse($groups as $group)
                 <tr class="cat-row">
-                    <td colspan="4">{{ $category }}</td>
+                    <td colspan="4">{{ $group['category'] }}</td>
                 </tr>
-                @foreach($items as $item)
+                @foreach($group['rows'] as $row)
+                    @php
+                        $item = $row['item'];
+                        $depth = $row['depth'];
+                    @endphp
                     <tr>
-                        <td class="no-col">{{ $no++ }}</td>
-                        <td class="pn-col">{{ $item->part_number }}</td>
-                        <td>{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
+                        <td class="no-col" style="padding-left:{{ 6 + $depth * 12 }}px">{{ $item->item_no }}</td>
+                        <td class="pn-col" style="padding-left:{{ 4 + $depth * 12 }}px">{{ $item->part_number }}</td>
+                        <td>
+                            <div>{!! \App\Models\Quotation::renderDescription($item->description) !!}</div>
+                        </td>
                         <td class="qty-col">{{ $item->qty }}</td>
                     </tr>
                 @endforeach
-            @endforeach
+            @empty
+                <tr>
+                    <td colspan="4" style="text-align:center;color:#999">Tidak ada item.</td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
 

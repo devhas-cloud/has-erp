@@ -196,12 +196,27 @@ class QuoteConfiguration extends Model
         };
     }
 
-    public function itemsGroupedByCategory(): array
+    /**
+     * Item hierarki (parent-child) diratakan DFS agar parent dirender
+     * sebelum anak. Penomoran ditentukan manual via item_no, di sini hanya
+     * dihitung kedalaman (depth) untuk indentasi tampilan.
+     */
+    public function flattenTree(): array
     {
-        return $this->items
-            ->groupBy(fn ($item) => $item->category ?: 'Lainnya')
-            ->map(fn ($group) => $group->values())
-            ->all();
+        $all = $this->items->keyBy('id');
+        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
+
+        $walk = function ($parentId, int $depth, &$rows) use (&$walk, $children) {
+            foreach ($children[$parentId] ?? [] as $item) {
+                $rows[] = ['item' => $item, 'depth' => $depth];
+                $walk($item->id, $depth + 1, $rows);
+            }
+        };
+
+        $rows = [];
+        $walk('_root', 0, $rows);
+
+        return $rows;
     }
 
     public function totalQty(): int

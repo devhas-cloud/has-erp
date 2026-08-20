@@ -40,6 +40,76 @@ class WaterConfigurationController extends Controller
             'items' => [],
             'categories' => $categories,
             'tasks' => $tasks,
+            'templates' => $this->templateList(),
+        ]);
+    }
+
+    /**
+     * Daftar configuration divisi WATER yang pernah dibuat, dipakai sebagai
+     * template isian. Hanya versi terakhir tiap group yang disertakan.
+     */
+    private function templateList(): array
+    {
+        $waterId = Division::where('division_name', 'WATER')->value('id');
+        if (! $waterId) {
+            return [];
+        }
+
+        $latestIds = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('division_id', $waterId)
+            ->groupBy('group_id')
+            ->pluck('id');
+
+        return QuoteConfiguration::with(['items', 'task', 'opportunity.accountCompany'])
+            ->whereIn('id', $latestIds)
+            ->where('division_id', $waterId)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($config) => [
+                'id' => $config->id,
+                'label' => ($config->opportunity?->opportunity_name ?? $config->task?->title ?? 'Configuration #'.$config->id)
+                    .' — '.($config->date?->format('d/m/Y') ?? '—')
+                    .' ('.($config->items->whereNull('parent_id')->count()).' parent)',
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ambil item (parent + children) dari sebuah configuration sebagai template
+     * isian, dalam urutan DFS sehingga parent muncul sebelum children.
+     */
+    public function fetchTemplate(Request $request, $id): JsonResponse
+    {
+        $config = QuoteConfiguration::with(['items'])
+            ->findOrFail($id);
+
+        $all = $config->items->keyBy('id');
+        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
+
+        $items = [];
+        $walk = function ($parentId) use (&$walk, &$items, $children) {
+            foreach ($children[$parentId] ?? [] as $item) {
+                $items[] = [
+                    '_key' => 'tpl-'.$item->id,
+                    'parent_key' => $item->parent_id ? 'tpl-'.$item->parent_id : null,
+                    'item_no' => $item->item_no,
+                    'product_id' => $item->product_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                ];
+                $walk($item->id);
+            }
+        };
+
+        $walk('_root');
+
+        return response()->json([
+            'success' => true,
+            'items' => $items,
         ]);
     }
 
@@ -224,11 +294,14 @@ class WaterConfigurationController extends Controller
             'parameter_note' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
+            'items.*._key' => 'required|string',
+            'items.*.parent_key' => 'nullable|string',
+            'items.*.item_no' => 'nullable|string|max:50',
             'items.*.product_id' => 'nullable|exists:master_products,id',
             'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
-            'items.*.qty' => 'required|integer|min:1',
+            'items.*.qty' => 'nullable|integer',
             'items.*.price' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
@@ -399,11 +472,14 @@ class WaterConfigurationController extends Controller
             'parameter_note' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
+            'items.*._key' => 'required|string',
+            'items.*.parent_key' => 'nullable|string',
+            'items.*.item_no' => 'nullable|string|max:50',
             'items.*.product_id' => 'nullable|exists:master_products,id',
             'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
-            'items.*.qty' => 'required|integer|min:1',
+            'items.*.qty' => 'nullable|integer',
             'items.*.price' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
@@ -747,8 +823,13 @@ class WaterConfigurationController extends Controller
                 'created_by' => Auth::id(),
             ]);
 
+            // Salin item dengan remap parent_id (induk selalu muncul sebelum
+            // anak karena urutan sort_order / DFS).
+            $itemIdMap = [];
             foreach ($source->items as $item) {
-                $revision->items()->create([
+                $new = $revision->items()->create([
+                    'item_no' => $item->item_no,
+                    'parent_id' => $item->parent_id ? ($itemIdMap[$item->parent_id] ?? null) : null,
                     'product_id' => $item->product_id,
                     'category' => $item->category,
                     'part_number' => $item->part_number,
@@ -758,6 +839,7 @@ class WaterConfigurationController extends Controller
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
+                $itemIdMap[$item->id] = $new->id;
             }
 
             return $revision;
@@ -904,20 +986,46 @@ class WaterConfigurationController extends Controller
         ]);
     }
 
+    /**
+     * Simpan item hierarki (parent-child): pass 1 insert semua baris tanpa
+     * parent_id, lalu pass 2 pasang parent_id berdasarkan parent_key.
+     */
     private function syncItems(QuoteConfiguration $quotation, array $items): void
     {
         $quotation->items()->delete();
 
+        $keyMap = [];
         $payload = [];
+
+        // Ambil harga produk dari database agar tidak terjadi selisih harga.
+        $productIds = collect($items)
+            ->pluck('product_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $productPrices = MasterProduct::whereIn('id', $productIds)
+            ->pluck('price', 'id')
+            ->map(fn ($price) => (float) $price)
+            ->all();
+
         foreach (array_values($items) as $i => $item) {
+            $keyMap[$item['_key']] = $i;
+
+            $qty = (int) ($item['qty'] ?? 0);
+            $productId = $item['product_id'] ?? null;
+            $productPrice = $productId ? ($productPrices[$productId] ?? 0) : 0;
+
             $payload[] = [
                 'quote_configuration_id' => $quotation->id,
-                'product_id' => $item['product_id'] ?? null,
+                'item_no' => $item['item_no'] ?? null,
+                'parent_id' => null,
+                'product_id' => $productId,
                 'category' => $item['category'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
-                'qty' => (int) ($item['qty'] ?? 1),
-                'price' => $item['price'] ?? null,
+                'qty' => $qty,
+                'price' => $qty <= 0 ? 0 : $productPrice,
                 'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
@@ -926,5 +1034,40 @@ class WaterConfigurationController extends Controller
         }
 
         QuoteConfigurationItem::insert($payload);
+
+        $inserted = QuoteConfigurationItem::where('quote_configuration_id', $quotation->id)
+            ->orderBy('id')
+            ->get();
+
+        $updates = [];
+
+        foreach ($items as $item) {
+            $parentKey = $item['parent_key'] ?? null;
+
+            if (! $parentKey || ! array_key_exists($parentKey, $keyMap)) {
+                continue;
+            }
+
+            $childIndex = $keyMap[$item['_key']];
+            $parentIndex = $keyMap[$parentKey];
+
+            if ($childIndex === $parentIndex) {
+                continue;
+            }
+
+            $child = $inserted[$childIndex] ?? null;
+            $parent = $inserted[$parentIndex] ?? null;
+
+            if ($child && $parent) {
+                $updates[] = [
+                    'id' => $child->id,
+                    'parent_id' => $parent->id,
+                ];
+            }
+        }
+
+        foreach ($updates as $update) {
+            QuoteConfigurationItem::where('id', $update['id'])->update(['parent_id' => $update['parent_id']]);
+        }
     }
 }

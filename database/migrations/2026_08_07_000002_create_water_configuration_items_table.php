@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('category', 100)->nullable();
             $table->string('part_number', 100)->nullable();
             $table->text('description')->nullable();
-            $table->integer('qty')->default(1);
+            $table->integer('qty')->nullable();
             $table->integer('sort_order')->default(0);
             $table->timestamps();
 

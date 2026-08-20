@@ -22,7 +22,7 @@
         border: 1px solid var(--card-border, #ced4da);
         border-radius: .25rem;
         padding: .25rem .5rem;
-        min-height: 58px;
+        min-height: 34px;
         background: #fff;
         font-size: .85rem;
         line-height: 1.45;
@@ -36,6 +36,47 @@
         content: attr(data-placeholder);
         color: #999;
     }
+    .wc-desc-wrap { position: relative; }
+    .wc-desc-toolbar {
+        position: absolute;
+        top: 2px;
+        right: 4px;
+        display: flex;
+        gap: 2px;
+        opacity: .55;
+    }
+    .wc-desc-toolbar button {
+        border: 1px solid var(--card-border, #ced4da);
+        background: #fff;
+        border-radius: 3px;
+        font-size: 11px;
+        line-height: 1;
+        padding: 2px 5px;
+        cursor: pointer;
+        color: var(--text-primary);
+    }
+    .wc-desc-toolbar button:hover { background: var(--bg); opacity: 1; }
+    .wc-desc-wrap:hover .wc-desc-toolbar { opacity: 1; }
+    .wc-cat[contenteditable="true"] {
+        border: 1px solid var(--card-border, #ced4da);
+        border-radius: .25rem;
+        padding: .25rem .5rem;
+        min-height: 34px;
+        background: #fff;
+        font-size: .85rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+    }
+    .wc-cat[contenteditable="true"]:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .wc-cat[contenteditable="true"]:empty::before {
+        content: attr(data-placeholder);
+        color: #999;
+    }
+    #wc-items-table { table-layout: fixed; }
+    #wc-items-table .wc-part-display { word-break: break-word; }
 </style>
 @endsection
 
@@ -43,7 +84,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">{{ $quotation ? 'Edit Quote Configuration #'.$quotation->id : 'Buat Quote Configuration' }}</h1>
-        <p class="page-header-sub">Pilih task quote, data customer otomatis terambil. Tambahkan item part, lalu simpan sebagai draft.</p>
+        <p class="page-header-sub">Pilih task quote, data customer otomatis terambil. Item part disusun hierarki — baris parent bisa punya child melalui tombol ＋, lalu simpan sebagai draft.</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ route('water-configuration.index') }}" class="btn btn-secondary btn-sm">
@@ -125,45 +166,90 @@
     <div class="card-custom fade-in mb-3">
         <div class="card-header-custom d-flex justify-content-between align-items-center">
             <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument</span>
-            <button type="button" class="btn btn-primary btn-sm" onclick="openProductPicker()">
-                <i class="fa fa-plus me-1"></i> Tambah Item
-            </button>
+            <div class="d-flex gap-2 align-items-center">
+                @if(! $quotation)
+                <select id="wc-template" class="form-select form-select-sm" style="width:auto">
+                    <option value="">— Pilih Template (Configuration) —</option>
+                    @foreach($templates as $tpl)
+                        <option value="{{ $tpl['id'] }}">{{ $tpl['label'] }}</option>
+                    @endforeach
+                </select>
+                @endif
+                <button type="button" class="btn btn-primary btn-sm" onclick="openProductPickerAsParent()">
+                    <i class="fa fa-plus me-1"></i> Tambah Item
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addItemRow({}, null)">
+                    <i class="fa fa-plus me-1"></i> Tambah Baris Manual
+                </button>
+            </div>
         </div>
         <div class="card-body-custom p-2">
             <div class="table-responsive">
                 <table class="table table-custom align-middle mb-0" id="wc-items-table">
                     <thead>
                         <tr>
-                            <th style="width:40px">#</th>
-                            <th style="min-width:260px">Produk (Part Number)</th>
-                            <th style="width:150px">Kategori</th>
-                            <th>Deskripsi</th>
-                            <th style="width:120px">Qty</th>
-                            <th class="text-center" style="width:130px">Aksi</th>
+                            <th style="width:50px">No</th>
+                            <th style="width:120px">Produk (Part Number)</th>
+                            <th style="width:120px">Kategori</th>
+                            <th style="width:300px">Deskripsi</th>
+                            <th style="width:55px">Qty</th>
+                            <th class="text-center" style="width:150px">Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="wc-items-body">
-                        @forelse($items as $item)
-                        <tr data-row="{{ $loop->iteration }}" class="wc-item-row">
-                            <td class="text-center wc-row-num">{{ $loop->iteration }}</td>
-                            <td>
-                                <input type="hidden" class="wc-product-id" value="{{ $item->product_id }}">
-                                <input type="hidden" class="wc-part" value="{{ $item->part_number }}">
-                                <code class="wc-part-display" style="color:var(--accent)">{{ $item->part_number ?: ($item->product?->code ?: '—') }}</code>
-                            </td>
-                            <td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="{{ $item->category }}"></td>
-                            <td><div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">{!! \App\Models\Quotation::renderDescription($item->description) !!}</div></td>
-                            <td><input type="number" class="form-control form-control-sm wc-qty" value="{{ $item->qty }}" min="1"></td>
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-1">
-                                    <button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>
-                                    <button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>
-                                    <button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)" title="Hapus"><i class="fa fa-trash" style="color:var(--danger)"></i></button>
-                                </div>
-                            </td>
-                        </tr>
-                        @empty
-                        @endforelse
+                        @php
+                            $rendered = [];
+                            $wcKeySeq = 0;
+                            $wcByParent = $items ? collect($items)->groupBy(fn ($it) => $it->parent_id ?? 'root') : collect();
+                            $wcRenderItem = function ($item, $depth, $wcByParent, &$rendered) use (&$wcRenderItem, &$wcKeySeq) {
+                                if ($item->id && in_array($item->id, $rendered)) {
+                                    return;
+                                }
+                                if ($item->id) {
+                                    $rendered[] = $item->id;
+                                }
+                                $key = $item->id ? 'db-'.$item->id : 'new-'.(++$wcKeySeq);
+                                $parentKey = $item->parent_id ? 'db-'.$item->parent_id : '';
+                                $isParent = $depth === 0;
+                                echo '<tr data-key="'.$key.'" data-parent="'.$parentKey.'" data-depth="'.$depth.'" class="wc-item-row">';
+                                echo '<td><input type="text" class="form-control form-control-sm wc-item-no text-center" value="'.e($item->item_no ?? '').'" placeholder="1 / 1.1"></td>';
+                                echo '<td><input type="hidden" class="wc-product-id" value="'.$item->product_id.'">';
+                                echo '<input type="hidden" class="wc-part" value="'.e($item->part_number).'">';
+                                echo '<input type="hidden" class="wc-category-data" value="'.e($item->category).'">';
+                                echo '<code class="wc-part-display" style="color:var(--accent)">'.e($item->part_number ?: ($item->product?->code ?: '—')).'</code></td>';
+                                if ($isParent) {
+                                    echo '<td><div class="form-control form-control-sm wc-cat" contenteditable="true" data-placeholder="Kategori">'.e($item->category).'</div></td>';
+                                } else {
+                                    echo '<td></td>';
+                                }
+                                echo '<td><div class="wc-desc-wrap" style="margin-left:'.($depth * 18).'px">';
+                                echo '<div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">'.\App\Models\Quotation::renderDescription($item->description).'</div>';
+                                echo '<div class="wc-desc-toolbar">';
+                                echo '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+                                echo '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+                                echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+                                echo '</div></div></td>';
+                                echo '<td class="text-center"><input type="number" class="form-control form-control-sm wc-qty text-center" value="'.$item->qty.'"></td>';
+                                echo '<td class="text-center">';
+                                echo '<div class="d-flex justify-content-center gap-1">';
+                                echo '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
+                                echo '<button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>';
+                                echo '<button type="button" class="btn btn-sm btn-soft" onclick="openProductPicker(this)" title="Tambah Item di bawah baris ini"><i class="fa fa-plus" style="color:var(--accent)"></i></button>';
+                                echo '<button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)" title="Hapus"><i class="fa fa-trash" style="color:var(--danger)"></i></button>';
+                                echo '</div></td></tr>';
+                                foreach (($wcByParent[$item->id] ?? []) as $child) {
+                                    $wcRenderItem($child, $depth + 1, $wcByParent, $rendered);
+                                }
+                            };
+                        @endphp
+                        @foreach($wcByParent['root'] ?? [] as $item)
+                            @php($wcRenderItem($item, 0, $wcByParent, $rendered))
+                        @endforeach
+                        @foreach($items ?? [] as $item)
+                            @if(! in_array($item->id, $rendered))
+                                @php($wcRenderItem($item, 0, $wcByParent, $rendered))
+                            @endif
+                        @endforeach
                     </tbody>
                 </table>
             </div>
@@ -187,11 +273,6 @@
     </div>
 </form>
 
-<datalist id="wc-category-list">
-    @foreach($categories as $category)
-        <option value="{{ $category }}"></option>
-    @endforeach
-</datalist>
 @endsection
 
 @push('modals')
@@ -199,7 +280,8 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Pilih Part Instrument</h6>
+                <h6 class="modal-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Pilih Part Instrument
+                    <small id="pp-target-label" style="font-size:11px;color:var(--text-muted);font-weight:400"></small></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -238,12 +320,14 @@ let ppTable = null;
 let ppModalInstance = null;
 let existingProductIds = [];
 let ppSelected = {};
+let ppTargetParentKey = null;
 
 const wcStoreUrl = '{{ route("water-configuration.store") }}';
 const wcUpdateUrl = '{{ route("water-configuration.update", "__ID__") }}';
 const wcIndexUrl = '{{ route("water-configuration.index") }}';
 const wcSearchUrl = '{{ route("water-configuration.search-products") }}';
 const wcFetchTaskUrl = '{{ route("water-configuration.fetch-task") }}';
+const wcFetchTemplateUrl = '{{ route("water-configuration.fetch-template", "__ID__") }}';
 
 function applyTaskData(data) {
     $('#wc-task-id').val(data.task_id || '');
@@ -283,13 +367,23 @@ $(document).on('change', '#wc-task', function() {
     });
 });
 
-function openProductPicker() {
+function openProductPicker(btn) {
+    ppTargetParentKey = null;
+    $('#pp-target-label').text('');
+    if (btn) {
+        var $row = $(btn).closest('tr.wc-item-row');
+        ppTargetParentKey = $row.attr('data-key');
+        var part = $row.find('.wc-part').val() || $row.find('.wc-part-display').text().trim();
+        $('#pp-target-label').text('→ sebagai item di bawah ' + (part || 'baris ini'));
+    }
+
+    ppSelected = {};
+    existingProductIds = [];
+    $('#wc-items-body .wc-product-id').each(function() {
+        var v = $(this).val();
+        if (v) existingProductIds.push(v);
+    });
     if (ppTable) {
-        existingProductIds = [];
-        $('#wc-items-body .wc-product-id').each(function() {
-            var v = $(this).val();
-            if (v) existingProductIds.push(v);
-        });
         ppTable.ajax.reload();
     }
     if (!ppModalInstance) {
@@ -298,89 +392,121 @@ function openProductPicker() {
     ppModalInstance.show();
 }
 
-function addItemRow(item) {
-    item = item || {};
-    wcRowIndex++;
+function openProductPickerAsParent() {
+    ppTargetParentKey = null;
+    $('#pp-target-label').text('→ sebagai parent (baris utama)');
 
-    var html = '<tr data-row="' + wcRowIndex + '" class="wc-item-row">';
-    html += '<td class="text-center wc-row-num">' + wcRowIndex + '</td>';
+    ppSelected = {};
+    existingProductIds = [];
+    $('#wc-items-body .wc-product-id').each(function() {
+        var v = $(this).val();
+        if (v) existingProductIds.push(v);
+    });
+    if (ppTable) {
+        ppTable.ajax.reload();
+    }
+    if (!ppModalInstance) {
+        ppModalInstance = new bootstrap.Modal(document.getElementById('productPickerModal'));
+    }
+    ppModalInstance.show();
+}
+
+function addItemRow(item, parentKey) {
+    item = item || {};
+    var key;
+    if (item._key) {
+        key = item._key;
+    } else {
+        wcRowIndex++;
+        key = 'new-' + wcRowIndex;
+    }
+    var depth = 0;
+    if (parentKey) {
+        var parentRow = $('tr[data-key="' + parentKey + '"]');
+        depth = (parseInt(parentRow.attr('data-depth')) || 0) + 1;
+    }
+    var isParent = !parentKey;
+
+    var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" class="wc-item-row">';
+    html += '<td><input type="text" class="form-control form-control-sm wc-item-no text-center" value="' + (item.item_no || '') + '" placeholder="1 / 1.1"></td>';
     html += '<td><input type="hidden" class="wc-product-id" value="' + (item.id || item.product_id || '') + '">';
     html += '<input type="hidden" class="wc-part" value="' + (item.code || item.part_number || '') + '">';
+    html += '<input type="hidden" class="wc-category-data" value="' + (item.category || '') + '">';
     html += '<code class="wc-part-display" style="color:var(--accent)">' + (item.code || item.part_number || '—') + '</code></td>';
-    html += '<td><input type="text" class="form-control form-control-sm wc-category" list="wc-category-list" placeholder="Kategori bebas" value="' + (item.category || '') + '"></td>';
-    html += '<td><div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</div></td>';
-    html += '<td><input type="number" class="form-control form-control-sm wc-qty" value="1" min="1"></td>';
+    if (isParent) {
+        html += '<td><div class="form-control form-control-sm wc-cat" contenteditable="true" data-placeholder="Kategori">' + (item.category || '') + '</div></td>';
+    } else {
+        html += '<td></td>';
+    }
+    html += '<td><div class="wc-desc-wrap" style="margin-left:' + (depth * 18) + 'px">';
+    html += '<div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</div>';
+    html += '<div class="wc-desc-toolbar">';
+    html += '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+    html += '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+    html += '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+    html += '</div></div></td>';
+    html += '<td class="text-center"><input type="number" class="form-control form-control-sm wc-qty text-center" value="' + (item.qty != null && item.qty !== '' ? item.qty : 1) + '"></td>';
     html += '<td class="text-center"><div class="d-flex justify-content-center gap-1">';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>';
+    html += '<button type="button" class="btn btn-sm btn-soft" onclick="openProductPicker(this)" title="Tambah Item di bawah baris ini"><i class="fa fa-plus" style="color:var(--accent)"></i></button>';
     html += '<button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)" title="Hapus"><i class="fa fa-trash" style="color:var(--danger)"></i></button>';
     html += '</div></td>';
     html += '</tr>';
 
-    $('#wc-items-body').append(html);
+    // Sisipkan DFS setelah keturunan terakhir dari parent (menjaga urutan).
+    if (parentKey) {
+        var last = $('tr[data-key="' + parentKey + '"]');
+        var stack = [parentKey];
+        while (stack.length) {
+            var cur = stack.pop();
+            $('tr[data-key="' + cur + '"]').nextAll('tr').each(function() {
+                var p = $(this).attr('data-parent');
+                if (p === cur) {
+                    last = this;
+                    stack.push($(this).attr('data-key'));
+                }
+            });
+        }
+        $(html).insertAfter(last);
+    } else {
+        $('#wc-items-body').append(html);
+    }
+    refreshItems();
+    return key;
 }
 
 function removeItemRow(btn) {
-    $(btn).closest('tr.wc-item-row').remove();
+    var row = $(btn).closest('tr.wc-item-row');
+    var key = row.attr('data-key');
+    // Hapus juga semua turunannya.
+    var toRemove = [];
+    var walk = function(k) {
+        $('tr[data-parent="' + k + '"]').each(function() {
+            toRemove.push(this);
+            walk($(this).attr('data-key'));
+        });
+    };
+    walk(key);
+    toRemove.forEach(function(el) { $(el).remove(); });
+    row.remove();
     refreshItems();
 }
 
-function renumberItems() {
-    var n = 0;
-    $('#wc-items-body tr.wc-item-row').each(function() {
-        n++;
-        $(this).find('.wc-row-num').text(n);
-    });
-}
-
-function buildGroupHeader(cat) {
-    return '<tr class="wc-group-row">' +
-        '<td colspan="6" style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;padding:8px 14px;">' +
-        '<i class="fa fa-tag me-1"></i>' + (cat || 'Lainnya') +
-        '</td></tr>';
-}
-
-function applyGrouping() {
-    var $tbody = $('#wc-items-body');
-    var $rows = $tbody.find('tr.wc-item-row');
-    if ($rows.length === 0) {
-        $tbody.find('tr.wc-group-row').remove();
-        return;
-    }
-
-    var groups = [];
-    var groupIndex = {};
-    $rows.each(function() {
-        var cat = ($(this).find('.wc-category').val() || '').trim();
-        if (!(cat in groupIndex)) {
-            groupIndex[cat] = groups.length;
-            groups.push({ cat: cat, rows: [] });
-        }
-        groups[groupIndex[cat]].rows.push(this);
-    });
-
-    $tbody.empty();
-    groups.forEach(function(g) {
-        $tbody.append(buildGroupHeader(g.cat));
-        g.rows.forEach(function(r) {
-            $tbody.append(r);
-        });
-    });
-}
-
 function moveItemRow($row, dir) {
+    var parent = $row.attr('data-parent') || '';
+    var selector = 'tr.wc-item-row[data-parent="' + parent + '"]';
     if (dir === 'up') {
-        var $prev = $row.prevAll('tr').first();
-        if ($prev.length && $prev.hasClass('wc-item-row')) {
+        var $prev = $row.prevAll(selector).first();
+        if ($prev.length) {
             $row.insertBefore($prev);
         }
     } else {
-        var $next = $row.nextAll('tr').first();
-        if ($next.length && $next.hasClass('wc-item-row')) {
+        var $next = $row.nextAll(selector).first();
+        if ($next.length) {
             $row.insertAfter($next);
         }
     }
-    renumberItems();
 }
 
 function setEmptyState() {
@@ -388,7 +514,7 @@ function setEmptyState() {
     if ($('#wc-items-body tr.wc-item-row').length === 0) {
         if ($empty.length === 0) {
             $('#wc-items-body').html(
-                '<tr class="wc-empty-row"><td colspan="6" class="text-center" style="padding:24px;color:var(--text-muted);font-size:13px">Belum ada part. Klik <strong>Tambah Item</strong> untuk memilih.</td></tr>'
+                '<tr class="wc-empty-row"><td colspan="6" class="text-center" style="padding:24px;color:var(--text-muted);font-size:13px">Belum ada item. Klik <strong>Tambah Baris Manual</strong> atau gunakan tombol <strong>＋</strong> pada baris.</td></tr>'
             );
         }
     } else if ($empty.length) {
@@ -397,8 +523,6 @@ function setEmptyState() {
 }
 
 function refreshItems() {
-    applyGrouping();
-    renumberItems();
     setEmptyState();
 }
 
@@ -412,9 +536,12 @@ $(document).on('click', '.wc-move-down', function(e) {
     moveItemRow($(this).closest('tr.wc-item-row'), 'down');
 });
 
-$(document).on('change', '.wc-category', function() {
-    applyGrouping();
-    renumberItems();
+$(document).on('mousedown', '.wc-desc-toolbar button', function(e) {
+    e.preventDefault();
+});
+
+$(document).on('click', '.wc-desc-toolbar button', function() {
+    document.execCommand($(this).data('cmd'), false, null);
 });
 
 function collectItems() {
@@ -422,12 +549,21 @@ function collectItems() {
     var valid = true;
 
     $('#wc-items-body tr.wc-item-row').each(function() {
-        var $desc = $(this).find('.wc-desc');
+        var $row = $(this);
+        var $desc = $row.find('.wc-desc');
         var descHtml = $desc.html() || '';
         var descText = $('<div>').html(descHtml).text().trim();
-        var qty = parseInt($(this).find('.wc-qty').val(), 10);
 
-        $(this).find('.is-invalid').removeClass('is-invalid');
+        var qtyVal = $row.find('.wc-qty').val();
+        var qty = (qtyVal === '' || qtyVal == null) ? 0 : parseInt(qtyVal, 10);
+        qty = isNaN(qty) ? 0 : qty;
+
+        var catEl = $row.find('.wc-cat');
+        var category = catEl.length
+            ? catEl.text().trim()
+            : $row.find('.wc-category-data').val().trim();
+
+        $row.find('.is-invalid').removeClass('is-invalid');
 
         if (!descText) {
             $desc.addClass('is-invalid');
@@ -435,11 +571,14 @@ function collectItems() {
         }
 
         items.push({
-            product_id: $(this).find('.wc-product-id').val() || null,
-            category: $(this).find('.wc-category').val().trim(),
-            part_number: $(this).find('.wc-part').val().trim(),
+            _key: $row.attr('data-key'),
+            parent_key: $row.attr('data-parent') || null,
+            item_no: $row.find('.wc-item-no').val(),
+            product_id: $row.find('.wc-product-id').val() || null,
+            category: category,
+            part_number: $row.find('.wc-part').val().trim(),
             description: descHtml,
-            qty: isNaN(qty) || qty < 1 ? 1 : qty
+            qty: qty
         });
     });
 
@@ -498,6 +637,33 @@ $(document).ready(function() {
         width: '100%',
         placeholder: '— Pilih Task —',
         allowClear: true
+    });
+
+    // Muat parent dari template configuration yang dipilih.
+    $('#wc-template').on('change', function() {
+        var configId = $(this).val();
+        if (!configId) {
+            return;
+        }
+
+        $('#wc-items-body').empty();
+
+        $.get(wcFetchTemplateUrl.replace('__ID__', configId), function(res) {
+            var items = res.items || [];
+            if (items.length === 0) {
+                toastr.info('Template tidak memiliki item.');
+            }
+            // Load DFS: item parent_key null = root, children menyusul dengan relasi.
+            items.forEach(function(p) {
+                addItemRow(p, p.parent_key || null);
+            });
+            toastr.success(items.length + ' item (parent & children) dimuat dari template.');
+            $('#wc-template').val('');
+        }).fail(function(xhr) {
+            var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memuat template.';
+            toastr.error(msg);
+            refreshItems();
+        });
     });
 
     refreshItems();
@@ -595,11 +761,11 @@ $(document).ready(function() {
         }
 
         selected.forEach(function(p) {
-            addItemRow(p);
+            addItemRow(p, ppTargetParentKey);
         });
 
         refreshItems();
-        toastr.success(selected.length + ' part ditambahkan.');
+        toastr.success(selected.length + ' part ditambahkan' + (ppTargetParentKey ? ' sebagai item child.' : ' sebagai parent.'));
         if (ppModalInstance) {
             ppModalInstance.hide();
         }
@@ -608,8 +774,10 @@ $(document).ready(function() {
     // Reset pilihan setelah modal ditutup (Batal)
     $(document).on('hidden.bs.modal', '#productPickerModal', function() {
         ppSelected = {};
+        ppTargetParentKey = null;
         existingProductIds = [];
         $('#pp-search').val('');
+        $('#pp-target-label').text('');
         if (ppTable) {
             ppTable.ajax.reload();
         }

@@ -109,6 +109,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('water-configuration/{id}/pdf', [WaterConfigurationController::class, 'pdf'])->name('water-configuration.pdf');
     Route::get('water-configuration/search-products', [WaterConfigurationController::class, 'searchProducts'])->name('water-configuration.search-products');
     Route::get('water-configuration/fetch-task', [WaterConfigurationController::class, 'fetchTask'])->name('water-configuration.fetch-task');
+    Route::get('water-configuration/{id}/template', [WaterConfigurationController::class, 'fetchTemplate'])->name('water-configuration.fetch-template');
     Route::resource('water-configuration', WaterConfigurationController::class);
 
     Route::get('ims-configuration/data', [ImsConfigurationController::class, 'data'])->name('ims-configuration.data');

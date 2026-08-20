@@ -233,32 +233,82 @@
                 <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument ({{ $quotation->items->count() }} item)</span>
             </div>
             <div class="card-body-custom p-2">
-                @php $groups = $quotation->itemsGroupedByCategory(); $no = 1; @endphp
-                @foreach($groups as $category => $items)
+                @php
+                    $all = $quotation->items->keyBy('id');
+                    $children = $all->groupBy(fn ($i) => $i->parent_id ?: '_root');
+
+                    // Kelompokkan root (parent) berdasarkan kategori, urut sesuai kemunculan pertama.
+                    $groupMap = [];
+                    $groupOrder = [];
+                    $parents = $children['_root'] ?? collect();
+                    foreach ($parents as $p) {
+                        $cat = $p->category ?: 'Lainnya';
+                        if (! isset($groupMap[$cat])) {
+                            $groupMap[$cat] = [];
+                            $groupOrder[] = $cat;
+                        }
+                        $groupMap[$cat][] = $p;
+                    }
+                @endphp
+
+                @forelse($groupOrder as $category)
                     <div class="cat-title">{{ $category }}</div>
-                    <div class="table-responsive">
+                    <div class="table-responsive mb-4">
                         <table class="table table-custom align-middle mb-0">
                             <thead>
                                 <tr>
-                                    <th style="width:45px">No</th>
+                                    <th style="width:70px">No</th>
                                     <th style="width:170px">Part Number</th>
                                     <th>Deskripsi</th>
                                     <th style="width:60px" class="text-center">Qty</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($items as $item)
+                                @php
+                                    $catRows = [];
+                                    $walk = function ($parentId, $depth) use (&$walk, &$catRows, $children) {
+                                        foreach ($children[$parentId] ?? [] as $item) {
+                                            $catRows[] = ['item' => $item, 'depth' => $depth];
+                                            $walk($item->id, $depth + 1);
+                                        }
+                                    };
+                                    foreach ($groupMap[$category] as $root) {
+                                        $kids = $children[$root->id] ?? collect();
+                                        if ($kids->isEmpty()) {
+                                            // Root tanpa children -> dirender sbg baris data.
+                                            $catRows[] = ['item' => $root, 'depth' => 0];
+                                        } else {
+                                            // Root = judul kategori; children mulai kedalaman 1.
+                                            $walk($root->id, 1);
+                                        }
+                                    }
+                                @endphp
+                                @forelse($catRows as $row)
+                                    @php
+                                        $item = $row['item'];
+                                        $depth = $row['depth'];
+                                    @endphp
                                     <tr>
-                                        <td class="text-center">{{ $no++ }}</td>
+                                        <td class="text-center" style="padding-left:{{ 12 + $depth * 20 }}px">{{ $item->item_no }}</td>
                                         <td><code>{{ $item->part_number ?? '—' }}</code></td>
-                                        <td>{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
+                                        <td>
+                                            <div style="margin-left:{{ $depth * 20 }}px">
+                                                {!! \App\Models\Quotation::renderDescription($item->description) !!}
+                                            </div>
+                                        </td>
                                         <td class="text-center">{{ $item->qty }}</td>
                                     </tr>
-                                @endforeach
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item.</td>
+                                    </tr>
+                                @endforelse
                             </tbody>
                         </table>
                     </div>
-                @endforeach
+                @empty
+                    <div class="text-center" style="color:var(--text-muted);padding:24px">Belum ada item.</div>
+                @endforelse
             </div>
         </div>
 
