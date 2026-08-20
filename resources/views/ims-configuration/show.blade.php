@@ -230,47 +230,120 @@
     <div class="col-lg-7">
         <div class="card-custom">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument ({{ $quotation->items->count() }} item)</span>
+                <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument</span>
             </div>
             <div class="card-body-custom p-2">
-                <div class="table-responsive">
-                    <table class="table table-custom align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width:45px">No</th>
-                                <th>Produk</th>
-                                <th>Deskripsi</th>
-                                <th style="width:80px" class="text-center">Qty</th>
-                                <th style="width:150px" class="text-end">Harga</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @php $totalPrice = 0; @endphp
-                            @foreach($quotation->items as $no => $item)
-                                @php $totalPrice = $totalPrice + ($item->price * $item->qty); @endphp
+                @php
+                    $all = $quotation->items->keyBy('id');
+                    $children = $all->groupBy(fn ($i) => $i->parent_id ?: '_root');
+
+                    // Kelompokkan root (parent) berdasarkan kategori, urut sesuai kemunculan pertama.
+                    $groupMap = [];
+                    $groupOrder = [];
+                    $parents = $children['_root'] ?? collect();
+                    foreach ($parents as $p) {
+                        $cat = $p->category ?: 'Lainnya';
+                        if (! isset($groupMap[$cat])) {
+                            $groupMap[$cat] = [];
+                            $groupOrder[] = $cat;
+                        }
+                        $groupMap[$cat][] = $p;
+                    }
+
+                    $groups = [];
+                    foreach ($groupOrder as $category) {
+                        $catRows = [];
+                        $catSubtotal = 0;
+                        $walk = function ($parentId, $depth) use (&$walk, &$catRows, &$catSubtotal, $children) {
+                            foreach ($children[$parentId] ?? [] as $item) {
+                                $catRows[] = ['item' => $item, 'depth' => $depth];
+                                $catSubtotal += (($item->price ?? $item->product?->price) ?? 0) * $item->qty;
+                                $walk($item->id, $depth + 1);
+                            }
+                        };
+                        foreach ($groupMap[$category] as $root) {
+                            $kids = $children[$root->id] ?? collect();
+                            if ($kids->isEmpty()) {
+                                // Root tanpa children -> dirender sbg baris data.
+                                $catRows[] = ['item' => $root, 'depth' => 0];
+                                $catSubtotal += (($root->price ?? $root->product?->price) ?? 0) * $root->qty;
+                            } else {
+                                // Root = judul kategori; children mulai kedalaman 1.
+                                $walk($root->id, 1);
+                            }
+                        }
+                        $groups[] = ['category' => $category, 'rows' => $catRows, 'subtotal' => $catSubtotal];
+                    }
+
+                    $totalPrice = $quotation->items->sum(fn ($item) => (($item->price ?? $item->product?->price) ?? 0) * $item->qty);
+                @endphp
+
+                @forelse($groups as $group)
+                    <div class="cat-title">{{ $group['category'] }}</div>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-custom align-middle mb-0">
+                            <thead>
                                 <tr>
-                                    <td class="text-center">{{ $no + 1 }}</td>
-                                    <td>
-                                        <strong>{{ $item->product?->name ?? ($item->part_number ?: '—') }}</strong>
-                                        @if($item->part_number)
-                                            <div style="font-size:11px;color:var(--text-muted)">{{ $item->part_number }}</div>
-                                        @endif
-                                    </td>
-                                    <td>{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
-                                    <td class="text-center">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
-                                    @php $price = $item->price ?? $item->product?->price; @endphp
-                                    <td class="text-end">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
+                                    <th style="width:55px">No</th>
+                                    <th>Produk</th>
+                                    <th>Deskripsi</th>
+                                    <th style="width:80px" class="text-center">Qty</th>
+                                    <th style="width:150px" class="text-end">Harga</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="4" class="text-end"><strong>Total </strong></td>
-                                <td class="text-end"><strong> Rp {{ number_format($totalPrice, 0, ',', '.') }}</strong></td>
-                            </tr>
-                        </tfoot>
+                            </thead>
+                            <tbody>
+                                @forelse($group['rows'] as $row)
+                                    @php
+                                        $item = $row['item'];
+                                        $depth = $row['depth'];
+                                        $price = $item->price ?? $item->product?->price;
+                                    @endphp
+                                    <tr>
+                                        <td class="text-center" style="padding-left:{{ 6 + $depth * 20 }}px">{{ $item->item_no }}</td>
+                                        <td>
+                                            <div style="margin-left:{{ $depth * 20 }}px">
+                                                <strong>{{ $item->product?->name ?? ($item->part_number ?: '—') }}</strong>
+                                                @if($item->part_number)
+                                                    <div style="font-size:11px;color:var(--text-muted)">{{ $item->part_number }}</div>
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div style="margin-left:{{ $depth * 20 }}px">
+                                                {!! \App\Models\Quotation::renderDescription($item->description) !!}
+                                            </div>
+                                        </td>
+                                        <td class="text-center">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
+                                        <td class="text-end">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="5" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="4" class="text-end"><strong>Sub Total</strong></td>
+                                    <td class="text-end"><strong> Rp {{ number_format($group['subtotal'], 0, ',', '.') }}</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                @empty
+                    <div class="text-center" style="color:var(--text-muted);padding:24px">Belum ada item.</div>
+                @endforelse
+
+                @if($groups)
+                <div class="d-flex justify-content-end mt-2">
+                    <table class="table table-custom align-middle mb-0" style="max-width:340px">
+                        <tr>
+                            <td class="text-end"><strong>Total Keseluruhan</strong></td>
+                            <td class="text-end fw-bold" style="color:var(--accent)">Rp {{ number_format($totalPrice, 0, ',', '.') }}</td>
+                        </tr>
                     </table>
                 </div>
+                @endif
             </div>
         </div>
 

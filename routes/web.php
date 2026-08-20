@@ -122,6 +122,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('ims-configuration/{id}/pdf', [ImsConfigurationController::class, 'pdf'])->name('ims-configuration.pdf');
     Route::get('ims-configuration/search-products', [ImsConfigurationController::class, 'searchProducts'])->name('ims-configuration.search-products');
     Route::get('ims-configuration/fetch-task', [ImsConfigurationController::class, 'fetchTask'])->name('ims-configuration.fetch-task');
+    Route::get('ims-configuration/{id}/template', [ImsConfigurationController::class, 'fetchTemplate'])->name('ims-configuration.fetch-template');
     Route::resource('ims-configuration', ImsConfigurationController::class);
 
     Route::get('quotation/data', [QuotationController::class, 'data'])->name('quotation.data');

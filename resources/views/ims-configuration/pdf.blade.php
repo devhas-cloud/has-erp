@@ -80,6 +80,7 @@
             padding: 4px 6px;
             border: 1px solid #999;
             font-size: 11px;
+            text-align: center;
         }
         .no-col { width: 34px; text-align: center; }
         .pn-col { width: 130px; }
@@ -176,42 +177,95 @@
     </table>
 
     @php
-        $totalItems = $quotation->items->count();
-        $totalPrice = 0;
+        $all = $quotation->items->keyBy('id');
+        $children = $all->groupBy(fn ($i) => $i->parent_id ?: '_root');
+
+        // Kelompokkan root (parent) berdasarkan kategori, urut kemunculan pertama.
+        $groupMap = [];
+        $groupOrder = [];
+        foreach ($children['_root'] ?? [] as $root) {
+            $cat = $root->category ?: 'Lainnya';
+            if (! isset($groupMap[$cat])) {
+                $groupMap[$cat] = [];
+                $groupOrder[] = $cat;
+            }
+            $groupMap[$cat][] = $root;
+        }
+
+        $groups = [];
+        foreach ($groupOrder as $cat) {
+            $catRows = [];
+            $walk = function ($parentId, $depth) use (&$walk, &$catRows, $children) {
+                foreach ($children[$parentId] ?? [] as $item) {
+                    $catRows[] = ['item' => $item, 'depth' => $depth];
+                    $walk($item->id, $depth + 1);
+                }
+            };
+            foreach ($groupMap[$cat] as $root) {
+                $kids = $children[$root->id] ?? collect();
+                if ($kids->isEmpty()) {
+                    // Root tanpa children: render sebagai baris data.
+                    $catRows[] = ['item' => $root, 'depth' => 0];
+                } else {
+                    // Root = header kategori; children mulai kedalaman 1.
+                    $walk($root->id, 1);
+                }
+            }
+            $groups[] = ['category' => $cat, 'rows' => $catRows];
+        }
+
+        $totalPrice = $quotation->items->sum(fn ($item) => (($item->price ?? $item->product?->price) ?? 0) * $item->qty);
     @endphp
 
     <table class="parts">
         <thead>
             <tr>
                 <th class="no-col">No</th>
-                <th style="width:200px">Produk</th>
+                <th style="width:180px">Produk</th>
                 <th>List Part Instrument</th>
                 <th class="qty-col">Qty</th>
                 <th class="price-col">Harga</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($quotation->items as $no => $item)
-                <tr>
-                    <td class="no-col">{{ $no + 1 }}</td>
-                    <td>{{ $item->product?->name ?? ($item->part_number ?: '—') }}</td>
-                    <td>{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
-                    <td class="qty-col">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
-                    @php $price = $item->price ?? $item->product?->price; @endphp
-                    <td class="price-col">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
+            @forelse($groups as $group)
+                <tr class="cat-row">
+                    <td colspan="5">{{ $group['category'] }}</td>
                 </tr>
-            @endforeach
+                @foreach($group['rows'] as $row)
+                    @php
+                        $item = $row['item'];
+                        $depth = $row['depth'];
+                        $price = $item->price ?? $item->product?->price;
+                    @endphp
+                    <tr>
+                        <td class="no-col" style="padding-left:{{ 6 + $depth * 12 }}px">{{ $item->item_no }}</td>
+                        <td style="padding-left:{{ 4 + $depth * 12 }}px">
+                            {{ $item->product?->name ?? ($item->part_number ?: '—') }}
+                        </td>
+                        <td>
+                            <div style="padding-left:{{ $depth * 12 }}px">{!! \App\Models\Quotation::renderDescription($item->description) !!}</div>
+                        </td>
+                        <td class="qty-col">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
+                        <td class="price-col">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
+                    </tr>
+                @endforeach
+            @empty
+                <tr>
+                    <td colspan="5" style="text-align:center;color:#999">Tidak ada item.</td>
+                </tr>
+            @endforelse
         </tbody>
         <tfoot>
             <tr>
                 <td colspan="4" class="text-end"><strong>Total </strong></td>
-                <td class="price-col"><strong>{{ 'Rp '.number_format($quotation->items->sum(fn($item) => ($item->price ?? $item->product?->price) * $item->qty), 0, ',', '.') }}</strong></td>
+                <td class="price-col"><strong>{{ 'Rp '.number_format($totalPrice, 0, ',', '.') }}</strong></td>
             </tr>
         </tfoot>
     </table>
 
     @if($quotation->notes)
-        <div class="note">Note :<br>{!! nl2br(e($quotation->notes)) !!}</div>
+        <div class="note">Catatan :<br>{!! nl2br(e($quotation->notes)) !!}</div>
     @endif
 
     <div class="sign">

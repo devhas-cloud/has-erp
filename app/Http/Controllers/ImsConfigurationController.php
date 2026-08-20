@@ -33,11 +33,85 @@ class ImsConfigurationController extends Controller
     public function create()
     {
         $tasks = $this->quoteTasks();
+        $categories = $this->categorySuggestions();
 
         return view('ims-configuration.form', [
             'quotation' => null,
             'items' => [],
             'tasks' => $tasks,
+            'categories' => $categories,
+            'templates' => $this->templateList(),
+        ]);
+    }
+
+    /**
+     * Daftar configuration divisi IMS yang pernah dibuat, dipakai sebagai template
+     * isian. Hanya versi terakhir tiap group yang disertakan.
+     */
+    private function templateList(): array
+    {
+        $imsId = Division::where('division_name', 'IMS')->value('id');
+        if (! $imsId) {
+            return [];
+        }
+
+        $latestIds = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('division_id', $imsId)
+            ->groupBy('group_id')
+            ->pluck('id');
+
+        return QuoteConfiguration::with(['items', 'task', 'opportunity.accountCompany'])
+            ->whereIn('id', $latestIds)
+            ->where('division_id', $imsId)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($config) => [
+                'id' => $config->id,
+                'label' => ($config->opportunity?->opportunity_name ?? $config->task?->title ?? 'Configuration #'.$config->id)
+                    .' — '.($config->date?->format('d/m/Y') ?? '—')
+                    .' ('.$config->items->count().' item)',
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ambil item (parent + children) dari configuration IMS sebagai template
+     * isian, dalam urutan DFS.
+     */
+    public function fetchTemplate(Request $request, $id): JsonResponse
+    {
+        $config = QuoteConfiguration::with(['items'])
+            ->findOrFail($id);
+
+        $all = $config->items->keyBy('id');
+        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
+
+        $items = [];
+        $walk = function ($parentId) use (&$walk, &$items, $children) {
+            foreach ($children[$parentId] ?? [] as $item) {
+                $items[] = [
+                    '_key' => 'tpl-'.$item->id,
+                    'parent_key' => $item->parent_id ? 'tpl-'.$item->parent_id : null,
+                    'item_no' => $item->item_no,
+                    'product_id' => $item->product_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                    'price' => $item->price,
+                    'unit' => $item->unit,
+                ];
+                $walk($item->id);
+            }
+        };
+
+        $walk('_root');
+
+        return response()->json([
+            'success' => true,
+            'items' => $items,
         ]);
     }
 
@@ -224,7 +298,11 @@ class ImsConfigurationController extends Controller
             'parameter_note' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
+            'items.*._key' => 'required|string',
+            'items.*.parent_key' => 'nullable|string',
+            'items.*.item_no' => 'nullable|string|max:50',
             'items.*.product_id' => 'nullable|exists:master_products,id',
+            'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
@@ -322,6 +400,8 @@ class ImsConfigurationController extends Controller
             'quotation' => $quotation,
             'items' => $quotation->items,
             'tasks' => $tasks,
+            'categories' => $this->categorySuggestions(),
+            'templates' => $this->templateList(),
         ]);
     }
 
@@ -396,7 +476,11 @@ class ImsConfigurationController extends Controller
             'parameter_note' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
+            'items.*._key' => 'required|string',
+            'items.*.parent_key' => 'nullable|string',
+            'items.*.item_no' => 'nullable|string|max:50',
             'items.*.product_id' => 'nullable|exists:master_products,id',
+            'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
@@ -743,8 +827,13 @@ class ImsConfigurationController extends Controller
                 'created_by' => Auth::id(),
             ]);
 
+            // Salin item dengan remap parent_id (induk selalu muncul sebelum
+            // anak karena urutan sort_order / DFS).
+            $itemIdMap = [];
             foreach ($source->items as $item) {
-                $revision->items()->create([
+                $new = $revision->items()->create([
+                    'item_no' => $item->item_no,
+                    'parent_id' => $item->parent_id ? ($itemIdMap[$item->parent_id] ?? null) : null,
                     'product_id' => $item->product_id,
                     'category' => $item->category,
                     'part_number' => $item->part_number,
@@ -754,6 +843,7 @@ class ImsConfigurationController extends Controller
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
+                $itemIdMap[$item->id] = $new->id;
             }
 
             return $revision;
@@ -904,10 +994,15 @@ class ImsConfigurationController extends Controller
     {
         $quotation->items()->delete();
 
+        $keyMap = [];
         $payload = [];
+
         foreach (array_values($items) as $i => $item) {
+            $keyMap[$item['_key']] = $i;
             $payload[] = [
                 'quote_configuration_id' => $quotation->id,
+                'item_no' => $item['item_no'] ?? null,
+                'parent_id' => null,
                 'product_id' => $item['product_id'] ?? null,
                 'category' => $item['category'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
@@ -922,5 +1017,40 @@ class ImsConfigurationController extends Controller
         }
 
         QuoteConfigurationItem::insert($payload);
+
+        $inserted = QuoteConfigurationItem::where('quote_configuration_id', $quotation->id)
+            ->orderBy('id')
+            ->get();
+
+        $updates = [];
+
+        foreach ($items as $item) {
+            $parentKey = $item['parent_key'] ?? null;
+
+            if (! $parentKey || ! array_key_exists($parentKey, $keyMap)) {
+                continue;
+            }
+
+            $childIndex = $keyMap[$item['_key']];
+            $parentIndex = $keyMap[$parentKey];
+
+            if ($childIndex === $parentIndex) {
+                continue;
+            }
+
+            $child = $inserted[$childIndex] ?? null;
+            $parent = $inserted[$parentIndex] ?? null;
+
+            if ($child && $parent) {
+                $updates[] = [
+                    'id' => $child->id,
+                    'parent_id' => $parent->id,
+                ];
+            }
+        }
+
+        foreach ($updates as $update) {
+            QuoteConfigurationItem::where('id', $update['id'])->update(['parent_id' => $update['parent_id']]);
+        }
     }
 }

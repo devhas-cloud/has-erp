@@ -22,7 +22,7 @@
         border: 1px solid var(--card-border, #ced4da);
         border-radius: .25rem;
         padding: .25rem .5rem;
-        min-height: 58px;
+        min-height: 34px;
         background: #fff;
         font-size: .85rem;
         line-height: 1.45;
@@ -36,6 +36,62 @@
         content: attr(data-placeholder);
         color: #999;
     }
+    .wc-desc-wrap { position: relative; }
+    .wc-desc-toolbar {
+        position: absolute;
+        top: 2px;
+        right: 4px;
+        display: flex;
+        gap: 2px;
+        opacity: .55;
+    }
+    .wc-desc-toolbar button {
+        border: 1px solid var(--card-border, #ced4da);
+        background: #fff;
+        border-radius: 3px;
+        font-size: 11px;
+        line-height: 1;
+        padding: 2px 5px;
+        cursor: pointer;
+        color: var(--text-primary);
+    }
+    .wc-desc-toolbar button:hover { background: var(--bg); opacity: 1; }
+    .wc-desc-wrap:hover .wc-desc-toolbar { opacity: 1; }
+    .wc-cat[contenteditable="true"] {
+        border: 1px solid var(--card-border, #ced4da);
+        border-radius: .25rem;
+        padding: .25rem .5rem;
+        min-height: 34px;
+        background: #fff;
+        font-size: .85rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+    }
+    .wc-cat[contenteditable="true"]:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .wc-cat[contenteditable="true"]:empty::before {
+        content: attr(data-placeholder);
+        color: #999;
+    }
+    .wc-item-no[contenteditable="true"],
+    .wc-qty[contenteditable="true"],
+    .wc-unit[contenteditable="true"] {
+        min-height: 34px;
+    }
+    .wc-item-no[contenteditable="true"]:empty::before,
+    .wc-qty[contenteditable="true"]:empty::before,
+    .wc-unit[contenteditable="true"]:empty::before {
+        content: attr(data-placeholder);
+        color: #999;
+    }
+    #wc-items-table .wc-price-display {
+        min-height: 34px;
+        height: 34px;
+    }
+    #wc-items-table { table-layout: fixed; }
+    #wc-items-table .wc-part-display { word-break: break-word; }
 </style>
 @endsection
 
@@ -121,53 +177,96 @@
     <div class="card-custom fade-in mb-3">
         <div class="card-header-custom d-flex justify-content-between align-items-center">
             <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument</span>
-            <button type="button" class="btn btn-primary btn-sm" onclick="openProductPicker()">
-                <i class="fa fa-plus me-1"></i> Tambah Item
-            </button>
+            <div class="d-flex gap-2 align-items-center">
+                {{-- @if(! $quotation)
+                <select id="wc-template" class="form-select form-select-sm" style="width:auto">
+                    <option value="">— Pilih Template (Configuration) —</option>
+                    @foreach($templates as $tpl)
+                        <option value="{{ $tpl['id'] }}">{{ $tpl['label'] }}</option>
+                    @endforeach
+                </select>
+                @endif --}}
+                <button type="button" class="btn btn-primary btn-sm" onclick="openProductPickerAsParent()">
+                    <i class="fa fa-plus me-1"></i> Tambah Item
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addItemRow({}, null)">
+                    <i class="fa fa-plus me-1"></i> Tambah Baris Manual
+                </button>
+            </div>
         </div>
         <div class="card-body-custom p-2">
             <div class="table-responsive">
                 <table class="table table-custom align-middle mb-0" id="wc-items-table">
                     <thead>
                         <tr>
-                            <th style="width:40px">#</th>
-                            <th style="min-width:140px">Produk</th>
-                            <th>Deskripsi</th>
-                            <th style="width:90px">Qty</th>
-                            <th style="width:120px">Unit</th>
-                            <th style="width:160px">Harga</th>
-                            <th class="text-center" style="width:130px">Aksi</th>
+                            <th style="width:55px">No</th>
+                            <th style="width:150px">Produk</th>
+                            <th style="width:130px">Kategori</th>
+                            <th style="width:330px">Deskripsi</th>
+                            <th style="width:55px">Qty</th>
+                            <th style="width:80px">Unit</th>
+                            <th style="width:120px">Harga</th>
+                            <th class="text-center" style="width:150px">Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="wc-items-body">
-                        @forelse($items as $item)
-                        <tr data-row="{{ $loop->iteration }}" class="wc-item-row">
-                            <td class="text-center wc-row-num">{{ $loop->iteration }}</td>
-                            <td>
-                                <input type="hidden" class="wc-product-id" value="{{ $item->product_id }}">
-                                <input type="hidden" class="wc-part" value="{{ $item->part_number }}">
-                                <strong style="font-size:13px">{{ $item->product?->name ?? ($item->part_number ?: '—') }}</strong>
-                                @if ($item->part_number)
-                                    <div style="font-size:11px;color:var(--text-muted)">{{ $item->part_number }}</div>
-                                @endif
-                            </td>
-                            <td><div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">{!! \App\Models\Quotation::renderDescription($item->description) !!}</div></td>
-                            <td><input type="number" class="form-control form-control-sm wc-qty" value="{{ $item->qty }}" min="1"></td>
-                            <td><input type="text" class="form-control form-control-sm wc-unit" placeholder="cth: pcs, lot" value="{{ $item->unit }}"></td>
-                            <td>
-                                <input type="hidden" class="wc-price" value="{{ $item->price ?? $item->product?->price }}">
-                                <input type="text" class="form-control form-control-sm wc-price-display" value="{{ ($item->price ?? $item->product?->price) ? number_format($item->price ?? $item->product?->price, 0, ',', '.') : '—' }}" readonly>
-                            </td>
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-1">
-                                    <button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>
-                                    <button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>
-                                    <button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)" title="Hapus"><i class="fa fa-trash" style="color:var(--danger)"></i></button>
-                                </div>
-                            </td>
-                        </tr>
-                        @empty
-                        @endforelse
+                        @php
+                            $rendered = [];
+                            $wcKeySeq = 0;
+                            $wcByParent = $items ? collect($items)->groupBy(fn ($it) => $it->parent_id ?? 'root') : collect();
+                            $wcRenderItem = function ($item, $depth, $wcByParent, &$rendered) use (&$wcRenderItem, &$wcKeySeq) {
+                                if ($item->id && in_array($item->id, $rendered)) {
+                                    return;
+                                }
+                                if ($item->id) {
+                                    $rendered[] = $item->id;
+                                }
+                                $key = $item->id ? 'db-'.$item->id : 'new-'.(++$wcKeySeq);
+                                $parentKey = $item->parent_id ? 'db-'.$item->parent_id : '';
+                                $isParent = $depth === 0;
+                                $price = $item->price ?? $item->product?->price;
+                                echo '<tr data-key="'.$key.'" data-parent="'.$parentKey.'" data-depth="'.$depth.'" class="wc-item-row">';
+                                echo '<td class="text-center"><div class="form-control form-control-sm wc-item-no text-center" contenteditable="true" data-placeholder="1">'.e($item->item_no ?? '').'</div></td>';
+                                echo '<td><input type="hidden" class="wc-product-id" value="'.$item->product_id.'">';
+                                echo '<input type="hidden" class="wc-part" value="'.e($item->part_number).'">';
+                                echo '<input type="hidden" class="wc-category-data" value="'.e($item->category).'">';
+                                echo '<code class="wc-part-display" style="color:var(--accent)">'.e($item->product?->name ?? $item->part_number ?: '—').'</code></td>';
+                                if ($isParent) {
+                                    echo '<td><div class="form-control form-control-sm wc-cat" contenteditable="true" data-placeholder="Kategori">'.e($item->category).'</div></td>';
+                                } else {
+                                    echo '<td></td>';
+                                }
+                                echo '<td><div class="wc-desc-wrap" style="margin-left:'.($depth * 18).'px">';
+                                echo '<div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">'.\App\Models\Quotation::renderDescription($item->description).'</div>';
+                                echo '<div class="wc-desc-toolbar">';
+                                echo '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+                                echo '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+                                echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+                                echo '</div></div></td>';
+                                echo '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">'.$item->qty.'</div></td>';
+                                echo '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">'.e($item->unit).'</div></td>';
+                                echo '<td><input type="hidden" class="wc-price" value="'.e($price).'">';
+                                echo '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="'.($price ? number_format($price, 0, ',', '.') : '').'" placeholder="0"></td>';
+                                echo '<td class="text-center">';
+                                echo '<div class="d-flex justify-content-center gap-1">';
+                                echo '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
+                                echo '<button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>';
+                                echo '<button type="button" class="btn btn-sm btn-soft" onclick="openProductPicker(this)" title="Tambah Item di bawah baris ini"><i class="fa fa-plus" style="color:var(--accent)"></i></button>';
+                                echo '<button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)" title="Hapus"><i class="fa fa-trash" style="color:var(--danger)"></i></button>';
+                                echo '</div></td></tr>';
+                                foreach (($wcByParent[$item->id] ?? []) as $child) {
+                                    $wcRenderItem($child, $depth + 1, $wcByParent, $rendered);
+                                }
+                            };
+                        @endphp
+                        @foreach($wcByParent['root'] ?? [] as $item)
+                            @php($wcRenderItem($item, 0, $wcByParent, $rendered))
+                        @endforeach
+                        @foreach($items ?? [] as $item)
+                            @if(! in_array($item->id, $rendered))
+                                @php($wcRenderItem($item, 0, $wcByParent, $rendered))
+                            @endif
+                        @endforeach
                     </tbody>
                 </table>
             </div>
@@ -197,7 +296,8 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Pilih Part Instrument</h6>
+                <h6 class="modal-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Pilih Part Instrument
+                    <small id="pp-target-label" style="font-size:11px;color:var(--text-muted);font-weight:400"></small></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -210,6 +310,7 @@
                             <tr>
                                 <th style="width:40px"></th>
                                 <th>Part Number</th>
+                                <th>Name Produk</th>
                                 <th>Brand</th>
                                 <th>Category</th>
                                 <th>Deskripsi</th>
@@ -236,12 +337,14 @@ let ppTable = null;
 let ppModalInstance = null;
 let existingProductIds = [];
 let ppSelected = {};
+let ppTargetParentKey = null;
 
 const wcStoreUrl = '{{ route("ims-configuration.store") }}';
 const wcUpdateUrl = '{{ route("ims-configuration.update", "__ID__") }}';
 const wcIndexUrl = '{{ route("ims-configuration.index") }}';
 const wcSearchUrl = '{{ route("ims-configuration.search-products") }}';
 const wcFetchTaskUrl = '{{ route("ims-configuration.fetch-task") }}';
+const wcFetchTemplateUrl = '{{ route("ims-configuration.fetch-template", "__ID__") }}';
 
 function applyTaskData(data) {
     $('#wc-task-id').val(data.task_id || '');
@@ -266,7 +369,6 @@ $(document).on('change', '#wc-task', function() {
         });
         return;
     }
-
     $.ajax({
         url: wcFetchTaskUrl,
         data: { task_id: taskId },
@@ -281,82 +383,146 @@ $(document).on('change', '#wc-task', function() {
     });
 });
 
-function openProductPicker() {
-    if (ppTable) {
-        existingProductIds = [];
-        $('#wc-items-body .wc-product-id').each(function() {
-            var v = $(this).val();
-            if (v) existingProductIds.push(v);
-        });
-        ppTable.ajax.reload();
+function openProductPicker(btn) {
+    ppTargetParentKey = null;
+    $('#pp-target-label').text('');
+    if (btn) {
+        var $row = $(btn).closest('tr.wc-item-row');
+        ppTargetParentKey = $row.attr('data-key');
+        var part = $row.find('.wc-part').val() || $row.find('.wc-part-display').text().trim();
+        $('#pp-target-label').text('→ sebagai item di bawah ' + (part || 'baris ini'));
     }
+    ppSelected = {};
+    existingProductIds = [];
+    $('#wc-items-body .wc-product-id').each(function() {
+        var v = $(this).val();
+        if (v) existingProductIds.push(v);
+    });
+    if (ppTable) ppTable.ajax.reload();
     if (!ppModalInstance) {
         ppModalInstance = new bootstrap.Modal(document.getElementById('productPickerModal'));
     }
     ppModalInstance.show();
 }
 
-function addItemRow(item) {
+function openProductPickerAsParent() {
+    ppTargetParentKey = null;
+    $('#pp-target-label').text('→ sebagai parent (baris utama)');
+    ppSelected = {};
+    existingProductIds = [];
+    $('#wc-items-body .wc-product-id').each(function() {
+        var v = $(this).val();
+        if (v) existingProductIds.push(v);
+    });
+    if (ppTable) ppTable.ajax.reload();
+    if (!ppModalInstance) {
+        ppModalInstance = new bootstrap.Modal(document.getElementById('productPickerModal'));
+    }
+    ppModalInstance.show();
+}
+
+function numberFormat(n) {
+    return Number(n || 0).toLocaleString('id-ID');
+}
+
+function priceDisplayOf(raw) {
+    return (raw != null && raw !== '') ? numberFormat(raw) : '—';
+}
+
+function addItemRow(item, parentKey) {
     item = item || {};
-    wcRowIndex++;
-
+    var key;
+    if (item._key) {
+        key = item._key;
+    } else {
+        wcRowIndex++;
+        key = 'new-' + wcRowIndex;
+    }
+    var depth = 0;
+    if (parentKey) {
+        var parentRow = $('tr[data-key="' + parentKey + '"]');
+        depth = (parseInt(parentRow.attr('data-depth')) || 0) + 1;
+    }
+    var isParent = !parentKey;
     var priceRaw = (item.price != null && item.price !== '') ? item.price : '';
-    var priceDisplay = priceRaw !== '' ? numberFormat(Number(priceRaw)) : '—';
 
-    var html = '<tr data-row="' + wcRowIndex + '" class="wc-item-row">';
-    html += '<td class="text-center wc-row-num">' + wcRowIndex + '</td>';
+    var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" class="wc-item-row">';
+    html += '<td class="text-center"><div class="form-control form-control-sm wc-item-no text-center" contenteditable="true" data-placeholder="1">' + (item.item_no || '') + '</div></td>';
     html += '<td><input type="hidden" class="wc-product-id" value="' + (item.id || item.product_id || '') + '">';
     html += '<input type="hidden" class="wc-part" value="' + (item.code || item.part_number || '') + '">';
-    html += '<strong style="font-size:13px">' + (item.name || item.code || '—') + '</strong>';
-    if (item.code) {
-        html += '<div style="font-size:11px;color:var(--text-muted)">' + item.code + '</div>';
+    html += '<input type="hidden" class="wc-category-data" value="' + (item.category || '') + '">';
+    html += '<code class="wc-part-display" style="color:var(--accent)">' + (item.name || item.code || item.part_number || '—') + '</code></td>';
+    if (isParent) {
+        html += '<td><div class="form-control form-control-sm wc-cat" contenteditable="true" data-placeholder="Kategori">' + (item.category || '') + '</div></td>';
+    } else {
+        html += '<td></td>';
     }
-    html += '</td>';
-    html += '<td><div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</div></td>';
-    html += '<td><input type="number" class="form-control form-control-sm wc-qty" value="1" min="1"></td>';
-    html += '<td><input type="text" class="form-control form-control-sm wc-unit" placeholder="cth: pcs, lot" value=""></td>';
+    html += '<td><div class="wc-desc-wrap" style="margin-left:' + (depth * 18) + 'px">';
+    html += '<div class="form-control form-control-sm wc-desc" contenteditable="true" data-placeholder="Deskripsi item (wajib)">' + (item.description || item.name || '') + '</div>';
+    html += '<div class="wc-desc-toolbar">';
+    html += '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
+    html += '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
+    html += '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
+    html += '</div></div></td>';
+    html += '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">' + (item.qty != null && item.qty !== '' ? item.qty : 1) + '</div></td>';
+    html += '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">' + (item.unit || '') + '</div></td>';
     html += '<td><input type="hidden" class="wc-price" value="' + priceRaw + '">';
-    html += '<input type="text" class="form-control form-control-sm wc-price-display" value="' + priceDisplay + '" readonly></td>';
+    html += '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="' + (priceRaw !== '' ? priceDisplayOf(priceRaw) : '') + '" placeholder="0"></td>';
     html += '<td class="text-center"><div class="d-flex justify-content-center gap-1">';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>';
+    html += '<button type="button" class="btn btn-sm btn-soft" onclick="openProductPicker(this)" title="Tambah Item di bawah baris ini"><i class="fa fa-plus" style="color:var(--accent)"></i></button>';
     html += '<button type="button" class="btn btn-sm btn-soft" onclick="removeItemRow(this)" title="Hapus"><i class="fa fa-trash" style="color:var(--danger)"></i></button>';
     html += '</div></td>';
     html += '</tr>';
 
-    $('#wc-items-body').append(html);
-}
-
-function numberFormat(n) {
-    return n.toLocaleString('id-ID');
+    if (parentKey) {
+        var last = $('tr[data-key="' + parentKey + '"]');
+        var stack = [parentKey];
+        while (stack.length) {
+            var cur = stack.pop();
+            $('tr[data-key="' + cur + '"]').nextAll('tr').each(function() {
+                var p = $(this).attr('data-parent');
+                if (p === cur) {
+                    last = this;
+                    stack.push($(this).attr('data-key'));
+                }
+            });
+        }
+        $(html).insertAfter(last);
+    } else {
+        $('#wc-items-body').append(html);
+    }
+    refreshItems();
+    return key;
 }
 
 function removeItemRow(btn) {
-    $(btn).closest('tr.wc-item-row').remove();
+    var row = $(btn).closest('tr.wc-item-row');
+    var key = row.attr('data-key');
+    var toRemove = [];
+    var walk = function(k) {
+        $('tr[data-parent="' + k + '"]').each(function() {
+            toRemove.push(this);
+            walk($(this).attr('data-key'));
+        });
+    };
+    walk(key);
+    toRemove.forEach(function(el) { $(el).remove(); });
+    row.remove();
     refreshItems();
 }
 
-function renumberItems() {
-    var n = 0;
-    $('#wc-items-body tr.wc-item-row').each(function() {
-        n++;
-        $(this).find('.wc-row-num').text(n);
-    });
-}
-
 function moveItemRow($row, dir) {
+    var parent = $row.attr('data-parent') || '';
+    var selector = 'tr.wc-item-row[data-parent="' + parent + '"]';
     if (dir === 'up') {
-        var $prev = $row.prevAll('tr').first();
-        if ($prev.length && $prev.hasClass('wc-item-row')) {
-            $row.insertBefore($prev);
-        }
+        var $prev = $row.prevAll(selector).first();
+        if ($prev.length) $row.insertBefore($prev);
     } else {
-        var $next = $row.nextAll('tr').first();
-        if ($next.length && $next.hasClass('wc-item-row')) {
-            $row.insertAfter($next);
-        }
+        var $next = $row.nextAll(selector).first();
+        if ($next.length) $row.insertAfter($next);
     }
-    renumberItems();
 }
 
 function setEmptyState() {
@@ -364,7 +530,7 @@ function setEmptyState() {
     if ($('#wc-items-body tr.wc-item-row').length === 0) {
         if ($empty.length === 0) {
             $('#wc-items-body').html(
-                '<tr class="wc-empty-row"><td colspan="7" class="text-center" style="padding:24px;color:var(--text-muted);font-size:13px">Belum ada part. Klik <strong>Tambah Item</strong> untuk memilih.</td></tr>'
+                '<tr class="wc-empty-row"><td colspan="8" class="text-center" style="padding:24px;color:var(--text-muted);font-size:13px">Belum ada item. Klik <strong>Tambah Baris Manual</strong> atau gunakan tombol <strong>＋</strong> pada baris.</td></tr>'
             );
         }
     } else if ($empty.length) {
@@ -373,7 +539,6 @@ function setEmptyState() {
 }
 
 function refreshItems() {
-    renumberItems();
     setEmptyState();
 }
 
@@ -387,17 +552,54 @@ $(document).on('click', '.wc-move-down', function(e) {
     moveItemRow($(this).closest('tr.wc-item-row'), 'down');
 });
 
+$(document).on('mousedown', '.wc-desc-toolbar button', function(e) {
+    e.preventDefault();
+});
+
+$(document).on('click', '.wc-desc-toolbar button', function() {
+    document.execCommand($(this).data('cmd'), false, null);
+});
+
+// Sinkronkan harga editable: input -> format ribuan live (titik) + desimal koma, simpan angka bersih.
+$(document).on('input', '.wc-price-display', function() {
+    var $row = $(this).closest('tr.wc-item-row');
+    var cleaned = String(this.value).replace(/[^\d.,]/g, '');
+    // Pemisah desimal = koma (,); titik (.) = ribuan.
+    var parts = cleaned.split(',');
+    var intStr = (parts[0] || '').replace(/\./g, '').replace(/\D/g, '');
+    var decStr = (parts[1] || '').replace(/\D/g, '').slice(0, 2);
+    var formattedInt = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    this.value = formattedInt + (decStr ? ',' + decStr : '');
+    var raw = (intStr === '' ? '' : Number(intStr)) + (decStr ? '.' + decStr : '');
+    $row.find('.wc-price').val(raw);
+});
+
+// Saat blur, pastikan format ribuan (id-ID) rapi.
+$(document).on('change', '.wc-price-display', function() {
+    var $row = $(this).closest('tr.wc-item-row');
+    var raw = $row.find('.wc-price').val();
+    if (raw === '') { $(this).val(''); return; }
+    var num = Number(raw);
+    $(this).val(num.toLocaleString('id-ID', { maximumFractionDigits: 2 }));
+});
+
 function collectItems() {
     var items = [];
     var valid = true;
 
     $('#wc-items-body tr.wc-item-row').each(function() {
-        var $desc = $(this).find('.wc-desc');
+        var $row = $(this);
+        var $desc = $row.find('.wc-desc');
         var descHtml = $desc.html() || '';
         var descText = $('<div>').html(descHtml).text().trim();
-        var qty = parseInt($(this).find('.wc-qty').val(), 10);
+        var qtyText = $row.find('.wc-qty').text().trim();
+        var qty = parseInt(qtyText, 10);
+        var catEl = $row.find('.wc-cat');
+        var category = catEl.length
+            ? catEl.text().trim()
+            : $row.find('.wc-category-data').val().trim();
 
-        $(this).find('.is-invalid').removeClass('is-invalid');
+        $row.find('.is-invalid').removeClass('is-invalid');
 
         if (!descText) {
             $desc.addClass('is-invalid');
@@ -405,12 +607,16 @@ function collectItems() {
         }
 
         items.push({
-            product_id: $(this).find('.wc-product-id').val() || null,
-            part_number: $(this).find('.wc-part').val().trim(),
+            _key: $row.attr('data-key'),
+            parent_key: $row.attr('data-parent') || null,
+            item_no: $row.find('.wc-item-no').text().trim(),
+            product_id: $row.find('.wc-product-id').val() || null,
+            category: category,
+            part_number: $row.find('.wc-part').val().trim(),
             description: descHtml,
             qty: isNaN(qty) || qty < 1 ? 1 : qty,
-            price: $(this).find('.wc-price').val().trim() || null,
-            unit: $(this).find('.wc-unit').val().trim() || null
+            price: $row.find('.wc-price').val().trim() || null,
+            unit: $row.find('.wc-unit').text().trim() || null
         });
     });
 
@@ -470,6 +676,27 @@ $(document).ready(function() {
         allowClear: true
     });
 
+    $('#wc-template').on('change', function() {
+        var configId = $(this).val();
+        if (!configId) return;
+        $('#wc-items-body').empty();
+        $.get(wcFetchTemplateUrl.replace('__ID__', configId), function(res) {
+            var items = res.items || [];
+            if (items.length === 0) {
+                toastr.info('Template tidak memiliki item.');
+            }
+            items.forEach(function(p) {
+                addItemRow(p, p.parent_key || null);
+            });
+            toastr.success(items.length + ' item (parent & children) dimuat dari template.');
+            $('#wc-template').val('');
+        }).fail(function(xhr) {
+            var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memuat template.';
+            toastr.error(msg);
+            refreshItems();
+        });
+    });
+
     refreshItems();
 });
 
@@ -491,7 +718,7 @@ $(document).ready(function() {
         searching: false,
         paging: true,
         info: true,
-        order: [[1, 'asc']],
+        order: [[2, 'asc']],
         columns: [
             { data: 'id', orderable: false, searchable: false, className: 'text-center',
                 render: function(data) {
@@ -501,6 +728,9 @@ $(document).ready(function() {
             },
             { data: 'code', orderable: true, searchable: true,
                 render: function(data) { return '<code style="color:var(--accent)">' + data + '</code>'; }
+            },
+            { data: 'name', orderable: true, searchable: true,
+                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'brand', orderable: false, searchable: true,
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
@@ -521,12 +751,9 @@ $(document).ready(function() {
     var ppSearchTimer = null;
     $('#pp-search').on('input', function() {
         clearTimeout(ppSearchTimer);
-        ppSearchTimer = setTimeout(function() {
-            ppTable.ajax.reload();
-        }, 350);
+        ppSearchTimer = setTimeout(function() { ppTable.ajax.reload(); }, 350);
     });
 
-    // Klik baris => toggle checkbox
     $(document).on('click', '#pp-table tbody tr', function(e) {
         if ($(e.target).is('input.pp-check') || $(e.target).closest('input.pp-check').length) {
             return;
@@ -537,7 +764,6 @@ $(document).ready(function() {
         }
     });
 
-    // Simpan state pilihan lintas paging
     $(document).on('change', '.pp-check', function() {
         var id = $(this).val();
         var rowData = ppTable.row($(this).closest('tr')).data();
@@ -547,6 +773,7 @@ $(document).ready(function() {
                     id: rowData.id,
                     code: rowData.code,
                     name: rowData.name,
+                    category: rowData.category,
                     description: rowData.description,
                     price: rowData.price
                 };
@@ -558,32 +785,25 @@ $(document).ready(function() {
 
     $(document).on('click', '#btn-pp-add', function() {
         var selected = Object.values(ppSelected);
-
         if (selected.length === 0) {
             toastr.error('Pilih minimal 1 part terlebih dahulu.');
             return;
         }
-
-        selected.forEach(function(p) {
-            addItemRow(p);
-        });
-
+        selected.forEach(function(p) { addItemRow(p, ppTargetParentKey); });
         refreshItems();
-        toastr.success(selected.length + ' part ditambahkan.');
-        if (ppModalInstance) {
-            ppModalInstance.hide();
-        }
+        toastr.success(selected.length + ' part ditambahkan' + (ppTargetParentKey ? ' sebagai item child.' : ' sebagai parent.'));
+        if (ppModalInstance) ppModalInstance.hide();
     });
 
-    // Reset pilihan setelah modal ditutup (Batal)
     $(document).on('hidden.bs.modal', '#productPickerModal', function() {
         ppSelected = {};
+        ppTargetParentKey = null;
         existingProductIds = [];
         $('#pp-search').val('');
-        if (ppTable) {
-            ppTable.ajax.reload();
-        }
+        $('#pp-target-label').text('');
+        if (ppTable) ppTable.ajax.reload();
     });
 });
+
 </script>
 @endsection
