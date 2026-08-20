@@ -230,7 +230,7 @@
     <div class="col-lg-7">
         <div class="card-custom">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument ({{ $quotation->items->count() }} item)</span>
+                <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument</span>
             </div>
             <div class="card-body-custom p-2">
                 @php
