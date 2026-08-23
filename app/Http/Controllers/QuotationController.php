@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Log;
+use App\Models\MasterProduct;
 use App\Models\Module;
 use App\Models\Quotation;
 use App\Models\QuotationConfigItem;
@@ -50,6 +51,19 @@ class QuotationController extends Controller
     {
         return Quotation::withCount('items')
             ->has('items')
+            ->orderByDesc('id')
+            ->get(['id', 'quotation_number', 'to_name']);
+    }
+
+    /**
+     * Daftar quotation yang memiliki cost items — dipakai sebagai template
+     * isian Tab Biaya ("Pilih Template Biaya"). Setiap quotation baru dengan
+     * biaya otomatis tersedia.
+     */
+    private function costTemplateList()
+    {
+        return Quotation::withCount('costItems')
+            ->has('costItems')
             ->orderByDesc('id')
             ->get(['id', 'quotation_number', 'to_name']);
     }
@@ -157,6 +171,7 @@ class QuotationController extends Controller
             'costItems' => [],
             'formula' => null,
             'templates' => $this->templateList(),
+            'costTemplates' => $this->costTemplateList(),
             'terms' => self::DEFAULT_TERMS,
         ]);
     }
@@ -172,7 +187,10 @@ class QuotationController extends Controller
         foreach ($configs as $config) {
             foreach ($config->items as $item) {
                 $items[] = [
+                    'id' => $item->id,
                     'quote_configuration_id' => $config->id,
+                    'item_no' => $item->item_no,
+                    'parent_id' => $item->parent_id,
                     'category' => $item->category,
                     'part_number' => $item->part_number,
                     'description' => $item->description,
@@ -222,6 +240,7 @@ class QuotationController extends Controller
         // Daftar config terpilih (gabungan IMS + WATER).
         $configList = $configs->map(fn ($c) => [
             'id' => $c->id,
+            'division_id' => $c->division_id,
             'division_name' => $c->division?->division_name ?? '—',
             'version' => $c->version,
             'label' => '#'.$c->id.' v'.$c->version.' — '.($c->division?->division_name ?? ''),
@@ -277,6 +296,62 @@ class QuotationController extends Controller
     }
 
     /**
+     * Pencarian MasterProduct (DataTables server-side) untuk modal "Add Item"
+     * pada tab List Configuration. Opsional difilter per divisi config block.
+     */
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $searchValue = $request->input('search.value', '');
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 100);
+        $divisionId = $request->input('division_id');
+
+        $query = MasterProduct::query()
+            ->where('status', 'Active')
+            ->orderBy('name');
+
+        if ($divisionId) {
+            $query->where('division_id', $divisionId);
+        }
+
+        $recordsTotal = $query->count();
+
+        if ($searchValue) {
+            $query->where(function ($builder) use ($searchValue) {
+                $builder->where('name', 'like', "%{$searchValue}%")
+                    ->orWhere('code', 'like', "%{$searchValue}%")
+                    ->orWhere('brand', 'like', "%{$searchValue}%")
+                    ->orWhere('category', 'like', "%{$searchValue}%")
+                    ->orWhere('description', 'like', "%{$searchValue}%");
+            });
+        }
+
+        $recordsFiltered = $query->count();
+
+        $products = $query
+            ->skip($start)
+            ->take($length)
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+
+        $data = $products->map(fn ($product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'code' => $product->code,
+            'brand' => $product->brand,
+            'category' => $product->category,
+            'description' => $product->description,
+            'price' => $product->price,
+        ])->all();
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
+    /**
      * Ambil item quotation existing sebagai template isian List Item Quotation.
      * Dikembalikan datar berurutan DFS supaya parent dirender sebelum child.
      */
@@ -304,6 +379,53 @@ class QuotationController extends Controller
                     'description' => $item->description,
                     'qty' => $item->qty,
                     'price' => $item->price,
+                    'unit' => $item->unit,
+                ];
+                $walk($item->id);
+            }
+        };
+
+        $walk('_root');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'quotation_id' => $quotation->id,
+                'quotation_number' => $quotation->quotation_number,
+                'to_name' => $quotation->to_name,
+                'items' => $rows,
+            ],
+        ]);
+    }
+
+    /**
+     * Ambil cost items quotation existing sebagai template isian Tab Biaya.
+     * Dikembalikan datar berurutan DFS supaya parent dirender sebelum child.
+     * Harga TIDAK diikutsertakan — template hanya membawa struktur
+     * (item_no, title/description, qty, unit), harga diisi manual per quotation.
+     */
+    public function fetchCostTemplate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'quotation_id' => 'required|exists:quotations,id',
+        ]);
+
+        $quotation = Quotation::with('costItems')->findOrFail($request->input('quotation_id'));
+
+        $all = $quotation->costItems->keyBy('id');
+        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
+
+        $rows = [];
+
+        $walk = function ($parentId) use (&$walk, &$rows, $children) {
+            foreach ($children[$parentId] ?? [] as $item) {
+                $rows[] = [
+                    '_key' => 'tpl-cost-'.$item->id,
+                    'parent_key' => $item->parent_id ? 'tpl-cost-'.$item->parent_id : null,
+                    'item_no' => $item->item_no,
+                    'title' => $item->title,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
                     'unit' => $item->unit,
                 ];
                 $walk($item->id);
@@ -571,7 +693,10 @@ class QuotationController extends Controller
                 'formula' => $item->formula,
             ])->all(),
             'configItems' => $quotation->configItems->map(fn ($item) => [
+                'id' => $item->id,
                 'quote_configuration_id' => $item->quote_configuration_id,
+                'item_no' => $item->item_no,
+                'parent_id' => $item->parent_id,
                 'category' => $item->category,
                 'part_number' => $item->part_number,
                 'description' => $item->description,
@@ -593,6 +718,7 @@ class QuotationController extends Controller
             ])->all(),
             'formula' => $quotation->formula,
             'templates' => $this->templateList(),
+            'costTemplates' => $this->costTemplateList(),
             'terms' => $quotation->terms ?? self::DEFAULT_TERMS,
         ]);
     }
@@ -1237,6 +1363,9 @@ class QuotationController extends Controller
             'items.*.formula.qty' => 'nullable|string|max:255',
             'items.*.formula.price' => 'nullable|string|max:255',
             'config_items' => 'nullable|array',
+            'config_items.*._key' => 'required|string',
+            'config_items.*.parent_key' => 'nullable|string',
+            'config_items.*.item_no' => 'nullable|string|max:50',
             'config_items.*.quote_configuration_id' => 'nullable|integer|exists:quote_configurations,id',
             'config_items.*.category' => 'nullable|string|max:100',
             'config_items.*.part_number' => 'nullable|string|max:100',
@@ -1339,11 +1468,16 @@ class QuotationController extends Controller
     {
         $quotation->configItems()->delete();
 
+        $keyMap = [];
         $payload = [];
+
         foreach (array_values($configItems) as $i => $item) {
+            $keyMap[$item['_key']] = $i;
             $payload[] = [
                 'quotation_id' => $quotation->id,
                 'quote_configuration_id' => $item['quote_configuration_id'] ?? null,
+                'item_no' => $item['item_no'] ?? null,
+                'parent_id' => null,
                 'category' => $item['category'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
@@ -1357,8 +1491,45 @@ class QuotationController extends Controller
             ];
         }
 
-        if (! empty($payload)) {
-            QuotationConfigItem::insert($payload);
+        if (empty($payload)) {
+            return;
+        }
+
+        QuotationConfigItem::insert($payload);
+
+        $inserted = QuotationConfigItem::where('quotation_id', $quotation->id)
+            ->orderBy('id')
+            ->get();
+
+        $updates = [];
+
+        foreach ($configItems as $item) {
+            $parentKey = $item['parent_key'] ?? null;
+
+            if (! $parentKey || ! array_key_exists($parentKey, $keyMap)) {
+                continue;
+            }
+
+            $childIndex = $keyMap[$item['_key']];
+            $parentIndex = $keyMap[$parentKey];
+
+            if ($childIndex === $parentIndex) {
+                continue;
+            }
+
+            $child = $inserted[$childIndex] ?? null;
+            $parent = $inserted[$parentIndex] ?? null;
+
+            if ($child && $parent) {
+                $updates[] = [
+                    'id' => $child->id,
+                    'parent_id' => $parent->id,
+                ];
+            }
+        }
+
+        foreach ($updates as $update) {
+            QuotationConfigItem::where('id', $update['id'])->update(['parent_id' => $update['parent_id']]);
         }
     }
 

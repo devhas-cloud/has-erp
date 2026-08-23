@@ -997,11 +997,24 @@ class WaterConfigurationController extends Controller
         $keyMap = [];
         $payload = [];
 
+        // Ambil harga produk dari database via product_id (bukan input user).
+        $productIds = collect($items)
+            ->pluck('product_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $productPrices = MasterProduct::whereIn('id', $productIds)
+            ->pluck('price', 'id')
+            ->map(fn ($price) => (float) $price)
+            ->all();
+
         foreach (array_values($items) as $i => $item) {
             $keyMap[$item['_key']] = $i;
 
             $qty = (int) ($item['qty'] ?? 0);
             $productId = $item['product_id'] ?? null;
+            $productPrice = $productId ? ($productPrices[$productId] ?? 0) : 0;
 
             $payload[] = [
                 'quote_configuration_id' => $quotation->id,
@@ -1012,7 +1025,7 @@ class WaterConfigurationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => $qty,
-                'price' => $qty <= 0 ? 0 : ($item['price'] ?? null),
+                'price' => $qty <= 0 ? 0 : $productPrice,
                 'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),

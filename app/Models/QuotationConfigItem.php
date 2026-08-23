@@ -12,6 +12,8 @@ class QuotationConfigItem extends Model
     protected $fillable = [
         'quotation_id',
         'quote_configuration_id',
+        'item_no',
+        'parent_id',
         'category',
         'part_number',
         'description',

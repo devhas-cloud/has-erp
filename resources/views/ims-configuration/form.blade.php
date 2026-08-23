@@ -246,7 +246,7 @@
                                 echo '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">'.$item->qty.'</div></td>';
                                 echo '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">'.e($item->unit).'</div></td>';
                                 echo '<td><input type="hidden" class="wc-price" value="'.e($price).'">';
-                                echo '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="'.($price ? number_format($price, 0, ',', '.') : '').'" placeholder="0"></td>';
+                                echo '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="'.($price ? number_format($price, 0, '.', ',') : '').'" placeholder="0"></td>';
                                 echo '<td class="text-center">';
                                 echo '<div class="d-flex justify-content-center gap-1">';
                                 echo '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
@@ -422,7 +422,7 @@ function openProductPickerAsParent() {
 }
 
 function numberFormat(n) {
-    return Number(n || 0).toLocaleString('id-ID');
+    return Number(n || 0).toLocaleString('en-US');
 }
 
 function priceDisplayOf(raw) {
@@ -560,27 +560,27 @@ $(document).on('click', '.wc-desc-toolbar button', function() {
     document.execCommand($(this).data('cmd'), false, null);
 });
 
-// Sinkronkan harga editable: input -> format ribuan live (titik) + desimal koma, simpan angka bersih.
+// Sinkronkan harga editable: input -> format ribuan live (koma) + desimal titik, simpan angka bersih.
 $(document).on('input', '.wc-price-display', function() {
     var $row = $(this).closest('tr.wc-item-row');
     var cleaned = String(this.value).replace(/[^\d.,]/g, '');
-    // Pemisah desimal = koma (,); titik (.) = ribuan.
-    var parts = cleaned.split(',');
-    var intStr = (parts[0] || '').replace(/\./g, '').replace(/\D/g, '');
+    // Pemisah desimal = titik (.); koma (,) = ribuan.
+    var parts = cleaned.split('.');
+    var intStr = (parts[0] || '').replace(/,/g, '').replace(/\D/g, '');
     var decStr = (parts[1] || '').replace(/\D/g, '').slice(0, 2);
-    var formattedInt = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    this.value = formattedInt + (decStr ? ',' + decStr : '');
+    var formattedInt = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    this.value = formattedInt + (decStr ? '.' + decStr : '');
     var raw = (intStr === '' ? '' : Number(intStr)) + (decStr ? '.' + decStr : '');
     $row.find('.wc-price').val(raw);
 });
 
-// Saat blur, pastikan format ribuan (id-ID) rapi.
+// Saat blur, pastikan format ribuan (en-US) rapi.
 $(document).on('change', '.wc-price-display', function() {
     var $row = $(this).closest('tr.wc-item-row');
     var raw = $row.find('.wc-price').val();
     if (raw === '') { $(this).val(''); return; }
     var num = Number(raw);
-    $(this).val(num.toLocaleString('id-ID', { maximumFractionDigits: 2 }));
+    $(this).val(num.toLocaleString('en-US', { maximumFractionDigits: 2 }));
 });
 
 function collectItems() {

@@ -247,7 +247,7 @@
                             <div style="padding-left:{{ $depth * 12 }}px">{!! \App\Models\Quotation::renderDescription($item->description) !!}</div>
                         </td>
                         <td class="qty-col">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
-                        <td class="price-col">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
+                        <td class="price-col">{{ $price ? 'Rp '.number_format($price, 0, '.', ',') : '—' }}</td>
                     </tr>
                 @endforeach
             @empty
@@ -259,7 +259,7 @@
         <tfoot>
             <tr>
                 <td colspan="4" class="text-end"><strong>Total </strong></td>
-                <td class="price-col"><strong>{{ 'Rp '.number_format($totalPrice, 0, ',', '.') }}</strong></td>
+                <td class="price-col"><strong>{{ 'Rp '.number_format($totalPrice, 0, '.', ',') }}</strong></td>
             </tr>
         </tfoot>
     </table>

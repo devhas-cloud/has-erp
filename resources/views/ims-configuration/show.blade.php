@@ -314,7 +314,7 @@
                                             </div>
                                         </td>
                                         <td class="text-center">{{ $item->qty }} &ensp; {{ $item->unit ?: '' }}</td>
-                                        <td class="text-end">{{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '—' }}</td>
+                                        <td class="text-end">{{ $price ? 'Rp '.number_format($price, 0, '.', ',') : '—' }}</td>
                                     </tr>
                                 @empty
                                     <tr>
@@ -325,7 +325,7 @@
                             <tfoot>
                                 <tr>
                                     <td colspan="4" class="text-end"><strong>Sub Total</strong></td>
-                                    <td class="text-end"><strong> Rp {{ number_format($group['subtotal'], 0, ',', '.') }}</strong></td>
+                                    <td class="text-end"><strong> Rp {{ number_format($group['subtotal'], 0, '.', ',') }}</strong></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -339,7 +339,7 @@
                     <table class="table table-custom align-middle mb-0" style="max-width:340px">
                         <tr>
                             <td class="text-end"><strong>Total Keseluruhan</strong></td>
-                            <td class="text-end fw-bold" style="color:var(--accent)">Rp {{ number_format($totalPrice, 0, ',', '.') }}</td>
+                            <td class="text-end fw-bold" style="color:var(--accent)">Rp {{ number_format($totalPrice, 0, '.', ',') }}</td>
                         </tr>
                     </table>
                 </div>

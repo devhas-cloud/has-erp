@@ -423,7 +423,7 @@ function openDetailModal(id) {
         $('#pd-brand').text(p.brand || '—');
         $('#pd-category').text(p.category || '—');
         $('#pd-division').text(p.division_name || '—');
-        $('#pd-price').text('Rp ' + Number(p.price).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        $('#pd-price').text('Rp ' + Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
         $('#pd-status').html(p.status === 'Active'
             ? '<span class="status-badge status-active">Active</span>'
             : '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Inactive</span>');
@@ -487,14 +487,17 @@ $(document).on('click', '#btn-save-product', function() {
         fd.append('image', imageFile);
     }
 
-    var url = isEdit ? productUpdateUrl.replace('__ID__', id) : '{{ route("product-management.store") }}';
-    var method = isEdit ? 'PUT' : 'POST';
+    var url = '{{ route("product-management.store") }}';
+    if (isEdit) {
+        url = productUpdateUrl.replace('__ID__', id);
+        fd.append('_method', 'PUT');
+    }
 
     $('#btn-save-product').prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Menyimpan...');
 
     $.ajax({
         url: url,
-        method: method,
+        method: 'POST',
         data: fd,
         processData: false,
         contentType: false,
@@ -510,7 +513,20 @@ $(document).on('click', '#btn-save-product', function() {
             if (xhr.responseJSON.errors) {
                 var firstKey = Object.keys(xhr.responseJSON.errors)[0];
                 msg = xhr.responseJSON.errors[firstKey][0];
-                $('#' + firstKey).addClass('is-invalid');
+                var fieldMap = {
+                    code: 'product-code',
+                    price: 'product-price',
+                    status: 'product-status',
+                    name: 'product-name',
+                    brand: 'product-brand',
+                    category: 'product-category',
+                    division_id: 'product-division',
+                    image: 'product-image',
+                    description: 'product-description'
+                };
+                $('#product-form .is-invalid').removeClass('is-invalid');
+                var target = fieldMap[firstKey] || firstKey;
+                $('#' + target).addClass('is-invalid');
             } else if (xhr.responseJSON.message) {
                 msg = xhr.responseJSON.message;
             }

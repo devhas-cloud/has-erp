@@ -127,7 +127,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('quotation/data', [QuotationController::class, 'data'])->name('quotation.data');
     Route::get('quotation/fetch-task', [QuotationController::class, 'fetchTask'])->name('quotation.fetch-task');
+    Route::get('quotation/search-products', [QuotationController::class, 'searchProducts'])->name('quotation.search-products');
     Route::get('quotation/fetch-template', [QuotationController::class, 'fetchTemplate'])->name('quotation.fetch-template');
+    Route::get('quotation/fetch-cost-template', [QuotationController::class, 'fetchCostTemplate'])->name('quotation.fetch-cost-template');
     Route::post('quotation/{id}/submit', [QuotationController::class, 'submit'])->name('quotation.submit');
     Route::post('quotation/{id}/approve', [QuotationController::class, 'approve'])->name('quotation.approve');
     Route::post('quotation/{id}/reject', [QuotationController::class, 'reject'])->name('quotation.reject');

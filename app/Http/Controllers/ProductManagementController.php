@@ -76,7 +76,7 @@ class ProductManagementController extends Controller
                 'category' => $product->category ?? '—',
                 'division_name' => $product->division?->division_name ?? '—',
                 'price' => $product->price,
-                'price_formatted' => number_format((float) $product->price, 2),
+                'price_formatted' => number_format((float) $product->price, 0, '.', ','),
                 'status' => $product->status ?? 'Active',
                 'image_url' => $product->image_url,
             ];

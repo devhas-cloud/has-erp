@@ -216,7 +216,7 @@
 
     @if($quotation->cost_notes)
         <div class="catatan">
-            <span class="catatan-title">Catatan Biaya :</span><br>
+            <span class="catatan-title">Catatan :</span><br>
             {!! nl2br(e($quotation->cost_notes)) !!}
         </div>
     @endif
