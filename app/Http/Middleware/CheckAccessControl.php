@@ -58,6 +58,13 @@ class CheckAccessControl
         }
 
         if (! $hasAccess) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki izin untuk melakukan aksi ini.',
+                ], 403);
+            }
+
             return redirect()->back()->with('error', 'Anda tidak memiliki izin untuk melakukan aksi ini.');
         }
 

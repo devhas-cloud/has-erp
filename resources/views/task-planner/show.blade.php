@@ -782,9 +782,9 @@
                 <div class="card-header-custom">
                     <span>
                         <i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees
-                        @if ($task->handlingDivision)
+                        @if ($task->handlingGroup)
                             <span class="assignee-badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px;padding:3px 8px">
-                                <i class="fa fa-building"></i> {{ $task->handlingDivision->division_name }}
+                                <i class="fa fa-building"></i> {{ $task->handlingGroup->name }}
                             </span>
                         @endif
                     </span>
@@ -931,7 +931,8 @@
             </div>
             @endif
 
-            <div class="card-custom fade-in stagger-2 mt-4">
+            <!-- Non aktifkan sementara karena fitur alert belum digunakan -->
+            {{-- <div class="card-custom fade-in stagger-2 mt-4">
                 <div class="card-header-custom">
                     <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Configuration</span>
                 </div>
@@ -977,7 +978,7 @@
                         </tr>
                     </table>
                 </div>
-            </div>
+            </div> --}}
 
             <div class="card-custom fade-in stagger-3 mt-4">
                 <div class="card-header-custom">
@@ -997,20 +998,20 @@
                                 </span>
                             </td>
                         </tr>
-                        @if ($task->handlingDivision)
+                        @if ($task->handlingGroup)
                             <tr>
-                                <td>Divisi Penanganan</td>
+                                <td>Penanganan</td>
                                 <td>
                                     <span class="assignee-badge" style="background:var(--accent-soft);color:var(--accent)">
-                                        <i class="fa fa-building"></i> {{ $task->handlingDivision->division_name }}
+                                        <i class="fa fa-building"></i> {{ $task->handlingGroup->name }}
                                     </span>
                                 </td>
                             </tr>
                         @endif
-                        <tr>
+                        {{-- <tr>
                             <td>Division</td>
                             <td>{{ $task->division?->division_name ?? 'Global' }}</td>
-                        </tr>
+                        </tr> --}}
                         <tr>
                             <td>Created By</td>
                             <td><strong>{{ $task->creator?->username ?? '—' }}</strong></td>

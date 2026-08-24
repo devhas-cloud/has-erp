@@ -1119,16 +1119,16 @@
                         </div>
                         <div class="task-form-section-body">
 
-                            <div class="task-form-row" id="task-handling-division-container" style="display:none">
+                            <div class="task-form-row" id="task-handling-group-container" style="display:none">
                                 <div class="form-group">
-                                    <label>Divisi</label>
-                                    <select name="handling_division_id" id="task-handling-division" style="width:100%">
-                                        <option value="">— Pilih Divisi —</option>
-                                        @foreach ($divisions as $d)
-                                            <option value="{{ $d->id }}">{{ $d->division_name }}</option>
+                                    <label>Penanganan</label>
+                                    <select name="handling_group_id" id="task-handling-group" style="width:100%">
+                                        <option value="">— Pilih Penanganan —</option>
+                                        @foreach ($handlingGroups as $hg)
+                                            <option value="{{ $hg->id }}">{{ $hg->name }}</option>
                                         @endforeach
                                     </select>
-                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Anggota tim divisi akan otomatis menjadi assignee task.</div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Anggota penanganan akan otomatis menjadi assignee task.</div>
                                 </div>
                             </div>
 
@@ -1454,23 +1454,23 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
 });
 
 const categoryHandlerMap = @json($categoryHandlerMap);
-const fetchDivisionHandlersUrl = '{{ route('task-planner.fetch-division-handlers') }}';
+const fetchHandlingGroupUsersUrl = '{{ route('task-planner.fetch-handling-group-users') }}';
 
 $(document).on('change', '#task-category-id', function() {
     var enabled = categoryHandlerMap[$(this).val()] ? true : false;
-    $('#task-handling-division-container').toggle(enabled);
+    $('#task-handling-group-container').toggle(enabled);
     if (!enabled) {
-        $('#task-handling-division').val('');
+        $('#task-handling-group').val('');
     }
 });
 
-$(document).on('change', '#task-handling-division', function() {
-    var divisionId = $(this).val();
-    if (!divisionId) return;
+$(document).on('change', '#task-handling-group', function() {
+    var groupId = $(this).val();
+    if (!groupId) return;
     var $assignees = $('#task-assignees');
     $.ajax({
-        url: fetchDivisionHandlersUrl,
-        data: { division_id: divisionId },
+        url: fetchHandlingGroupUsersUrl,
+        data: { handling_group_id: groupId },
         dataType: 'json',
         success: function(res) {
             $assignees.empty();
@@ -1480,7 +1480,7 @@ $(document).on('change', '#task-handling-division', function() {
             $assignees.trigger('change');
         },
         error: function() {
-            toastr.error('Gagal memuat anggota divisi.');
+            toastr.error('Gagal memuat anggota penanganan.');
         }
     });
 });
@@ -1821,8 +1821,8 @@ function openCreateTaskModal() {
     $('#task-form')[0].reset();
     document.getElementById('taskModalTitle').textContent = 'Add Task';
     $('#task-assignees').val(null).trigger('change');
-    $('#task-handling-division-container').hide();
-    $('#task-handling-division').val('');
+    $('#task-handling-group-container').hide();
+    $('#task-handling-group').val('');
     new bootstrap.Modal(document.getElementById('taskModal')).show();
 }
 
@@ -1845,7 +1845,7 @@ $(document).on('click', '#btn-save-opportunity-task', function() {
             title: title,
             description: $('#task-description').val(),
             category_id: category,
-            handling_division_id: $('#task-handling-division').val(),
+            handling_group_id: $('#task-handling-group').val(),
             due_date: dueDate,
             time: $('#task-time').val(),
             assignees: $('#task-assignees').val(),

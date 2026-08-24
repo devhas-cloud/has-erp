@@ -65,7 +65,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('task-planner/import-template', [TaskPlannerController::class, 'downloadTemplate'])->name('task-planner.template');
     Route::post('task-planner/import', [TaskPlannerController::class, 'import'])->name('task-planner.import');
     Route::get('task-planner/fetch-assignees', [TaskPlannerController::class, 'fetchAssignees'])->name('task-planner.fetch-assignees');
-    Route::get('task-planner/fetch-division-handlers', [TaskPlannerController::class, 'fetchDivisionHandlers'])->name('task-planner.fetch-division-handlers');
+    Route::get('task-planner/fetch-handling-group-users', [TaskPlannerController::class, 'fetchHandlingGroupUsers'])->name('task-planner.fetch-handling-group-users');
     Route::get('task-planner/fetch-whatsapp-groups', [TaskPlannerController::class, 'fetchWhatsAppGroups'])->name('task-planner.fetch-whatsapp-groups');
     Route::post('task-planner/{id}/approve', [TaskPlannerController::class, 'approve'])->name('task-planner.approve');
     Route::post('task-planner/{id}/reject', [TaskPlannerController::class, 'reject'])->name('task-planner.reject');

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DivisionHandler;
+use App\Models\HandlingGroup;
 use App\Models\Log;
 use App\Models\Notification;
 use App\Models\QuoteConfiguration;
@@ -158,13 +158,18 @@ class TaskPlannerController extends Controller
         ]);
     }
 
-    private function mergeDivisionHandlerAssignees(array $assigneeIds, $handlingDivisionId): array
+    private function mergeHandlingGroupAssignees(array $assigneeIds, $handlingGroupId): array
     {
-        if (! $handlingDivisionId) {
+        if (! $handlingGroupId) {
             return $assigneeIds;
         }
 
-        $roster = DivisionHandler::where('division_id', $handlingDivisionId)->pluck('user_id')->all();
+        $group = HandlingGroup::with('users')->find($handlingGroupId);
+        if (! $group) {
+            return $assigneeIds;
+        }
+
+        $roster = $group->users->pluck('id')->all();
 
         return array_values(array_unique(array_merge($assigneeIds, $roster)));
     }
@@ -217,19 +222,18 @@ class TaskPlannerController extends Controller
         return response()->json(['results' => $results]);
     }
 
-    public function fetchDivisionHandlers(Request $request): JsonResponse
+    public function fetchHandlingGroupUsers(Request $request): JsonResponse
     {
         $request->validate([
-            'division_id' => 'required|exists:divisions,id',
+            'handling_group_id' => 'required|exists:handling_groups,id',
         ]);
 
-        $users = DivisionHandler::where('division_id', $request->input('division_id'))
-            ->with(['user.hierarchyRole'])
-            ->get()
-            ->map(fn ($dh) => [
-                'id' => $dh->user->id,
-                'text' => $dh->user->username.($dh->user->hierarchyRole ? ' ('.$dh->user->hierarchyRole->role_name.')' : ''),
-            ]);
+        $group = HandlingGroup::with('users.hierarchyRole')->find($request->input('handling_group_id'));
+
+        $users = $group->users->map(fn ($user) => [
+            'id' => $user->id,
+            'text' => $user->username.($user->hierarchyRole ? ' ('.$user->hierarchyRole->role_name.')' : ''),
+        ]);
 
         return response()->json(['results' => $users]);
     }
@@ -260,7 +264,7 @@ class TaskPlannerController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
-            'handling_division_id' => 'nullable|exists:divisions,id',
+            'handling_group_id' => 'nullable|exists:handling_groups,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
@@ -275,7 +279,7 @@ class TaskPlannerController extends Controller
         $validated['status'] = 'todo';
 
         $assigneeIds = $request->input('assignees', []);
-        $assigneeIds = $this->mergeDivisionHandlerAssignees($assigneeIds, $request->input('handling_division_id'));
+        $assigneeIds = $this->mergeHandlingGroupAssignees($assigneeIds, $request->input('handling_group_id'));
 
         if (empty($assigneeIds)) {
             $assigneeIds = [Auth::id()];
@@ -332,7 +336,7 @@ class TaskPlannerController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
-            'handling_division_id' => 'nullable|exists:divisions,id',
+            'handling_group_id' => 'nullable|exists:handling_groups,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
@@ -355,7 +359,7 @@ class TaskPlannerController extends Controller
         }
 
         $assigneeIds = $request->input('assignees', []);
-        $assigneeIds = $this->mergeDivisionHandlerAssignees($assigneeIds, $request->input('handling_division_id'));
+        $assigneeIds = $this->mergeHandlingGroupAssignees($assigneeIds, $request->input('handling_group_id'));
 
         if (empty($assigneeIds)) {
             $assigneeIds = [$task->creator_id];
@@ -383,7 +387,7 @@ class TaskPlannerController extends Controller
             'whatsappGroup.division',
             'assignees.hierarchyRole',
             'proposals.uploader',
-            'handlingDivision.handlerUsers',
+            'handlingGroup.users',
         ])->findOrFail($id);
 
         // Config terbaru per group (riwayat/versi) untuk task ini.

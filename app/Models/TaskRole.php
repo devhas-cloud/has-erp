@@ -20,6 +20,11 @@ class TaskRole extends Model
         'hierarchy_level' => 'integer',
     ];
 
+    public function setIsGlobalDelegatorAttribute($value): void
+    {
+        $this->attributes['is_global_delegator'] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class, 'task_role_id');

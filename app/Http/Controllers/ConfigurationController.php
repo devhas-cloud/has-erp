@@ -8,6 +8,7 @@ use App\Models\BusinessValue;
 use App\Models\ContactMethod;
 use App\Models\Division;
 use App\Models\Forecast;
+use App\Models\HandlingGroup;
 use App\Models\InteractionLevel;
 use App\Models\JobTitle;
 use App\Models\LossReason;
@@ -57,30 +58,23 @@ class ConfigurationController extends Controller
                 'columns' => ['username'],
                 'hidden' => true,
             ],
-            'division-handlers' => [
-                'model' => Division::class,
-                'label' => 'Divisi Penanganan',
-                'slug' => 'division-handlers',
-                'columns' => ['division_name', 'members'],
+            'handling-groups' => [
+                'model' => HandlingGroup::class,
+                'label' => 'Penanganan',
+                'slug' => 'handling-groups',
+                'columns' => ['name', 'members'],
                 'column_labels' => [
-                    'division_name' => 'Divisi',
-                    'members' => 'Anggota Penanganan',
+                    'name' => 'Nama',
+                    'members' => 'Anggota',
                 ],
                 'rules' => [
-                    'division_id' => 'required|exists:divisions,id',
+                    'name' => 'required|string|max:100',
                     'user_ids' => 'nullable|array',
                     'user_ids.*' => 'exists:users,id',
                 ],
-                'no_name_field' => true,
                 'extra_fields' => [
-                    'division_id' => [
-                        'label' => 'Divisi',
-                        'type' => 'select_fk',
-                        'source' => 'divisions',
-                        'source_key' => 'division_name',
-                    ],
                     'user_ids' => [
-                        'label' => 'Anggota Terlibat',
+                        'label' => 'Anggota',
                         'type' => 'multi_select',
                         'source' => 'users',
                         'source_key' => 'username',
@@ -329,8 +323,8 @@ class ConfigurationController extends Controller
             return response()->json(['error' => 'Invalid table'], 404);
         }
 
-        if ($table === 'division-handlers') {
-            return $this->listDivisionHandlers($request);
+        if ($table === 'handling-groups') {
+            return $this->listHandlingGroups($request);
         }
 
         $search = $request->get('search', '');
@@ -397,15 +391,15 @@ class ConfigurationController extends Controller
             return response()->json(['error' => 'Invalid table'], 404);
         }
 
-        if ($table === 'division-handlers') {
+        if ($table === 'handling-groups') {
             $validated = $request->validate($cfg['rules']);
-            $division = Division::findOrFail($validated['division_id']);
-            $division->handlerUsers()->sync($validated['user_ids'] ?? []);
+            $group = HandlingGroup::create(['name' => $validated['name']]);
+            $group->users()->sync($validated['user_ids'] ?? []);
 
             return response()->json([
                 'success' => true,
-                'message' => "Divisi Penanganan {$division->division_name} berhasil disimpan.",
-                'data' => $division,
+                'message' => "Penanganan {$group->name} berhasil ditambahkan.",
+                'data' => $group,
             ]);
         }
 
@@ -427,15 +421,16 @@ class ConfigurationController extends Controller
             return response()->json(['error' => 'Invalid table'], 404);
         }
 
-        if ($table === 'division-handlers') {
+        if ($table === 'handling-groups') {
             $validated = $request->validate($cfg['rules']);
-            $division = Division::findOrFail($id);
-            $division->handlerUsers()->sync($validated['user_ids'] ?? []);
+            $group = HandlingGroup::findOrFail($id);
+            $group->update(['name' => $validated['name']]);
+            $group->users()->sync($validated['user_ids'] ?? []);
 
             return response()->json([
                 'success' => true,
-                'message' => "Divisi Penanganan {$division->division_name} berhasil diperbarui.",
-                'data' => $division,
+                'message' => "Penanganan {$group->name} berhasil diperbarui.",
+                'data' => $group,
             ]);
         }
 
@@ -459,13 +454,14 @@ class ConfigurationController extends Controller
             return response()->json(['error' => 'Invalid table'], 404);
         }
 
-        if ($table === 'division-handlers') {
-            $division = Division::findOrFail($id);
-            $division->handlerUsers()->sync([]);
+        if ($table === 'handling-groups') {
+            $group = HandlingGroup::findOrFail($id);
+            $group->users()->sync([]);
+            $group->delete();
 
             return response()->json([
                 'success' => true,
-                'message' => "Divisi Penanganan {$division->division_name} berhasil dikosongkan.",
+                'message' => "Penanganan {$group->name} berhasil dihapus.",
             ]);
         }
 
@@ -478,24 +474,23 @@ class ConfigurationController extends Controller
         ]);
     }
 
-    private function listDivisionHandlers(Request $request): JsonResponse
+    private function listHandlingGroups(Request $request): JsonResponse
     {
         $search = $request->get('search', '');
 
-        $query = Division::whereHas('handlerUsers')->with('handlerUsers')->orderBy('division_name');
+        $query = HandlingGroup::with('users');
 
         if ($search) {
-            $query->where('division_name', 'like', "%{$search}%");
+            $query->where('name', 'like', "%{$search}%");
         }
 
-        $records = $query->paginate(15);
+        $records = $query->orderBy('id', 'desc')->paginate(15);
 
-        $data = collect($records->items())->map(function (Division $division) {
-            $division->members = $division->handlerUsers->pluck('username')->join(', ');
-            $division->division_id = $division->id;
-            $division->user_ids = $division->handlerUsers->pluck('id')->all();
+        $data = collect($records->items())->map(function (HandlingGroup $group) {
+            $group->members = $group->users->pluck('username')->join(', ');
+            $group->user_ids = $group->users->pluck('id')->all();
 
-            return $division;
+            return $group;
         })->all();
 
         return response()->json([
@@ -508,8 +503,8 @@ class ConfigurationController extends Controller
                 'from' => $records->firstItem(),
                 'to' => $records->lastItem(),
             ],
-            'columns' => ['division_name', 'members'],
-            'label' => 'Divisi Penanganan',
+            'columns' => ['name', 'members'],
+            'label' => 'Penanganan',
             'display_map' => null,
         ]);
     }

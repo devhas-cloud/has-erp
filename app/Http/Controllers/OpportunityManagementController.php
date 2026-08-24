@@ -7,7 +7,7 @@ use App\Models\AccountContact;
 use App\Models\Activity;
 use App\Models\ActivityAttachment;
 use App\Models\Division;
-use App\Models\DivisionHandler;
+use App\Models\HandlingGroup;
 use App\Models\Forecast;
 use App\Models\Lead;
 use App\Models\Log;
@@ -301,6 +301,7 @@ class OpportunityManagementController extends Controller
         $forecasts = Forecast::where('status', 'Active')->get();
         $lossReasons = LossReason::where('status', 'Active')->get();
         $divisions = Division::where('status', 'Active')->get();
+        $handlingGroups = HandlingGroup::orderBy('name')->get();
         $sources = Source::where('status', 'Active')->get();
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
@@ -311,7 +312,8 @@ class OpportunityManagementController extends Controller
 
         return view('opportunity-management.show', compact(
             'opportunity', 'stages', 'forecasts', 'lossReasons', 'divisions',
-            'sources', 'users', 'accountCompanies', 'accountContacts', 'categories', 'categoryHandlerMap'
+            'sources', 'users', 'accountCompanies', 'accountContacts', 'categories', 'categoryHandlerMap',
+            'handlingGroups'
         ));
     }
 
@@ -485,7 +487,7 @@ class OpportunityManagementController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
-            'handling_division_id' => 'nullable|exists:divisions,id',
+            'handling_group_id' => 'nullable|exists:handling_groups,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
             'time' => 'nullable|date_format:H:i',
@@ -501,10 +503,13 @@ class OpportunityManagementController extends Controller
         $validated['opportunity_id'] = $opportunity->id;
 
         $assigneeIds = $request->input('assignees', []);
-        $handlingDivisionId = $request->input('handling_division_id');
-        if ($handlingDivisionId) {
-            $roster = DivisionHandler::where('division_id', $handlingDivisionId)->pluck('user_id')->all();
-            $assigneeIds = array_values(array_unique(array_merge($assigneeIds, $roster)));
+        $handlingGroupId = $request->input('handling_group_id');
+        if ($handlingGroupId) {
+            $group = HandlingGroup::with('users')->find($handlingGroupId);
+            if ($group) {
+                $roster = $group->users->pluck('id')->all();
+                $assigneeIds = array_values(array_unique(array_merge($assigneeIds, $roster)));
+            }
         }
 
         if (empty($assigneeIds)) {

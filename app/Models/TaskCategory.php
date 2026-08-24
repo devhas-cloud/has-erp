@@ -21,6 +21,11 @@ class TaskCategory extends Model
         'use_division_handler' => 'boolean',
     ];
 
+    public function setUseDivisionHandlerAttribute($value): void
+    {
+        $this->attributes['use_division_handler'] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
     public function division(): BelongsTo
     {
         return $this->belongsTo(Division::class);
