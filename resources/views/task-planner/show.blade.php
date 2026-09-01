@@ -617,7 +617,7 @@
             <p class="page-header-sub">#{{ $task->id }} — Informasi lengkap tugas</p>
         </div>
         <div class="page-header-actions">
-            @if ($canUpdate && $task->creator_id === Auth::id())
+            @if ($canUpdate && $task->creator_id === Auth::id() && strtolower($task->category?->name) !== 'proposal' && strtolower($task->category?->name) !== 'quote')
                 <a href="{{ route('task-planner.edit', $task->id) }}" class="btn-accent">
                     <i class="fa fa-pen"></i><span>Edit</span>
                 </a>
@@ -783,6 +783,7 @@
                     <span>
                         <i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees
                         @if ($task->handlingGroup)
+                            <br>
                             <span class="assignee-badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px;padding:3px 8px">
                                 <i class="fa fa-building"></i> {{ $task->handlingGroup->name }}
                             </span>
@@ -813,7 +814,7 @@
                         </div>
                     @endif
 
-                    @if ($task->status === 'waiting_approval' && $isCreator)
+                    @if ($task->status === 'waiting_approval' && $isCreator && strtolower($task->category?->name) !== 'proposal' && strtolower($task->category?->name) !== 'quote')
                         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                             <button type="button" class="btn btn-sm btn-accent btn-approve-task"
                                 data-id="{{ $task->id }}" data-status="done" style="font-size:10px">
@@ -824,6 +825,14 @@
                                 style="background:#f51f0b;font-size:10px">
                                 <i class="fa fa-times me-1"></i>Reject
                             </button>
+                        </div>
+                    @else
+                       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+                            <button type="button" class="btn btn-sm btn-accent btn-approve-task"
+                                data-id="{{ $task->id }}" data-status="done" style="font-size:10px">
+                                <i class="fa fa-check me-1"></i>Complete Task
+                            </button>
+
                         </div>
                     @endif
 
@@ -889,15 +898,44 @@
             </div>
             @endif
 
-            <!-- ── Quote Configuration ── -->
+            <!-- ── Quote & Configuration ── -->
             @if (strtolower($task->category?->name) === 'quote')
             <div class="card-custom fade-in stagger-3 mt-4">
-                <div class="card-header-custom">
-                    <span><i class="fa fa-clipboard-check me-2" style="color:var(--accent)"></i>Configuration</span>
+                <div class="card-header-custom" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                    <span><i class="fa fa-clipboard-check me-2" style="color:var(--accent)"></i>Quote &amp; Configuration</span>
+                    @php
+                        // Syarat tombol Add: task belum done, viewer creator/assignee, dan quotation belum dibuat.
+                        $showAddConfigBtn = $task->status !== 'done' && ($isCreator || $isAssignee) && $quotations->isEmpty();
+                        // Item "Buat Quotation" hanya tampil jika sudah ada config Approved.
+                        $hasApprovedConfig = $quoteConfigurations->contains(fn ($c) => $c->status === \App\Models\QuoteConfiguration::STATUS_APPROVED);
+                    @endphp
+                    @if ($showAddConfigBtn)
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-accent dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size:11px">
+                            <i class="fa fa-plus"></i> Add
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" style="font-size:12px">
+                            @if(strtolower(auth()->user()->division->division_name ?? '') === 'water')
+                            <li><a class="dropdown-item" href="{{ route('water-configuration.create', ['task_id' => $task->id]) }}">Water Config</a></li>
+                            @endif
+                            @if(strtolower(auth()->user()->division->division_name ?? '') === 'ims')
+                            <li><a class="dropdown-item" href="{{ route('ims-configuration.create', ['task_id' => $task->id]) }}">IMS Config</a></li>
+                            @endif
+                            @if ($hasApprovedConfig)
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ route('quotation.create', ['task_id' => $task->id]) }}">
+                                    <i class="fa fa-file-invoice-dollar me-1"></i> Buat Quotation
+                                </a>
+                            </li>
+                            @endif
+                        </ul>
+                    </div>
+                    @endif
                 </div>
                 <div class="card-body-custom">
-                    @if ($quoteConfigurations->isEmpty())
-                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">Belum ada configuration.</div>
+                    @if ($quoteConfigurations->isEmpty() && $quotations->isEmpty())
+                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">Belum ada configuration / quotation.</div>
                     @else
                         <table class="table table-sm align-middle mb-0" style="font-size:12.5px">
                             <thead>
@@ -905,22 +943,58 @@
                                     <th style="width:36px">No</th>
                                     <th>Divisi</th>
                                     <th>Status</th>
-                                    <th class="text-center" style="width:44px">Aksi</th>
+                                    <th class="text-center" style="width:70px">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach ($quoteConfigurations as $i => $qc)
+                                @php
+                                    // Viewer divisi Sales: pada baris configuration tidak tampil aksi,
+                                    // pada baris quotation hanya pdf (bukan view).
+                                    $viewerIsSales = strtolower(auth()->user()->division?->division_name ?? '') === 'sales';
+                                    $rowNo = 0;
+                                @endphp
+                                @foreach ($quoteConfigurations as $qc)
+                                @php
+                                    $rowNo++;
+                                    $isImsConfig = strtolower($qc->division?->division_name ?? '') === 'ims';
+                                    $configShowRoute = $isImsConfig ? 'ims-configuration.show' : 'water-configuration.show';
+                                    $configShowParam = $isImsConfig ? 'ims_configuration' : 'water_configuration';
+                                    $configPdfRoute = $isImsConfig ? 'ims-configuration.pdf' : 'water-configuration.pdf';
+                                    // Divisi pembuat record = user login -> tampilkan view + pdf.
+                                    $isConfigCreator = (int) $qc->created_by === (int) Auth::id();
+                                @endphp
                                 <tr>
-                                    <td>{{ $i + 1 }}</td>
+                                    <td>{{ $rowNo }}</td>
                                     <td>{{ $qc->division?->division_name ?? '—' }}</td>
                                     <td>{!! $qc->statusBadgeHtml() !!}</td>
-                                    <td class="text-center">
-                                        @php
-                                            $isImsConfig = strtolower($qc->division?->division_name ?? '') === 'ims';
-                                            $configShowRoute = $isImsConfig ? 'ims-configuration.show' : 'water-configuration.show';
-                                            $configShowParam = $isImsConfig ? 'ims_configuration' : 'water_configuration';
-                                        @endphp
-                                        <a href="{{ route($configShowRoute, [$configShowParam => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
+                                    <td class="text-center" style="white-space:nowrap">
+                                        @if (!$viewerIsSales)
+                                            @if ($isConfigCreator)
+                                            <a href="{{ route($configShowRoute, [$configShowParam => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
+                                            @endif
+                                            <a href="{{ route($configPdfRoute, ['id' => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" target="_blank" title="PDF"><i class="fa fa-file-pdf"></i></a>
+                                        @endif
+                                    </td>
+                                </tr>
+                                @endforeach
+
+                                @foreach ($quotations as $q)
+                                @php
+                                    $rowNo++;
+                                    // Divisi pembuat record quotation = user login -> tampilkan view + pdf.
+                                    $isQtCreator = (int) $q->created_by === (int) Auth::id();
+                                @endphp
+                                <tr>
+                                    <td>{{ $rowNo }}</td>
+                                    <td>{{ $q->creator?->division?->division_name ?? '—' }}</td>
+                                    <td>{!! $q->statusBadgeHtml() !!}</td>
+                                    <td class="text-center" style="white-space:nowrap">
+                                        @if (!$viewerIsSales)
+                                            @if ($isQtCreator)
+                                            <a href="{{ route('quotation.show', ['quotation' => $q->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
+                                            @endif
+                                        @endif
+                                        <a href="{{ route('quotation.pdf', ['id' => $q->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" target="_blank" title="PDF"><i class="fa fa-file-pdf"></i></a>
                                     </td>
                                 </tr>
                                 @endforeach

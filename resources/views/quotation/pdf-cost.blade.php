@@ -101,10 +101,57 @@
             border: 1px solid #999;
             font-size: 10px;
         }
-        .no-col { width: 26px; text-align: center; }
-        .qty-col { width: 55px; text-align: center; }
-        .price-col { width: 85px; text-align: right; }
-        .amount-col { width: 90px; text-align: right; }
+        /* Judul biaya (cost_title) — terpisah di luar tabel */
+        .cost-title {
+            background: #ddebf7;
+            font-weight: 800;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            padding: 6px 8px;
+            border: 1px solid #999;
+            margin-bottom: 6px;
+        }
+        /* Baris header (depth 0 / parent) */
+        .parent-row td {
+            background: #f2f2f2;
+            font-weight: 700;
+            padding: 4px 6px;
+            border: 1px solid #999;
+            font-size: 10px;
+        }
+        .parent-row td.parent-desc-cell {
+            padding: 0;
+        }
+        .parent-row .parent-info {
+            width: 266pt;
+            table-layout: fixed;
+            border-collapse: collapse;
+        }
+        .parent-row .parent-info td {
+            border: none;
+            background: transparent;
+            padding: 4px 0;
+            vertical-align: top;
+        }
+        .parent-row .parent-info .parent-info-desc {
+            width: 234pt;
+        }
+        .parent-row .parent-info .parent-info-val {
+            width: 32pt;
+            text-align: right;
+            white-space: nowrap;
+        }
+        table.parts th.no-col { width: 26px; }
+        table.parts th.qty-col { width: 40px; }
+        table.parts th.unit-col { width: 50px; }
+        table.parts th.price-col { width: 80px; }
+        table.parts th.amount-col { width: 90px; }
+        .no-col { text-align: center; }
+        .qty-col { text-align: center; }
+        .unit-col { text-align: center; }
+        .price-col { text-align: right; }
+        .amount-col { text-align: right; }
         table.parts tr { page-break-inside: avoid; }
 
         .catatan {
@@ -142,7 +189,7 @@
 </head>
 <body>
 
-    <div class="doc-header">
+    {{-- <div class="doc-header">
         <div class="company">PT. HAS ENVIRONMENTAL</div>
         <div class="addr">Ruko Mega Grosir Cempaka Mas Blok I/12</div>
         <div class="addr">Jl. Letjen Suprapto Cempaka Putih, Jakarta Pusat 10640</div>
@@ -166,9 +213,21 @@
             <td class="kr">Our Ref</td>
             <td class="right">{{ $quotation->quotation_number ?? '—' }}</td>
         </tr>
-    </table>
+    </table> --}}
 
-    @php $costRows = $quotation->flattenCostTree(); @endphp
+    @php
+        $costRows = $quotation->flattenCostTree();
+        // Set item yang punya anak (parent) — dipakai utk deteksi leaf saat hitung total.
+        $parentIds = $quotation->costItems->pluck('parent_id')->filter()->unique()->all();
+        // Total = jumlah qty x price dari baris leaf saja (parent tidak dihitung 2x).
+        $costTotal = $quotation->costItems
+            ->filter(fn ($i) => ! in_array($i->id, $parentIds))
+            ->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->price ?? 0)), 0);
+    @endphp
+
+    @if($quotation->cost_title)
+        <div class="cost-title">{!! \App\Models\Quotation::renderDescription($quotation->cost_title) !!}</div>
+    @endif
 
     <table class="parts">
         <thead>
@@ -176,42 +235,58 @@
                 <th class="no-col">No</th>
                 <th>Description</th>
                 <th class="qty-col">Qty</th>
+                <th class="unit-col">Unit</th>
                 <th class="price-col">Unit Price</th>
                 <th class="amount-col">Amount</th>
             </tr>
         </thead>
         <tbody>
-            @forelse($costRows as $row)
-                @php
-                    $citem = $row['item'];
-                    $cdepth = $row['depth'];
-                    $isTitle = (bool) $citem->title;
-                    $desc = $isTitle ? $citem->title : $citem->description;
-                @endphp
-                <tr>
-                    <td class="no-col">{{ $citem->item_no }}</td>
-                    <td>
-                        <div style="padding-left:{{ $cdepth * 14 }}px;{{ $isTitle ? 'font-weight:700;' : '' }}">
-                            {!! \App\Models\Quotation::renderDescription($desc) !!}
-                        </div>
+        @forelse($costRows as $row)
+            @php
+                $item = $row['item'];
+                $depth = $row['depth'];
+            @endphp
+
+            @if($depth === 0)
+                {{-- Baris header (parent): No + deskripsi, ": qty unit" rata kanan di batas kolom Qty. --}}
+                <tr class="parent-row">
+                    <td class="no-col">{{ $item->item_no }}</td>
+                    <td class="parent-desc-cell">
+                        <table class="parent-info">
+                            <tr>
+                                <td class="parent-info-desc">{!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
+                                @if($item->qty)
+                                    <td>: {{ $item->qty }} {{ $item->unit }}</td>
+                                @endif
+                            </tr>
+                        </table>
                     </td>
-                    <td class="qty-col">{{ $citem->qty ?: '' }} {{ $citem->qty ? $citem->unit : '' }}</td>
-                    <td class="price-col">{{ $citem->price ? \App\Models\Quotation::formatMoney($citem->price) : '' }}</td>
-                    <td class="amount-col">{{ $citem->qty && $citem->price ? \App\Models\Quotation::formatMoney($citem->qty * $citem->price) : '' }}</td>
+                    <td class="qty-col"></td>
+                    <td class="unit-col"></td>
+                    <td class="price-col"></td>
+                    <td class="amount-col"></td>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="5" style="text-align:center;color:#999">Belum ada biaya.</td>
+            @else
+                {{-- Baris data (leaf/child): kolom lengkap. --}}
+               <tr>
+                    <td class="no-col"></td>
+                    <td> {{ $item->item_no }} &emsp; {!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
+                    <td class="qty-col">{{ $item->qty ?: '' }}</td>
+                    <td class="unit-col">{{ $item->qty ? $item->unit : '' }}</td>
+                    <td class="price-col">{{ $item->price ? \App\Models\Quotation::formatMoney($item->price) : '' }}</td>
+                    <td class="amount-col">{{ $item->qty && $item->price ? \App\Models\Quotation::formatMoney($item->qty * $item->price) : '' }}</td>
                 </tr>
-            @endforelse
-        </tbody>
-        <tfoot>
-            @php $costTotal = $quotation->costItems->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->price ?? 0)), 0); @endphp
+            @endif
+        @empty
+            <tr>
+                <td colspan="6" style="text-align:center;color:#999">Belum ada biaya.</td>
+            </tr>
+        @endforelse
             <tr class="cat-row">
-                <td colspan="4" style="text-align:right">Total Price Biaya</td>
+                <td colspan="5" style="text-align:right">Total Price Biaya</td>
                 <td style="text-align:right">{{ \App\Models\Quotation::formatMoney($costTotal) }}</td>
             </tr>
-        </tfoot>
+        </tbody>
     </table>
 
     @if($quotation->cost_notes)

@@ -59,6 +59,7 @@ class Quotation extends Model
         'currency',
         'your_ref',
         'no_of_pages',
+        'is_portable',
         'to_name',
         'address',
         'attn_name',
@@ -69,6 +70,7 @@ class Quotation extends Model
         'parameter_note',
         'notes',
         'cost_notes',
+        'cost_title',
         'terms',
         'subtotal',
         'dpp',
@@ -92,6 +94,7 @@ class Quotation extends Model
         return [
             'date' => 'date',
             'no_of_pages' => 'integer',
+            'is_portable' => 'boolean',
             'is_current' => 'boolean',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',

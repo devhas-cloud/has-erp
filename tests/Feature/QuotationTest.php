@@ -748,29 +748,29 @@ class QuotationTest extends TestCase
             'quote_configuration_ids' => [$config->id],
             'ppn_percent' => 11,
             'items' => [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000])],
+            'cost_title' => 'Biaya Mobilisasi',
             'cost_items' => [
-                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'title' => 'Biaya Mobilisasi', 'qty' => '', 'price' => ''],
-                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'title' => '', 'description' => 'Transport', 'qty' => 1, 'price' => 500000],
-                ['_key' => 'c-3', 'parent_key' => null, 'item_no' => '2', 'title' => 'Biaya Instalasi', 'qty' => '', 'price' => ''],
-                ['_key' => 'c-4', 'parent_key' => 'c-3', 'item_no' => '2.1', 'title' => '', 'description' => 'Pemasangan', 'qty' => 2, 'price' => 250000],
+                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'description' => 'Mobilisasi Umum', 'qty' => 1, 'price' => 250000],
+                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'description' => 'Transport', 'qty' => 1, 'price' => 500000],
+                ['_key' => 'c-3', 'parent_key' => 'c-1', 'item_no' => '1.2', 'description' => 'Pemasangan', 'qty' => 2, 'price' => 250000],
             ],
             'cost_notes' => 'Mobilisasi dikenakan biaya tambahan.',
         ])->assertOk();
 
         $quotation = Quotation::latest('id')->firstOrFail();
 
-        $this->assertCount(4, $quotation->costItems);
+        $this->assertCount(3, $quotation->costItems);
+        $this->assertSame('Biaya Mobilisasi', $quotation->cost_title);
 
-        $title = $quotation->costItems()->where('title', 'Biaya Mobilisasi')->first();
+        $mobilisasi = $quotation->costItems()->where('description', 'Mobilisasi Umum')->first();
         $child = $quotation->costItems()->where('description', 'Transport')->first();
-        $this->assertNull($title->parent_id);
-        $this->assertSame($title->id, $child->parent_id);
+        $this->assertNull($mobilisasi->parent_id);
+        $this->assertSame($mobilisasi->id, $child->parent_id);
         $this->assertSame('1.1', $child->item_no);
         $this->assertSame(500000.0, (float) $child->price);
 
-        $inst = $quotation->costItems()->where('title', 'Biaya Instalasi')->first();
         $instChild = $quotation->costItems()->where('description', 'Pemasangan')->first();
-        $this->assertSame($inst->id, $instChild->parent_id);
+        $this->assertSame($mobilisasi->id, $instChild->parent_id);
         $this->assertSame(2, $instChild->qty);
         $this->assertSame(250000.0, (float) $instChild->price);
 
@@ -789,11 +789,11 @@ class QuotationTest extends TestCase
             'quote_configuration_ids' => [$config->id],
             'ppn_percent' => 11,
             'items' => [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000])],
+            'cost_title' => 'Biaya Mobilisasi',
             'cost_items' => [
-                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'title' => 'Biaya Mobilisasi', 'qty' => '', 'price' => ''],
-                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'title' => '', 'description' => 'Transport', 'qty' => 1, 'price' => 500000],
-                ['_key' => 'c-3', 'parent_key' => null, 'item_no' => '2', 'title' => 'Biaya Instalasi', 'qty' => '', 'price' => ''],
-                ['_key' => 'c-4', 'parent_key' => 'c-3', 'item_no' => '2.1', 'title' => '', 'description' => 'Pemasangan', 'qty' => 2, 'price' => 250000],
+                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'description' => 'Mobilisasi Umum', 'qty' => 1, 'price' => 250000],
+                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'description' => 'Transport', 'qty' => 1, 'price' => 500000],
+                ['_key' => 'c-3', 'parent_key' => 'c-1', 'item_no' => '1.2', 'description' => 'Pemasangan', 'qty' => 2, 'price' => 250000],
             ],
         ])->assertOk();
 
@@ -805,20 +805,22 @@ class QuotationTest extends TestCase
 
         $this->assertTrue($response->json('success'));
         $rows = $response->json('data.items');
-        $this->assertCount(4, $rows);
+        $this->assertCount(3, $rows);
+
+        // Judul biaya dikembalikan terpisah.
+        $this->assertSame('Biaya Mobilisasi', $response->json('data.cost_title'));
 
         // Urutan DFS: parent sebelum child.
-        $this->assertSame('Biaya Mobilisasi', $rows[0]['title']);
+        $this->assertSame('Mobilisasi Umum', $rows[0]['description']);
         $this->assertSame('Transport', $rows[1]['description']);
         $this->assertNull($rows[0]['parent_key']);
         $this->assertSame($rows[0]['_key'], $rows[1]['parent_key']);
-        $this->assertSame('Biaya Instalasi', $rows[2]['title']);
-        $this->assertSame($rows[2]['_key'], $rows[3]['parent_key']);
+        $this->assertSame($rows[0]['_key'], $rows[2]['parent_key']);
 
         // Harga TIDAK diikutsertakan pada template; qty/unit tetap dipertahankan.
         $this->assertArrayNotHasKey('price', $rows[1]);
         $this->assertSame(1, $rows[1]['qty']);
-        $this->assertSame(2, $rows[3]['qty']);
+        $this->assertSame(2, $rows[2]['qty']);
     }
 
     public function test_fetch_cost_template_rejects_missing_quotation(): void
@@ -845,11 +847,12 @@ class QuotationTest extends TestCase
             'unlocked_by' => $this->admin->id,
             'created_by' => $this->user->id,
             'cost_notes' => 'Catatan biaya awal.',
+            'cost_title' => 'Biaya Mobilisasi',
         ]);
         $quotation->update(['group_id' => $quotation->id]);
 
-        $title = $quotation->costItems()->create(['title' => 'Biaya Mobilisasi', 'item_no' => '1', 'sort_order' => 1]);
-        $quotation->costItems()->create(['parent_id' => $title->id, 'description' => 'Transport', 'qty' => 1, 'price' => 500000, 'item_no' => '1.1', 'sort_order' => 2]);
+        $parent = $quotation->costItems()->create(['description' => 'Mobilisasi Umum', 'qty' => 1, 'price' => 250000, 'item_no' => '1', 'sort_order' => 1]);
+        $quotation->costItems()->create(['parent_id' => $parent->id, 'description' => 'Transport', 'qty' => 1, 'price' => 500000, 'item_no' => '1.1', 'sort_order' => 2]);
 
         $response = $this->actingAs($this->admin)
             ->postJson(route('quotation.revise', $quotation->id))
@@ -857,11 +860,12 @@ class QuotationTest extends TestCase
 
         $revision = Quotation::findOrFail($response->json('id'));
         $this->assertSame('Catatan biaya awal.', $revision->cost_notes);
+        $this->assertSame('Biaya Mobilisasi', $revision->cost_title);
         $this->assertCount(2, $revision->costItems);
 
-        $revTitle = $revision->costItems()->where('title', 'Biaya Mobilisasi')->first();
+        $revParent = $revision->costItems()->where('description', 'Mobilisasi Umum')->first();
         $revChild = $revision->costItems()->where('description', 'Transport')->first();
-        $this->assertSame($revTitle->id, $revChild->parent_id);
+        $this->assertSame($revParent->id, $revChild->parent_id);
         $this->assertSame(500000.0, (float) $revChild->price);
     }
 

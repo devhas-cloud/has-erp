@@ -244,6 +244,7 @@ class QuotationController extends Controller
             'division_name' => $c->division?->division_name ?? '—',
             'version' => $c->version,
             'label' => '#'.$c->id.' v'.$c->version.' — '.($c->division?->division_name ?? ''),
+            'notes' => $c->notes,
         ])->all();
 
         // Item config digabung untuk prefill baris item.
@@ -402,7 +403,8 @@ class QuotationController extends Controller
      * Ambil cost items quotation existing sebagai template isian Tab Biaya.
      * Dikembalikan datar berurutan DFS supaya parent dirender sebelum child.
      * Harga TIDAK diikutsertakan — template hanya membawa struktur
-     * (item_no, title/description, qty, unit), harga diisi manual per quotation.
+     * (item_no, description, qty, unit), harga diisi manual per quotation.
+     * Judul biaya dikembalikan terpisah (cost_title) karena hanya satu per biaya.
      */
     public function fetchCostTemplate(Request $request): JsonResponse
     {
@@ -423,7 +425,6 @@ class QuotationController extends Controller
                     '_key' => 'tpl-cost-'.$item->id,
                     'parent_key' => $item->parent_id ? 'tpl-cost-'.$item->parent_id : null,
                     'item_no' => $item->item_no,
-                    'title' => $item->title,
                     'description' => $item->description,
                     'qty' => $item->qty,
                     'unit' => $item->unit,
@@ -440,6 +441,7 @@ class QuotationController extends Controller
                 'quotation_id' => $quotation->id,
                 'quotation_number' => $quotation->quotation_number,
                 'to_name' => $quotation->to_name,
+                'cost_title' => $quotation->cost_title,
                 'items' => $rows,
             ],
         ]);
@@ -583,6 +585,7 @@ class QuotationController extends Controller
                     'currency' => $validated['currency'] ?? 'Rupiah',
                     'your_ref' => $validated['your_ref'] ?? null,
                     'no_of_pages' => (int) ($validated['no_of_pages'] ?? 1),
+                    'is_portable' => (bool) ($validated['is_portable'] ?? false),
                     'to_name' => $validated['to_name'] ?? null,
                     'address' => $validated['address'] ?? null,
                     'attn_name' => $validated['attn_name'] ?? null,
@@ -593,6 +596,7 @@ class QuotationController extends Controller
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
                     'cost_notes' => $validated['cost_notes'] ?? null,
+                    'cost_title' => $validated['cost_title'] ?? null,
                     'terms' => $validated['terms'] ?? self::DEFAULT_TERMS,
                     'status' => Quotation::STATUS_DRAFT,
                     'group_id' => null,
@@ -709,7 +713,6 @@ class QuotationController extends Controller
                 'id' => $item->id,
                 'parent_id' => $item->parent_id,
                 'item_no' => $item->item_no,
-                'title' => $item->title,
                 'description' => $item->description,
                 'qty' => $item->qty,
                 'price' => $item->price,
@@ -775,6 +778,7 @@ class QuotationController extends Controller
                     'currency' => $validated['currency'] ?? 'Rupiah',
                     'your_ref' => $validated['your_ref'] ?? null,
                     'no_of_pages' => (int) ($validated['no_of_pages'] ?? 1),
+                    'is_portable' => (bool) ($validated['is_portable'] ?? false),
                     'to_name' => $validated['to_name'] ?? null,
                     'address' => $validated['address'] ?? null,
                     'attn_name' => $validated['attn_name'] ?? null,
@@ -785,6 +789,7 @@ class QuotationController extends Controller
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
                     'cost_notes' => $validated['cost_notes'] ?? null,
+                    'cost_title' => $validated['cost_title'] ?? null,
                     'terms' => $validated['terms'] ?? self::DEFAULT_TERMS,
                     'discount_percent' => $validated['discount_percent'] ?? null,
                     'discount_amount' => $validated['discount_amount'] ?? null,
@@ -1108,6 +1113,7 @@ class QuotationController extends Controller
                 'currency' => $source->currency,
                 'your_ref' => $source->your_ref,
                 'no_of_pages' => $source->no_of_pages,
+                'is_portable' => $source->is_portable,
                 'to_name' => $source->to_name,
                 'address' => $source->address,
                 'attn_name' => $source->attn_name,
@@ -1118,6 +1124,7 @@ class QuotationController extends Controller
                 'parameter_note' => $source->parameter_note,
                 'notes' => $source->notes,
                 'cost_notes' => $source->cost_notes,
+                'cost_title' => $source->cost_title,
                 'terms' => $source->terms,
                 'subtotal' => $source->subtotal,
                 'dpp' => $source->dpp,
@@ -1172,7 +1179,6 @@ class QuotationController extends Controller
                 $new = $revision->costItems()->create([
                     'item_no' => $item->item_no,
                     'parent_id' => $item->parent_id ? ($costIdMap[$item->parent_id] ?? null) : null,
-                    'title' => $item->title,
                     'description' => $item->description,
                     'qty' => $item->qty,
                     'price' => $item->price,
@@ -1330,6 +1336,7 @@ class QuotationController extends Controller
             'currency' => 'nullable|string|max:30',
             'your_ref' => 'nullable|string|max:100',
             'no_of_pages' => 'nullable|integer|min:1',
+            'is_portable' => 'nullable|boolean',
             'to_name' => 'nullable|string|max:200',
             'address' => 'nullable|string',
             'attn_name' => 'nullable|string|max:150',
@@ -1388,6 +1395,7 @@ class QuotationController extends Controller
             'cost_items.*.formula' => 'nullable|array',
             'cost_items.*.formula.qty' => 'nullable|string|max:255',
             'cost_items.*.formula.price' => 'nullable|string|max:255',
+            'cost_title' => 'nullable|string|max:500',
         ]);
     }
 
@@ -1537,6 +1545,7 @@ class QuotationController extends Controller
      * Simpan item biaya (Tab Biaya) dengan hierarki parent-child.
      * Dua-pass: insert semua baris tanpa parent, lalu pasang parent_id
      * berdasarkan parent_key. Nilai biaya TIDAK memengaruhi subtotal.
+     * Judul biaya (cost_title) disimpan pada level quotation, bukan baris.
      */
     private function syncCostItems(Quotation $quotation, array $costItems): void
     {
@@ -1551,7 +1560,7 @@ class QuotationController extends Controller
                 'quotation_id' => $quotation->id,
                 'item_no' => $item['item_no'] ?? null,
                 'parent_id' => null,
-                'title' => $item['title'] ?? null,
+                'title' => null,
                 'description' => $item['description'] ?? null,
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'price' => $item['price'] ?? null,
@@ -1562,6 +1571,17 @@ class QuotationController extends Controller
                 'updated_at' => now(),
             ];
         }
+
+        // Bersihkan sisa baris title lama (jika ada) dari data yang dulu tersimpan.
+        QuotationCostItem::where('quotation_id', $quotation->id)
+            ->whereNotNull('title')
+            ->where('title', '!=', '')
+            ->update(['parent_id' => null]);
+
+        QuotationCostItem::where('quotation_id', $quotation->id)
+            ->whereNotNull('title')
+            ->where('title', '!=', '')
+            ->delete();
 
         if (empty($payload)) {
             return;

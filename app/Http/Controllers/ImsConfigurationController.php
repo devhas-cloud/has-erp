@@ -30,7 +30,7 @@ class ImsConfigurationController extends Controller
     /**
      * Halaman form untuk membuat quote configuration baru.
      */
-    public function create()
+    public function create(Request $request)
     {
         $tasks = $this->quoteTasks();
         $categories = $this->categorySuggestions();
@@ -41,6 +41,7 @@ class ImsConfigurationController extends Controller
             'tasks' => $tasks,
             'categories' => $categories,
             'templates' => $this->templateList(),
+            'preselectedTaskId' => $request->query('task_id'),
         ]);
     }
 
@@ -402,6 +403,7 @@ class ImsConfigurationController extends Controller
             'tasks' => $tasks,
             'categories' => $this->categorySuggestions(),
             'templates' => $this->templateList(),
+            'preselectedTaskId' => null,
         ]);
     }
 

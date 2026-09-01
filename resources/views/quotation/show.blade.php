@@ -469,6 +469,14 @@
                 </div>
             </div>
 
+            {{-- Portabilitas --}}
+            <div class="info-item">
+                <div class="info-label">Portabilitas</div>
+                <div class="info-value">
+                    {{ ($quotation->is_portable ?? false) ? 'Portable' : 'Non-Portable' }}
+                </div>
+            </div>
+
             {{-- Attn --}}
             <div class="info-item">
                 <div class="info-label">Attn</div>
@@ -603,6 +611,7 @@
                         <thead>
                             <tr>
                                 <th style="width:45px">No</th>
+                                <th style="width:120px">Part No</th>
                                 <th>Deskripsi</th>
                                 <th style="width:80px" class="text-center">Qty</th>
                                 <th style="width:140px" class="text-end">Unit Price</th>
@@ -618,12 +627,10 @@
                                 @endphp
                                 <tr>
                                     <td class="text-center" style="padding-left:{{ 8 + $depth * 20 }}px">{{ $item->item_no }}</td>
+                                    <td><code>{{ $item->part_number ?: '—' }}</code></td>
                                     <td>
                                         <div style="margin-left:{{ $depth * 20 }}px">
                                             {!! \App\Models\Quotation::renderDescription($item->description) !!}
-                                            @if($item->part_number)
-                                                <div><small style="color:var(--text-muted)">PN: {{ $item->part_number }}</small></div>
-                                            @endif
                                         </div>
                                     </td>
                                     <td class="text-center">{{ $item->qty ?: '' }} {{ $item->qty ? $item->unit : '' }}</td>
@@ -632,7 +639,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item.</td>
+                                    <td colspan="6" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -681,11 +688,16 @@
                     </a>
                 </div>
                 <div class="table-responsive">
-                    <table class="table table-custom align-middle mb-0">
+                    @if($quotation->cost_title)
+                        <div style="font-weight:800;font-size:14px;padding:8px 10px;background:#ddebf7;border:1px solid #999;border-radius:4px 4px 0 0">
+                            {!! \App\Models\Quotation::renderDescription($quotation->cost_title) !!}
+                        </div>
+                    @endif
+                    <table class="table table-custom align-middle mb-0" style="{{ $quotation->cost_title ? 'border-top:none' : '' }}">
                         <thead>
                             <tr>
                                 <th style="width:45px">No</th>
-                                <th>Judul / Deskripsi</th>
+                                <th>Deskripsi</th>
                                 <th style="width:100px" class="text-center">Qty</th>
                                 <th style="width:140px" class="text-end">Harga</th>
                                 <th style="width:150px" class="text-end">Amount</th>
@@ -697,14 +709,12 @@
                                 @php
                                     $citem = $row['item'];
                                     $cdepth = $row['depth'];
-                                    $isTitle = (bool) $citem->title;
-                                    $desc = $isTitle ? $citem->title : $citem->description;
                                 @endphp
                                 <tr>
                                     <td class="text-center" style="padding-left:{{ 8 + $cdepth * 20 }}px">{{ $citem->item_no }}</td>
                                     <td>
-                                        <div style="margin-left:{{ $cdepth * 20 }}px;{{ $isTitle ? 'font-weight:700;' : '' }}">
-                                            {!! \App\Models\Quotation::renderDescription($desc) !!}
+                                        <div style="margin-left:{{ $cdepth * 20 }}px">
+                                            {!! \App\Models\Quotation::renderDescription($citem->description) !!}
                                         </div>
                                     </td>
                                     <td class="text-center">{{ $citem->qty ?: '' }} {{ $citem->qty ? $citem->unit : '' }}</td>

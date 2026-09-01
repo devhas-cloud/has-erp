@@ -14,7 +14,6 @@ class QuotationCostItem extends Model
         'quotation_id',
         'item_no',
         'parent_id',
-        'title',
         'description',
         'qty',
         'price',

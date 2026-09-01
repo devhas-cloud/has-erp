@@ -30,7 +30,7 @@ class WaterConfigurationController extends Controller
     /**
      * Halaman form untuk membuat quote configuration baru.
      */
-    public function create()
+    public function create(Request $request)
     {
         $categories = $this->categorySuggestions();
         $tasks = $this->quoteTasks();
@@ -41,6 +41,7 @@ class WaterConfigurationController extends Controller
             'categories' => $categories,
             'tasks' => $tasks,
             'templates' => $this->templateList(),
+            'preselectedTaskId' => $request->query('task_id'),
         ]);
     }
 
@@ -398,6 +399,7 @@ class WaterConfigurationController extends Controller
             'items' => $quotation->items,
             'categories' => $categories,
             'tasks' => $tasks,
+            'preselectedTaskId' => null,
         ]);
     }
 

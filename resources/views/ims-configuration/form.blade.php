@@ -123,13 +123,13 @@
                         <option value="">— Pilih Task —</option>
                         @foreach($tasks as $task)
                             <option value="{{ $task->id }}"
-                                {{ $quotation?->task_id == $task->id ? 'selected' : '' }}>
+                                {{ ($quotation?->task_id ?? $preselectedTaskId) == $task->id ? 'selected' : '' }}>
                                 {{ $task->opportunity?->opportunity_name ?? $task->title }}
                                 {{ $task->opportunity?->accountCompany?->account_name ? ' (' . $task->opportunity->accountCompany->account_name . ')' : '' }}
                             </option>
                         @endforeach
                     </select>
-                    <input type="hidden" name="task_id" id="wc-task-id" value="{{ $quotation?->task_id }}">
+                    <input type="hidden" name="task_id" id="wc-task-id" value="{{ $quotation?->task_id ?? $preselectedTaskId }}">
                     <input type="hidden" name="opportunity_id" id="wc-opportunity-id" value="{{ $quotation?->opportunity_id }}">
                 </div>
                 <div class="col-md-4">
@@ -803,6 +803,10 @@ $(document).ready(function() {
         $('#pp-target-label').text('');
         if (ppTable) ppTable.ajax.reload();
     });
+
+    @if ($preselectedTaskId)
+        $('#wc-task').trigger('change');
+    @endif
 });
 
 </script>

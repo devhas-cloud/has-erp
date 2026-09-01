@@ -6,6 +6,7 @@ use App\Models\HandlingGroup;
 use App\Models\Log;
 use App\Models\Notification;
 use App\Models\QuoteConfiguration;
+use App\Models\Quotation;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
@@ -397,12 +398,24 @@ class TaskPlannerController extends Controller
             ->groupBy(DB::raw('COALESCE(group_id, id)'))
             ->pluck('id');
 
-        $quoteConfigurations = QuoteConfiguration::with('division')
+        $quoteConfigurations = QuoteConfiguration::with(['division', 'creator.division'])
             ->whereIn('id', $latestIds)
             ->orderByDesc('created_at')
             ->get();
 
-        return view('task-planner.show', compact('task', 'quoteConfigurations'));
+        // Quotation terbaru per group (riwayat/versi) untuk task ini.
+        $quotationLatestIds = Quotation::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('task_id', $task->id)
+            ->groupBy(DB::raw('COALESCE(group_id, id)'))
+            ->pluck('id');
+
+        $quotations = Quotation::with('creator.division')
+            ->whereIn('id', $quotationLatestIds)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('task-planner.show', compact('task', 'quoteConfigurations', 'quotations'));
     }
 
     public function approve($id): JsonResponse
@@ -425,6 +438,19 @@ class TaskPlannerController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Task kategori Proposal harus upload file proposal (.pdf) sebelum approve.',
+                ], 422);
+            }
+        }
+
+        // jika task category = "quote" maka wajib ada quotation berstatus approved
+        if ($taskCategory && strtolower($taskCategory->name) === 'quote') {
+            $hasApprovedQuotation = Quotation::where('task_id', $task->id)
+                ->where('status', Quotation::STATUS_APPROVED)
+                ->exists();
+            if (! $hasApprovedQuotation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Task kategori Quote harus memiliki quotation berstatus Approved sebelum approve.',
                 ], 422);
             }
         }
@@ -482,6 +508,19 @@ class TaskPlannerController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Task kategori Proposal harus upload file proposal (.pdf) sebelum menandai selesai.',
+                ], 422);
+            }
+        }
+
+        // jika task category = "quote" maka wajib ada quotation berstatus approved sebelum mark as done
+        if ($taskCategory && strtolower($taskCategory->name) === 'quote' && $validated['status'] === 'done') {
+            $hasApprovedQuotation = Quotation::where('task_id', $task->id)
+                ->where('status', Quotation::STATUS_APPROVED)
+                ->exists();
+            if (! $hasApprovedQuotation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Task kategori Quote harus memiliki quotation berstatus Approved sebelum menandai selesai.',
                 ], 422);
             }
         }
