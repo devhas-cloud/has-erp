@@ -123,8 +123,21 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label class="form-label">Harga (Rp) <span style="color:var(--danger)">*</span></label>
+                                <label class="form-label">Harga <span style="color:var(--danger)">*</span></label>
                                 <input type="number" id="product-price" class="form-control" min="0" step="0.01" placeholder="0.00" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Currency</label>
+                                <select id="product-currency" class="form-select">
+                                    <option value="">— Default (Base) —</option>
+                                    @foreach($currencies as $currency)
+                                        <option value="{{ $currency->id }}">{{ $currency->name }}
+                                            @if($currency->is_base) (Base) @endif</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">Kosongkan untuk memakai mata uang base.</div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -136,7 +149,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <div class="mb-3">
                                 <label class="form-label">Gambar Produk</label>
                                 <input type="file" id="product-image" class="form-control" accept="image/jpeg,image/png,image/jpg,image/gif,image/webp">
@@ -239,7 +252,7 @@
                             </tr>
                             <tr>
                                 <td>Harga</td>
-                                <td><strong id="pd-price">—</strong></td>
+                                <td><strong id="pd-price">—</strong><div id="pd-price-equivalent"></div></td>
                             </tr>
                             <tr>
                                 <td>Status</td>
@@ -294,38 +307,44 @@ function initProductTable() {
         serverSide: true,
         ajax: '{{ route("product-management.data") }}',
         order: [[1, 'asc']],
+        autoWidth: true,
+        columnDefs: [
+            { targets: '_all', className: 'no-ellipsis' }
+        ],
         columns: [
-            { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
+            { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center', width: '48px' },
             {
-                data: 'name_display', orderable: true, searchable: true,
+                data: 'name_display', orderable: true, searchable: true, width: '24%',
                 render: function(data, type, row) {
                     var img = row.image_url
                         ? '<img src="' + row.image_url + '" class="avatar-circle" alt="" style="background:transparent">'
                         : '<div class="avatar-circle">' + row.initials + '</div>';
-                    return '<div style="display:flex;align-items:center;gap:10px">' +
+                    return '<div style="display:flex;align-items:center;gap:10px;min-width:0">' +
                         img +
-                        '<strong style="color:var(--text-primary);font-weight:600">' + data + '</strong>' +
+                        '<strong style="color:var(--text-primary);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + data + '</strong>' +
                         '</div>';
                 }
             },
-            { data: 'code', orderable: true, searchable: true,
+            { data: 'code', orderable: true, searchable: true, width: '10%',
                 render: function(data) {
                     return '<code style="color:var(--accent)">' + data + '</code>';
                 }
             },
-            { data: 'brand', orderable: true, searchable: true,
+            { data: 'brand', orderable: true, searchable: true, width: '11%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
-            { data: 'category', orderable: true, searchable: true,
+            { data: 'category', orderable: true, searchable: true, width: '12%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
-            { data: 'division_name', orderable: false, searchable: true,
+            { data: 'division_name', orderable: false, searchable: true, width: '9%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
-            { data: 'price_formatted', orderable: true, searchable: false, className: 'text-end',
-                render: function(data) { return '<strong>' + data + '</strong>'; }
+            { data: 'price_formatted', orderable: true, searchable: false, className: 'text-end', width: '15%',
+                render: function(data, type, row) {
+                    return '<strong>' + row.currency_symbol + ' ' + data + '</strong>';
+                }
             },
-            { data: 'status', orderable: true, searchable: false,
+            { data: 'status', orderable: true, searchable: false, width: '9%',
                 render: function(data) {
                     if (data === 'Active') {
                         return '<span class="status-badge status-active">Active</span>';
@@ -334,7 +353,7 @@ function initProductTable() {
                 }
             },
             {
-                data: 'id', orderable: false, searchable: false, className: 'text-center',
+                data: 'id', orderable: false, searchable: false, className: 'text-center', width: '10%',
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1">';
                     btn += '<button class="btn-icon" title="Detail" onclick="openDetailModal(' + data + ')"><i class="fa-solid fa-eye"></i></button>';
@@ -356,6 +375,7 @@ function resetProductForm() {
     document.getElementById('product-form').reset();
     document.getElementById('product-edit-id').value = '';
     document.getElementById('product-status').value = 'Active';
+    document.getElementById('product-currency').value = '';
     $('#product-image-preview').empty();
     $('#product-form .is-invalid').removeClass('is-invalid');
 }
@@ -399,6 +419,7 @@ function openEditModal(id) {
         $('#product-category').val(p.category || '');
         $('#product-division').val(p.division_id || '');
         $('#product-price').val(p.price || '');
+        $('#product-currency').val(p.currency_id || '');
         $('#product-status').val(p.status || 'Active');
         $('#product-description').val(p.description || '');
         if (p.image_url) {
@@ -423,7 +444,21 @@ function openDetailModal(id) {
         $('#pd-brand').text(p.brand || '—');
         $('#pd-category').text(p.category || '—');
         $('#pd-division').text(p.division_name || '—');
-        $('#pd-price').text('Rp ' + Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+        $('#pd-price').text((p.currency_symbol || p.currency_name || 'Rp') + ' ' + Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+
+        var eqWrap = $('#pd-price-equivalent');
+        if (!p.currency_is_base) {
+            var rate = parseFloat(p.currency_rate || 1);
+            var equivalent = Number(p.price) * rate;
+            var baseSym = p.base_currency_symbol || p.base_currency_name || 'Rp';
+            var rateFmt = Number(rate).toLocaleString('en-US', { maximumFractionDigits: 2 });
+            var priceFmt = Number(equivalent).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+            eqWrap.html('<div style="font-size:12px;color:var(--text-muted);font-weight:500;margin-top:4px;line-height:1.4">' +
+                '≈ ' + baseSym + ' ' + priceFmt + ' &nbsp;·&nbsp; 1 ' + (p.currency_name || '') + ' = ' + baseSym + ' ' + rateFmt +
+                '</div>');
+        } else {
+            eqWrap.empty();
+        }
         $('#pd-status').html(p.status === 'Active'
             ? '<span class="status-badge status-active">Active</span>'
             : '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Inactive</span>');
@@ -481,6 +516,7 @@ $(document).on('click', '#btn-save-product', function() {
     fd.append('division_id', $('#product-division').val());
     fd.append('description', $('#product-description').val().trim());
     fd.append('price', price);
+    fd.append('currency_id', $('#product-currency').val());
     fd.append('status', status);
     var imageFile = $('#product-image')[0].files[0];
     if (imageFile) {
@@ -516,6 +552,7 @@ $(document).on('click', '#btn-save-product', function() {
                 var fieldMap = {
                     code: 'product-code',
                     price: 'product-price',
+                    currency_id: 'product-currency',
                     status: 'product-status',
                     name: 'product-name',
                     brand: 'product-brand',

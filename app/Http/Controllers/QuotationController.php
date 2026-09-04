@@ -51,7 +51,8 @@ class QuotationController extends Controller
     private function templateList()
     {
         return Quotation::withCount('items')
-            ->has('items')
+            ->whereHas('items')
+            ->where('status',Quotation::STATUS_APPROVED)
             ->orderByDesc('id')
             ->get(['id', 'quotation_number', 'to_name']);
     }
@@ -64,7 +65,8 @@ class QuotationController extends Controller
     private function costTemplateList()
     {
         return Quotation::withCount('costItems')
-            ->has('costItems')
+            ->whereHas('costItems')
+            ->where('status',Quotation::STATUS_APPROVED)
             ->orderByDesc('id')
             ->get(['id', 'quotation_number', 'to_name']);
     }
@@ -300,6 +302,7 @@ class QuotationController extends Controller
     /**
      * Pencarian MasterProduct (DataTables server-side) untuk modal "Add Item"
      * pada tab List Configuration. Opsional difilter per divisi config block.
+     * Harga yang dikembalikan menyesuaikan kurs: master price × rate currency.
      */
     public function searchProducts(Request $request): JsonResponse
     {
@@ -309,6 +312,7 @@ class QuotationController extends Controller
         $divisionId = $request->input('division_id');
 
         $query = MasterProduct::query()
+            ->with('currency')
             ->where('status', 'Active')
             ->orderBy('name');
 
@@ -333,7 +337,7 @@ class QuotationController extends Controller
         $products = $query
             ->skip($start)
             ->take($length)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price', 'currency_id']);
 
         $data = $products->map(fn ($product) => [
             'id' => $product->id,
@@ -342,7 +346,7 @@ class QuotationController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
-            'price' => $product->price,
+            'price' => $product->priceInBase(),
         ])->all();
 
         return response()->json([

@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
             StagesTableSeeder::class,
             AccountCompanySeeder::class,
             AccountContactSeeder::class,
+            CurrenciesTableSeeder::class,
             MasterProductSeeder::class,
         ]);
     }

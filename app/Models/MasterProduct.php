@@ -19,6 +19,7 @@ class MasterProduct extends Model
         'description',
         'image',
         'price',
+        'currency_id',
         'status',
     ];
 
@@ -34,6 +35,11 @@ class MasterProduct extends Model
         return $this->belongsTo(Division::class);
     }
 
+    public function currency(): BelongsTo
+    {
+        return $this->belongsTo(Currency::class);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('status', 'Active');
@@ -47,5 +53,20 @@ class MasterProduct extends Model
     public function getImageThumbAttribute(): ?string
     {
         return $this->image ? Storage::url($this->image) : null;
+    }
+
+    /**
+     * Nilai harga setara base (IDR): price × rate mata uang produk.
+     * Produk tanpa currency atau ber-currency base dikonversi dgn rate 1.
+     */
+    public function priceInBase(): float
+    {
+        $currency = $this->relationLoaded('currency') ? $this->currency : $this->currency()->first();
+
+        if ($currency && ! $currency->isBase()) {
+            return round((float) $this->price * (float) $currency->rate, 2);
+        }
+
+        return round((float) $this->price, 2);
     }
 }

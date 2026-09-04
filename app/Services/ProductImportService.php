@@ -2,12 +2,15 @@
 
 namespace App\Services;
 
+use App\Models\Currency;
 use App\Models\Division;
 use App\Models\MasterProduct;
 
 class ProductImportService
 {
     private array $divisionLookup = [];
+
+    private array $currencyLookup = [];
 
     /** lowercase nama produk => code (untuk cek duplikat nama) */
     private array $nameMap = [];
@@ -23,6 +26,20 @@ class ProductImportService
         foreach ($divisions as $div) {
             $this->divisionLookup[mb_strtolower(trim($div->division_name))] = $div->id;
         }
+
+        $currencies = Currency::where('status', 'Active')
+            ->select('id', 'name', 'is_base')
+            ->get();
+
+        $this->currencyLookup = [];
+        foreach ($currencies as $currency) {
+            $this->currencyLookup[mb_strtolower(trim($currency->name))] = $currency->id;
+        }
+    }
+
+    private function baseCurrencyId(): ?int
+    {
+        return Currency::where('is_base', true)->where('status', 'Active')->value('id');
     }
 
     /**
@@ -275,6 +292,22 @@ class ProductImportService
                     }
                 }
 
+                // Resolve currency code → id (case-insensitive).
+                // Kosong → pakai currency base; kode tak dikenal → baris gagal.
+                $currencyId = null;
+                $currencyInput = trim($data['currency'] ?? '');
+                if ($currencyInput === '') {
+                    $currencyId = $this->baseCurrencyId();
+                } else {
+                    $currencyKey = mb_strtolower($currencyInput);
+                    if (! isset($this->currencyLookup[$currencyKey])) {
+                        $failed++;
+                        $errors[] = "Line {$lineNumber}: Kode currency '{$currencyInput}' tidak dikenal. Gunakan salah satu dari: ".implode(', ', array_keys($this->currencyLookup)).'.';
+                        continue;
+                    }
+                    $currencyId = $this->currencyLookup[$currencyKey];
+                }
+
                 // Nama produk boleh kosong, tapi jika terisi tidak boleh duplikat (case-insensitive)
                 $name = $this->nullIfEmpty($data['name'] ?? '', 150);
                 if ($name !== null) {
@@ -293,6 +326,7 @@ class ProductImportService
                     'category' => $this->nullIfEmpty($data['category'] ?? '', 100),
                     'description' => $this->nullIfEmpty($data['description'] ?? ''),
                     'price' => $price,
+                    'currency_id' => $currencyId,
                     'status' => $status,
                     'division_id' => $divisionId,
                 ];
@@ -341,8 +375,15 @@ class ProductImportService
             ->pluck('division_name')
             ->toArray();
 
+        $currencies = Currency::where('status', 'Active')
+            ->orderBy('is_base', 'desc')
+            ->orderBy('name')
+            ->pluck('name')
+            ->toArray();
+
         return [
             'division' => $divisions,
+            'currency' => $currencies,
             'status' => ['Active', 'Inactive'],
         ];
     }

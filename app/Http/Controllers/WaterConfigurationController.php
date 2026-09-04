@@ -1062,15 +1062,22 @@ class WaterConfigurationController extends Controller
         $payload = [];
 
         // Ambil harga produk dari database via product_id (bukan input user).
+        // Harga yang disimpan menyesuaikan kurs: price × rate mata uang produk.
         $productIds = collect($items)
             ->pluck('product_id')
             ->filter()
             ->unique()
             ->values();
 
-        $productPrices = MasterProduct::whereIn('id', $productIds)
-            ->pluck('price', 'id')
-            ->map(fn ($price) => (float) $price)
+        $productPrices = MasterProduct::with('currency')
+            ->whereIn('id', $productIds)
+            ->get(['id', 'price', 'currency_id'])
+            ->mapWithKeys(function ($product) {
+                $currency = $product->currency;
+                $rate = $currency && ! $currency->is_base ? (float) $currency->rate : 1.0;
+
+                return [$product->id => round((float) $product->price * $rate, 2)];
+            })
             ->all();
 
         foreach (array_values($items) as $i => $item) {

@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Division;
+use App\Models\Currency;
 use App\Models\MasterProduct;
 use Illuminate\Database\Seeder;
 
@@ -10,23 +11,25 @@ class MasterProductSeeder extends Seeder
 {
     public function run(): void
     {
+        $baseCurrencyId = Currency::where('is_base', true)->where('status', 'Active')->value('id');
+
         $waterDivision = Division::where('division_name', 'WATER')->first();
         $imsDivision = Division::where('division_name', 'IMS')->first();
 
         if ($waterDivision) {
-            $this->seedWaterProducts($waterDivision->id);
+            $this->seedWaterProducts($waterDivision->id, $baseCurrencyId);
         } else {
             $this->command?->warn('Divisi WATER tidak ditemukan, seed produk WATER dilewati.');
         }
 
         if ($imsDivision) {
-            $this->seedImsProducts($imsDivision->id);
+            $this->seedImsProducts($imsDivision->id, $baseCurrencyId);
         } else {
             $this->command?->warn('Divisi IMS tidak ditemukan, seed produk IMS dilewati.');
         }
     }
 
-    private function seedWaterProducts(int $divisionId): void
+    private function seedWaterProducts(int $divisionId, ?int $baseCurrencyId): void
     {
         $products = [
             // Recordall — Disc Series
@@ -81,6 +84,7 @@ class MasterProductSeeder extends Seeder
                     'description' => null,
                     'image' => null,
                     'price' => $product['price'],
+                    'currency_id' => $baseCurrencyId,
                     'status' => 'Active',
                 ]
             );
@@ -89,7 +93,7 @@ class MasterProductSeeder extends Seeder
         $this->command?->info('Seeded '.count($products).' produk WATER.');
     }
 
-    private function seedImsProducts(int $divisionId): void
+    private function seedImsProducts(int $divisionId, ?int $baseCurrencyId): void
     {
         $brands = [
             'Schneider', 'Grundfos', 'Victaulic', 'Georg Fischer', 'Pentair',
@@ -144,6 +148,7 @@ class MasterProductSeeder extends Seeder
                     'description' => null,
                     'image' => null,
                     'price' => $product['price'],
+                    'currency_id' => $baseCurrencyId,
                     'status' => 'Active',
                 ]
             );

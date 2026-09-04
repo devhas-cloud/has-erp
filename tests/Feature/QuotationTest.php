@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AccountCompany;
 use App\Models\AccountContact;
+use App\Models\Currency;
 use App\Models\Division;
 use App\Models\MasterProduct;
 use App\Models\Module;
@@ -464,6 +465,48 @@ class QuotationTest extends TestCase
             ->getJson(route('quotation.search-products').'?search[value]=S::CAN')
             ->assertOk();
         $this->assertSame(1, count($responseFiltered->json('data')));
+    }
+
+    public function test_search_products_price_follows_currency_rate(): void
+    {
+        $base = Currency::create([
+            'name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active',
+        ]);
+        $usd = Currency::create([
+            'name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active',
+        ]);
+
+        MasterProduct::create([
+            'division_id' => $this->division->id,
+            'name' => 'Produk IDR',
+            'code' => 'IDR-1',
+            'brand' => 'HAS',
+            'category' => 'Analyzer',
+            'price' => 5000000,
+            'currency_id' => $base->id,
+            'status' => 'Active',
+        ]);
+        MasterProduct::create([
+            'division_id' => $this->division->id,
+            'name' => 'Produk USD',
+            'code' => 'USD-1',
+            'brand' => 'HAS',
+            'category' => 'Analyzer',
+            'price' => 100,
+            'currency_id' => $usd->id,
+            'status' => 'Active',
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->getJson(route('quotation.search-products').'?division_id='.$this->division->id)
+            ->assertOk();
+
+        $data = collect($response->json('data'))->keyBy('code');
+
+        // Produk base: price apa adanya.
+        $this->assertEquals(5000000.0, (float) $data['IDR-1']['price']);
+        // Produk USD: price × rate = 100 × 20.000 = 2.000.000.
+        $this->assertEquals(2000000.0, (float) $data['USD-1']['price']);
     }
 
     public function test_store_creates_quotation_with_hierarchy_and_totals(): void

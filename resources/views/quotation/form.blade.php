@@ -307,67 +307,13 @@
                                 </tr>
                             </thead>
                             <tbody id="qt-items-body">
-                                @php
-                                    $rendered = [];
-                                    $keySeq = 0;
-                                    $byParent = $items ? collect($items)->groupBy(fn ($it) => $it['parent_id'] ?? 'root') : collect();
-                                    $renderItem = function ($item, $depth, $byParent, &$rendered) use (&$renderItem, &$keySeq) {
-                                        if ($item['id'] && in_array($item['id'], $rendered)) {
-                                            return;
-                                        }
-                                        if ($item['id']) {
-                                            $rendered[] = $item['id'];
-                                        }
-                                        $key = $item['id'] ? 'db-'.$item['id'] : 'new-'.($item['_key'] ?? (++$keySeq));
-                                        $parentKey = ($item['parent_id'] ?? null)
-                                            ? 'db-'.$item['parent_id']
-                                            : ($item['_parent'] ?? '');
-                                        $fxQty = isset($item['formula']['qty']) ? ' data-fx="'.e($item['formula']['qty']).'"' : '';
-                                        $fxPrice = isset($item['formula']['price']) ? ' data-fx="'.e($item['formula']['price']).'"' : '';
-                                        echo '<tr data-key="'.$key.'"'
-                                            .' data-parent="'.$parentKey.'"'
-                                            .' data-depth="'.$depth.'">';
-                                        echo '<td class="text-center qt-row-col qt-row-num"></td>';
-                                        echo '<td><input type="text" class="form-control form-control-sm qt-no" value="'.e($item['item_no'] ?? '').'" placeholder="1 / 1.1"></td>';
-                                        echo '<td><input type="text" class="form-control form-control-sm qt-pn" value="'.e($item['part_number'] ?? '').'" placeholder="Part No"></td>';
-                                        echo '<td><div class="qt-desc-wrap" style="margin-left:'.($depth * 18).'px">';
-                                        echo '<div class="qt-desc" contenteditable="true" data-placeholder="Deskripsi item...">'.\App\Models\Quotation::renderDescription($item['description'] ?? '').'</div>';
-                                        echo '<div class="qt-desc-toolbar">';
-                                        echo '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>';
-                                        echo '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>';
-                                        echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
-                                        echo '</div></div></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" data-fx-table="items"'.$fxQty.' value="'.($item['qty'] ?? '').'"></td>';
-                                        echo '<td><input type="text" class="form-control form-control-sm qt-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" data-fx-table="items"'.$fxPrice.' value="'.($item['price'] ?? '').'"></td>';
-                                        echo '<td class="qt-amount text-end"></td>';
-                                        echo '<td class="text-center">';
-                                        echo '<button type="button" class="btn-icon" title="Add Item dari Config" onclick="openQtItemPicker(this)"><i class="fa fa-cart-plus"></i></button>';
-                                        echo '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtChild(this)"><i class="fa fa-plus"></i></button>';
-                                        echo '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="removeQtItem(this)"><i class="fa fa-trash"></i></button>';
-                                        echo '</td></tr>';
-                                        foreach (($byParent[$item['id'] ?? null] ?? []) as $child) {
-                                            $renderItem($child, $depth + 1, $byParent, $rendered);
-                                        }
-                                    };
-                                    foreach ($byParent['root'] ?? [] as $item) {
-                                        $renderItem($item, 0, $byParent, $rendered);
-                                    }
-                                    // Item yang bukan root & tidak dirender karena parent-nya hilang (anti-bug)
-                                    foreach ($items as $item) {
-                                        if (! in_array($item['id'] ?? null, $rendered)) {
-                                            $renderItem($item, 0, $byParent, $rendered);
-                                        }
-                                    }
-                                @endphp
                             </tbody>
                         </table>
                     </div>
-                    @if(empty($items))
-                        <div class="config-card-empty" id="qt-items-empty">
-                            <i class="fa-solid fa-inbox"></i> Belum ada item. Tambahkan item secara manual menggunakan tombol "Tambah Baris Manual" atau "＋".
-                        </div>
-                    @endif
+                    <div class="config-card-empty" id="qt-items-empty">
+                        <i class="fa-solid fa-inbox"></i> Belum ada item. Tambahkan item secara manual menggunakan tombol "Tambah Baris Manual" atau "＋".
+                    </div>
+
                 </div>
                 <div class="tab-pane fade" id="qt-tab-configs" role="tabpanel">
                     <div id="qt-config-lists"></div>

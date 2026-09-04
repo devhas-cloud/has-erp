@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AccountCompany;
 use App\Models\AccountContact;
+use App\Models\Currency;
 use App\Models\Division;
 use App\Models\MasterProduct;
 use App\Models\Module;
@@ -717,6 +718,62 @@ class WaterConfigurationApprovalTest extends TestCase
         // qty 0 → price 0 meski ada product_id.
         $this->assertEquals(0, $rows[1]->price);
         // tanpa product_id → price 0.
+        $this->assertEquals(0, $rows[2]->price);
+    }
+
+    public function test_store_price_follows_currency_rate(): void
+    {
+        $base = Currency::create([
+            'name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active',
+        ]);
+        $usd = Currency::create([
+            'name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active',
+        ]);
+
+        $idrProduct = MasterProduct::create([
+            'name' => 'Produk IDR',
+            'code' => 'WTR-IDR-001',
+            'brand' => 's::can',
+            'category' => 'pH',
+            'division_id' => $this->water->id,
+            'description' => 'harga dalam base',
+            'price' => 5000000,
+            'currency_id' => $base->id,
+            'status' => 'Active',
+        ]);
+
+        $usdProduct = MasterProduct::create([
+            'name' => 'Produk USD',
+            'code' => 'WTR-USD-001',
+            'brand' => 's::can',
+            'category' => 'pH',
+            'division_id' => $this->water->id,
+            'description' => 'harga dalam USD',
+            'price' => 100,
+            'currency_id' => $usd->id,
+            'status' => 'Active',
+        ]);
+
+        $task = $this->createQuoteTask();
+
+        $this->actingAs($this->creator)->postJson(route('water-configuration.store'), [
+            'task_id' => $task->id,
+            'parameter_note' => 'pH',
+            'items' => [
+                ['_key' => 'new-1', 'product_id' => $idrProduct->id, 'description' => 'base', 'qty' => 1],
+                ['_key' => 'new-2', 'product_id' => $usdProduct->id, 'description' => 'usd', 'qty' => 2],
+                ['_key' => 'new-3', 'product_id' => null, 'description' => 'manual', 'qty' => 1],
+            ],
+        ])->assertOk();
+
+        $quotation = QuoteConfiguration::latest('id')->firstOrFail();
+        $rows = $quotation->items()->orderBy('sort_order')->get();
+
+        // Produk base (IDR) → price tetap apa adanya (5.000.000).
+        $this->assertEquals(5000000, $rows[0]->price);
+        // Produk USD → price disimpan setara base: 100 × 20.000 = 2.000.000.
+        $this->assertEquals(2000000, $rows[1]->price);
+        // Tanpa product_id → price 0.
         $this->assertEquals(0, $rows[2]->price);
     }
 

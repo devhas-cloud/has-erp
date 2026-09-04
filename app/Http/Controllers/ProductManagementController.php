@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Currency;
 use App\Models\Division;
 use App\Models\MasterProduct;
 use App\Services\ProductExportService;
@@ -16,13 +17,14 @@ class ProductManagementController extends Controller
     public function index()
     {
         $divisions = Division::where('status', 'Active')->orderBy('division_name')->get();
+        $currencies = Currency::where('status', 'Active')->orderBy('is_base', 'desc')->orderBy('name')->get();
 
-        return view('product-management.index', compact('divisions'));
+        return view('product-management.index', compact('divisions', 'currencies'));
     }
 
     public function data(Request $request): JsonResponse
     {
-        $query = MasterProduct::with(['division']);
+        $query = MasterProduct::with(['division', 'currency']);
 
         $recordsTotal = MasterProduct::count();
 
@@ -65,6 +67,7 @@ class ProductManagementController extends Controller
 
         $data = [];
         foreach ($products as $i => $product) {
+            $currency = $product->currency;
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $product->id,
@@ -77,6 +80,9 @@ class ProductManagementController extends Controller
                 'division_name' => $product->division?->division_name ?? '—',
                 'price' => $product->price,
                 'price_formatted' => number_format((float) $product->price, 0, '.', ','),
+                'currency_id' => $product->currency_id,
+                'currency_name' => $currency?->name ?? '—',
+                'currency_symbol' => $currency?->symbol ?: ($currency?->name ?? ''),
                 'status' => $product->status ?? 'Active',
                 'image_url' => $product->image_url,
             ];
@@ -101,8 +107,11 @@ class ProductManagementController extends Controller
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'price' => 'required|numeric|min:0',
+            'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
+
+        $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
 
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('product-images', 'public');
@@ -118,11 +127,20 @@ class ProductManagementController extends Controller
 
     public function edit($id): JsonResponse
     {
-        $product = MasterProduct::with('division')->findOrFail($id);
+        $product = MasterProduct::with(['division', 'currency'])->findOrFail($id);
+
+        $currency = $product->currency;
+        $baseCurrency = Currency::where('is_base', true)->where('status', 'Active')->first();
 
         $data = $product->toArray();
         $data['image_url'] = $product->image_url;
         $data['division_name'] = $product->division?->division_name;
+        $data['currency_name'] = $currency?->name;
+        $data['currency_symbol'] = $currency?->symbol ?: ($currency?->name ?? '');
+        $data['currency_rate'] = $currency ? (float) $currency->rate : 1.0;
+        $data['currency_is_base'] = $currency ? (bool) $currency->is_base : true;
+        $data['base_currency_name'] = $baseCurrency?->name ?? 'IDR';
+        $data['base_currency_symbol'] = $baseCurrency?->symbol ?: ($baseCurrency?->name ?? 'IDR');
 
         return response()->json([
             'success' => true,
@@ -151,8 +169,11 @@ class ProductManagementController extends Controller
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'price' => 'required|numeric|min:0',
+            'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
+
+        $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
 
         if ($request->hasFile('image')) {
             if ($product->image) {
@@ -187,13 +208,13 @@ class ProductManagementController extends Controller
 
     public function export()
     {
-        $products = MasterProduct::with('division')
+        $products = MasterProduct::with(['division', 'currency'])
             ->orderBy('id', 'desc')
             ->get();
 
         $headers = [
             'Name', 'Code', 'Brand', 'Category', 'Division',
-            'Description', 'Price', 'Status',
+            'Description', 'Price', 'Currency', 'Status',
         ];
 
         $service = new ProductExportService;
@@ -253,5 +274,18 @@ class ProductManagementController extends Controller
                 unlink($fullPath);
             }
         }
+    }
+
+    /**
+     * Currency tidak wajib dipilih. Jika kosong, produk memakai currency base
+     * (biasanya IDR) sebagai acuan default.
+     */
+    private function resolveCurrencyId($currencyId): ?int
+    {
+        if ($currencyId) {
+            return (int) $currencyId;
+        }
+
+        return Currency::where('is_base', true)->where('status', 'Active')->value('id');
     }
 }

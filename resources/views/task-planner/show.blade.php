@@ -1020,8 +1020,8 @@
                             @if ($hasApprovedConfig)
                             <li><hr class="dropdown-divider"></li>
                             <li>
-                                <a class="dropdown-item" href="{{ route('quotation.create', ['task_id' => $task->id]) }}">
-                                    <i class="fa fa-file-invoice-dollar me-1"></i> Buat Quotation
+                                <a class="dropdown-item" href="{{ route('quotation.create') }}">
+                                    <i class="fa fa-file-invoice-dollar me-1"></i> Create Quotation
                                 </a>
                             </li>
                             @endif

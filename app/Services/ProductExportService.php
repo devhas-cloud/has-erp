@@ -173,6 +173,7 @@ class ProductExportService
             $product->division?->division_name ?? '',
             $product->description ?? '',
             $product->price ?? 0,
+            $product->currency?->name ?? '',
             $product->status ?? 'Active',
         ];
     }

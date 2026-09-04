@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountManagementController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
+use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\DashboardTaskPlannerController;
 use App\Http\Controllers\ImsConfigurationController;
 use App\Http\Controllers\LeadsManagementController;
@@ -99,6 +100,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('product-management/template', [ProductManagementController::class, 'downloadTemplate'])->name('product-management.template');
     Route::post('product-management/import', [ProductManagementController::class, 'import'])->name('product-management.import');
     Route::resource('product-management', ProductManagementController::class);
+
+    Route::get('currency/data', [CurrencyController::class, 'data'])->name('currency.data');
+    Route::resource('currency', CurrencyController::class)->except(['create', 'show']);
 
     Route::get('water-configuration/data', [WaterConfigurationController::class, 'data'])->name('water-configuration.data');
     Route::post('water-configuration/{id}/submit', [WaterConfigurationController::class, 'submit'])->name('water-configuration.submit');

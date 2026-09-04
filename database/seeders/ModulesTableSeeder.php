@@ -84,6 +84,14 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Master Data',
             ],
             [
+                'module_code' => 'MOD_CURRENCY_MANAGEMENT',
+                'module_name' => 'Currency Management',
+                'description' => 'Menu untuk mengelola mata uang dan nilai kurs konversi',
+                'route_name' => 'currency',
+                'icon' => 'fa fa-money-bill',
+                'group' => 'Master Data',
+            ],
+            [
                 'module_code' => 'MOD_WATER_CONFIGURATION',
                 'module_name' => 'Water Configuration',
                 'description' => 'Menu quotation water configuration (parameter pH, Ammonia, COD, TSS dan Debit)',
