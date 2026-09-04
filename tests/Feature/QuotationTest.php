@@ -1444,4 +1444,118 @@ class QuotationTest extends TestCase
         $quotation = Quotation::latest('id')->firstOrFail();
         $this->assertSame('<b>bold</b><i>italic</i><u>under</u>', $quotation->items()->first()->description);
     }
+
+    public function test_creator_can_update_notes_on_draft_quotation(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $config->id,
+            'task_id' => $config->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->user->id,
+            'notes' => 'Catatan awal.',
+        ]);
+
+        $this->actingAs($this->user)
+            ->putJson(route('quotation.update-notes', $quotation->id), ['notes' => "Catatan baru.\nBaris kedua."])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('notes', "Catatan baru.\nBaris kedua.");
+
+        $this->assertSame("Catatan baru.\nBaris kedua.", $quotation->fresh()->notes);
+    }
+
+    public function test_creator_can_update_notes_on_approved_locked_quotation(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $config->id,
+            'task_id' => $config->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_APPROVED,
+            'approved_at' => now(),
+            'created_by' => $this->user->id,
+            'notes' => 'Catatan lama.',
+        ]);
+
+        $this->actingAs($this->user)
+            ->putJson(route('quotation.update-notes', $quotation->id), ['notes' => 'Catatan setelah approval.'])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertSame('Catatan setelah approval.', $quotation->fresh()->notes);
+    }
+
+    public function test_admin_can_update_notes_even_when_not_creator(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $config->id,
+            'task_id' => $config->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->user->id,
+            'notes' => null,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('quotation.update-notes', $quotation->id), ['notes' => 'Catatan admin.'])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertSame('Catatan admin.', $quotation->fresh()->notes);
+    }
+
+    public function test_non_creator_non_admin_cannot_update_notes(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $config->id,
+            'task_id' => $config->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->user->id,
+            'notes' => 'Tidak boleh diubah.',
+        ]);
+
+        $other = User::create([
+            'username' => 'oranglain',
+            'email' => 'lain@has.com',
+            'password' => bcrypt('secret'),
+            'division_id' => $this->division->id,
+            'role' => 'User',
+        ]);
+
+        $this->actingAs($other)
+            ->putJson(route('quotation.update-notes', $quotation->id), ['notes' => 'Diubah orang lain.'])
+            ->assertForbidden();
+
+        $this->assertSame('Tidak boleh diubah.', $quotation->fresh()->notes);
+    }
+
+    public function test_creator_can_clear_notes_to_null(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $config->id,
+            'task_id' => $config->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->user->id,
+            'notes' => 'Isi catatan.',
+        ]);
+
+        $this->actingAs($this->user)
+            ->putJson(route('quotation.update-notes', $quotation->id), ['notes' => ''])
+            ->assertOk()
+            ->assertJsonPath('notes', null);
+
+        $this->assertNull($quotation->fresh()->notes);
+    }
 }

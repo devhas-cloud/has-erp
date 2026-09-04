@@ -904,6 +904,43 @@ class QuotationController extends Controller
     }
 
     /**
+     * Perbarui isi catatan (notes) quotation langsung dari halaman show.
+     * Berlaku untuk semua status; hanya creator atau Admin yang boleh.
+     */
+    public function updateNotes(Request $request, $id): JsonResponse
+    {
+        $quotation = Quotation::findOrFail($id);
+
+        if ((int) $quotation->created_by !== (int) Auth::id() && Auth::user()->role !== 'Admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pembuat quotation atau Admin yang bisa mengubah catatan.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'notes' => 'nullable|string',
+        ]);
+
+        $notes = $validated['notes'] ?? null;
+
+        $quotation->update(['notes' => $notes]);
+
+        Log::record(
+            'update_quotation_notes',
+            "Catatan Quotation #{$quotation->id} ({$quotation->quotation_number}) diperbarui oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Catatan berhasil diperbarui.',
+            'notes' => $notes,
+        ]);
+    }
+
+    /**
      * Terbitkan quotation (draft -> issued). Setelah issued, dokumen terkunci.
      */
     // ── Approval & Versioning (mirip alur Quote Configuration) ──

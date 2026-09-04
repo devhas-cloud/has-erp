@@ -742,11 +742,20 @@
                 @endif
             </div>
             <div class="tab-pane fade" id="qt-show-notes" role="tabpanel">
-                @if($quotation->notes)
-                    <div style="font-size:13px;white-space:pre-line;padding:14px">{!! nl2br(e($quotation->notes)) !!}</div>
-                @else
-                    <div class="text-center" style="color:var(--text-muted);padding:16px">Belum ada catatan.</div>
-                @endif
+                <div class="d-flex justify-content-end" style="padding:10px 14px 0">
+                    @if((int) $quotation->created_by === (int) auth()->id() || auth()->user()->role === 'Admin')
+                    <button type="button" class="btn btn-sm btn-soft" onclick="openQtNotesModal()">
+                        <i class="fa fa-pen me-1"></i> Edit Catatan
+                    </button>
+                    @endif
+                </div>
+                <div id="qt-notes-view" style="font-size:13px;white-space:pre-line;padding:6px 14px 14px">
+                    @if($quotation->notes)
+                        {!! nl2br(e($quotation->notes)) !!}
+                    @else
+                        <span style="color:var(--text-muted)">Belum ada catatan.</span>
+                    @endif
+                </div>
             </div>
         </div>
     </div>
@@ -812,6 +821,30 @@
 @endsection
 
 @push('modals')
+<div class="modal fade" id="qtNotesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Edit Catatan</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label">Catatan Quotation</label>
+                    <textarea id="qt-notes-input" class="form-control" rows="8"
+                        placeholder="Tulis catatan quotation..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-qt-notes">
+                    <i class="fa fa-save me-1"></i> Simpan
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="qtRejectModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -872,7 +905,9 @@
 <script>
 let qtRejectModalInstance = null;
 let qtTrackModalInstance = null;
+let qtNotesModalInstance = null;
 const qtId = {{ $quotation->id }};
+let initialQtNotes = @json((string) ($quotation->notes ?? ''));
 
 $(document).ready(function() {
     // Ringkasan Harga hanya tampil saat tab "List Item Quotation" aktif.
@@ -889,6 +924,49 @@ const quotationReviseUrl = '{{ route("quotation.revise", "__ID__") }}';
 const quotationVersionsUrl = '{{ route("quotation.versions", "__ID__") }}';
 const quotationDeleteUrl = '{{ route("quotation.destroy", "__ID__") }}';
 const quotationEditUrl = '{{ route("quotation.edit", "__ID__") }}';
+const quotationNotesUrl = '{{ route("quotation.update-notes", "__ID__") }}';
+
+function escapeHtmlNotes(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function openQtNotesModal() {
+    $('#qt-notes-input').val(initialQtNotes);
+    if (!qtNotesModalInstance) {
+        qtNotesModalInstance = new bootstrap.Modal(document.getElementById('qtNotesModal'));
+    }
+    qtNotesModalInstance.show();
+}
+
+$(document).on('click', '#btn-save-qt-notes', function() {
+    var notes = $('#qt-notes-input').val() || '';
+    var $btn = $(this);
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Menyimpan...');
+
+    $.ajax({
+        url: quotationNotesUrl.replace('__ID__', qtId),
+        method: 'PUT',
+        data: { notes: notes, _token: '{{ csrf_token() }}' },
+        dataType: 'json'
+    }).done(function(res) {
+        var clean = res.notes || '';
+        initialQtNotes = clean;
+        var view = $('#qt-notes-view');
+        view.html(clean ? escapeHtmlNotes(clean).replace(/\n/g, '<br>') : '<span style="color:var(--text-muted)">Belum ada catatan.</span>');
+        toastr.success(res.message || 'Catatan berhasil diperbarui.');
+        qtNotesModalInstance.hide();
+    }).fail(function(xhr) {
+        toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menyimpan catatan.');
+    }).always(function() {
+        $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Simpan');
+    });
+});
 
 function submitQuotation() {
     Swal.fire({
