@@ -308,7 +308,7 @@ class TaskPlannerController extends Controller
             }
         }
 
-        Log::record('create_task', "Task #{$task->id}: {$task->title}", 'MOD_TASK_PLANNER', $task);
+        Log::record('create_task', " {$task->title}", 'MOD_TASK_PLANNER', $task);
 
         return response()->json([
             'success' => true,
@@ -372,7 +372,7 @@ class TaskPlannerController extends Controller
         $task->update($validated);
         $task->assignees()->sync($assigneeIds);
 
-        Log::record('update_task', "Task #{$task->id}: {$task->title}", 'MOD_TASK_PLANNER', $task);
+        Log::record('update_task', " {$task->title}", 'MOD_TASK_PLANNER', $task);
 
         return response()->json([
             'success' => true,
@@ -415,7 +415,19 @@ class TaskPlannerController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        return view('task-planner.show', compact('task', 'quoteConfigurations', 'quotations'));
+        // Final quotation: hanya ketika task sudah done dan ada quotation
+        // berstatus Approved (yang paling akhir disetujui).
+        $finalQuotation = null;
+        if ($task->status === 'done') {
+            $finalQuotation = Quotation::with(['creator.division', 'finalChecker'])
+                ->where('task_id', $task->id)
+                ->where('status', Quotation::STATUS_APPROVED)
+                ->orderByDesc('approved_at')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        return view('task-planner.show', compact('task', 'quoteConfigurations', 'quotations', 'finalQuotation'));
     }
 
     public function approve($id): JsonResponse
@@ -453,13 +465,34 @@ class TaskPlannerController extends Controller
                     'message' => 'Task kategori Quote harus memiliki quotation berstatus Approved sebelum approve.',
                 ], 422);
             }
+
+            // update opportunity, quote Redy menjadi true
+            $quotation = Quotation::where('task_id', $task->id)
+                ->where('status', Quotation::STATUS_APPROVED)
+                ->latest()
+                ->first();
+            if ($quotation && $quotation->opportunity) {
+                $quotation->opportunity->update(['quote_ready' => true]);
+            }
         }
 
         $task->update(['status' => 'done']);
 
-        Log::record('approve_task', "Task #{$task->id}: {$task->title} disetujui", 'MOD_TASK_PLANNER', $task);
+        // Task kategori quote/proposal diselesaikan lewat tombol "Complete Task",
+        // sehingga log & pesan menyesuaikan (bukan approve).
+        $isCompleteCategory = $taskCategory
+            && in_array(strtolower($taskCategory->name), ['quote', 'proposal'], true);
 
-        return response()->json(['success' => true, 'message' => 'Task disetujui.']);
+        $action = $isCompleteCategory ? 'complete_task' : 'approve_task';
+        $description = $isCompleteCategory
+            ? "{$task->title} di-complete"
+            : "{$task->title} disetujui";
+
+        Log::record($action, $description, 'MOD_TASK_PLANNER', $task);
+        return response()->json([
+            'success' => true,
+            'message' => $isCompleteCategory ? 'Task berhasil di-complete.' : 'Task disetujui.',
+        ]);
     }
 
     public function reject($id): JsonResponse
@@ -476,8 +509,7 @@ class TaskPlannerController extends Controller
 
         $task->update(['status' => 'in_progress']);
 
-        Log::record('reject_task', "Task #{$task->id}: {$task->title} ditolak", 'MOD_TASK_PLANNER', $task);
-
+        Log::record('reject_task', " {$task->title} ditolak", 'MOD_TASK_PLANNER', $task);
         return response()->json(['success' => true, 'message' => 'Task ditolak, status kembali ke In Progress.']);
     }
 
@@ -540,8 +572,7 @@ class TaskPlannerController extends Controller
             $task->update(['status' => 'waiting_approval']);
 
             $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
-            Log::record('transition_task', "Task #{$task->id}: {$oldLabel} → Waiting Approval", 'MOD_TASK_PLANNER', $task);
-
+            Log::record('transition_task', " {$oldLabel} → Waiting Approval", 'MOD_TASK_PLANNER', $task);
             return response()->json([
                 'success' => true,
                 'message' => 'Task dikirim ke creator untuk approval.',
@@ -564,11 +595,107 @@ class TaskPlannerController extends Controller
 
         $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
         $newLabel = $statusLabels[$newStatus] ?? $newStatus;
-        Log::record('transition_task', "Task #{$task->id}: {$oldLabel} → {$newLabel}", 'MOD_TASK_PLANNER', $task);
-
+        Log::record('transition_task', " {$oldLabel} → {$newLabel}", 'MOD_TASK_PLANNER', $task);
         return response()->json([
             'success' => true,
             'message' => 'Status diupdate.',
+        ]);
+    }
+
+    /**
+     * Buka kembali task kategori Quote yang sudah Done menjadi In Progress.
+     * Hanya creator/assignee. Alasan disimpan sebagai activity & log,
+     * dan notifikasi dikirim ke creator/assignee lain.
+     */
+    public function open(Request $request, $id): JsonResponse
+    {
+        $task = Task::with('assignees')->findOrFail($id);
+
+        if (! $task->category || strtolower($task->category->name) !== 'quote') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya task kategori Quote yang bisa dibuka kembali.',
+            ], 422);
+        }
+
+        if ($task->status !== 'done') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task tidak dalam status Done.',
+            ], 422);
+        }
+
+        $isCreator = $task->creator_id === Auth::id();
+        $isAssignee = $task->assignees->contains('id', Auth::id());
+
+        if (! $isCreator && ! $isAssignee) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya creator atau assignee yang bisa membuka task.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+        $reason = trim($validated['reason']);
+
+        $task->update(['status' => 'in_progress']);
+
+        // Simpan alasan sebagai activity
+        TaskActivity::create([
+            'task_id' => $task->id,
+            'user_id' => Auth::id(),
+            'content' => '🔄 Task dibuka kembali: '.$reason,
+        ]);
+
+
+        // Simpan ke log (task + opportunity bila terikat)
+        Log::record(
+            'open_task',
+            "{$task->title} dibuka kembali — {$reason}",
+            'MOD_TASK_PLANNER',
+            $task
+        );
+
+
+
+        // Notifikasi ke creator & assignee lain (selain pembuka)
+        // $openerId = Auth::id();
+        // $notifiedIds = [$openerId];
+        // $task->load('creator');
+
+        // if ($task->creator_id !== $openerId) {
+        //     Notification::create([
+        //         'user_id' => $task->creator_id,
+        //         'type' => 'task_opened',
+        //         'title' => "Task dibuka kembali: {$task->title}",
+        //         'body' => Auth::user()->username.' membuka task: '.$reason,
+        //         'notifiable_type' => Task::class,
+        //         'notifiable_id' => $task->id,
+        //         'data' => ['task_id' => $task->id, 'opened_by' => $openerId, 'reason' => $reason],
+        //     ]);
+        //     $notifiedIds[] = $task->creator_id;
+        // }
+
+        // foreach ($task->assignees as $assignee) {
+        //     if (in_array($assignee->id, $notifiedIds)) {
+        //         continue;
+        //     }
+        //     Notification::create([
+        //         'user_id' => $assignee->id,
+        //         'type' => 'task_opened',
+        //         'title' => "Task dibuka kembali: {$task->title}",
+        //         'body' => Auth::user()->username.' membuka task: '.$reason,
+        //         'notifiable_type' => Task::class,
+        //         'notifiable_id' => $task->id,
+        //         'data' => ['task_id' => $task->id, 'opened_by' => $openerId, 'reason' => $reason],
+        //     ]);
+        // }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task dibuka kembali ke In Progress.',
         ]);
     }
 
@@ -697,7 +824,7 @@ class TaskPlannerController extends Controller
     {
         $task = Task::findOrFail($id);
 
-        Log::record('delete_task', "Task #{$task->id}: {$task->title} dihapus", 'MOD_TASK_PLANNER', $task);
+        Log::record('delete_task', " {$task->title} dihapus", 'MOD_TASK_PLANNER', $task);
 
         $task->delete();
 

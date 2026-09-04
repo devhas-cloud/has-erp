@@ -12,6 +12,7 @@ use App\Models\QuoteConfigurationItem;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -343,10 +344,19 @@ class WaterConfigurationController extends Controller
 
             Log::record(
                 'create_water_configuration',
-                "Quote Configuration #{$quotation->id} dibuat untuk task {$quotation->task?->title}",
+                "Quote Configuration  dibuat untuk task {$quotation->task?->title}",
                 self::MODULE_CODE,
                 $quotation
             );
+
+            if ($quotation->task) {
+                $divisionName = $quotation->division?->division_name ?? 'Water';
+                TaskWorkflowLogger::forTask(
+                    $quotation->task,
+                    'create_water_configuration',
+                    "Quote Configuration {$divisionName}  dibuat untuk Task #{$quotation->task_id} (Draft)"
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -513,10 +523,19 @@ class WaterConfigurationController extends Controller
 
             Log::record(
                 'update_water_configuration',
-                "Quote Configuration #{$quotation->id} diupdate",
+                "Quote Configuration  diupdate",
                 self::MODULE_CODE,
                 $quotation
             );
+
+            if ($quotation->task) {
+                $divisionName = $quotation->division?->division_name ?? 'Water';
+                TaskWorkflowLogger::forTask(
+                    $quotation->task,
+                    'update_water_configuration',
+                    "Quote Configuration {$divisionName}  diupdate (Draft)"
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -545,7 +564,7 @@ class WaterConfigurationController extends Controller
 
         Log::record(
             'delete_water_configuration',
-            "Quote Configuration #{$quotation->id} dihapus",
+            "Quote Configuration  dihapus",
             self::MODULE_CODE,
             $quotation
         );
@@ -609,12 +628,14 @@ class WaterConfigurationController extends Controller
 
         $this->notifyApprovers($quotation);
 
-        Log::record(
-            'submit_water_configuration',
-            "Quote Configuration #{$quotation->id} dikirim untuk approval",
-            self::MODULE_CODE,
-            $quotation
-        );
+        if ($quotation->task) {
+            $divisionName = $quotation->division?->division_name ?? 'Water';
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'submit_water_configuration',
+                "Quote Configuration {$divisionName}  → Waiting Approval"
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -672,15 +693,24 @@ class WaterConfigurationController extends Controller
             $quotation,
             'quotation_approved',
             'Quote Configuration Disetujui',
-            "Quote Configuration #{$quotation->id} telah disetujui oleh ".Auth::user()->username.'.'
+            "Quote Configuration {$quotation->name} telah disetujui oleh ".Auth::user()->username.'.'
         );
 
         Log::record(
             'approve_water_configuration',
-            "Quote Configuration #{$quotation->id} disetujui oleh ".Auth::user()->username,
+            "Quote Configuration {$quotation->name} disetujui oleh ".Auth::user()->username,
             self::MODULE_CODE,
             $quotation
         );
+
+        if ($quotation->task) {
+            $divisionName = $quotation->division?->division_name ?? 'Water';
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'approve_water_configuration',
+                "Quote Configuration {$divisionName}  disetujui oleh ".Auth::user()->username
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -721,15 +751,24 @@ class WaterConfigurationController extends Controller
             $quotation,
             'quotation_rejected',
             'Quote Configuration Ditolak',
-            "Quote Configuration #{$quotation->id} ditolak oleh ".Auth::user()->username.'. Alasan: '.$validated['approval_note']
+            "Quote Configuration  ditolak oleh ".Auth::user()->username.'. Alasan: '.$validated['approval_note']
         );
 
         Log::record(
             'reject_water_configuration',
-            "Quote Configuration #{$quotation->id} ditolak oleh ".Auth::user()->username,
+            "Quote Configuration  ditolak oleh ".Auth::user()->username,
             self::MODULE_CODE,
             $quotation
         );
+
+        if ($quotation->task) {
+            $divisionName = $quotation->division?->division_name ?? 'Water';
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'reject_water_configuration',
+                "Quote Configuration {$divisionName}  ditolak oleh ".Auth::user()->username
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -758,6 +797,14 @@ class WaterConfigurationController extends Controller
             ], 403);
         }
 
+        // jika Task yang terikat quote status done maka tidak bisa di buka
+        if ($quotation->task && $quotation->task->status === 'done') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task terkait sudah selesai. Tidak bisa membuka kunci configuration.',
+            ], 422);
+        }
+
         $quotation->update([
             'unlocked_by' => Auth::id(),
             'unlocked_at' => now(),
@@ -765,7 +812,7 @@ class WaterConfigurationController extends Controller
 
         Log::record(
             'unlock_water_configuration',
-            "Quote Configuration #{$quotation->id} dibuka kunci oleh ".Auth::user()->username,
+            "Quote Configuration  dibuka kunci oleh ".Auth::user()->username,
             self::MODULE_CODE,
             $quotation
         );
@@ -853,6 +900,21 @@ class WaterConfigurationController extends Controller
             self::MODULE_CODE,
             $revision
         );
+
+        if ($revision->task) {
+            $divisionName = $revision->division?->division_name ?? 'Water';
+            TaskWorkflowLogger::forTask(
+                $revision->task,
+                'revise_water_configuration',
+                "Revisi Quote Configuration {$divisionName} #{$revision->id} dibuat dari #{$source->id}"
+            );
+            Log::record(
+                'revise_water_configuration_task',
+                "Revisi Quote Configuration #{$revision->id} dibuat dari #{$source->id} untuk Task #{$revision->task_id}",
+                self::MODULE_CODE,
+                $revision
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -966,7 +1028,7 @@ class WaterConfigurationController extends Controller
                 $approver,
                 'quotation_approval_required',
                 'Quote Configuration Menunggu Approval',
-                "Quote Configuration #{$quotation->id} dari {$creator->username} menunggu approval Anda.",
+                "Quote Configuration  dari {$creator->username} menunggu approval Anda.",
                 [
                     'quote_configuration_id' => $quotation->id,
                     'task_id' => $quotation->task_id,

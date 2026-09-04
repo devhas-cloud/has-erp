@@ -461,13 +461,7 @@
                 </div>
             </div>
 
-            {{-- No of Pages --}}
-            <div class="info-item">
-                <div class="info-label">No of Pages</div>
-                <div class="info-value">
-                    {{ $quotation->no_of_pages ?? '—' }} Pages
-                </div>
-            </div>
+
 
             {{-- Portabilitas --}}
             <div class="info-item">

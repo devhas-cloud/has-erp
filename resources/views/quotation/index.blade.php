@@ -161,12 +161,12 @@ function initQuotationTable() {
                         btn += '<button class="btn-icon" title="Approve" onclick="approveQuotation(' + data + ')"><i class="fa fa-check"></i></button>';
                         btn += '<button class="btn-icon text-danger" title="Reject" onclick="openQtReject(' + data + ')"><i class="fa fa-xmark"></i></button>';
                     }
-                    if (row.status === 'approved' && row.locked && row.can_approve) {
-                        btn += '<button class="btn-icon" title="Buka Kunci" onclick="unlockQuotation(' + data + ')"><i class="fa fa-lock-open"></i></button>';
-                    }
-                    if (row.can_revise) {
-                        btn += '<button class="btn-icon" title="Buat Revisi" onclick="reviseQuotation(' + data + ')"><i class="fa fa-copy"></i></button>';
-                    }
+                    // if (row.status === 'approved' && row.locked && row.can_approve) {
+                    //     btn += '<button class="btn-icon" title="Buka Kunci" onclick="unlockQuotation(' + data + ')"><i class="fa fa-lock-open"></i></button>';
+                    // }
+                    // if (row.can_revise) {
+                    //     btn += '<button class="btn-icon" title="Buat Revisi" onclick="reviseQuotation(' + data + ')"><i class="fa fa-copy"></i></button>';
+                    // }
                     btn += '</div>';
                     return btn;
                 }

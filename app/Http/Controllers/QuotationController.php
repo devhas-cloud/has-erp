@@ -12,6 +12,7 @@ use App\Models\QuotationItem;
 use App\Models\QuoteConfiguration;
 use App\Models\Task;
 use App\Models\UserAccessControl;
+use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -641,6 +642,14 @@ class QuotationController extends Controller
                 $quotation
             );
 
+            if ($quotation->task) {
+                TaskWorkflowLogger::forTask(
+                    $quotation->task,
+                    'create_quotation',
+                    "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuat dari Task #{$task->id} (Draft)"
+                );
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Quotation berhasil dibuat.',
@@ -827,6 +836,14 @@ class QuotationController extends Controller
                 $quotation
             );
 
+            if ($quotation->task) {
+                TaskWorkflowLogger::forTask(
+                    $quotation->task,
+                    'update_quotation',
+                    "Quotation #{$quotation->id} ({$quotation->quotation_number}) diupdate (Draft)"
+                );
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Quotation berhasil diupdate.',
@@ -924,6 +941,14 @@ class QuotationController extends Controller
             $quotation
         );
 
+        if ($quotation->task) {
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'submit_quotation',
+                "Quotation #{$quotation->id} ({$quotation->quotation_number}) → Waiting Approval"
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Quotation dikirim untuk approval.',
@@ -980,6 +1005,14 @@ class QuotationController extends Controller
             $quotation
         );
 
+        if ($quotation->task) {
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'approve_quotation',
+                "Quotation #{$quotation->id} ({$quotation->quotation_number}) disetujui oleh ".Auth::user()->username
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Quotation disetujui.',
@@ -1022,6 +1055,14 @@ class QuotationController extends Controller
             $quotation
         );
 
+        if ($quotation->task) {
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'reject_quotation',
+                "Quotation #{$quotation->id} ({$quotation->quotation_number}) ditolak oleh ".Auth::user()->username
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Quotation ditolak.',
@@ -1049,6 +1090,14 @@ class QuotationController extends Controller
             ], 403);
         }
 
+        // jika Task yang terikat quote status done maka tidak bisa di buka
+        if($quotation->task && $quotation->task->status === 'done') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Quotation tidak bisa dibuka kunci karena Task terkait sudah selesai.',
+            ], 422);
+        }
+
         $quotation->update([
             'unlocked_by' => Auth::id(),
             'unlocked_at' => now(),
@@ -1060,6 +1109,14 @@ class QuotationController extends Controller
             self::MODULE_CODE,
             $quotation
         );
+
+        if ($quotation->task) {
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'unlock_quotation',
+                "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuka kunci oleh ".Auth::user()->username
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -1203,6 +1260,14 @@ class QuotationController extends Controller
             $revision
         );
 
+        if ($revision->task) {
+            TaskWorkflowLogger::forTask(
+                $revision->task,
+                'revise_quotation',
+                "Revisi Quotation #{$revision->id} ({$revision->quotation_number}) dibuat dari #{$source->id}"
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Revisi (versi '.$revision->version.') berhasil dibuat.',
@@ -1298,10 +1363,42 @@ class QuotationController extends Controller
             'task.creator',
         ])->findOrFail($id);
 
-        $pdf = Pdf::loadView('quotation.pdf', compact('quotation'))
-            ->setPaper('a4', 'portrait');
+        $pdf = $this->renderPdfWithPageCount('quotation.pdf', compact('quotation'));
 
         return $pdf->stream('Quotation-'.$quotation->id.'.pdf');
+    }
+
+    /**
+     * Render view PDF sambil mengisi variabel $pageCount dengan jumlah halaman
+     * hasil cetak yang sebenarnya.
+     *
+     * DomPDF hanya bisa mengganti {PAGE_COUNT} pada teks yang digambar lewat
+     * canvas (header/footer), bukan pada teks di dalam alur dokumen seperti sel
+     * tabel. Karena itu dokumen dicetak ulang: tahap pertama untuk menghitung
+     * halaman, tahap berikutnya memakai angka tersebut. Pengulangan berhenti
+     * begitu jumlah halaman stabil (umumnya cukup 2 tahap; tahap ekstra hanya
+     * terpakai bila pergantian angka sampai menggeser jumlah halaman).
+     */
+    private function renderPdfWithPageCount(string $view, array $data, int $maxPasses = 3): \Barryvdh\DomPDF\PDF
+    {
+        $pageCount = 1;
+        $pdf = null;
+
+        for ($pass = 1; $pass <= $maxPasses; $pass++) {
+            $pdf = Pdf::loadView($view, array_merge($data, ['pageCount' => $pageCount]))
+                ->setPaper('a4', 'portrait');
+            $pdf->render();
+
+            $rendered = $pdf->getDomPDF()->getCanvas()->get_page_count();
+
+            if ($rendered === $pageCount) {
+                break;
+            }
+
+            $pageCount = $rendered;
+        }
+
+        return $pdf;
     }
 
     /**

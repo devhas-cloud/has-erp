@@ -70,6 +70,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('task-planner/{id}/approve', [TaskPlannerController::class, 'approve'])->name('task-planner.approve');
     Route::post('task-planner/{id}/reject', [TaskPlannerController::class, 'reject'])->name('task-planner.reject');
     Route::post('task-planner/{id}/transition', [TaskPlannerController::class, 'transition'])->name('task-planner.transition');
+    Route::post('task-planner/{id}/open', [TaskPlannerController::class, 'open'])->name('task-planner.open');
     Route::get('task-planner/{id}/activities', [TaskPlannerController::class, 'activities'])->name('task-planner.activities');
     Route::post('task-planner/{id}/activities', [TaskPlannerController::class, 'storeActivity'])->name('task-planner.store-activity');
     Route::post('task-planner/{id}/visit', [TaskPlannerController::class, 'storeVisit'])->name('task-planner.visit');

@@ -147,4 +147,35 @@ class TaskPlannerQuoteGateTest extends TestCase
             ->assertSee('Quote', false)
             ->assertSee('Approved');
     }
+
+    public function test_show_page_displays_final_quotation_when_task_done(): void
+    {
+        $task = $this->createQuoteTask();
+        $quotation = $this->createApprovedQuotation($task);
+        $task->update(['status' => 'done']);
+
+        $response = $this->actingAs($this->creator)->get(
+            route('task-planner.show', $task->id)
+        );
+
+        $response->assertOk()
+            ->assertViewHas('finalQuotation', fn ($final) => $final && $final->id === $quotation->id)
+            ->assertSee('Final Quotation')
+            ->assertSee('001/HAS/QT/TEST')
+            ->assertSee(route('quotation.pdf', ['id' => $quotation->id, 'back' => 'task-'.$task->id]), false);
+    }
+
+    public function test_show_page_hides_final_quotation_when_task_not_done(): void
+    {
+        $task = $this->createQuoteTask();
+        $this->createApprovedQuotation($task);
+
+        $response = $this->actingAs($this->creator)->get(
+            route('task-planner.show', $task->id)
+        );
+
+        $response->assertOk()
+            ->assertViewHas('finalQuotation', null)
+            ->assertSee('Final quotation akan tampil setelah quotation di-approve dan task di-complete.');
+    }
 }

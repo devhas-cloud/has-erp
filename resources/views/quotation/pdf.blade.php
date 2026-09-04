@@ -9,19 +9,21 @@
             font-family: 'DejaVu Sans', Arial, sans-serif;
             font-size: 11px;
             color: #111;
-            padding: 8mm 14mm;
             line-height: 1.45;
         }
 
         /* Header diulang otomatis di setiap halaman oleh DomPDF */
         .doc-header {
             position: fixed;
-            top: 0;
+            top: -28mm;      /* mulai ~8mm dari tepi atas kertas */
             left: 0;
             right: 0;
+            height: 25mm;    /* tinggi tetap agar jarak ke konten selalu sama */
+            overflow: hidden;
             text-align: center;
-            padding: 6mm 14mm 2mm;
+            padding-bottom: 2mm;
             border-bottom: 2px solid #111;
+            line-height: 1.25;
         }
         .doc-header .company {
             font-size: 15px;
@@ -36,14 +38,35 @@
         .doc-header .npwp {
             font-size: 9.5px;
             color: #333;
-            margin-top: 1px;
         }
+
+        /* Footer diulang di setiap halaman, berada di dalam margin bawah */
+        .doc-footer {
+            position: fixed;
+            bottom: -11mm;
+            left: 0;
+            right: 0;
+            height: 6mm;
+            font-size: 8.5px;
+            color: #666;
+            border-top: 0.5px solid #bbb;
+            padding-top: 1.5mm;
+        }
+        /*
+         * Pakai tabel, JANGAN float: float di dalam elemen fixed ini ikut
+         * terbaca oleh alur dokumen di DomPDF sehingga paragraf biasa
+         * (salutation, terms) tergeser ke kanan sebesar lebar float.
+         */
+        .doc-footer table { width: 100%; border-collapse: collapse; }
+        .doc-footer td { font-size: 8.5px; color: #666; padding: 0; }
+        .doc-footer td.pg { text-align: right; }
+        .doc-footer td.pg:after { content: counter(page); }
 
         .doc-title {
             text-align: center;
             font-size: 15px;
             font-weight: 700;
-            margin: 14px 0 12px;
+            margin: 0 0 12px;
             text-transform: uppercase;
             letter-spacing: 3px;
             text-decoration: underline;
@@ -82,6 +105,9 @@
             border-collapse: collapse;
             margin-bottom: 10px;
         }
+        /* Baris judul tabel ikut tercetak ulang di tiap halaman */
+        table.parts thead { display: table-header-group; }
+        table.parts tbody { display: table-row-group; }
         table.parts th {
             background: #e8e8e8;
             border: 1px solid #999;
@@ -118,6 +144,7 @@
             width: 260px;
             margin-left: auto;
             margin-bottom: 14px;
+            page-break-inside: avoid;
         }
         .totals table {
             width: 100%;
@@ -144,6 +171,7 @@
             font-weight: 700;
             text-decoration: underline;
             margin-bottom: 4px;
+            page-break-after: avoid;
         }
         .terms .closing {
             margin-top: 8px;
@@ -152,7 +180,7 @@
 
         .sign {
             width: 100%;
-            margin-top: 48px;
+            margin-top: 36px;
             page-break-inside: avoid;
         }
         .sign table {
@@ -174,11 +202,23 @@
             margin: 0 auto;
         }
 
-        @page { margin: 34mm 14mm 12mm 14mm; }
+        /*
+         * Layout halaman:
+         * - @page menyisakan ruang kosong 38mm di atas & 16mm di bawah pada SETIAP halaman.
+         * - Header/footer position:fixed diletakkan DI DALAM ruang kosong itu memakai
+         *   offset negatif, karena DomPDF menghitung top/bottom elemen fixed relatif
+         *   terhadap area konten (sesudah margin @page), bukan terhadap tepi kertas.
+         *   Tanpa offset negatif, header menumpuk dengan isi dokumen.
+         * - !important WAJIB dipertahankan: di DomPDF style @page dipakai sebagai style
+         *   dasar elemen root, sehingga "* { margin: 0 }" di atas akan menimpanya dan
+         *   membuat margin halaman hilang (header/footer ikut terdorong keluar kertas).
+         */
+        @page { margin: 38mm 14mm 16mm 14mm !important; }
     </style>
 </head>
 <body>
 
+    <img src="{{ public_path('img/has.jpg') }}" style="position:fixed;top:-80;left:0;width:120px;height:auto;" />
     <div class="doc-header">
         <div class="company">PT. HAS ENVIRONMENTAL</div>
         <div class="addr">Ruko Mega Grosir Cempaka Mas Blok I/12</div>
@@ -187,8 +227,21 @@
         <div class="contact">email : info@has-environmental.com</div>
         <div class="npwp">NPWP : 02.593.153.6 027.000</div>
     </div>
+    <img src="{{ public_path('img/smk3.png') }}" style="position:fixed;top:-80;right:0;width:70px;height:auto;" />
 
-    <div class="doc-title">QUOTATION</div>
+    <div class="doc-footer">
+        <table>
+            <tr>
+                <td class="ref">{{ $quotation->quotation_number ?? '' }}</td>
+                <td class="pg">Hal. </td>
+            </tr>
+        </table>
+    </div>
+
+    {{-- $pageCount = jumlah halaman hasil cetak sebenarnya, diisi oleh
+         QuotationController::renderPdfWithPageCount(). Nilai no_of_pages dari
+         database hanya dipakai kalau view dirender di luar controller itu. --}}
+    @php $totalPages = (int) ($pageCount ?? $quotation->no_of_pages ?? 1); @endphp
 
     <table class="info">
         <tr>
@@ -225,14 +278,19 @@
             <td class="k"></td>
             <td></td>
             <td class="kr">No of Pages</td>
-            <td class="right">{{ $quotation->no_of_pages }} {{ $quotation->no_of_pages > 1 ? 'Pages' : 'Page' }}</td>
+            <td class="right">{{ $totalPages }} {{ $totalPages > 1 ? 'Pages' : 'Page' }}</td>
         </tr>
     </table>
 
     <div class="salutation">
         Dear Customer,<br>
         Thank you for your inquiry &amp; we are pleased to quote as follow :
+        <br>
+        <br>
+        <h4>Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringa (SPARING) <br> Sesuai PERMENLHK Nomor P.80/MENLHK/SETJEN/KUM.1/10/2019</h4>
+        <h4>Parameter : {{ $quotation->parameter_note }} </h4>
     </div>
+
 
     @php $rows = $quotation->flattenTree(); @endphp
 
@@ -253,9 +311,16 @@
                     $depth = $row['depth'];
                 @endphp
                 <tr>
-                    <td class="no-col">{{ $item->item_no }}</td>
                     <td>
-                        <div style="padding-left:{{ $depth * 14 }}px">
+                        <!-- jika item_no parent -->
+                        @if(!$depth)
+                        <span style="font-weight:bold;">{{ $item->item_no }}</span>
+                        @else
+                        <span style="font-weight:bold; padding-left:{{ $depth * 14 }}px">{{ $item->item_no }}</span>
+                        @endif
+                    </td>
+                    <td>
+                        <div>
                             {!! \App\Models\Quotation::renderDescription($item->description) !!}
                             @if($item->part_number)
                                 <div style="font-size:9px;color:#444">Part Number : {{ $item->part_number }}</div>
@@ -272,40 +337,44 @@
                 </tr>
             @endforelse
         </tbody>
-    </table>
-
-    <div class="totals">
-        <table>
+        <tfoot>
             <tr>
+                <td colspan="3"></td>
                 <td class="l">Subtotal</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->subtotal) }}</td>
+                <td class="price-col">{{ \App\Models\Quotation::formatMoney($quotation->subtotal) }}</td>
             </tr>
             @if($quotation->discount_amount > 0)
             <tr>
+                <td colspan="3"></td>
                 <td class="l">Discount</td>
                 <td class="v">({{ \App\Models\Quotation::formatMoney($quotation->discount_amount) }})</td>
             </tr>
             @endif
             <tr>
+                <td colspan="3"></td>
                 <td class="l">DPP Pajak</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->dpp) }}</td>
+                <td class="price-col">{{ \App\Models\Quotation::formatMoney($quotation->dpp) }}</td>
             </tr>
             <tr>
-                <td class="l">PPN{{ $quotation->ppn_percent ? ' ('.$quotation->ppn_percent.'%)' : '' }}</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->ppn) }}</td>
+                <td colspan="3"></td>
+                <td class="l">PPN </td>
+                <td class="price-col">{{ \App\Models\Quotation::formatMoney($quotation->ppn) }}</td>
             </tr>
             <tr class="grand">
+                <td colspan="3"></td>
                 <td class="l">Full Amount</td>
-                <td class="v">{{ \App\Models\Quotation::formatMoney($quotation->grand_total) }}</td>
+                <td class="price-col">{{ \App\Models\Quotation::formatMoney($quotation->grand_total) }}</td>
             </tr>
-        </table>
-    </div>
+        </tfoot>
+    </table>
+
 
     @if($quotation->terms)
         <div class="terms">
             <div class="terms-title">Term &amp; Conditions :</div>
              <div style="font-family:monospace;font-size:10px; white-space: pre-wrap;">{!! e($quotation->terms) !!}</div>
-            <div class="closing">Goods has been Purchased can not be Returned, Refunded or Exchanged</div>
+            <div class="closing">Goods has been Purchased can not be Returned, Refunded or Exchanged <br>
+            Signature</div>
         </div>
     @endif
 
@@ -313,7 +382,7 @@
         <table>
             <tr>
                 <td>
-                    <div class="label">Signature</div>
+                    <div class="label"></div>
                 </td>
                 <td>
                     <div class="label">Contact Person</div>
@@ -323,12 +392,12 @@
                 <td>
                     <div class="name">
                         Computer generated<br>
-                        {{ $quotation->creator?->username ?? '________' }}
+                        {{ ucfirst($quotation->creator?->username ?? '________') }}
                     </div>
                 </td>
                 <td>
                     <div class="name">
-                        {{ $quotation->from_name ?? '________' }}<br>
+                        {{ ucfirst($quotation->from_name ?? '________') }}<br>
                         <span class="phone">{{ $quotation->contact_phone ?? '' }}</span>
                     </div>
                 </td>

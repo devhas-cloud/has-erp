@@ -795,7 +795,7 @@
                         $isAssignee = $task->assignees->contains('id', Auth::id());
                         $canTransition = $isCreator || $isAssignee;
                     @endphp
-                    @if ($task->status !== 'done' && $canTransition)
+                    @if ($task->status !== 'done' && $isAssignee)
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
                             @if ($task->status === 'todo')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
@@ -814,6 +814,8 @@
                         </div>
                     @endif
 
+
+                    <!-- Untuk task yang membutuhkan approval, tampilkan tombol Approve/Reject jika viewer adalah creator -->
                     @if ($task->status === 'waiting_approval' && $isCreator && strtolower($task->category?->name) !== 'proposal' && strtolower($task->category?->name) !== 'quote')
                         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                             <button type="button" class="btn btn-sm btn-accent btn-approve-task"
@@ -826,13 +828,24 @@
                                 <i class="fa fa-times me-1"></i>Reject
                             </button>
                         </div>
-                    @else
+                    @elseif($task->status === 'waiting_approval' && $isCreator)
                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-                            <button type="button" class="btn btn-sm btn-accent btn-approve-task"
+                            <button type="button" class="btn btn-sm btn-accent btn-complete-task"
                                 data-id="{{ $task->id }}" data-status="done" style="font-size:10px">
                                 <i class="fa fa-check me-1"></i>Complete Task
                             </button>
 
+                        </div>
+                    @endif
+
+                    <!-- jika category task adalah quote, jika satus task adalah done, maka tampilkan tombol "Open Task" untuk update task menjadi in_progress kembali, dimana tombol ini hanya tampil untuk creator atau assignee -->
+                    <!-- dengan syarat menambahkan alasan open task yang tersimpan menjadi activity dan log sehingga, menjadi catatan bahwa task ini dibuka kembali -->
+                    @if (strtolower($task->category?->name) === 'quote' && $task->status === 'done' && $isCreator)
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+                            <button type="button" class="btn btn-sm btn-accent btn-open-task"
+                                data-id="{{ $task->id }}" data-status="in_progress" style="font-size:10px">
+                                <i class="fa fa-rotate-left me-1"></i>Open Task
+                            </button>
                         </div>
                     @endif
 
@@ -898,6 +911,89 @@
             </div>
             @endif
 
+            <!-- Final Quotation: tampil ketika task done dan quotation berstatus Approved -->
+            @if (strtolower($task->category?->name) === 'quote')
+            <div class="card-custom fade-in stagger-3 mt-4">
+                <div class="card-header-custom" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                    <span><i class="fa fa-file-invoice-dollar me-2" style="color:var(--accent)"></i>Final Quotation</span>
+                    @if ($finalQuotation)
+                    <a href="{{ route('quotation.pdf', ['id' => $finalQuotation->id, 'back' => 'task-'.$task->id]) }}"
+                        class="btn btn-sm btn-accent" target="_blank" style="font-size:11px">
+                        <i class="fa fa-file-pdf"></i> Download PDF
+                    </a>
+                    @endif
+                </div>
+                <div class="card-body-custom" id="final-quotation">
+                    @if ($finalQuotation)
+                        @php
+                            $finalIsCreator = (int) $finalQuotation->created_by === (int) Auth::id();
+                            $finalViewerIsSales = strtolower(auth()->user()->division?->division_name ?? '') === 'sales';
+                        @endphp
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0" style="font-size:12px">
+                                <tbody>
+                                    <tr>
+                                        <td style="width:160px;color:var(--text-muted)">Our Ref</td>
+                                        <td>
+                                            <strong>{{ $finalQuotation->quotation_number ?: '—' }}</strong>
+                                            @if ($finalQuotation->version)
+                                            {{-- <span class="status-badge ms-1" style="background:#e2e8f0;color:#475569;">v{{ $finalQuotation->version }}</span> --}}
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color:var(--text-muted)">Status</td>
+                                        <td>{!! $finalQuotation->statusBadgeHtml() !!}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color:var(--text-muted)">Created By</td>
+                                        <td>{{ $finalQuotation->creator?->username ?? '—' }}
+                                            @if ($finalQuotation->creator?->division)
+                                            <span style="color:var(--text-muted)">({{ $finalQuotation->creator->division->division_name }})</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color:var(--text-muted)">Created At</td>
+                                        <td>{{ $finalQuotation->created_at?->format('d M Y H:i') ?? '—' }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color:var(--text-muted)">Approved By</td>
+                                        <td>{{ $finalQuotation->finalChecker?->username ?? '—' }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color:var(--text-muted)">Approved At</td>
+                                        <td>{{ $finalQuotation->approved_at?->format('d M Y H:i') ?? '—' }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color:var(--text-muted)">Grand Total</td>
+                                        <td><strong>{{ \App\Models\Quotation::formatMoney($finalQuotation->grand_total) }}</strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (!$finalViewerIsSales && $finalIsCreator)
+                        <div class="mt-2">
+                            <a href="{{ route('quotation.show', ['quotation' => $finalQuotation->id, 'back' => 'task-'.$task->id]) }}"
+                                class="btn btn-sm btn-outline-secondary" style="font-size:11px">
+                                <i class="fa fa-eye me-1"></i> View Quotation
+                            </a>
+                        </div>
+                        @endif
+                    @elseif ($task->status !== 'done')
+                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
+                            <i class="fa fa-info-circle me-1"></i> Final quotation akan tampil setelah task di-complete.
+                        </div>
+                    @else
+                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
+                            Belum ada final quotation.
+                        </div>
+                    @endif
+                </div>
+            </div>
+            @endif
+
+
             <!-- ── Quote & Configuration ── -->
             @if (strtolower($task->category?->name) === 'quote')
             <div class="card-custom fade-in stagger-3 mt-4">
@@ -961,7 +1057,7 @@
                                     $configShowParam = $isImsConfig ? 'ims_configuration' : 'water_configuration';
                                     $configPdfRoute = $isImsConfig ? 'ims-configuration.pdf' : 'water-configuration.pdf';
                                     // Divisi pembuat record = user login -> tampilkan view + pdf.
-                                    $isConfigCreator = (int) $qc->created_by === (int) Auth::id();
+                                    $isConfigDivisiCreator = (int) $qc->division?->id === (int) auth()->user()->division_id;
                                 @endphp
                                 <tr>
                                     <td>{{ $rowNo }}</td>
@@ -969,7 +1065,7 @@
                                     <td>{!! $qc->statusBadgeHtml() !!}</td>
                                     <td class="text-center" style="white-space:nowrap">
                                         @if (!$viewerIsSales)
-                                            @if ($isConfigCreator)
+                                            @if ($isConfigDivisiCreator)
                                             <a href="{{ route($configShowRoute, [$configShowParam => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
                                             @endif
                                             <a href="{{ route($configPdfRoute, ['id' => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" target="_blank" title="PDF"><i class="fa fa-file-pdf"></i></a>
@@ -994,7 +1090,10 @@
                                             <a href="{{ route('quotation.show', ['quotation' => $q->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
                                             @endif
                                         @endif
-                                        <a href="{{ route('quotation.pdf', ['id' => $q->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" target="_blank" title="PDF"><i class="fa fa-file-pdf"></i></a>
+
+                                        @if($q->status !=='approved')
+                                            <a href="{{ route('quotation.pdf', ['id' => $q->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" target="_blank" title="PDF"><i class="fa fa-file-pdf"></i></a>
+                                        @endif
                                     </td>
                                 </tr>
                                 @endforeach
@@ -1110,7 +1209,7 @@
 
 
         </div>
-    </div>
+    </>
 @endsection
 
 @section('scripts')
@@ -1145,6 +1244,42 @@
                         $btn.prop('disabled', false).html(
                             '<i class="fa fa-check"></i><span>Approve</span>');
                         toastr.error(xhr.responseJSON?.message || 'Gagal approve.');
+                    }
+                });
+            });
+        });
+
+
+        $(document).on('click', '.btn-complete-task', function() {
+            var id = $(this).data('id');
+            var $btn = $(this);
+            Swal.fire({
+                title: 'Complete Task?',
+                text: 'Status task akan berubah menjadi Done.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Complete Task',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#64748b',
+                reverseButtons: true,
+            }).then(function(result) {
+                if (!result.isConfirmed) return;
+                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Completing...');
+                $.ajax({
+                    url: '{{ route('task-planner.index') }}/' + id + '/approve',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function(res) {
+                        toastr.success(res.message);
+                        location.reload();
+                    },
+                    error: function(xhr) {
+                        $btn.prop('disabled', false).html(
+                            '<i class="fa fa-check"></i><span>Complete Task</span>');
+                        toastr.error(xhr.responseJSON?.message || 'Gagal complete task.');
                     }
                 });
             });
@@ -1218,6 +1353,47 @@
                     error: function(xhr) {
                         $btn.prop('disabled', false).html('<i class="fa fa-check me-1"></i>Mark as Done');
                         toastr.error(xhr.responseJSON?.message || 'Gagal.');
+                    }
+                });
+            });
+        });
+
+        $(document).on('click', '.btn-open-task', function() {
+            var id = $(this).data('id');
+            var $btn = $(this);
+            Swal.fire({
+                title: 'Open Task?',
+                text: 'Task akan kembali ke In Progress. Tulis alasan pembukaan kembali.',
+                icon: 'question',
+                input: 'textarea',
+                inputPlaceholder: 'Alasan membuka task kembali...',
+                inputValidator: function(v) {
+                    if (!v || !v.trim()) return 'Alasan wajib diisi.';
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Open Task',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#64748b',
+                reverseButtons: true,
+            }).then(function(result) {
+                if (!result.isConfirmed) return;
+                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Opening...');
+                $.ajax({
+                    url: '{{ route('task-planner.index') }}/' + id + '/open',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}',
+                        reason: result.value.trim()
+                    },
+                    success: function(res) {
+                        toastr.success(res.message);
+                        location.reload();
+                    },
+                    error: function(xhr) {
+                        $btn.prop('disabled', false).html(
+                            '<i class="fa fa-rotate-left me-1"></i>Open Task');
+                        toastr.error(xhr.responseJSON?.message || 'Gagal membuka task.');
                     }
                 });
             });
