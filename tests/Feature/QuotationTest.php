@@ -975,6 +975,61 @@ class QuotationTest extends TestCase
         $this->assertSame('edited item', $fresh->items()->first()->description);
     }
 
+    /**
+     * Item config: price_currency (sebelum kurs) + currency dikirim client,
+     * price (IDR) dihitung server dari kurs master. Payload lama yang hanya
+     * membawa price tetap diterima (price dianggap IDR).
+     */
+    public function test_store_config_items_compute_price_from_price_currency_and_rate(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 17500, 'is_base' => false, 'status' => 'Active']);
+
+        $config = $this->createApprovedConfiguration();
+
+        $this->actingAs($this->admin)->postJson(route('quotation.store'), [
+            'task_id' => $config->task_id,
+            'quote_configuration_ids' => [$config->id],
+            'items' => [$this->itemPayload($config, ['_key' => 'row-1'])],
+            'config_items' => [
+                ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'USD-1', 'description' => 'sensor usd', 'qty' => 2, 'currency' => 'usd', 'price_currency' => 4715.94, 'price' => 1],
+                ['_key' => 'c-2', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'IDR-1', 'description' => 'sensor idr', 'qty' => 1, 'currency' => '', 'price_currency' => 1000],
+                ['_key' => 'c-3', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'OLD-1', 'description' => 'payload lama', 'qty' => 1, 'price' => 9000],
+            ],
+        ])->assertOk();
+
+        $items = Quotation::latest('id')->firstOrFail()->configItems->keyBy('part_number');
+
+        // USD: kode dinormalkan, price = 4.715,94 x 17.500; price kiriman client diabaikan.
+        $this->assertSame('USD', $items['USD-1']->currency);
+        $this->assertSame(4715.94, $items['USD-1']->price_currency);
+        $this->assertSame(82_528_950.0, $items['USD-1']->price);
+        // Kosong -> base (IDR), rate 1.
+        $this->assertSame('IDR', $items['IDR-1']->currency);
+        $this->assertSame(1000.0, $items['IDR-1']->price);
+        // Payload lama: price dianggap IDR, price_currency = price.
+        $this->assertSame('IDR', $items['OLD-1']->currency);
+        $this->assertSame(9000.0, $items['OLD-1']->price_currency);
+        $this->assertSame(9000.0, $items['OLD-1']->price);
+    }
+
+    public function test_search_products_returns_price_currency_and_currency(): void
+    {
+        $base = Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
+
+        MasterProduct::create(['division_id' => $this->division->id, 'name' => 'Produk USD', 'code' => 'USD-1', 'brand' => 'HAS', 'category' => 'Analyzer', 'price' => 100, 'currency_id' => $usd->id, 'status' => 'Active']);
+        MasterProduct::create(['division_id' => $this->division->id, 'name' => 'Produk IDR', 'code' => 'IDR-1', 'brand' => 'HAS', 'category' => 'Analyzer', 'price' => 5000, 'currency_id' => $base->id, 'status' => 'Active']);
+
+        $data = collect($this->actingAs($this->admin)
+            ->getJson(route('quotation.search-products').'?division_id='.$this->division->id)
+            ->assertOk()
+            ->json('data'))->keyBy('code');
+
+        $this->assertSame(['USD', 100.0, 2000000.0], [$data['USD-1']['currency'], (float) $data['USD-1']['price_currency'], (float) $data['USD-1']['price']]);
+        $this->assertSame(['IDR', 5000.0, 5000.0], [$data['IDR-1']['currency'], (float) $data['IDR-1']['price_currency'], (float) $data['IDR-1']['price']]);
+    }
+
     public function test_store_sanitizes_config_item_description(): void
     {
         $config = $this->createApprovedConfiguration();
@@ -1225,7 +1280,7 @@ class QuotationTest extends TestCase
 
         $parent = $quotation->items()->create(['item_no' => '1', 'description' => 'Multiparameter Sensor', 'qty' => 1, 'unit' => 'Kit']);
         $quotation->items()->create(['item_no' => '1.1', 'parent_id' => $parent->id, 'description' => 'pH::lyser', 'qty' => 1, 'price' => 123100000]);
-        $quotation->configItems()->create(['quote_configuration_id' => $config->id, 'description' => 'snapshot config', 'qty' => 1, 'price' => 3000]);
+        $quotation->configItems()->create(['quote_configuration_id' => $config->id, 'description' => 'snapshot config', 'qty' => 1, 'price' => 52_500_000, 'price_currency' => 3000, 'currency' => 'USD']);
         $quotation->configurations()->sync([$config->id]);
 
         $response = $this->actingAs($this->admin)
@@ -1243,6 +1298,9 @@ class QuotationTest extends TestCase
         $this->assertSame($quotation->quotation_number, $revision->quotation_number);
         $this->assertSame(2, $revision->items()->count());
         $this->assertSame(1, $revision->configItems()->count());
+        // Snapshot mata uang config item ikut tersalin apa adanya.
+        $revCfg = $revision->configItems()->first();
+        $this->assertSame(['USD', 3000.0, 52_500_000.0], [$revCfg->currency, $revCfg->price_currency, $revCfg->price]);
         $this->assertTrue($revision->configurations->contains('id', $config->id));
 
         // Sumber approved menjadi archived.

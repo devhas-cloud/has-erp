@@ -19,16 +19,24 @@ class QuotationConfigItem extends Model
         'description',
         'qty',
         'price',
+        'price_currency',
+        'currency',
         'unit',
         'formula',
         'sort_order',
     ];
 
+    /**
+     * price          = harga satuan IDR sesudah kurs (price_currency x rate)
+     * price_currency = harga satuan sebelum kurs, dalam mata uang `currency`
+     * currency       = kode mata uang (currencies.name)
+     */
     protected function casts(): array
     {
         return [
             'qty' => 'integer',
             'price' => 'float',
+            'price_currency' => 'float',
             'formula' => 'array',
         ];
     }

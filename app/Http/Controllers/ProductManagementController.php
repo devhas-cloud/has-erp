@@ -79,7 +79,7 @@ class ProductManagementController extends Controller
                 'category' => $product->category ?? '—',
                 'division_name' => $product->division?->division_name ?? '—',
                 'price' => $product->price,
-                'price_formatted' => number_format((float) $product->price, 0, '.', ','),
+                'price_formatted' => number_format((float) $product->price, 2, '.', ','),
                 'currency_id' => $product->currency_id,
                 'currency_name' => $currency?->name ?? '—',
                 'currency_symbol' => $currency?->symbol ?: ($currency?->name ?? ''),

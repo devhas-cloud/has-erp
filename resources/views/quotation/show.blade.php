@@ -668,7 +668,8 @@
                                         <th>Part Number</th>
                                         <th>Deskripsi</th>
                                         <th style="width:80px" class="text-center">Qty</th>
-                                        <th style="width:140px" class="text-end">Unit Price</th>
+                                        <th style="width:150px" class="text-end">Harga</th>
+                                        <th style="width:140px" class="text-end">Rp Satuan</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -678,6 +679,11 @@
                                             <td><code>{{ $it->part_number ?? '—' }}</code></td>
                                             <td>{!! \App\Models\Quotation::renderDescription($it->description) !!}</td>
                                             <td class="text-center">{{ $it->qty ?: '' }} {{ $it->unit ?: '' }}</td>
+                                            <td class="text-end">
+                                                @if($it->price_currency !== null)
+                                                    {{ $it->currency ?: 'IDR' }} {{ number_format($it->price_currency, 2, '.', ',') }}
+                                                @endif
+                                            </td>
                                             <td class="text-end">{{ $it->price ? \App\Models\Quotation::formatMoney($it->price) : '' }}</td>
                                         </tr>
                                     @endforeach

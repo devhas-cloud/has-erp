@@ -1128,7 +1128,7 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
     html += '<button type="button" class="btn btn-secondary btn-sm" onclick="addQtConfigRow(this)"><i class="fa fa-plus me-1"></i> Tambah Baris Manual</button>';
     html += '</div></div>';
     html += '<div class="table-responsive"><table class="table table-custom align-middle mb-0"><thead><tr>';
-    html += '<th class="text-center qt-row-col">#</th><th style="width:200px">Part Number</th><th>Deskripsi</th><th style="width:90px">Qty</th><th style="width:150px">Unit Price</th><th class="text-end" style="width:130px">Amount</th><th class="text-center" style="width:90px">Aksi</th>';
+    html += '<th class="text-center qt-row-col">#</th><th style="width:200px">Part Number</th><th>Deskripsi</th><th style="width:90px">Qty</th><th style="width:95px">Mata Uang</th><th style="width:150px">Harga</th><th class="text-end" style="width:130px">Rp Satuan</th><th class="text-end" style="width:130px">Amount</th><th class="text-center" style="width:90px">Aksi</th>';
     html += '</tr></thead><tbody>';
 
 // Render baris satu item.
@@ -1142,13 +1142,16 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
         var parentKey = it.parent_id ? String(it.parent_id) : '';
         var fxQty = (it.formula && it.formula.qty) ? ' data-fx="' + String(it.formula.qty).replace(/"/g, '&quot;') + '"' : '';
         var fxPrice = (it.formula && it.formula.price) ? ' data-fx="' + String(it.formula.price).replace(/"/g, '&quot;') + '"' : '';
+        var priceVal = it.price_currency != null ? it.price_currency : (it.price != null ? it.price : '');
         html += '<tr class="qc-item" data-key="' + key + '" data-parent="' + parentKey + '" data-depth="' + depth + '" data-cat="' + escAttr(cat) + '">';
         html += '<td class="text-center qt-row-col qc-row-num"></td>';
         html += '<td style="padding-left:' + (depth * 24) + 'px"><input type="text" class="form-control form-control-sm qc-pn" value="' + (it.part_number || '') + '"></td>';
         html += '<td><div class="qt-desc-wrap" style="margin-left:' + (depth * 24) + 'px"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item...">' + (it.description || '') + '</div>';
         html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
         html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" data-fx-table="config:' + configId + '"' + fxQty + ' value="' + (it.qty != null ? it.qty : '') + '"></td>';
-        html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + (it.price != null ? it.price : '') + '"></td>';
+        html += '<td>' + qtCurrencySelect(it.currency) + '</td>';
+        html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + priceVal + '"></td>';
+        html += '<td class="qc-idr text-end"></td>';
         html += '<td class="qc-amount text-end"></td>';
         html += '<td class="text-center">';
         html += '<button type="button" class="btn-icon" title="Tambah Item dari Produk (child)" onclick="openQtConfigProductPicker(this)"><i class="fa fa-plus"></i></button>';
@@ -1175,7 +1178,7 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
 
     catOrder.forEach(function(cat) {
         html += '<tr class="qc-cat" data-cat="' + escAttr(cat) + '">';
-        html += '<td colspan="7"><span>Category : ' + escAttr(cat) + '</span>';
+        html += '<td colspan="9"><span>Category : ' + escAttr(cat) + '</span>';
         html += '<button type="button" class="btn-icon ms-2 qc-cat-btn" title="Tambah Item Anak" onclick="addQtConfigChildToCat(this)"><i class="fa fa-plus"></i></button>';
         html += '</td></tr>';
         var visited = {};
@@ -1185,10 +1188,30 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
     var visitedNoCat = {};
     noCatRoots.forEach(function(root) { walkRoot(root, visitedNoCat, ''); });
 
-    html += '<tr class="qc-total"><td colspan="6" class="text-end fw-bold">Total</td><td class="qc-total-val text-end fw-bold"></td></tr>';
+    html += '<tr class="qc-total"><td colspan="8" class="text-end fw-bold">Total</td><td class="qc-total-val text-end fw-bold"></td></tr>';
     html += '</tbody></table></div></div>';
 
     return html;
+}
+
+// Mata uang aktif + kurs untuk kolom "Rp Satuan" (tampilan; nilai final dihitung server saat simpan).
+const qtCurrencies = @json($currencies ?? []);
+function qtRateOf(code) {
+    for (var i = 0; i < qtCurrencies.length; i++) {
+        if (qtCurrencies[i].name === code) return qtCurrencies[i].is_base ? 1 : (Number(qtCurrencies[i].rate) || 0);
+    }
+    return 1;
+}
+function qtToIdr(amount, code) {
+    return Math.round((Number(amount) || 0) * qtRateOf(code) * 100) / 100;
+}
+function qtCurrencySelect(selected) {
+    var base = qtCurrencies.length ? qtCurrencies[0].name : 'IDR';
+    var html = '<select class="form-select form-select-sm qc-currency">';
+    (qtCurrencies.length ? qtCurrencies : [{ name: base }]).forEach(function(c) {
+        html += '<option value="' + c.name + '"' + (c.name === (selected || base) ? ' selected' : '') + '>' + c.name + '</option>';
+    });
+    return html + '</select>';
 }
 
 function qcRecalcBlock(block) {
@@ -1217,7 +1240,9 @@ function qcRecalcBlock(block) {
 
     rows.forEach(function(r) {
         var qty = parseFloat(qtToRaw($(r.el).find('.qc-qty').val())) || 0;
-        var price = parseFloat(qtToRaw($(r.el).find('.qc-price').val())) || 0;
+        var priceCurrency = parseFloat(qtToRaw($(r.el).find('.qc-price').val())) || 0;
+        var price = qtToIdr(priceCurrency, $(r.el).find('.qc-currency').val());
+        $(r.el).find('.qc-idr').text(price ? qtFmt(price) : '');
         r.amount = (qty > 0 && price > 0) ? qty * price : 0;
         r.hasKids = (kids[r.key] || []).length > 0;
     });
@@ -1275,7 +1300,7 @@ function qcRecalcBlock(block) {
         var pad = (p.depth + 1) * 24;
         var html = '<tr class="qc-subtotal" data-st-parent="' + p.key + '">';
         html += '<td></td>';
-        html += '<td colspan="4" class="text-end fw-bold" style="padding-left:' + pad + 'px">Subtotal</td>';
+        html += '<td colspan="6" class="text-end fw-bold" style="padding-left:' + pad + 'px">Subtotal</td>';
         html += '<td class="qc-subtotal-val text-end fw-bold">' + (sum ? qtFmt(sum) : '') + '</td>';
         html += '<td></td>';
         html += '</tr>';
@@ -1318,13 +1343,16 @@ function qcRowHtml(configId, item, parentKey, key, cat) {
     item = item || {};
     var fxQty = (item.formula && item.formula.qty) ? ' data-fx="' + String(item.formula.qty).replace(/"/g, '&quot;') + '"' : '';
     var fxPrice = (item.formula && item.formula.price) ? ' data-fx="' + String(item.formula.price).replace(/"/g, '&quot;') + '"' : '';
+    var priceVal = item.price_currency != null ? item.price_currency : (item.price != null ? item.price : '');
     var html = '<tr class="qc-item" data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" data-cat="' + String(cat).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">';
     html += '<td class="text-center qt-row-col qc-row-num"></td>';
     html += '<td style="padding-left:' + (depth * 24) + 'px"><input type="text" class="form-control form-control-sm qc-pn" value="' + (item.part_number || '') + '"></td>';
     html += '<td><div class="qt-desc-wrap" style="margin-left:' + (depth * 24) + 'px"><div class="qc-desc" contenteditable="true" data-placeholder="Deskripsi item...">' + (item.description || '') + '</div>';
     html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
     html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" data-fx-table="config:' + configId + '"' + fxQty + ' value="' + (item.qty != null ? item.qty : '') + '"></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + (item.price != null ? item.price : '') + '"></td>';
+    html += '<td>' + qtCurrencySelect(item.currency) + '</td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + priceVal + '"></td>';
+    html += '<td class="qc-idr text-end"></td>';
     html += '<td class="qc-amount text-end"></td>';
     html += '<td class="text-center">';
     html += '<button type="button" class="btn-icon" title="Tambah Item dari Produk (child)" onclick="openQtConfigProductPicker(this)"><i class="fa fa-plus"></i></button>';
@@ -1423,7 +1451,9 @@ function qtCollectConfigItems() {
                 part_number: $(this).find('.qc-pn').val(),
                 description: $(this).find('.qc-desc').html(),
                 qty: qtToRaw($qty.val()),
-                price: qtToRaw($price.val()),
+                currency: $(this).find('.qc-currency').val() || '',
+                price_currency: qtToRaw($price.val()),
+                price: qtToIdr(qtToRaw($price.val()), $(this).find('.qc-currency').val()),
                 unit: '',
                 formula: formula
             });
@@ -1538,7 +1568,9 @@ $(document).ready(function() {
                     name: rowData.name,
                     category: rowData.category,
                     description: rowData.description,
-                    price: rowData.price
+                    price: rowData.price,
+                    price_currency: rowData.price_currency,
+                    currency: rowData.currency
                 };
             }
         } else {
@@ -1564,7 +1596,9 @@ $(document).ready(function() {
                 part_number: p.code || '',
                 description: p.description || p.name || '',
                 qty: 1,
-                price: p.price
+                price: p.price,
+                price_currency: p.price_currency != null ? p.price_currency : p.price,
+                currency: p.currency
             };
             var html = qcRowHtml(configId, item, qtcfgTargetParentKey, key);
             if (qtcfgTargetParentKey) {
@@ -1922,6 +1956,9 @@ $(document).ready(function() {
     });
     $(document).on('input', '#qt-costs-body [contenteditable]', qtCostRecalc);
     $(document).on('input', '.qt-config-block input, .qt-config-block textarea, .qt-config-block [contenteditable]', function() {
+        qcRecalcBlock($(this).closest('.qt-config-block'));
+    });
+    $(document).on('change', '.qc-currency', function() {
         qcRecalcBlock($(this).closest('.qt-config-block'));
     });
 
