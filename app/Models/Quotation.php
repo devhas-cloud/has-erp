@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Quotation extends Model
 {
@@ -165,6 +166,11 @@ class Quotation extends Model
     public function revisionChildren(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
+    }
+
+    public function profitEstimate(): HasOne
+    {
+        return $this->hasOne(ProfitEstimate::class);
     }
 
     public function groupVersions(): HasMany

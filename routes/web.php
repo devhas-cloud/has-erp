@@ -11,6 +11,7 @@ use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\ProductManagementController;
+use App\Http\Controllers\ProfitEstimateController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
@@ -145,6 +146,11 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('quotation/{id}/pdf-cost', [QuotationController::class, 'pdfCost'])->name('quotation.pdf-cost');
     Route::put('quotation/{id}/update-notes', [QuotationController::class, 'updateNotes'])->name('quotation.update-notes');
     Route::resource('quotation', QuotationController::class);
+
+    Route::get('profit-estimate/data', [ProfitEstimateController::class, 'data'])->name('profit-estimate.data');
+    Route::get('profit-estimate/{id}/sync', [ProfitEstimateController::class, 'sync'])->name('profit-estimate.sync');
+    Route::get('profit-estimate/{id}/pdf', [ProfitEstimateController::class, 'pdf'])->name('profit-estimate.pdf');
+    Route::resource('profit-estimate', ProfitEstimateController::class);
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
         ->name('dashboard-task-planner.index');

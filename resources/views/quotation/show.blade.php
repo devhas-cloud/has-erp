@@ -284,6 +284,20 @@
         <a href="{{ route('quotation.pdf', $quotation->id) }}" target="_blank" class="btn-accent">
             <i class="fa fa-file-pdf me-1"></i> <span>View PDF</span>
         </a>
+        @if(!empty($canViewProfitEstimate))
+            @if($quotation->profitEstimate)
+                <a href="{{ route('profit-estimate.show', $quotation->profitEstimate->id) }}" class="btn btn-secondary btn-sm">
+                    <i class="fa fa-chart-line me-1"></i> Estimasi PL
+                    @if($quotation->profitEstimate->is_outdated)
+                        <span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px">Outdated</span>
+                    @endif
+                </a>
+            @elseif(!in_array($quotation->status, ['rejected', 'archived']))
+                <a href="{{ route('profit-estimate.create', ['quotation_id' => $quotation->id]) }}" class="btn btn-secondary btn-sm">
+                    <i class="fa fa-chart-line me-1"></i> Buat Estimasi PL
+                </a>
+            @endif
+        @endif
     </div>
 </div>
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Log;
 use App\Models\MasterProduct;
 use App\Models\Module;
+use App\Models\ProfitEstimate;
 use App\Models\Quotation;
 use App\Models\QuotationConfigItem;
 use App\Models\QuotationCostItem;
@@ -52,7 +53,7 @@ class QuotationController extends Controller
     {
         return Quotation::withCount('items')
             ->whereHas('items')
-            ->where('status',Quotation::STATUS_APPROVED)
+            ->where('status', Quotation::STATUS_APPROVED)
             ->orderByDesc('id')
             ->get(['id', 'quotation_number', 'to_name']);
     }
@@ -66,7 +67,7 @@ class QuotationController extends Controller
     {
         return Quotation::withCount('costItems')
             ->whereHas('costItems')
-            ->where('status',Quotation::STATUS_APPROVED)
+            ->where('status', Quotation::STATUS_APPROVED)
             ->orderByDesc('id')
             ->get(['id', 'quotation_number', 'to_name']);
     }
@@ -833,6 +834,9 @@ class QuotationController extends Controller
                 }
             });
 
+            // Nilai quotation berubah: PL yang menempel ditandai outdated.
+            ProfitEstimate::markOutdatedForQuotation($quotation->id);
+
             Log::record(
                 'update_quotation',
                 "Quotation #{$quotation->id} diupdate",
@@ -872,9 +876,12 @@ class QuotationController extends Controller
             'opportunity.accountCompany',
             'opportunity.accountContact',
             'task.creator',
+            'profitEstimate',
         ])->findOrFail($id);
 
-        return view('quotation.show', compact('quotation'));
+        $canViewProfitEstimate = ProfitEstimateController::userCanRead();
+
+        return view('quotation.show', compact('quotation', 'canViewProfitEstimate'));
     }
 
     public function destroy($id): JsonResponse
@@ -1132,7 +1139,7 @@ class QuotationController extends Controller
         }
 
         // jika Task yang terikat quote status done maka tidak bisa di buka
-        if($quotation->task && $quotation->task->status === 'done') {
+        if ($quotation->task && $quotation->task->status === 'done') {
             return response()->json([
                 'success' => false,
                 'message' => 'Quotation tidak bisa dibuka kunci karena Task terkait sudah selesai.',
@@ -1293,6 +1300,9 @@ class QuotationController extends Controller
 
             return $revision;
         });
+
+        // Quotation sumber digantikan versi baru: PL lama ditandai outdated.
+        ProfitEstimate::markOutdatedForQuotation($source->id);
 
         Log::record(
             'revise_quotation',

@@ -115,6 +115,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-file-invoice',
                 'group' => 'Admin',
             ],
+            [
+                'module_code' => 'MOD_PROFIT_ESTIMATE',
+                'module_name' => 'Estimasi PL',
+                'description' => 'Menu Estimasi Perhitungan Pendapatan (profit & loss) per quotation',
+                'route_name' => 'profit-estimate',
+                'icon' => 'fa fa-chart-line',
+                'group' => 'Admin',
+            ],
         ];
 
         foreach ($modules as $module) {
