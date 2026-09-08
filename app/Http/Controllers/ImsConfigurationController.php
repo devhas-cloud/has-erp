@@ -1074,6 +1074,8 @@ class ImsConfigurationController extends Controller
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => (int) ($item['qty'] ?? 1),
                 'price' => $item['price'] ?? null,
+                'price_currency' => $item['price'] ?? null,
+                'currency' => $item['price'] ? 'IDR' : null,
                 'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),

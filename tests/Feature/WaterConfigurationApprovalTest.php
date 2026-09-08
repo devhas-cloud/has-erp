@@ -682,6 +682,9 @@ class WaterConfigurationApprovalTest extends TestCase
         $this->assertSame('ammo::lyser pro', $quotation->items()->first()->product->name);
         // Price diambil dari database (master_products) via product_id.
         $this->assertEquals(15000000, $quotation->items()->first()->price);
+        // Tanpa master currency -> dianggap base: price_currency = price, currency IDR.
+        $this->assertEquals(15000000, $quotation->items()->first()->price_currency);
+        $this->assertSame('IDR', $quotation->items()->first()->currency);
     }
 
     public function test_store_sets_price_from_product_when_qty_positive_else_zero(): void
@@ -769,12 +772,71 @@ class WaterConfigurationApprovalTest extends TestCase
         $quotation = QuoteConfiguration::latest('id')->firstOrFail();
         $rows = $quotation->items()->orderBy('sort_order')->get();
 
-        // Produk base (IDR) → price tetap apa adanya (5.000.000).
+        // Produk base (IDR) → price = price_currency = 5.000.000, currency IDR.
         $this->assertEquals(5000000, $rows[0]->price);
-        // Produk USD → price disimpan setara base: 100 × 20.000 = 2.000.000.
+        $this->assertEquals(5000000, $rows[0]->price_currency);
+        $this->assertSame('IDR', $rows[0]->currency);
+        // Produk USD → price_currency 100 (USD), price = 100 × 20.000 = 2.000.000.
         $this->assertEquals(2000000, $rows[1]->price);
-        // Tanpa product_id → price 0.
+        $this->assertEquals(100, $rows[1]->price_currency);
+        $this->assertSame('USD', $rows[1]->currency);
+        // Tanpa product_id → harga 0, tanpa mata uang.
         $this->assertEquals(0, $rows[2]->price);
+        $this->assertEquals(0, $rows[2]->price_currency);
+        $this->assertNull($rows[2]->currency);
+    }
+
+    /**
+     * Jumlah query simpan item harus tetap berapa pun jumlah item (tidak N+1),
+     * termasuk pemasangan parent_id anak.
+     */
+    public function test_store_items_query_count_does_not_grow_with_item_count(): void
+    {
+        $product = MasterProduct::create([
+            'name' => 'pH::lyser pro',
+            'code' => 'E-514-4-075',
+            'brand' => 's::can',
+            'category' => 'pH',
+            'division_id' => $this->water->id,
+            'price' => 1000,
+            'status' => 'Active',
+        ]);
+
+        $buildItems = function (int $parents) use ($product) {
+            $items = [];
+            for ($p = 1; $p <= $parents; $p++) {
+                $items[] = ['_key' => "p{$p}", 'category' => 'pH', 'description' => "Parent {$p}", 'qty' => 1];
+                $items[] = ['_key' => "p{$p}a", 'parent_key' => "p{$p}", 'product_id' => $product->id, 'description' => "Child {$p}a", 'qty' => 1];
+                $items[] = ['_key' => "p{$p}b", 'parent_key' => "p{$p}", 'product_id' => $product->id, 'description' => "Child {$p}b", 'qty' => 2];
+            }
+
+            return $items;
+        };
+
+        $countQueries = function (array $items) {
+            $task = $this->createQuoteTask();
+            \DB::flushQueryLog();
+            \DB::enableQueryLog();
+            $this->actingAs($this->creator)->postJson(route('water-configuration.store'), [
+                'task_id' => $task->id,
+                'parameter_note' => 'pH',
+                'items' => $items,
+            ])->assertOk();
+            $count = count(\DB::getQueryLog());
+            \DB::disableQueryLog();
+
+            return $count;
+        };
+
+        $small = $countQueries($buildItems(1));   // 3 item
+        $large = $countQueries($buildItems(10));  // 30 item
+
+        $this->assertSame($small, $large, "Query simpan bertambah dari {$small} menjadi {$large} saat item bertambah.");
+
+        $config = QuoteConfiguration::latest('id')->firstOrFail();
+        $this->assertSame(30, $config->items()->count());
+        $this->assertSame(20, $config->items()->whereNotNull('parent_id')->count());
+        $this->assertEquals(1000, $config->items()->whereNotNull('parent_id')->first()->price);
     }
 
     public function test_fetch_template_returns_parent_and_children(): void

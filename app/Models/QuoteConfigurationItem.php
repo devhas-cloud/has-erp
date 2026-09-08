@@ -20,9 +20,20 @@ class QuoteConfigurationItem extends Model
         'description',
         'qty',
         'price',
+        'price_currency',
+        'currency',
         'unit',
         'sort_order',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'qty' => 'integer',
+            'price' => 'float',
+            'price_currency' => 'float',
+        ];
+    }
 
     public function quoteConfiguration(): BelongsTo
     {

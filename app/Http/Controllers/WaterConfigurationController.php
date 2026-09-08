@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Currency;
 use App\Models\Division;
 use App\Models\Log;
 use App\Models\MasterProduct;
@@ -299,7 +300,7 @@ class WaterConfigurationController extends Controller
             'items.*._key' => 'required|string',
             'items.*.parent_key' => 'nullable|string',
             'items.*.item_no' => 'nullable|string|max:50',
-            'items.*.product_id' => 'nullable|exists:master_products,id',
+            'items.*.product_id' => 'nullable|integer',
             'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
@@ -307,6 +308,10 @@ class WaterConfigurationController extends Controller
             'items.*.price' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
+
+        if ($error = $this->rejectUnknownProducts($validated['items'])) {
+            return $error;
+        }
 
         if (QuoteConfiguration::where('task_id', $validated['task_id'])
             ->where('division_id', Auth::user()->division_id)
@@ -487,7 +492,7 @@ class WaterConfigurationController extends Controller
             'items.*._key' => 'required|string',
             'items.*.parent_key' => 'nullable|string',
             'items.*.item_no' => 'nullable|string|max:50',
-            'items.*.product_id' => 'nullable|exists:master_products,id',
+            'items.*.product_id' => 'nullable|integer',
             'items.*.category' => 'nullable|string|max:100',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
@@ -495,6 +500,10 @@ class WaterConfigurationController extends Controller
             'items.*.price' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
+
+        if ($error = $this->rejectUnknownProducts($validated['items'])) {
+            return $error;
+        }
 
         if (QuoteConfiguration::where('task_id', $validated['task_id'])
             ->where('division_id', Auth::user()->division_id)
@@ -885,6 +894,8 @@ class WaterConfigurationController extends Controller
                     'description' => $item->description,
                     'qty' => $item->qty,
                     'price' => $item->price,
+                    'price_currency' => $item->price_currency,
+                    'currency' => $item->currency,
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
@@ -1051,41 +1062,63 @@ class WaterConfigurationController extends Controller
     }
 
     /**
-     * Simpan item hierarki (parent-child): pass 1 insert semua baris tanpa
-     * parent_id, lalu pass 2 pasang parent_id berdasarkan parent_key.
+     * Validasi product_id semua item dalam SATU query (pengganti rule
+     * `exists:master_products,id` per item yang menghasilkan N query).
+     */
+    private function rejectUnknownProducts(array $items): ?JsonResponse
+    {
+        $ids = collect($items)->pluck('product_id')->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return null;
+        }
+
+        $found = MasterProduct::whereIn('id', $ids)->pluck('id');
+        $missing = $ids->diff($found)->values();
+
+        if ($missing->isEmpty()) {
+            return null;
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Produk tidak ditemukan di master product: #'.$missing->implode(', #').'.',
+        ], 422);
+    }
+
+    /**
+     * Simpan item hierarki (parent-child) dengan jumlah query tetap (tidak N+1):
+     *   1. hapus item lama
+     *   2. muat master product + currency untuk semua product_id (1 query)
+     *   3. insert semua baris sekaligus tanpa parent_id
+     *   4. ambil id hasil insert (1 query)
+     *   5. pasang parent_id semua anak dalam 1 UPDATE ... CASE
+     *
+     * Harga seluruhnya dari master product:
+     *   currency       = currencies.name milik produk (base bila produk tanpa currency)
+     *   price_currency = master_products.price (sebelum kurs)
+     *   price          = master_products.price x currencies.rate (IDR sesudah kurs; base -> 1)
      */
     private function syncItems(QuoteConfiguration $quotation, array $items): void
     {
         $quotation->items()->delete();
 
-        $keyMap = [];
+        $items = array_values($items);
+
+        $products = MasterProduct::with('currency')
+            ->whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
+            ->get(['id', 'price', 'currency_id'])
+            ->keyBy('id');
+
+        $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
+
+        $now = now();
         $payload = [];
 
-        // Ambil harga produk dari database via product_id (bukan input user).
-        // Harga yang disimpan menyesuaikan kurs: price × rate mata uang produk.
-        $productIds = collect($items)
-            ->pluck('product_id')
-            ->filter()
-            ->unique()
-            ->values();
-
-        $productPrices = MasterProduct::with('currency')
-            ->whereIn('id', $productIds)
-            ->get(['id', 'price', 'currency_id'])
-            ->mapWithKeys(function ($product) {
-                $currency = $product->currency;
-                $rate = $currency && ! $currency->is_base ? (float) $currency->rate : 1.0;
-
-                return [$product->id => round((float) $product->price * $rate, 2)];
-            })
-            ->all();
-
-        foreach (array_values($items) as $i => $item) {
-            $keyMap[$item['_key']] = $i;
-
+        foreach ($items as $i => $item) {
             $qty = (int) ($item['qty'] ?? 0);
             $productId = $item['product_id'] ?? null;
-            $productPrice = $productId ? ($productPrices[$productId] ?? 0) : 0;
+            $pricing = $this->pricingFromProduct($productId ? $products->get($productId) : null, $qty, $baseCurrency);
 
             $payload[] = [
                 'quote_configuration_id' => $quotation->id,
@@ -1096,49 +1129,92 @@ class WaterConfigurationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => $qty,
-                'price' => $qty <= 0 ? 0 : $productPrice,
+                'price' => $pricing['price'],
+                'price_currency' => $pricing['price_currency'],
+                'currency' => $pricing['currency'],
                 'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => $now,
+                'updated_at' => $now,
             ];
         }
 
         QuoteConfigurationItem::insert($payload);
 
-        $inserted = QuoteConfigurationItem::where('quote_configuration_id', $quotation->id)
+        // Id hasil insert berurutan sama dengan urutan payload.
+        $ids = QuoteConfigurationItem::where('quote_configuration_id', $quotation->id)
             ->orderBy('id')
-            ->get();
+            ->pluck('id')
+            ->all();
 
-        $updates = [];
+        $indexByKey = [];
+        foreach ($items as $i => $item) {
+            $indexByKey[$item['_key']] = $i;
+        }
 
-        foreach ($items as $item) {
+        $parentByChildId = [];
+        foreach ($items as $i => $item) {
             $parentKey = $item['parent_key'] ?? null;
-
-            if (! $parentKey || ! array_key_exists($parentKey, $keyMap)) {
+            if (! $parentKey || ! isset($indexByKey[$parentKey]) || $indexByKey[$parentKey] === $i) {
                 continue;
             }
-
-            $childIndex = $keyMap[$item['_key']];
-            $parentIndex = $keyMap[$parentKey];
-
-            if ($childIndex === $parentIndex) {
-                continue;
-            }
-
-            $child = $inserted[$childIndex] ?? null;
-            $parent = $inserted[$parentIndex] ?? null;
-
-            if ($child && $parent) {
-                $updates[] = [
-                    'id' => $child->id,
-                    'parent_id' => $parent->id,
-                ];
+            if (isset($ids[$i], $ids[$indexByKey[$parentKey]])) {
+                $parentByChildId[$ids[$i]] = $ids[$indexByKey[$parentKey]];
             }
         }
 
-        foreach ($updates as $update) {
-            QuoteConfigurationItem::where('id', $update['id'])->update(['parent_id' => $update['parent_id']]);
+        $this->assignParents($parentByChildId);
+    }
+
+    /**
+     * Harga item dari master product. Qty <= 0 atau tanpa produk -> harga 0.00
+     *
+     * @return array{currency: ?string, price_currency: float, price: float}
+     */
+    private function pricingFromProduct(?MasterProduct $product, int $qty, string $baseCurrency): array
+    {
+        if (! $product) {
+            return ['currency' => null, 'price_currency' => 0.00, 'price' => 0.00];
         }
+
+        $currency = $product->currency;
+        $isForeign = $currency && ! $currency->is_base;
+        $rate = $isForeign ? (float) $currency->rate : 1.0;
+        $priceCurrency = $qty > 0 ? round((float) $product->price, 2) : 0.00;
+
+        return [
+            'currency' => $isForeign ? strtoupper($currency->name) : $baseCurrency,
+            'price_currency' => $priceCurrency,
+            'price' => round($priceCurrency * $rate, 2),
+        ];
+    }
+
+    /**
+     * Pasang parent_id banyak baris dalam satu query:
+     * UPDATE ... SET parent_id = CASE id WHEN ? THEN ? ... END WHERE id IN (...).
+     *
+     * @param  array<int,int>  $parentByChildId  [child_id => parent_id]
+     */
+    private function assignParents(array $parentByChildId): void
+    {
+        if (empty($parentByChildId)) {
+            return;
+        }
+
+        $cases = '';
+        $bindings = [];
+        foreach ($parentByChildId as $childId => $parentId) {
+            $cases .= ' WHEN ? THEN ?';
+            $bindings[] = $childId;
+            $bindings[] = $parentId;
+        }
+
+        $childIds = array_keys($parentByChildId);
+        $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+
+        DB::update(
+            "UPDATE quote_configuration_items SET parent_id = CASE id{$cases} END WHERE id IN ({$placeholders})",
+            array_merge($bindings, $childIds)
+        );
     }
 }
