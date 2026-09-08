@@ -75,13 +75,14 @@ class Currency extends Model
             ->get()
             ->map(fn ($c) => [
                 'name' => strtoupper($c->name),
+                'symbol' => $c->symbol ?: strtoupper($c->name),
                 'rate' => $c->is_base ? 1 : (float) $c->rate,
                 'is_base' => (bool) $c->is_base,
             ])
             ->values()
             ->all();
 
-        return $options ?: [['name' => self::baseName(), 'rate' => 1, 'is_base' => true]];
+        return $options ?: [['name' => self::baseName(), 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true]];
     }
 
     public function getSymbolOrDefaultAttribute(): string

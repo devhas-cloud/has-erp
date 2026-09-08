@@ -1030,6 +1030,206 @@ class QuotationTest extends TestCase
         $this->assertSame(['IDR', 5000.0, 5000.0], [$data['IDR-1']['currency'], (float) $data['IDR-1']['price_currency'], (float) $data['IDR-1']['price']]);
     }
 
+    /**
+     * Buat revisi approved (v2) dari configuration $v1 di group yang sama,
+     * dengan daftar item baru. v1 menjadi arsip (bukan current).
+     */
+    private function approveRevisionOf(QuoteConfiguration $v1, array $items): QuoteConfiguration
+    {
+        $v1->update(['status' => QuoteConfiguration::STATUS_ARCHIVED, 'is_current' => false]);
+
+        $v2 = QuoteConfiguration::create([
+            'division_id' => $v1->division_id,
+            'group_id' => $v1->group_id,
+            'version' => $v1->version + 1,
+            'parent_id' => $v1->id,
+            'is_current' => true,
+            'opportunity_id' => $v1->opportunity_id,
+            'task_id' => $v1->task_id,
+            'date' => '2026-08-20',
+            'status' => QuoteConfiguration::STATUS_APPROVED,
+            'created_by' => $this->user->id,
+            'final_checked_by' => $this->admin->id,
+            'approved_at' => now(),
+        ]);
+
+        foreach (array_values($items) as $i => $item) {
+            QuoteConfigurationItem::create(array_merge([
+                'quote_configuration_id' => $v2->id,
+                'category' => 'SPARING',
+                'qty' => 1,
+                'sort_order' => $i + 1,
+            ], $item));
+        }
+
+        return $v2->fresh();
+    }
+
+    public function test_fetch_task_flags_item_changes_against_quotation_snapshot(): void
+    {
+        $v1 = $this->createApprovedConfiguration();
+
+        // Quotation dibuat dari v1: snapshot A (harga 100), B, dan C (tanpa part number).
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $v1->id,
+            'task_id' => $v1->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->admin->id,
+        ]);
+        $quotation->configurations()->sync([$v1->id]);
+        $snapA = $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 100]);
+        // B adalah anak A di snapshot; nanti dihapus di v2 -> harus tetap menunjuk induk A (id live).
+        $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'parent_id' => $snapA->id, 'category' => 'SPARING', 'part_number' => 'B-1', 'description' => 'Sensor B', 'qty' => 1, 'price' => 200]);
+        $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => null, 'description' => 'Kabel <b>lokal</b>', 'qty' => 3, 'price' => 50]);
+
+        // Configuration direvisi: A harga naik, B hilang, D baru, C tetap (dicocokkan lewat deskripsi).
+        $v2 = $this->approveRevisionOf($v1, [
+            ['part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 150],
+            ['part_number' => 'D-1', 'description' => 'Sensor D', 'qty' => 2, 'price' => 300],
+            ['part_number' => null, 'description' => 'Kabel lokal', 'qty' => 3, 'price' => 50],
+        ]);
+
+        $data = $this->actingAs($this->admin)
+            ->getJson(route('quotation.fetch-task', ['task_id' => $v1->task_id, 'quotation_id' => $quotation->id]))
+            ->assertOk()
+            ->json('data');
+
+        // Hanya configuration terbaru yang dikirim (tidak ganda).
+        $this->assertSame([$v2->id], array_column($data['configs'], 'id'));
+
+        $items = collect($data['items'])->keyBy(fn ($it) => $it['part_number'] ?: 'desc');
+        $this->assertSame('berubah', $items['A-1']['change_status']);
+        $this->assertSame(100.0, (float) $items['A-1']['previous']['price']);
+        $this->assertSame('baru', $items['D-1']['change_status']);
+        $this->assertSame('sama', $items['desc']['change_status']);
+
+        $this->assertCount(1, $data['removed_items']);
+        $this->assertSame('B-1', $data['removed_items'][0]['part_number']);
+        $this->assertSame('dihapus', $data['removed_items'][0]['change_status']);
+        $this->assertSame($v2->id, $data['removed_items'][0]['quote_configuration_id']);
+        // Induk B (A) masih ada di v2 -> parent_id menunjuk id item A versi terbaru.
+        $this->assertSame($items['A-1']['id'], $data['removed_items'][0]['parent_id']);
+        $this->assertSame('SPARING', $data['removed_items'][0]['category']);
+
+        $this->assertSame(['sama' => 1, 'berubah' => 1, 'baru' => 1, 'dihapus' => 1], $data['change_summary']);
+        $this->assertSame([$v1->id, 1, $v2->id, 2], [
+            $data['config_changes'][0]['from_id'], $data['config_changes'][0]['from_version'],
+            $data['config_changes'][0]['to_id'], $data['config_changes'][0]['to_version'],
+        ]);
+
+        // Tanpa quotation_id: tidak ada perbandingan.
+        $plain = $this->actingAs($this->admin)
+            ->getJson(route('quotation.fetch-task', ['task_id' => $v1->task_id]))
+            ->assertOk()
+            ->json('data');
+        $this->assertNull($plain['change_summary']);
+        $this->assertArrayNotHasKey('change_status', $plain['items'][0]);
+
+        // Quotation sudah disimpan setelah revisi (pivot menunjuk v2) walau snapshot
+        // tetap berbeda (penyesuaian manual admin): pemberitahuan tidak muncul lagi.
+        $quotation->configurations()->sync([$v2->id]);
+        $again = $this->actingAs($this->admin)
+            ->getJson(route('quotation.fetch-task', ['task_id' => $v1->task_id, 'quotation_id' => $quotation->id]))
+            ->assertOk()
+            ->json('data');
+        $this->assertNull($again['change_summary']);
+        $this->assertSame([], $again['config_changes']);
+        $this->assertSame([], $again['removed_items']);
+        $this->assertArrayNotHasKey('change_status', $again['items'][0]);
+    }
+
+    /**
+     * Regresi: form mengirim id terpilih versi terbaru (v2) tetapi baris snapshot
+     * masih membawa id v1 -> snapshot harus ikut dipetakan ke v2, dan halaman edit
+     * tetap merender snapshot yang pivotnya sudah berpindah versi.
+     */
+    public function test_update_keeps_snapshot_attached_when_selected_ids_are_already_latest(): void
+    {
+        $v1 = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $v1->id,
+            'task_id' => $v1->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->admin->id,
+        ]);
+        $quotation->configurations()->sync([$v1->id]);
+        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'price' => 1000]);
+
+        $v2 = $this->approveRevisionOf($v1, [['part_number' => 'A-1', 'description' => 'Sensor A', 'price' => 150]]);
+
+        $this->actingAs($this->admin)->putJson(route('quotation.update', $quotation->id), [
+            'task_id' => $v1->task_id,
+            'quote_configuration_ids' => [$v2->id],
+            'items' => [$this->itemPayload($v1, ['_key' => 'row-1', 'description' => 'edited item'])],
+            'config_items' => [
+                ['_key' => 'c-1', 'quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 100],
+            ],
+        ])->assertOk();
+
+        $fresh = $quotation->fresh(['configurations', 'configItems', 'items']);
+        $this->assertSame([$v2->id], $fresh->configurations->pluck('id')->all());
+        $this->assertSame($v2->id, $fresh->configItems->first()->quote_configuration_id);
+        $this->assertSame($v2->id, $fresh->items->first()->quote_configuration_id);
+
+        // Data lama yang terlanjur terpisah (pivot v2, snapshot v1) tetap dirender di halaman edit.
+        $fresh->configItems()->update(['quote_configuration_id' => $v1->id]);
+        $this->actingAs($this->admin)->get(route('quotation.edit', $quotation->id))
+            ->assertOk()
+            ->assertViewHas('snapshotConfigs', fn ($cfgs) => $cfgs->pluck('id')->sort()->values()->all() === collect([$v1->id, $v2->id])->sort()->values()->all());
+    }
+
+    public function test_update_repoints_configuration_and_revise_keeps_source_pivot(): void
+    {
+        $v1 = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $v1->id,
+            'task_id' => $v1->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->admin->id,
+        ]);
+        $quotation->configurations()->sync([$v1->id]);
+        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'price' => 1000]);
+
+        $v2 = $this->approveRevisionOf($v1, [['part_number' => 'A-1', 'description' => 'Sensor A', 'price' => 150]]);
+
+        // Form edit masih mengirim id v1 (pivot lama) + snapshot yang menunjuk v1.
+        $this->actingAs($this->admin)->putJson(route('quotation.update', $quotation->id), [
+            'task_id' => $v1->task_id,
+            'quote_configuration_ids' => [$v1->id],
+            'items' => [$this->itemPayload($v1, ['_key' => 'row-1', 'description' => 'edited item'])],
+            'config_items' => [
+                ['_key' => 'c-1', 'quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 100],
+            ],
+        ])->assertOk();
+
+        $fresh = $quotation->fresh(['configurations', 'configItems']);
+        $this->assertSame([$v2->id], $fresh->configurations->pluck('id')->all());
+        $this->assertSame($v2->id, $fresh->configItems->first()->quote_configuration_id);
+        $this->assertDatabaseHas('logs', ['action' => 'update_quotation_config_version', 'loggable_id' => $quotation->id]);
+
+        // Revisi quotation dari sumber yang pivot-nya masih v1: pivot & snapshot disalin
+        // apa adanya, sehingga form edit revisi menampilkan pemberitahuan revisi configuration.
+        $quotation->update(['status' => Quotation::STATUS_REJECTED]);
+        $quotation->configurations()->sync([$v1->id]);
+        $quotation->configItems()->update(['quote_configuration_id' => $v1->id]);
+
+        $response = $this->actingAs($this->admin)->postJson(route('quotation.revise', $quotation->id))->assertOk();
+        $revision = Quotation::with(['configurations', 'configItems'])->findOrFail($response->json('id'));
+        $this->assertSame([$v1->id], $revision->configurations->pluck('id')->all());
+        $this->assertSame($v1->id, $revision->configItems->first()->quote_configuration_id);
+
+        $data = $this->actingAs($this->admin)
+            ->getJson(route('quotation.fetch-task', ['task_id' => $v1->task_id, 'quotation_id' => $revision->id]))
+            ->assertOk()
+            ->json('data');
+        $this->assertSame([$v1->id, $v2->id], [$data['config_changes'][0]['from_id'], $data['config_changes'][0]['to_id']]);
+    }
+
     public function test_store_sanitizes_config_item_description(): void
     {
         $config = $this->createApprovedConfiguration();

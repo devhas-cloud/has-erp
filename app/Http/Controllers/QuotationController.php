@@ -222,6 +222,7 @@ class QuotationController extends Controller
     {
         $request->validate([
             'task_id' => 'required|exists:tasks,id',
+            'quotation_id' => 'nullable|integer|exists:quotations,id',
         ]);
 
         $task = Task::with([
@@ -288,6 +289,17 @@ class QuotationController extends Controller
 
         $sales = $task->creator;
 
+        // Mode edit: bandingkan configuration approved terakhir dengan snapshot
+        // quotation (tab List Configuration) -> status per item + info revisi.
+        $comparison = null;
+        if ($request->filled('quotation_id')) {
+            $quotation = Quotation::with(['configItems', 'configurations'])->find($request->integer('quotation_id'));
+            if ($quotation) {
+                $comparison = $this->compareWithSnapshot($quotation, $configs, $items);
+                $items = $comparison['items'];
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -305,8 +317,259 @@ class QuotationController extends Controller
                 'configs' => $configList,
                 'items' => $items,
                 'products' => $products,
+                'removed_items' => $comparison['removed_items'] ?? [],
+                'config_changes' => $comparison['config_changes'] ?? [],
+                'change_summary' => $comparison['change_summary'] ?? null,
             ],
         ]);
+    }
+
+    /**
+     * Bandingkan item configuration approved terakhir ($liveItems) dengan
+     * snapshot quotation (quotation_config_items). Kunci pencocokan per group
+     * configuration: part_number, atau deskripsi ternormalisasi bila kosong.
+     *
+     * Status item live: sama | berubah (qty/price beda) | baru.
+     * Item snapshot yang tidak ada lagi dikembalikan sebagai removed_items (dihapus).
+     * config_changes berisi configuration yang direvisi sejak quotation terakhir
+     * disimpan (pivot quotation_quote_configurations menunjuk versi lama). Bila
+     * tidak ada, perbandingan item tidak dilakukan: setiap simpan mengarahkan pivot
+     * ke versi terbaru, jadi pemberitahuan hanya muncul sekali per revisi.
+     */
+    private function compareWithSnapshot(Quotation $quotation, $latestConfigs, array $liveItems): array
+    {
+        $groupOf = fn (QuoteConfiguration $c) => $c->group_id ?: $c->id;
+
+        // Configuration yang terikat ke quotation (pivot), per group.
+        $linkedByGroup = [];
+        $groupByConfigId = [];
+        foreach ($quotation->configurations as $c) {
+            $linkedByGroup[$groupOf($c)] = $c;
+            $groupByConfigId[$c->id] = $groupOf($c);
+        }
+
+        // Config snapshot yang tidak ada di pivot (data lama): cari group-nya.
+        $unknownIds = $quotation->configItems->pluck('quote_configuration_id')
+            ->filter(fn ($id) => $id && ! isset($groupByConfigId[$id]))->unique();
+        if ($unknownIds->isNotEmpty()) {
+            foreach (QuoteConfiguration::whereIn('id', $unknownIds)->get(['id', 'group_id']) as $c) {
+                $groupByConfigId[$c->id] = $groupOf($c);
+            }
+        }
+
+        // Snapshot per group per kunci item (+ indeks id untuk menelusuri induk).
+        $snapshotByGroup = [];
+        $snapshotById = [];
+        $snapshotGroup = [];
+        foreach ($quotation->configItems as $si) {
+            $g = $groupByConfigId[$si->quote_configuration_id] ?? 'unknown';
+            $snapshotByGroup[$g][$this->itemKey($si->part_number, $si->description)][] = $si;
+            $snapshotById[$si->id] = $si;
+            $snapshotGroup[$si->id] = $g;
+        }
+
+        $latestGroup = [];
+        $latestIdByGroup = [];
+        $configChanges = [];
+        foreach ($latestConfigs as $c) {
+            $g = $groupOf($c);
+            $latestGroup[$c->id] = $g;
+            $latestIdByGroup[$g] = $c->id;
+
+            $linked = $linkedByGroup[$g] ?? null;
+            if ($linked && (int) $linked->id !== (int) $c->id) {
+                $configChanges[] = [
+                    'group_id' => $g,
+                    'division_name' => $c->division?->division_name ?? '—',
+                    'from_id' => $linked->id,
+                    'from_version' => $linked->version,
+                    'to_id' => $c->id,
+                    'to_version' => $c->version,
+                ];
+            }
+        }
+
+        // Tidak ada configuration yang direvisi sejak quotation terakhir disimpan
+        // (pivot sudah menunjuk versi approved terakhir): perbedaan item adalah
+        // penyesuaian manual admin, bukan perubahan configuration -> tidak ditandai.
+        if (empty($configChanges)) {
+            return [
+                'items' => $liveItems,
+                'removed_items' => [],
+                'config_changes' => [],
+                'change_summary' => null,
+            ];
+        }
+
+        $summary = ['sama' => 0, 'berubah' => 0, 'baru' => 0, 'dihapus' => 0];
+        $matched = [];
+        $liveIdByKey = [];
+
+        foreach ($liveItems as &$item) {
+            $g = $latestGroup[$item['quote_configuration_id']] ?? null;
+            $key = $this->itemKey($item['part_number'], $item['description']);
+            $prev = $snapshotByGroup[$g][$key][0] ?? null;
+
+            if (! $prev) {
+                $item['change_status'] = 'baru';
+                $item['previous'] = null;
+                $summary['baru']++;
+
+                continue;
+            }
+
+            $matched[$g][$key] = true;
+            $liveIdByKey[$g][$key] = $item['id'];
+            $changed = (int) $prev->qty !== (int) $item['qty']
+                || round((float) $prev->price, 2) !== round((float) $item['price'], 2);
+
+            $item['change_status'] = $changed ? 'berubah' : 'sama';
+            $item['previous'] = [
+                'qty' => $prev->qty,
+                'price' => $prev->price,
+                'price_currency' => $prev->price_currency,
+                'currency' => $prev->currency,
+            ];
+            $summary[$changed ? 'berubah' : 'sama']++;
+        }
+        unset($item);
+
+        // Induk item yang dihapus: induk yang masih ada di configuration terbaru
+        // dipetakan ke id live-nya; induk yang ikut dihapus menunjuk id snapshot
+        // ('snap-…') agar hirarki tetap utuh dan tidak jatuh ke "Lain-lain".
+        $removedParentId = function ($si) use ($snapshotById, $snapshotGroup, $matched, $liveIdByKey) {
+            if (! $si->parent_id || ! isset($snapshotById[$si->parent_id])) {
+                return null;
+            }
+            $parent = $snapshotById[$si->parent_id];
+            $pg = $snapshotGroup[$parent->id] ?? 'unknown';
+            $pkey = $this->itemKey($parent->part_number, $parent->description);
+
+            return ! empty($matched[$pg][$pkey])
+                ? ($liveIdByKey[$pg][$pkey] ?? null)
+                : 'snap-'.$parent->id;
+        };
+
+        $removed = [];
+        foreach ($snapshotByGroup as $g => $byKey) {
+            foreach ($byKey as $key => $rows) {
+                if (! empty($matched[$g][$key])) {
+                    continue;
+                }
+                foreach ($rows as $si) {
+                    $removed[] = [
+                        'id' => 'snap-'.$si->id,
+                        'quote_configuration_id' => $latestIdByGroup[$g] ?? $si->quote_configuration_id,
+                        'item_no' => $si->item_no,
+                        'parent_id' => $removedParentId($si),
+                        'category' => $si->category,
+                        'part_number' => $si->part_number,
+                        'description' => $si->description,
+                        'qty' => $si->qty,
+                        'price' => $si->price,
+                        'price_currency' => $si->price_currency,
+                        'currency' => $si->currency,
+                        'unit' => $si->unit,
+                        'change_status' => 'dihapus',
+                        'previous' => null,
+                    ];
+                    $summary['dihapus']++;
+                }
+            }
+        }
+
+        return [
+            'items' => $liveItems,
+            'removed_items' => $removed,
+            'config_changes' => $configChanges,
+            'change_summary' => $summary,
+        ];
+    }
+
+    private function itemKey(?string $partNumber, ?string $description): string
+    {
+        $pn = mb_strtolower(trim((string) $partNumber));
+        if ($pn !== '') {
+            return 'pn:'.$pn;
+        }
+
+        $desc = html_entity_decode(strip_tags(str_replace(['<br>', '<br/>', '<br />'], ' ', (string) $description)), ENT_QUOTES, 'UTF-8');
+
+        return 'desc:'.mb_strtolower(trim(preg_replace('/\s+/', ' ', $desc)));
+    }
+
+    /**
+     * Arahkan id configuration terpilih ke versi approved terakhir di group
+     * yang sama (configuration bisa direvisi setelah quotation dibuat).
+     *
+     * @return array{0: int[], 1: int[], 2: array<int,int>} [id valid, id tidak valid, peta lama=>baru]
+     */
+    private function remapConfigIdsToLatest(array $selectedIds, $latestConfigs, array $referencedIds = []): array
+    {
+        $latestByGroup = $latestConfigs->keyBy(fn ($c) => $c->group_id ?: $c->id);
+        $validIds = $latestConfigs->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $selectedIds = array_values(array_unique(array_map('intval', $selectedIds)));
+        $referencedIds = array_values(array_unique(array_map('intval', array_filter($referencedIds))));
+
+        $configs = QuoteConfiguration::whereIn('id', array_merge($selectedIds, $referencedIds))
+            ->get(['id', 'group_id'])
+            ->keyBy('id');
+
+        $latestFor = function (int $id) use ($configs, $latestByGroup) {
+            $cfg = $configs[$id] ?? null;
+
+            return $cfg ? ($latestByGroup[$cfg->group_id ?: $cfg->id] ?? null) : null;
+        };
+
+        $mapped = [];
+        $invalid = [];
+        $remapped = [];
+
+        foreach ($selectedIds as $id) {
+            if (in_array($id, $validIds, true)) {
+                $mapped[] = $id;
+
+                continue;
+            }
+
+            $latest = $latestFor($id);
+            if ($latest) {
+                $mapped[] = (int) $latest->id;
+                $remapped[$id] = (int) $latest->id;
+            } else {
+                $invalid[] = $id;
+            }
+        }
+
+        // Id yang dirujuk baris item/snapshot (mis. blok tab List Configuration masih
+        // memakai id versi lama walau id terpilih sudah versi terbaru) ikut dipetakan,
+        // agar pivot dan snapshot selalu menunjuk versi yang sama.
+        foreach ($referencedIds as $id) {
+            if (in_array($id, $validIds, true) || isset($remapped[$id])) {
+                continue;
+            }
+            $latest = $latestFor($id);
+            if ($latest) {
+                $remapped[$id] = (int) $latest->id;
+            }
+        }
+
+        return [array_values(array_unique($mapped)), $invalid, $remapped];
+    }
+
+    /**
+     * Semua quote_configuration_id yang dirujuk baris item & snapshot config di payload.
+     */
+    private function referencedConfigIds(array $validated): array
+    {
+        return collect($validated['config_items'] ?? [])
+            ->pluck('quote_configuration_id')
+            ->merge(collect($validated['items'] ?? [])->pluck('quote_configuration_id'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
@@ -580,10 +843,7 @@ class QuotationController extends Controller
         }
 
         $configs = $this->approvedConfigsOfTask($task);
-        $validIds = $configs->pluck('id')->all();
-
-        $selectedIds = array_map('intval', $validated['quote_configuration_ids']);
-        $invalid = array_diff($selectedIds, $validIds);
+        [$selectedIds, $invalid, $remapped] = $this->remapConfigIdsToLatest($validated['quote_configuration_ids'], $configs, $this->referencedConfigIds($validated));
 
         if (! empty($invalid) || empty($selectedIds)) {
             return response()->json([
@@ -593,7 +853,7 @@ class QuotationController extends Controller
         }
 
         try {
-            $quotation = DB::transaction(function () use ($validated, $task, $selectedIds) {
+            $quotation = DB::transaction(function () use ($validated, $task, $selectedIds, $remapped) {
                 $quotation = Quotation::create([
                     'quote_configuration_id' => $selectedIds[0] ?? null,
                     'opportunity_id' => $task->opportunity_id,
@@ -631,8 +891,8 @@ class QuotationController extends Controller
 
                 $quotation->configurations()->sync($selectedIds);
 
-                $this->syncItems($quotation, $validated['items']);
-                $this->syncConfigItems($quotation, $validated['config_items'] ?? []);
+                $this->syncItems($quotation, $validated['items'], $remapped);
+                $this->syncConfigItems($quotation, $validated['config_items'] ?? [], $remapped);
                 $this->syncCostItems($quotation, $validated['cost_items'] ?? []);
 
                 $totals = Quotation::calculateTotals(
@@ -704,10 +964,24 @@ class QuotationController extends Controller
             }
         }
 
+        // Config untuk merender blok tab List Configuration: pivot + config lain yang
+        // masih dirujuk snapshot (data lama yang pivotnya sudah berpindah versi), agar
+        // snapshot tetap tampil dan ikut dipetakan ke versi terbaru saat disimpan.
+        $snapshotConfigs = $quotation->configurations->keyBy('id');
+        $orphanIds = $quotation->configItems->pluck('quote_configuration_id')
+            ->filter(fn ($id) => $id && ! $snapshotConfigs->has($id))
+            ->unique();
+        if ($orphanIds->isNotEmpty()) {
+            foreach (QuoteConfiguration::with('division')->whereIn('id', $orphanIds)->get() as $c) {
+                $snapshotConfigs->put($c->id, $c);
+            }
+        }
+
         return view('quotation.form', [
             'quotation' => $quotation,
             'tasks' => $tasks,
             'preselected' => $quotation->task,
+            'snapshotConfigs' => $snapshotConfigs->values(),
             'items' => $quotation->items->map(fn ($item) => [
                 'id' => $item->id,
                 'parent_id' => $item->parent_id,
@@ -784,10 +1058,7 @@ class QuotationController extends Controller
         }
 
         $configs = $this->approvedConfigsOfTask($task);
-        $validIds = $configs->pluck('id')->all();
-
-        $selectedIds = array_map('intval', $validated['quote_configuration_ids']);
-        $invalid = array_diff($selectedIds, $validIds);
+        [$selectedIds, $invalid, $remapped] = $this->remapConfigIdsToLatest($validated['quote_configuration_ids'], $configs, $this->referencedConfigIds($validated));
 
         if (! empty($invalid) || empty($selectedIds)) {
             return response()->json([
@@ -797,7 +1068,7 @@ class QuotationController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($quotation, $task, $selectedIds, $validated) {
+            DB::transaction(function () use ($quotation, $task, $selectedIds, $validated, $remapped) {
                 $quotation->update([
                     'quote_configuration_id' => $selectedIds[0] ?? null,
                     'opportunity_id' => $task->opportunity_id,
@@ -828,8 +1099,8 @@ class QuotationController extends Controller
 
                 $quotation->configurations()->sync($selectedIds);
 
-                $this->syncItems($quotation, $validated['items']);
-                $this->syncConfigItems($quotation, $validated['config_items'] ?? []);
+                $this->syncItems($quotation, $validated['items'], $remapped);
+                $this->syncConfigItems($quotation, $validated['config_items'] ?? [], $remapped);
                 $this->syncCostItems($quotation, $validated['cost_items'] ?? []);
 
                 $totals = Quotation::calculateTotals(
@@ -857,6 +1128,16 @@ class QuotationController extends Controller
                 self::MODULE_CODE,
                 $quotation
             );
+
+            if (! empty($remapped)) {
+                $pairs = collect($remapped)->map(fn ($to, $from) => "#{$from} → #{$to}")->implode(', ');
+                Log::record(
+                    'update_quotation_config_version',
+                    "Quotation #{$quotation->id}: configuration diarahkan ke versi approved terakhir ({$pairs})",
+                    self::MODULE_CODE,
+                    $quotation
+                );
+            }
 
             if ($quotation->task) {
                 TaskWorkflowLogger::forTask(
@@ -895,7 +1176,10 @@ class QuotationController extends Controller
 
         $canViewProfitEstimate = ProfitEstimateController::userCanRead();
 
-        return view('quotation.show', compact('quotation', 'canViewProfitEstimate'));
+        // Simbol mata uang (IDR -> Rp, USD -> $, ...) untuk kolom Harga tab List Configuration.
+        $currencySymbols = collect(Currency::formOptions())->pluck('symbol', 'name')->all();
+
+        return view('quotation.show', compact('quotation', 'canViewProfitEstimate', 'currencySymbols'));
     }
 
     public function destroy($id): JsonResponse
@@ -1310,6 +1594,10 @@ class QuotationController extends Controller
                 $costIdMap[$item->id] = $new->id;
             }
 
+            // Pivot disalin apa adanya (versi configuration saat sumber disimpan),
+            // sehingga bila configuration sudah direvisi, form edit revisi ini
+            // menampilkan pemberitahuan perubahan; saat disimpan, update()
+            // mengarahkannya ke versi terbaru.
             foreach ($source->configurations as $config) {
                 $revision->configurations()->attach($config->id);
             }
@@ -1569,7 +1857,7 @@ class QuotationController extends Controller
      * Simpan item hierarki: pass 1 insert semua baris (tanpa parent_id)
      * lalu pass 2 pasang parent_id berdasarkan parent_key.
      */
-    private function syncItems(Quotation $quotation, array $items): void
+    private function syncItems(Quotation $quotation, array $items, array $configIdMap = []): void
     {
         $quotation->items()->delete();
 
@@ -1578,10 +1866,11 @@ class QuotationController extends Controller
 
         foreach (array_values($items) as $i => $item) {
             $keyMap[$item['_key']] = $i;
+            $configId = isset($item['quote_configuration_id']) && $item['quote_configuration_id'] !== '' ? (int) $item['quote_configuration_id'] : null;
             $payload[] = [
                 'quotation_id' => $quotation->id,
                 'item_no' => $item['item_no'] ?? null,
-                'quote_configuration_id' => $item['quote_configuration_id'] ?? null,
+                'quote_configuration_id' => $configId !== null ? ($configIdMap[$configId] ?? $configId) : null,
                 'parent_id' => null,
                 'category' => $item['category'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
@@ -1638,7 +1927,7 @@ class QuotationController extends Controller
      * Simpan salinan snapshot item config (Tab "List Configuration").
      * Flat tanpa hierarki, independen dari quotation_items (Tab 1).
      */
-    private function syncConfigItems(Quotation $quotation, array $configItems): void
+    private function syncConfigItems(Quotation $quotation, array $configItems, array $configIdMap = []): void
     {
         $quotation->configItems()->delete();
 
@@ -1670,9 +1959,11 @@ class QuotationController extends Controller
                 $priceCurrency = $price;
             }
 
+            $configId = isset($item['quote_configuration_id']) && $item['quote_configuration_id'] !== '' ? (int) $item['quote_configuration_id'] : null;
+
             $payload[] = [
                 'quotation_id' => $quotation->id,
-                'quote_configuration_id' => $item['quote_configuration_id'] ?? null,
+                'quote_configuration_id' => $configId !== null ? ($configIdMap[$configId] ?? $configId) : null,
                 'item_no' => $item['item_no'] ?? null,
                 'parent_id' => null,
                 'category' => $item['category'] ?? null,

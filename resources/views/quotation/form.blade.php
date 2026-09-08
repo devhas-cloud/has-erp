@@ -117,6 +117,19 @@
     .qt-desc-wrap.qt-locked .qt-desc-toolbar {
         display: none;
     }
+    .qt-change-badge { display:inline-block; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; margin-left:6px; vertical-align:middle; }
+    .qt-change-baru { background:#dcfce7; color:#166534; }
+    .qt-change-berubah { background:#fef3c7; color:#92400e; }
+    .qt-change-dihapus { background:#fee2e2; color:#991b1b; }
+    tr.qt-picker-removed td { color:#94a3b8; background:#f8fafc; text-decoration:line-through; }
+    tr.qt-picker-removed td .qt-change-badge { text-decoration:none; }
+    .qt-cart-changed { color:#b45309 !important; }
+    .qt-picker-table th { font-size:12px; }
+    .qt-picker-table td { font-size:13px; line-height:1.45; }
+    .qt-picker-table tr.qt-item-picker-row:hover td { background:#f1f5f9; }
+    #qt-config-diff-body tr td { user-select:text; }
+    .qt-picker-prev { display:block; font-size:11px; color:#92400e; margin-top:2px; }
+    .qt-picker-fx { display:block; font-size:11px; color:var(--text-muted); }
     #qt-item-picker-body td {
         white-space: pre-wrap;
         word-break: break-word;
@@ -278,6 +291,7 @@
             </ul>
             <div class="tab-content pt-3">
                 <div class="tab-pane fade show active" id="qt-tab-items" role="tabpanel">
+                    <div id="qt-config-change-banner" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:13px"></div>
                     <div class="d-flex justify-content-end gap-2 mb-2">
                         <select id="qt-template" class="form-select form-select-sm" style="width:auto">
                             <option value="">— Pilih Template (Quotation) —</option>
@@ -370,6 +384,7 @@
                     @endif
                 </div>
                 <div class="tab-pane fade" id="qt-tab-configs" role="tabpanel">
+                    <div id="qt-config-change-actions" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:13px"></div>
                     <div id="qt-config-lists"></div>
                     <div class="config-card-empty" id="qt-configs-empty">
                         <i class="fa-solid fa-inbox"></i> Belum ada list configuration. Pilih task di atas untuk menampilkan configuration yang terikat.
@@ -1124,8 +1139,9 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
     html += '<div class="d-flex justify-content-between align-items-center mb-2">';
     html += '<strong style="font-size:13px">' + label + '</strong>';
     html += '<div class="d-flex gap-2">';
-    html += '<button type="button" class="btn btn-primary btn-sm" onclick="openQtConfigProductPicker(this)"><i class="fa fa-plus me-1"></i> Tambah Item</button>';
-    html += '<button type="button" class="btn btn-secondary btn-sm" onclick="addQtConfigRow(this)"><i class="fa fa-plus me-1"></i> Tambah Baris Manual</button>';
+    // html += '<button type="button" class="btn btn-primary btn-sm" onclick="openQtConfigProductPicker(this)"><i class="fa fa-plus me-1"></i> Tambah Item</button>';
+    // html += '<button type="button" class="btn btn-secondary btn-sm" onclick="addQtConfigRow(this)"><i class="fa fa-plus me-1"></i> Tambah Baris Manual</button>';
+    html += '<button type="button" class="btn btn-secondary btn-sm" onclick="addQtConfigCategory(this)"><i class="fa fa-folder-plus me-1"></i> Tambah Kategori</button>';
     html += '</div></div>';
     html += '<div class="table-responsive"><table class="table table-custom align-middle mb-0"><thead><tr>';
     html += '<th class="text-center qt-row-col">#</th><th style="width:200px">Part Number</th><th>Deskripsi</th><th style="width:90px">Qty</th><th style="width:95px">Mata Uang</th><th style="width:150px">Harga</th><th class="text-end" style="width:130px">Rp Satuan</th><th class="text-end" style="width:130px">Amount</th><th class="text-center" style="width:90px">Aksi</th>';
@@ -1177,10 +1193,7 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
     };
 
     catOrder.forEach(function(cat) {
-        html += '<tr class="qc-cat" data-cat="' + escAttr(cat) + '">';
-        html += '<td colspan="9"><span>Category : ' + escAttr(cat) + '</span>';
-        html += '<button type="button" class="btn-icon ms-2 qc-cat-btn" title="Tambah Item Anak" onclick="addQtConfigChildToCat(this)"><i class="fa fa-plus"></i></button>';
-        html += '</td></tr>';
+        html += qcCategoryRowHtml(cat);
         var visited = {};
         (catMap[cat] || []).forEach(function(root) { walkRoot(root, visited, cat); });
     });
@@ -1399,6 +1412,72 @@ function addQtConfigChild(btn) {
     qcRecalcBlock(block);
     qtFormatAllNumeric();
     qtRenumberRows();
+}
+
+// Baris header kategori di blok config (skema sama untuk render awal dan kategori baru).
+function qcCategoryRowHtml(cat) {
+    var esc = String(cat == null ? '' : cat).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    var html = '<tr class="qc-cat" data-cat="' + esc + '">';
+    html += '<td colspan="9"><span>Category : ' + esc + '</span>';
+    html += '<button type="button" class="btn-icon ms-2 qc-cat-btn" title="Tambah Item Anak" onclick="addQtConfigChildToCat(this)"><i class="fa fa-plus"></i></button>';
+    html += '<button type="button" class="btn-icon text-danger qc-cat-btn" title="Hapus Kategori beserta itemnya" onclick="removeQtConfigCategory(this)"><i class="fa fa-trash"></i></button>';
+    html += '</td></tr>';
+    return html;
+}
+
+// Tambah kategori baru di blok config: header kategori + satu baris item kosong di bawahnya.
+function addQtConfigCategory(btn) {
+    var block = $(btn).closest('.qt-config-block');
+    Swal.fire({
+        title: 'Tambah Kategori',
+        input: 'text',
+        inputLabel: 'Nama kategori',
+        inputPlaceholder: 'mis. Sistem Pemantauan Kualitas Air',
+        showCancelButton: true,
+        confirmButtonText: 'Tambah',
+        cancelButtonText: 'Batal',
+        inputValidator: function(v) { if (!String(v || '').trim()) return 'Nama kategori wajib diisi.'; }
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        var cat = String(result.value).trim();
+
+        // Kategori dengan nama sama sudah ada di blok ini -> arahkan ke sana.
+        var existing = block.find('tr.qc-cat').filter(function() {
+            return String($(this).attr('data-cat') || '').toLowerCase() === cat.toLowerCase();
+        });
+        if (existing.length) {
+            toastr.info('Kategori "' + cat + '" sudah ada. Gunakan tombol + pada kategori tersebut.');
+            existing.get(0).scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
+        var $catRow = $(qcCategoryRowHtml(cat)).insertBefore(block.find('.qc-total'));
+        addQtConfigChildToCat($catRow.find('.qc-cat-btn').get(0));
+        toastr.success('Kategori "' + cat + '" ditambahkan.');
+    });
+}
+
+// Hapus header kategori beserta seluruh baris item di bawahnya (data-cat sama).
+function removeQtConfigCategory(btn) {
+    var catRow = $(btn).closest('tr.qc-cat');
+    var block = catRow.closest('.qt-config-block');
+    var cat = catRow.attr('data-cat') || '';
+    var rows = block.find('tr.qc-item').filter(function() { return ($(this).attr('data-cat') || '') === cat; });
+
+    Swal.fire({
+        title: 'Hapus Kategori?',
+        text: 'Kategori "' + cat + '" beserta ' + rows.length + ' baris item di dalamnya akan dihapus dari tab ini.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        rows.remove();
+        catRow.remove();
+        qcRecalcBlock(block);
+        qtRenumberRows();
+    });
 }
 
 function addQtConfigChildToCat(btn) {
@@ -1753,7 +1832,7 @@ function qtCollectCostItems() {
     echo 'let qtSelectedConfigs = ['.implode(',', array_map('intval', $editConfigs)).'];';
     echo 'let qtInitialConfigData = '.json_encode([
         'configs' => $quotation
-            ? $quotation->configurations->map(fn ($c) => [
+            ? ($snapshotConfigs ?? $quotation->configurations)->map(fn ($c) => [
                 'id' => $c->id,
                 'division_id' => $c->division_id,
                 'label' => '#'.$c->id.' v'.$c->version.' — '.($c->division?->division_name ?? ''),
@@ -2064,10 +2143,14 @@ $(document).ready(function() {
     @if($quotation?->task_id || $preselected)
         var taskId = $('#qt-task-id').val();
         if (taskId) {
-            $.get(qtFetchTaskUrl, { task_id: taskId })
+            $.get(qtFetchTaskUrl, { task_id: taskId, quotation_id: $('#qt-edit-id').val() || '' })
                 .done(function(res) {
                     if (res.success) {
                         qtTaskData = res.data;
+                        // Configuration approved terakhir; server juga mengarahkan id lama ke versi terbaru saat simpan.
+                        qtSelectedConfigs = (res.data.configs || []).map(function(c) { return c.id; });
+                        qtRenderConfigChangeBanner();
+                        qtMarkChangedRows();
                         var d = res.data;
                         if (!$('#qt-to').val()) $('#qt-to').val(d.to_name || '');
                         if (!$('#qt-address').val()) $('#qt-address').val(d.address || '');
@@ -2132,10 +2215,85 @@ function qtFmtPrice(v) {
     return n.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
 }
 
-function openQtItemPicker(btn) {
-    qtItemTargetKey = $(btn).closest('tr').attr('data-key');
-    var container = $('#qt-item-picker-body');
+// ── Perubahan configuration sejak quotation dibuat (mode edit) ──
+function qtChangedKeys() {
+    var keys = {};
+    if (!qtTaskData) return keys;
+    (qtTaskData.items || []).concat(qtTaskData.removed_items || []).forEach(function(it) {
+        if ((it.change_status === 'berubah' || it.change_status === 'dihapus') && it.part_number) {
+            keys[String(it.part_number).trim().toLowerCase()] = it.change_status;
+        }
+    });
+    return keys;
+}
+
+// Tandai tombol keranjang pada baris List Item Quotation yang part number-nya berubah/dihapus di configuration.
+function qtMarkChangedRows() {
+    var keys = qtChangedKeys();
+    $('#qt-items-body tr').each(function() {
+        var pn = String($(this).find('.qt-pn').val() || '').trim().toLowerCase();
+        var btn = $(this).find('button[title^="Add Item dari Config"], button.qt-cart-changed');
+        var status = pn ? keys[pn] : null;
+        btn.toggleClass('qt-cart-changed', !!status)
+           .attr('title', status ? 'Add Item dari Config — item ini ' + status + ' di configuration terbaru' : 'Add Item dari Config');
+    });
+}
+
+function qtRenderConfigChangeBanner() {
+    var $info = $('#qt-config-change-banner');
+    var $act = $('#qt-config-change-actions');
+    if (!qtTaskData || !qtTaskData.change_summary) { $info.hide(); $act.hide(); return; }
+    var sum = qtTaskData.change_summary;
+    var changes = qtTaskData.config_changes || [];
+    var hasDiff = (sum.baru + sum.berubah + sum.dihapus) > 0 || changes.length > 0;
+    if (!hasDiff) { $info.hide(); $act.hide(); return; }
+
+    var head = changes.length
+        ? '<strong>Configuration direvisi sejak quotation ini dibuat:</strong> ' + changes.map(function(c) {
+            return $('<div>').text(c.division_name + ' v' + c.from_version + ' → v' + c.to_version).html();
+        }).join(', ') + '. '
+        : '<strong>Item configuration berbeda dari snapshot quotation.</strong> ';
+    var summary = 'Item: ' + sum.baru + ' baru, ' + sum.berubah + ' berubah, ' + sum.dihapus + ' dihapus. ';
+
+    // Tab List Item Quotation: alert informasi saja.
+    $info.html('<i class="fa fa-triangle-exclamation me-1"></i>' + head + summary
+        + 'Tab <em>List Configuration</em> masih memakai snapshot lama.').show();
+
+    // Tab List Configuration: admin memutuskan — pertahankan snapshot lama,
+    // sesuaikan manual, atau ambil langsung dari configuration terbaru.
+    $act.html('<i class="fa fa-triangle-exclamation me-1"></i>' + head + summary
+        + 'Snapshot lama di bawah tetap dipertahankan; sesuaikan manual bila perlu lewat <em>Tambah Item</em> / <em>Tambah Baris Manual</em>. '
+        + '<button type="button" class="btn btn-sm btn-warning ms-1" onclick="qtOpenConfigDiffModal()"><i class="fa fa-code-compare me-1"></i> Lihat perubahan</button>').show();
+}
+
+// ── Modal perubahan configuration: tabel informasi saja (tanpa aksi) ──
+let qtConfigDiffModalInstance = null;
+
+function qtCurrencySymbol(code) {
+    for (var i = 0; i < qtCurrencies.length; i++) {
+        if (qtCurrencies[i].name === code) return qtCurrencies[i].symbol || code;
+    }
+    return code || 'Rp';
+}
+
+function qtOpenConfigDiffModal() {
+    if (!qtTaskData) return;
+    // Tabel yang sama dengan modal "Add item Configuration", hanya tidak bisa diklik.
+    qtBuildConfigPicker($('#qt-config-diff-body'), $('#qt-config-diff-legend'), false);
+
+    if (!qtConfigDiffModalInstance) {
+        qtConfigDiffModalInstance = new bootstrap.Modal(document.getElementById('qtConfigDiffModal'));
+    }
+    qtConfigDiffModalInstance.show();
+}
+
+// Bangun tabel item configuration (per divisi, per kategori, hirarki) ke dalam
+// container. clickable=true untuk modal Add item (baris bisa diklik), false untuk
+// modal Perubahan Configuration (tampilan saja). Mengembalikan pool baris.
+function qtBuildConfigPicker(container, $legend, clickable) {
     container.empty();
+    var rowClass = clickable ? ' class="qt-item-picker-row"' : '';
+    var rowStyle = clickable ? 'cursor:pointer' : 'cursor:default';
 
     // Peta config_id -> division_name.
     var configDivision = {};
@@ -2163,19 +2321,15 @@ function openQtItemPicker(btn) {
     addNote(qtInitialConfigData && qtInitialConfigData.configs);
     addNote(qtTaskData && qtTaskData.configs);
 
-    // Kumpulkan item config dari data task / snapshot (punya parent_id & category),
-    // dedup by id karena kedua sumber bisa overlap di mode edit.
+    // Sumber tunggal: item configuration approved terakhir (qtTaskData) beserta
+    // item snapshot yang sudah tidak ada (dihapus). Snapshot quotation hanya
+    // dipakai bila data task belum/gagal dimuat, supaya tidak tampil ganda.
     var cfgItems = [];
-    var seenIds = {};
-    var pushUnique = function(it) {
-        if (it.id != null && it.id !== '') {
-            if (seenIds[it.id]) return;
-            seenIds[it.id] = true;
-        }
-        cfgItems.push(it);
-    };
-    (qtTaskData && qtTaskData.items || []).forEach(pushUnique);
-    (qtInitialConfigData && qtInitialConfigData.items || []).forEach(pushUnique);
+    if (qtTaskData && (qtTaskData.items || []).length) {
+        cfgItems = (qtTaskData.items || []).concat(qtTaskData.removed_items || []);
+    } else {
+        cfgItems = (qtInitialConfigData && qtInitialConfigData.items) || [];
+    }
 
     // Bangun pohon per config: configId -> { byParent, roots }.
     var treeByConfig = {};
@@ -2229,14 +2383,44 @@ function openQtItemPicker(btn) {
 
     // Pool baris yang bisa diklik + html render.
     var pool = [];
-    var addPoolRow = function(partNumber, desc, qty, price, indent) {
+    var changeBadge = function(it) {
+        if (!it || !it.change_status || it.change_status === 'sama') return '';
+        var label = it.change_status.charAt(0).toUpperCase() + it.change_status.slice(1);
+        var title = '';
+        if (it.change_status === 'berubah' && it.previous) {
+            title = 'Sebelumnya: qty ' + (it.previous.qty == null ? '-' : it.previous.qty) + ', harga ' + qtFmtPrice(it.previous.price)
+                + (it.previous.currency && it.previous.currency !== 'IDR' ? ' (' + it.previous.currency + ' ' + qtFmtPrice(it.previous.price_currency) + ')' : '');
+        } else if (it.change_status === 'dihapus') {
+            title = 'Item ini ada di snapshot quotation tetapi sudah tidak ada di configuration terbaru';
+        } else if (it.change_status === 'baru') {
+            title = 'Item ini belum ada di snapshot quotation';
+        }
+        return '<span class="qt-change-badge qt-change-' + it.change_status + '" title="' + $('<div>').text(title).html() + '">' + label + '</span>';
+    };
+    // Nilai lama untuk item berubah, ditulis di bawah deskripsi agar terbaca tanpa hover.
+    var prevLine = function(it) {
+        if (!it || it.change_status !== 'berubah' || !it.previous) return '';
+        var p = it.previous;
+        var harga = qtFmtPrice(p.price);
+        if (p.currency && p.currency !== 'IDR' && p.price_currency != null) {
+            harga += ' (' + qtCurrencySymbol(p.currency) + ' ' + qtFmtPrice(p.price_currency) + ')';
+        }
+        return '<span class="qt-picker-prev"><i class="fa fa-clock-rotate-left me-1"></i>Sebelumnya: qty ' + (p.qty == null ? '-' : p.qty) + ', harga Rp ' + harga + '</span>';
+    };
+    // Harga sebelum kurs (mata uang asing) sebagai keterangan kecil di bawah harga Rp.
+    var fxLine = function(it) {
+        if (!it || !it.currency || it.currency === 'IDR' || it.price_currency == null) return '';
+        return '<span class="qt-picker-fx">' + $('<div>').text(qtCurrencySymbol(it.currency) + ' ' + qtFmtPrice(it.price_currency)).html() + '</span>';
+    };
+    var addPoolRow = function(partNumber, desc, qty, price, indent, it) {
         var idx = pool.length;
         pool.push({ part_number: partNumber, description: desc, qty: qty, price: price });
-        html += '<tr class="qt-item-picker-row" style="cursor:pointer" data-idx="' + idx + '">';
-        html += '<td style="padding-left:' + (indent * 18) + 'px">' + $('<div>').text(partNumber).html() + '</td>';
-        html += '<td>' + qtRenderDesc(desc) + '</td>';
+        var removed = it && it.change_status === 'dihapus';
+        html += '<tr class="' + (clickable ? 'qt-item-picker-row' : '') + (removed ? ' qt-picker-removed' : '') + '" style="' + rowStyle + '" data-idx="' + idx + '">';
+        html += '<td style="padding-left:' + (8 + indent * 18) + 'px"><code>' + $('<div>').text(partNumber).html() + '</code></td>';
+        html += '<td>' + changeBadge(it) + (it && it.change_status && it.change_status !== 'sama' ? ' ' : '') + qtRenderDesc(desc) + prevLine(it) + '</td>';
         html += '<td class="text-center">' + $('<div>').text(qty == null ? '' : qty).html() + '</td>';
-        html += '<td class="text-end">' + qtFmtPrice(price) + '</td>';
+        html += '<td class="text-end" style="white-space:nowrap">' + (price ? 'Rp ' + qtFmtPrice(price) : '') + fxLine(it) + '</td>';
         html += '</tr>';
     };
 
@@ -2254,7 +2438,10 @@ function openQtItemPicker(btn) {
         // Pisahkan roots: punya children (dikelompokkan per kategori) vs tanpa children (Lain-lain).
         var catOrder = [], catMap = {}, lainLain = [];
         tree.roots.forEach(function(root) {
-            if (hasKids(tree, root)) {
+            // Root berkategori dengan anak -> di bawah kategorinya. Item dihapus yang
+            // masih punya kategori juga ditempatkan di kategorinya (bukan Lain-lain).
+            var removedWithCat = root.change_status === 'dihapus' && root.category;
+            if (hasKids(tree, root) || removedWithCat) {
                 var cat = root.category ? String(root.category) : 'Lain-lain';
                 if (!catMap[cat]) { catMap[cat] = []; catOrder.push(cat); }
                 catMap[cat].push(root);
@@ -2269,7 +2456,11 @@ function openQtItemPicker(btn) {
             (catMap[cat] || []).forEach(function(root) {
                 renderedAny = true;
                 var desc = root.description || root.name || '';
-                addPoolRow('-', desc, root.qty, leafTotal(tree, root), 0);
+                if (hasKids(tree, root)) {
+                    addPoolRow('-', desc, root.qty, leafTotal(tree, root), 0, root);
+                } else {
+                    addPoolRow(root.part_number || '-', desc, root.qty, parseFloat(qtToRaw(root.price)) || 0, 0, root);
+                }
                 var walk = function(it, depth) {
                     var key = it.id != null ? it.id : (it._key || it.__key);
                     kidsOf(tree, key).forEach(function(ch) {
@@ -2278,7 +2469,8 @@ function openQtItemPicker(btn) {
                             ch.description || ch.name || '',
                             ch.qty,
                             parseFloat(qtToRaw(ch.price)) || 0,
-                            depth
+                            depth,
+                            ch
                         );
                         walk(ch, depth + 1);
                     });
@@ -2288,6 +2480,10 @@ function openQtItemPicker(btn) {
         });
 
         if (lainLain.length) {
+            // Item yang sudah dihapus dari configuration ditaruh paling bawah (abu-abu).
+            lainLain.sort(function(a, b) {
+                return (a.change_status === 'dihapus' ? 1 : 0) - (b.change_status === 'dihapus' ? 1 : 0);
+            });
             html += '<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)">' +
                 '<td colspan="4"><i class="fa fa-tag me-1"></i>Category : Lain-lain</td></tr>';
             lainLain.forEach(function(root) {
@@ -2297,7 +2493,8 @@ function openQtItemPicker(btn) {
                     root.description || root.name || '',
                     root.qty,
                     parseFloat(qtToRaw(root.price)) || 0,
-                    0
+                    0,
+                    root
                 );
             });
         }
@@ -2308,7 +2505,7 @@ function openQtItemPicker(btn) {
             renderedAny = true;
             var idx = pool.length;
             pool.push({ part_number: '', description: configNotes[cid], qty: '', price: '' });
-            html += '<tr class="qt-item-picker-row" style="cursor:pointer" data-idx="' + idx + '">' +
+            html += '<tr' + rowClass + ' style="' + rowStyle + '" data-idx="' + idx + '">' +
                 '<td colspan="4" class="text-start" style="padding:6px 8px;font-style:italic;color:var(--text-muted);font-size:12px">' +
                 '<i class="fa-solid fa-note-sticky me-1"></i><strong>Catatan :</strong> ' + qtRenderDesc(configNotes[cid]) +
                 '</td></tr>';
@@ -2319,6 +2516,30 @@ function openQtItemPicker(btn) {
         html = '<tr><td colspan="4" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item config.</td></tr>';
     }
     container.html(html);
+
+    // Legenda: hanya tampil bila ada perbedaan dengan snapshot quotation (mode edit).
+    var sum = qtTaskData && qtTaskData.change_summary;
+    if (sum && (sum.baru + sum.berubah + sum.dihapus) > 0) {
+        var changes = qtTaskData.config_changes || [];
+        $legend.html('<i class="fa fa-triangle-exclamation me-1"></i>'
+            + (changes.length ? '<strong>Configuration direvisi:</strong> ' + changes.map(function(c) {
+                return $('<div>').text(c.division_name + ' v' + c.from_version + ' → v' + c.to_version).html();
+            }).join(', ') + '. ' : '')
+            + 'Daftar di bawah adalah configuration approved terbaru. '
+            + '<span class="qt-change-badge qt-change-baru ms-0">Baru</span> belum ada di snapshot quotation, '
+            + '<span class="qt-change-badge qt-change-berubah ms-0">Berubah</span> qty/harga berbeda (nilai lama tertera di bawah deskripsi), '
+            + '<span class="qt-change-badge qt-change-dihapus ms-0">Dihapus</span> ada di snapshot tetapi sudah tidak ada di configuration (baris abu-abu, masih bisa dipakai).').show();
+    } else {
+        $legend.hide();
+    }
+
+    return pool;
+}
+
+function openQtItemPicker(btn) {
+    qtItemTargetKey = $(btn).closest('tr').attr('data-key');
+    var container = $('#qt-item-picker-body');
+    var pool = qtBuildConfigPicker(container, $('#qt-item-picker-legend'), true);
 
     container.off('click', '.qt-item-picker-row').on('click', '.qt-item-picker-row', function() {
         var item = pool[$(this).data('idx')];
@@ -2335,6 +2556,7 @@ function openQtItemPicker(btn) {
         makeQtDescReadonly(target);
         qtFormatAllNumeric();
         qtRecalc();
+        qtMarkChangedRows();
         if (qtItemPickerInstance) qtItemPickerInstance.hide();
         toastr.success('Item config diterapkan ke baris.');
     });
@@ -2349,22 +2571,54 @@ function openQtItemPicker(btn) {
 @endsection
 
 @push('modals')
-<div class="modal fade" id="qtItemPickerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade" id="qtConfigDiffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-cart-plus me-2" style="color:var(--accent)"></i>Add item Configuration</h6>
+                <h6 class="modal-title"><i class="fa-solid fa-code-compare me-2" style="color:var(--accent)"></i>Perubahan Configuration
+                    <small style="font-size:11px;color:var(--text-muted);font-weight:400">tampilan saja; penyesuaian dilakukan manual di tab List Configuration</small></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div id="qt-config-diff-legend" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:12px"></div>
                 <div class="table-responsive">
-                    <table class="table table-custom align-middle mb-0">
+                    <table class="table table-custom align-middle mb-0 qt-picker-table">
                         <thead>
                             <tr>
-                                <th>Part Number</th>
+                                <th style="width:170px">Part Number</th>
                                 <th>Deskripsi</th>
-                                <th style="width:60px" class="text-center">Qty</th>
-                                <th style="width:130px" class="text-end">Price</th>
+                                <th style="width:70px" class="text-center">Qty</th>
+                                <th style="width:190px" class="text-end">Harga</th>
+                            </tr>
+                        </thead>
+                        <tbody id="qt-config-diff-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="qtItemPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa-solid fa-cart-plus me-2" style="color:var(--accent)"></i>Add item Configuration
+                    <small style="font-size:11px;color:var(--text-muted);font-weight:400">klik salah satu baris untuk menerapkannya ke baris item yang dipilih</small></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="qt-item-picker-legend" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:12px"></div>
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0 qt-picker-table">
+                        <thead>
+                            <tr>
+                                <th style="width:170px">Part Number</th>
+                                <th>Deskripsi</th>
+                                <th style="width:70px" class="text-center">Qty</th>
+                                <th style="width:190px" class="text-end">Harga</th>
                             </tr>
                         </thead>
                         <tbody id="qt-item-picker-body"></tbody>

@@ -657,40 +657,68 @@
             <div class="tab-pane fade" id="qt-show-configs" role="tabpanel">
                 @php $configItems = $quotation->configItems; @endphp
                 @if($configItems->isNotEmpty())
-                    @php $groups = $configItems->groupBy(fn ($it) => $it->category ?: 'Lainnya'); @endphp
+                    @php
+                        $groups = $configItems->groupBy(fn ($it) => $it->category ?: 'Lainnya');
+                        $symbols = $currencySymbols ?? [];
+                        $configGrandTotal = 0;
+                    @endphp
                     @foreach($groups as $category => $citems)
+                        @php $catSubtotal = 0; @endphp
                         <div style="font-size:13px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;padding:10px 14px 6px">{{ $category }}</div>
                         <div class="table-responsive">
                             <table class="table table-custom align-middle mb-0">
                                 <thead>
                                     <tr>
                                         <th style="width:45px">No</th>
-                                        <th>Part Number</th>
+                                        <th style="width:150px">Part Number</th>
                                         <th>Deskripsi</th>
                                         <th style="width:80px" class="text-center">Qty</th>
-                                        <th style="width:150px" class="text-end">Harga</th>
+                                        <th style="width:170px" class="text-end">Harga</th>
                                         <th style="width:140px" class="text-end">Rp Satuan</th>
+                                        <th style="width:150px" class="text-end">Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach($citems as $idx => $it)
+                                        @php
+                                            $code = strtoupper($it->currency ?: 'IDR');
+                                            $symbol = $symbols[$code] ?? ($code === 'IDR' ? 'Rp' : $code);
+                                            $amount = ($it->qty ?? 0) * ($it->price ?? 0);
+                                            $catSubtotal += $amount;
+                                        @endphp
                                         <tr>
                                             <td class="text-center">{{ $idx + 1 }}</td>
                                             <td><code>{{ $it->part_number ?? '—' }}</code></td>
                                             <td>{!! \App\Models\Quotation::renderDescription($it->description) !!}</td>
                                             <td class="text-center">{{ $it->qty ?: '' }} {{ $it->unit ?: '' }}</td>
-                                            <td class="text-end">
+                                            <td class="text-end" style="white-space:nowrap">
                                                 @if($it->price_currency !== null)
-                                                    {{ $it->currency ?: 'IDR' }} {{ number_format($it->price_currency, 2, '.', ',') }}
+                                                    <span style="font-size:11px;color:var(--text-muted);margin-right:4px">{{ $code }}</span>{{ $symbol }} {{ $code === 'IDR' ? \App\Models\Quotation::formatMoney($it->price_currency) : number_format($it->price_currency, 2, '.', ',') }}
                                                 @endif
                                             </td>
                                             <td class="text-end">{{ $it->price ? \App\Models\Quotation::formatMoney($it->price) : '' }}</td>
+                                            <td class="text-end">{{ $amount ? \App\Models\Quotation::formatMoney($amount) : '' }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="6" class="text-end fw-bold">Subtotal {{ $category }}</td>
+                                        <td class="text-end fw-bold">{{ \App\Models\Quotation::formatMoney($catSubtotal) }}</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
+                        @php $configGrandTotal += $catSubtotal; @endphp
                     @endforeach
+                    <div class="d-flex justify-content-end mt-2">
+                        <table class="table table-custom align-middle mb-0" style="max-width:340px">
+                            <tr style="background:var(--accent-soft)">
+                                <td class="text-end fw-bold">Total List Configuration</td>
+                                <td class="text-end fw-bold" style="color:var(--accent)">{{ \App\Models\Quotation::formatMoney($configGrandTotal) }}</td>
+                            </tr>
+                        </table>
+                    </div>
                 @else
                     <div class="text-center" style="color:var(--text-muted);padding:16px">Belum ada list configuration.</div>
                 @endif
