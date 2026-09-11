@@ -260,6 +260,82 @@ class ProfitEstimateTest extends TestCase
         $this->assertSame(200.0, $calc['header']['total_cost']);
     }
 
+    /**
+     * Toggle "+40" (is_up) disimpan sebagai status tersendiri, bukan ditebak
+     * dari nominal. deriveHppLines() SELALU menghitung ulang otomatis + 40
+     * dari item saat ini, sehingga tetap benar walau item berubah di antara
+     * dua kali edit/simpan (nominal tersimpan yang stale diabaikan).
+     */
+    public function test_derive_hpp_up_toggle_is_independent_of_stored_amount_and_recomputes(): void
+    {
+        // Baris HPP tersimpan dengan is_up=1 tapi nominal STALE (bukan otomatis+40
+        // dari item saat ini) — mensimulasikan item yang berubah sejak simpan terakhir.
+        $lines = [
+            ['section' => 'product', 'label' => 'pHlyser', 'qty' => 1, 'vendor' => 'Badger Meter', 'currency' => 'USD', 'amount' => 5000],
+            ['section' => 'hpp', 'vendor' => 'Badger Meter', 'currency' => 'USD', 'amount' => 999999, 'is_up' => 1],
+        ];
+
+        $result = ProfitEstimate::deriveHppLines($lines);
+        $hpp = array_values(array_filter($result, fn ($l) => $l['section'] === 'hpp'));
+
+        $this->assertCount(1, $hpp);
+        // Bukan 999999 (nilai stale) — dihitung ulang: 5000 (item) + HPP_UP_AMOUNT.
+        $this->assertSame(5000 + ProfitEstimate::HPP_UP_AMOUNT, $hpp[0]['amount']);
+        $this->assertTrue($hpp[0]['is_up']);
+        $this->assertFalse($hpp[0]['is_manual']);
+        $this->assertSame(5000.0, $hpp[0]['derived_amount']);
+
+        // is_up hanya berlaku untuk mata uang non-IDR; vendor IDR tetap otomatis penuh.
+        $idrLines = [
+            ['section' => 'product', 'label' => 'Kalibrasi', 'qty' => 1, 'vendor' => 'Lab lokal', 'currency' => 'IDR', 'amount' => 1000],
+            ['section' => 'hpp', 'vendor' => 'Lab lokal', 'currency' => 'IDR', 'amount' => 999, 'is_up' => 1],
+        ];
+        $idrHpp = array_values(array_filter(ProfitEstimate::deriveHppLines($idrLines), fn ($l) => $l['section'] === 'hpp'));
+        $this->assertSame(1000.0, $idrHpp[0]['amount']);
+        $this->assertFalse($idrHpp[0]['is_up']);
+    }
+
+    /**
+     * Biaya operasional berpersentase: nominal = percent% x total HPP (Rp) vendor
+     * non-IDR; HPP IDR tidak ikut. Disimpan sebagai IDR. Tanpa percent = manual.
+     */
+    public function test_calculate_percent_cost_lines_from_foreign_hpp_total(): void
+    {
+        $rates = ['USD' => 17500, 'EUR' => 20000];
+
+        $result = ProfitEstimate::calculate(['nilai_awal' => 1000], [
+            ['section' => 'hpp', 'vendor' => 'Badger Meter', 'currency' => 'USD', 'amount' => 4715.9375],   // 82.528.906,25
+            ['section' => 'hpp', 'vendor' => 'S::CAN', 'currency' => 'EUR', 'amount' => 24357.80],          // 487.156.000
+            ['section' => 'hpp', 'vendor' => 'Lab lokal', 'currency' => 'IDR', 'amount' => 25_000_000],      // tidak dihitung
+            ['section' => 'cost_spent', 'label' => 'Biaya kirim barang masuk', 'currency' => 'USD', 'amount' => '', 'percent' => 18],
+            ['section' => 'cost_spent', 'label' => 'Nominal menang', 'currency' => 'IDR', 'amount' => 5_000_000, 'percent' => 18],
+            ['section' => 'cost_spent', 'label' => 'Biaya kirim barang keluar', 'currency' => 'IDR', 'amount' => 40_000_000, 'percent' => ''],
+            ['section' => 'cost_spent', 'label' => 'Custom duty', 'currency' => 'IDR', 'amount' => '', 'percent' => 0],
+        ], $rates);
+
+        $lines = collect($result['lines'])->keyBy('label');
+
+        // 18% x 569.684.906,25 = 102.543.283,13 (lembar contoh); currency/amount kiriman diabaikan.
+        $this->assertSame(102_543_283.13, $lines['Biaya kirim barang masuk']['amount_idr']);
+        $this->assertSame('IDR', $lines['Biaya kirim barang masuk']['currency']);
+        $this->assertSame(102_543_283.13, $lines['Biaya kirim barang masuk']['amount']);
+        $this->assertSame(18.0, $lines['Biaya kirim barang masuk']['percent']);
+        // Nominal terisi -> persen diabaikan (disimpan null), nominal dipakai apa adanya.
+        $this->assertNull($lines['Nominal menang']['percent']);
+        $this->assertSame(5_000_000.0, $lines['Nominal menang']['amount_idr']);
+        // Percent kosong -> manual.
+        $this->assertNull($lines['Biaya kirim barang keluar']['percent']);
+        $this->assertSame(40_000_000.0, $lines['Biaya kirim barang keluar']['amount_idr']);
+        // Nominal kosong + percent 0 -> 0 dari persen (bukan manual).
+        $this->assertSame(0.0, $lines['Custom duty']['percent']);
+        $this->assertSame(0.0, $lines['Custom duty']['amount_idr']);
+        // Baris HPP tidak pernah membawa percent.
+        $this->assertNull($lines['Badger Meter'] ?? null);
+        $this->assertNull(collect($result['lines'])->firstWhere('vendor', 'Badger Meter')['percent']);
+
+        $this->assertEqualsWithDelta(569_684_906.25 + 25_000_000 + 102_543_283.13 + 5_000_000 + 40_000_000, $result['header']['total_cost'], 0.01);
+    }
+
     public function test_create_form_is_prefilled_from_quotation(): void
     {
         $quotation = $this->createQuotation();
@@ -272,25 +348,45 @@ class ProfitEstimateTest extends TestCase
             $products = array_values(array_filter($data['lines'], fn ($l) => $l['section'] === 'product'));
             $hpp = array_values(array_filter($data['lines'], fn ($l) => $l['section'] === 'hpp'));
             $planned = array_values(array_filter($data['lines'], fn ($l) => $l['section'] === 'cost_planned'));
+            $spent = array_values(array_filter($data['lines'], fn ($l) => $l['section'] === 'cost_spent'));
 
             return $data['nilai_awal'] === 1_750_000_000.0
                 && $data['ppn_amount'] === 100_000.0
                 && $data['rates']['USD'] === 17500.0
                 && $data['investment_percent'] === ProfitEstimate::DEFAULT_INVESTMENT_PERCENT
                 && $data['sales_person_name'] === 'Zuri'
-                && count($products) === 2
-                && $products[0]['label'] === 'pHlyser'           // baris pertama deskripsi saja
-                && $products[0]['vendor'] === 'Badger Meter'     // brand dari master product
-                && $products[0]['currency'] === 'USD'
-                && $products[0]['amount'] === 4000.0             // amount baris = 2 x USD 2.000
-                && $products[1]['vendor'] === null               // tanpa master product -> diisi user
-                && $products[1]['amount'] === 0
-                && $hpp[0]['vendor'] === 'Badger Meter'          // HPP turunan per vendor
-                && $hpp[0]['currency'] === 'USD'
-                && $hpp[0]['amount'] === 4000.0
-                && $hpp[0]['is_manual'] === false
-                && $planned[0]['amount'] === 2_000_000.0;        // total biaya quotation
+                && $products === []                              // daftar item kosong: user memilih dari configuration
+                && $hpp === []
+                && $planned[0]['amount'] === 2_000_000.0         // total biaya quotation
+                && $spent[0]['percent'] === 18                   // kirim masuk: 18% dari HPP non-IDR
+                && $spent[1]['percent'] === 0
+                && $spent[2]['percent'] === null;                // custom duty: manual
         });
+
+        // Snapshot List Configuration quotation tersedia untuk modal pilih item.
+        $response->assertViewHas('configItems', fn ($items) => is_array($items));
+    }
+
+    public function test_create_form_exposes_quotation_config_items_for_picker(): void
+    {
+        $quotation = $this->createQuotation();
+        $quotation->configItems()->create(['category' => 'SPARING', 'part_number' => 'PH-001', 'description' => 'pHlyser<br>with cable', 'qty' => 2, 'unit' => 'Unit', 'price' => 35_000_000, 'price_currency' => 2000, 'currency' => 'USD']);
+        $quotation->configItems()->create(['category' => 'SPARING', 'part_number' => 'CAB-1', 'description' => 'Kabel', 'qty' => 1, 'price' => 500_000]);
+
+        $this->actingAs($this->admin)
+            ->get(route('profit-estimate.create', ['quotation_id' => $quotation->id]))
+            ->assertOk()
+            ->assertViewHas('configItems', function (array $items) {
+                return count($items) === 2
+                    && $items[0]['description'] === 'pHlyser'
+                    && $items[0]['currency'] === 'USD'
+                    && $items[0]['price_currency'] === 2000.0
+                    && $items[0]['price'] === 35_000_000.0
+                    && $items[0]['qty'] === 2.0
+                    && $items[1]['currency'] === 'IDR'
+                    && $items[1]['price_currency'] === 500_000.0;
+            })
+            ->assertViewHas('currencySymbols', fn ($s) => ($s['USD'] ?? null) === '$');
     }
 
     public function test_store_creates_estimate_and_rejects_duplicate(): void
@@ -318,6 +414,7 @@ class ProfitEstimateTest extends TestCase
                 ['section' => 'hpp', 'vendor' => 'Lab lokal', 'currency' => 'IDR', 'amount' => 25_000_000, 'is_manual' => 1],
                 ['section' => 'hpp', 'vendor' => 'Vendor Palsu', 'currency' => 'IDR', 'amount' => 999, 'is_manual' => 1],
                 ['section' => 'cost_spent', 'label' => 'Biaya kirim barang masuk', 'currency' => 'IDR', 'amount' => 1_000_000],
+                ['section' => 'cost_spent', 'label' => 'Biaya kirim barang keluar', 'currency' => 'IDR', 'amount' => 0, 'percent' => 10], // 10% x HPP USD
                 ['section' => 'cost_planned', 'label' => '', 'currency' => 'IDR', 'amount' => 0], // baris kosong dibuang
             ],
         ];
@@ -338,9 +435,12 @@ class ProfitEstimateTest extends TestCase
         $this->assertSame($quotation->id, $estimate->quotation_id);
         $this->assertSame(1_520_663_100.0, $estimate->real_project_value);
         $this->assertSame(228_099_465.0, $estimate->investment_amount);
-        $this->assertEqualsWithDelta(82_528_906.25 + 25_000_000 + 1_000_000 + 228_099_465, $estimate->total_cost, 0.01);
+        // HPP USD 82.528.906,25 -> kirim keluar 10% = 8.252.890,63 (HPP IDR Lab lokal tidak ikut).
+        $this->assertEqualsWithDelta(82_528_906.25 + 25_000_000 + 1_000_000 + 8_252_890.63 + 228_099_465, $estimate->total_cost, 0.01);
         $this->assertFalse($estimate->is_outdated);
-        $this->assertCount(6, $estimate->lines); // 3 item + 2 HPP turunan + 1 biaya
+        $this->assertCount(7, $estimate->lines); // 3 item + 2 HPP turunan + 2 biaya
+        $pctLine = $estimate->linesOf('cost_spent')->firstWhere('label', 'Biaya kirim barang keluar');
+        $this->assertSame([10.0, 8_252_890.63, 'IDR'], [$pctLine->percent, $pctLine->amount_idr, $pctLine->currency]);
 
         $hpp = $estimate->linesOf('hpp');
         $this->assertSame(['Badger Meter', 'USD', 4715.9375, false, 82_528_906.25], [$hpp[0]->vendor, $hpp[0]->currency, $hpp[0]->amount, $hpp[0]->is_manual, $hpp[0]->amount_idr]);
@@ -362,6 +462,56 @@ class ProfitEstimateTest extends TestCase
         $this->actingAs($this->admin)->get(route('profit-estimate.pdf', $estimate->id))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
+    }
+
+    /**
+     * Toggle "+40" (is_up) tersimpan sebagai kolom sendiri dan dibaca kembali
+     * apa adanya di form edit. Saat item berubah lalu disimpan lagi, nominal
+     * HPP dihitung ULANG dari item terbaru + HPP_UP_AMOUNT — server tidak
+     * pernah percaya nominal HPP yang dikirim client untuk baris is_up=1.
+     */
+    public function test_hpp_up_toggle_persists_and_recomputes_flexibly_on_edit(): void
+    {
+        $quotation = $this->createQuotation();
+
+        $store = [
+            'quotation_id' => $quotation->id,
+            'nilai_awal' => 1_750_000_000,
+            'rates' => ['USD' => 17500],
+            'lines' => [
+                ['section' => 'product', 'label' => 'pHlyser', 'qty' => 1, 'vendor' => 'Badger Meter', 'currency' => 'USD', 'amount' => 3000],
+                ['section' => 'hpp', 'vendor' => 'Badger Meter', 'currency' => 'USD', 'amount' => 3040, 'is_up' => 1],
+            ],
+        ];
+
+        $this->actingAs($this->admin)->postJson(route('profit-estimate.store'), $store)->assertOk();
+
+        $estimate = ProfitEstimate::with('lines')->where('quotation_id', $quotation->id)->firstOrFail();
+        $hpp = $estimate->linesOf('hpp')->first();
+        $this->assertTrue($hpp->is_up);
+        $this->assertFalse($hpp->is_manual);
+        $this->assertSame(3040.0, $hpp->amount); // 3000 (item) + HPP_UP_AMOUNT (40)
+
+        // Form edit membawa status is_up apa adanya (bukan ditebak dari nominal).
+        $this->actingAs($this->admin)->get(route('profit-estimate.edit', $estimate->id))
+            ->assertOk()
+            ->assertViewHas('data', function (array $data) {
+                $hppLine = collect($data['lines'])->firstWhere('section', 'hpp');
+
+                return $hppLine['is_up'] === true && $hppLine['is_manual'] === false;
+            });
+
+        // Item diubah (mis. user mengganti amount) lalu disimpan lagi. Klien mengirim
+        // is_up=1 dengan nominal STALE (tidak dihitung ulang di sisi klien) — server
+        // harus tetap menghasilkan nominal yang benar: item baru (5000) + 40 = 5040.
+        $update = $store;
+        $update['lines'][0]['amount'] = 5000;
+        $update['lines'][1]['amount'] = 999999; // stale, harus diabaikan
+        $this->actingAs($this->admin)->putJson(route('profit-estimate.update', $estimate->id), $update)->assertOk();
+
+        $hpp = $estimate->fresh(['lines'])->linesOf('hpp')->first();
+        $this->assertTrue($hpp->is_up);
+        $this->assertSame(5040.0, $hpp->amount);
     }
 
     public function test_quotation_revision_marks_estimate_outdated_and_sync_form_then_update_clears_it(): void
@@ -392,9 +542,9 @@ class ProfitEstimateTest extends TestCase
             $hpp = array_values(array_filter($data['lines'], fn ($l) => $l['section'] === 'hpp'));
 
             return $data['nilai_awal'] === 1_750_000_000.0
+                && count($products) === 1                            // hanya baris item PL sebelumnya yang disalin
                 && $products[0]['label'] === 'pHlyser'
-                && $products[0]['amount'] === 3500.0                 // harga negosiasi ikut (bukan 4000 master product)
-                && $products[1]['label'] === 'Kalibrasi lokal'
+                && $products[0]['amount'] === 3500.0                 // harga negosiasi ikut
                 && $hpp[0]['vendor'] === 'Badger Meter'
                 && $hpp[0]['amount'] === 3400.0 && $hpp[0]['is_manual'] === true;
         };

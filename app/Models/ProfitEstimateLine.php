@@ -20,6 +20,8 @@ class ProfitEstimateLine extends Model
         'amount',
         'amount_idr',
         'is_manual',
+        'percent',
+        'is_up',
         'sort_order',
     ];
 
@@ -30,6 +32,8 @@ class ProfitEstimateLine extends Model
             'amount' => 'float',
             'amount_idr' => 'float',
             'is_manual' => 'boolean',
+            'percent' => 'float',
+            'is_up' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

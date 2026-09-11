@@ -121,6 +121,8 @@ class ProfitEstimateController extends Controller
             'quotation' => $quotation,
             'data' => $this->prefillFromQuotation($quotation, $previous),
             'currencyCodes' => $this->currencyCodes(),
+            'currencySymbols' => collect(Currency::formOptions())->pluck('symbol', 'name')->all(),
+            'configItems' => $this->configItemsForPicker($quotation),
             'previous' => $previous,
         ]);
     }
@@ -197,10 +199,12 @@ class ProfitEstimateController extends Controller
         ])->findOrFail($id);
 
         $currentQuotation = $this->currentQuotationOfGroup($estimate->quotation);
+        $currencySymbols = collect(Currency::formOptions())->pluck('symbol', 'name')->all();
 
         return view('profit-estimate.show', [
             'estimate' => $estimate,
             'currentQuotation' => $currentQuotation,
+            'currencySymbols' => $currencySymbols,
         ]);
     }
 
@@ -214,6 +218,8 @@ class ProfitEstimateController extends Controller
             'quotation' => $quotation,
             'data' => $this->dataFromEstimate($estimate),
             'currencyCodes' => $this->currencyCodes(),
+            'currencySymbols' => collect(Currency::formOptions())->pluck('symbol', 'name')->all(),
+            'configItems' => $this->configItemsForPicker($quotation),
             'previous' => null,
         ]);
     }
@@ -287,6 +293,8 @@ class ProfitEstimateController extends Controller
             'quotation' => $quotation,
             'data' => $this->prefillFromQuotation($quotation, $estimate),
             'currencyCodes' => $this->currencyCodes(),
+            'currencySymbols' => collect(Currency::formOptions())->pluck('symbol', 'name')->all(),
+            'configItems' => $this->configItemsForPicker($quotation),
             'previous' => null,
             'syncing' => true,
         ]);
@@ -299,7 +307,9 @@ class ProfitEstimateController extends Controller
             'quotation.opportunity.accountCompany',
         ])->findOrFail($id);
 
-        $pdf = Pdf::loadView('profit-estimate.pdf', compact('estimate'))
+        $currencySymbols = collect(Currency::formOptions())->pluck('symbol', 'name')->all();
+
+        $pdf = Pdf::loadView('profit-estimate.pdf', compact('estimate', 'currencySymbols'))
             ->setPaper('a4', 'portrait');
 
         return $pdf->stream('Estimasi-PL-'.$estimate->id.'.pdf');
@@ -336,6 +346,8 @@ class ProfitEstimateController extends Controller
             'lines.*.currency' => 'nullable|string|max:10',
             'lines.*.amount' => 'nullable|numeric|min:0',
             'lines.*.is_manual' => 'nullable|boolean',
+            'lines.*.percent' => 'nullable|numeric|min:0|max:100',
+            'lines.*.is_up' => 'nullable|boolean',
         ];
     }
 
@@ -376,6 +388,8 @@ class ProfitEstimateController extends Controller
                 'amount' => $line['amount'],
                 'amount_idr' => $line['amount_idr'],
                 'is_manual' => (bool) ($line['is_manual'] ?? false),
+                'percent' => $line['percent'] ?? null,
+                'is_up' => (bool) ($line['is_up'] ?? false),
                 'sort_order' => $line['sort_order'],
             ]);
         }
@@ -391,7 +405,7 @@ class ProfitEstimateController extends Controller
         return collect($lines)
             ->filter(function ($line) {
                 $hasText = trim((string) ($line['label'] ?? '')) !== '' || trim((string) ($line['vendor'] ?? '')) !== '';
-                $hasAmount = (float) ($line['amount'] ?? 0) > 0 || (float) ($line['qty'] ?? 0) > 0;
+                $hasAmount = (float) ($line['amount'] ?? 0) > 0 || (float) ($line['qty'] ?? 0) > 0 || (float) ($line['percent'] ?? 0) > 0;
 
                 return $hasText || $hasAmount;
             })
@@ -472,6 +486,7 @@ class ProfitEstimateController extends Controller
             'items',
             'costItems',
             'configurations.items.product.currency',
+            'configItems',
             'opportunity.accountCompany',
             'task.creator',
             'profitEstimate',
@@ -558,6 +573,8 @@ class ProfitEstimateController extends Controller
                 'currency' => $l->currency,
                 'amount' => $l->amount,
                 'is_manual' => $l->is_manual,
+                'percent' => $l->percent,
+                'is_up' => $l->is_up,
             ])->values()->all(),
         ];
     }
@@ -573,62 +590,20 @@ class ProfitEstimateController extends Controller
     {
         $rates = $previous?->rates ?: $this->currentRates();
 
-        // Info master product (brand, mata uang, harga satuan) via quote configuration items.
-        $productInfo = [];
-        foreach ($quotation->configurations as $config) {
-            foreach ($config->items as $ci) {
-                $product = $ci->product;
-                if (! $product) {
-                    continue;
-                }
-                $info = [
-                    'brand' => trim((string) ($product->brand ?: $product->name)),
-                    'currency' => strtoupper($product->currency?->name ?: ProfitEstimate::BASE_CURRENCY),
-                    'price' => (float) $product->price,
-                ];
-                if ($ci->part_number) {
-                    $productInfo['pn:'.mb_strtolower(trim($ci->part_number))] = $info;
-                }
-                $productInfo['desc:'.$this->normalizeLabel($ci->description)] = $info;
-                $productInfo['desc:'.$this->normalizeLabel($product->name)] = $info;
-            }
-        }
-
-        $prevProducts = $previous
-            ? $previous->linesOf(ProfitEstimate::SECTION_PRODUCT)->keyBy(fn ($l) => $this->normalizeLabel($l->label))
-            : collect();
-
-        // Daftar item: baris leaf quotation_items.
-        $parentIds = $quotation->items->pluck('parent_id')->filter()->unique()->all();
-        $products = [];
-        foreach ($quotation->items as $item) {
-            if (in_array($item->id, $parentIds, true)) {
-                continue;
-            }
-            $label = $this->firstLine($item->description);
-            if ($label === '') {
-                continue;
-            }
-            $qty = (float) ($item->qty ?: 1);
-
-            $info = null;
-            if ($item->part_number) {
-                $info = $productInfo['pn:'.mb_strtolower(trim($item->part_number))] ?? null;
-            }
-            $info = $info ?? $productInfo['desc:'.$this->normalizeLabel($label)] ?? null;
-
-            $prev = $prevProducts[$this->normalizeLabel($label)] ?? null;
-
-            $products[] = [
+        // Daftar item TIDAK diisi dari quotation: user memilih sendiri dari snapshot
+        // List Configuration (modal di form). Bila ada PL sebelumnya (sync / revisi),
+        // baris itemnya disalin apa adanya.
+        $products = $previous
+            ? $previous->linesOf(ProfitEstimate::SECTION_PRODUCT)->map(fn ($l) => [
                 'section' => ProfitEstimate::SECTION_PRODUCT,
-                'label' => $label,
-                'qty' => $qty,
-                'unit' => $item->unit ?: 'Each',
-                'vendor' => $prev?->vendor ?: ($info['brand'] ?? null),
-                'currency' => $prev?->currency ?: ($info['currency'] ?? ProfitEstimate::BASE_CURRENCY),
-                'amount' => $prev ? (float) $prev->amount : ($info ? round($info['price'] * $qty, 4) : 0),
-            ];
-        }
+                'label' => $l->label,
+                'qty' => $l->qty,
+                'unit' => $l->unit,
+                'vendor' => $l->vendor,
+                'currency' => $l->currency,
+                'amount' => $l->amount,
+            ])->values()->all()
+            : [];
 
         $copy = fn (string $section) => $previous
             ? $previous->linesOf($section)->map(fn ($l) => [
@@ -640,17 +615,26 @@ class ProfitEstimateController extends Controller
                 'currency' => $l->currency,
                 'amount' => $l->amount,
                 'is_manual' => $l->is_manual,
+                'percent' => $l->percent,
+                'is_up' => $l->is_up,
             ])->all()
             : null;
 
-        // Koreksi manual HPP dari PL sebelumnya (hanya yang bertanda manual).
-        $hppOverrides = array_values(array_filter($copy(ProfitEstimate::SECTION_HPP) ?? [], fn ($l) => ! empty($l['is_manual'])));
+        // Koreksi HPP dari PL sebelumnya: baik nominal custom (is_manual)
+        // maupun toggle "+40" (is_up) dibawa; is_up dihitung ulang dari item
+        // terkini oleh deriveHppLines(), bukan dari nominal tersimpan.
+        $hppOverrides = array_values(array_filter(
+            $copy(ProfitEstimate::SECTION_HPP) ?? [],
+            fn ($l) => ! empty($l['is_manual']) || ! empty($l['is_up'])
+        ));
 
         $costSpent = $copy(ProfitEstimate::SECTION_COST_SPENT)
             ?? array_map(fn ($label) => [
                 'section' => ProfitEstimate::SECTION_COST_SPENT,
                 'label' => $label, 'qty' => null, 'unit' => null, 'vendor' => null,
                 'currency' => ProfitEstimate::BASE_CURRENCY, 'amount' => 0,
+                // Kirim masuk/keluar: persentase dari total HPP vendor non-IDR.
+                'percent' => ProfitEstimate::DEFAULT_COST_SPENT_PERCENT[$label] ?? null,
             ], ProfitEstimate::DEFAULT_COST_SPENT_LABELS);
 
         $costPlanned = $copy(ProfitEstimate::SECTION_COST_PLANNED);
@@ -691,6 +675,25 @@ class ProfitEstimateController extends Controller
             'accounting_name' => $previous?->accounting_name,
             'lines' => ProfitEstimate::deriveHppLines(array_merge($products, $hppOverrides, $costSpent, $costPlanned)),
         ];
+    }
+
+    /**
+     * Snapshot item List Configuration quotation untuk modal "Pilih dari
+     * Configuration" di form PL (harga satuan sebelum & sesudah kurs).
+     */
+    private function configItemsForPicker(Quotation $quotation): array
+    {
+        return $quotation->configItems->map(fn ($it) => [
+            'id' => $it->id,
+            'category' => $it->category ?: 'Lainnya',
+            'part_number' => $it->part_number,
+            'description' => $this->firstLine($it->description),
+            'qty' => (float) ($it->qty ?: 0),
+            'unit' => $it->unit,
+            'currency' => strtoupper($it->currency ?: ProfitEstimate::BASE_CURRENCY),
+            'price_currency' => (float) ($it->price_currency ?? $it->price ?? 0),
+            'price' => (float) ($it->price ?? 0),
+        ])->values()->all();
     }
 
     private function firstLine(?string $html): string

@@ -22,12 +22,18 @@
             return $out;
         };
         $fxCount = count($fx);
-        $symbol = ['USD' => '$', 'EUR' => '€', 'GBP' => '£'];
+        // Simbol mata uang dari master currency; fallback bila tidak dikirim.
+        $symbol = array_merge(['IDR' => 'Rp', 'USD' => '$', 'EUR' => '€', 'GBP' => '£'], $currencySymbols ?? []);
+        $money = function ($amount, ?string $code) use ($symbol) {
+            $code = strtoupper($code ?: 'IDR');
+            $sym = $symbol[$code] ?? $code;
+            return $sym.' '.($code === 'IDR' ? PL::formatMoney($amount, 0) : PL::formatMoney($amount));
+        };
     @endphp
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 9.5px; color: #111; line-height: 1.35; }
-        @page { margin: 8mm 10mm 8mm 10mm; }
+        @page { margin: 15mm 16mm 15mm 16mm; }
         table { border-collapse: collapse; width: 100%; }
         td, th { padding: 1.8px 5px; vertical-align: middle; }
         .b { font-weight: 700; }
@@ -95,15 +101,28 @@
         <td style="width:42%;vertical-align:top;padding:0">
             <table class="items">
                 @foreach($products as $p)
-                    <tr><td style="width:55%">{{ $p->label }}</td><td class="c">{{ $p->qty + 0 }} {{ $p->unit }} x</td></tr>
+                    <tr>
+                        <td style="width:40%">{{ $p->label }}</td>
+                        <td class="c" style="width:26%;white-space:nowrap">{{ $p->qty + 0 }} {{ $p->unit }} x</td>
+                        <td class="num">{{ $p->amount ? $money($p->amount, $p->currency) : '' }}</td>
+                    </tr>
                 @endforeach
                 @if($products->isEmpty())
-                    <tr><td style="width:55%">&nbsp;</td><td></td></tr>
+                    <tr><td style="width:40%">&nbsp;</td><td style="width:26%"></td><td></td></tr>
                 @endif
-                <tr><td>&nbsp;</td><td></td></tr>
-                @foreach($vendors as $v)
-                    <tr><td>Vendor</td><td class="c">{{ $v }}</td></tr>
-                @endforeach
+                <tr><td>&nbsp;</td><td></td><td></td></tr>
+                {{-- Vendor + nilai HPP-nya (per vendor & mata uang); fallback nama vendor saja bila HPP kosong. --}}
+                @forelse($hpp as $h)
+                    <tr>
+                        <td>Vendor</td>
+                        <td class="c" style="white-space:nowrap">{{ $h->vendor ?: $h->label }}</td>
+                        <td class="num">{{ $money($h->is_up ? $h->amount - PL::HPP_UP_AMOUNT : $h->amount, $h->currency) }}</td>
+                    </tr>
+                @empty
+                    @foreach($vendors as $v)
+                        <tr><td>Vendor</td><td class="c" colspan="2">{{ $v }}</td></tr>
+                    @endforeach
+                @endforelse
             </table>
         </td>
     </tr>
@@ -162,7 +181,7 @@
         </tr>
         <tr class="grey">
             <td class="b">Total Biaya Yang dikeluarkan</td>
-            @foreach($fx as $code)<td class="num b">{{ ($symbol[$code] ?? '').PL::formatMoney($fxTotal($code)) }}</td>@endforeach
+            @foreach($fx as $code)<td class="num b">{{ ($symbol[$code] ?? $code).' '.PL::formatMoney($fxTotal($code)) }}</td>@endforeach
             <td class="num b">{{ PL::formatMoney($estimate->total_cost) }}</td>
         </tr>
     </tbody>

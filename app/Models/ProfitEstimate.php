@@ -16,6 +16,8 @@ use Illuminate\Support\Collection;
  *   Referen             = Sub Total II x referral_percent
  *   Nilai Real Project  = Sub Total II - Referen
  *   Rp per baris biaya  = amount x kurs (snapshot) ; IDR = amount
+ *   Biaya berpersentase = percent% x Σ HPP (Rp) vendor non-IDR (disimpan IDR);
+ *                         hanya bila nominal kosong, nominal terisi mengabaikan persen
  *   HPP per vendor      = Σ amount item per (vendor, mata uang); boleh dikoreksi manual
  *   Baris item (product) menyimpan amount tetapi TIDAK dihitung sebagai biaya,
  *   karena biayanya sudah diwakili baris HPP.
@@ -54,10 +56,28 @@ class ProfitEstimate extends Model
 
     public const DEFAULT_PM_FEE_PERCENT = 0.5;
 
+    /**
+     * Kenaikan nominal HPP (mata uang non-IDR) untuk toggle "+40" biaya TT
+     * di form. Dipakai server (deriveHppLines) dan dikirim ke JS lewat form,
+     * sehingga satu-satunya sumber angka ini.
+     */
+    public const HPP_UP_AMOUNT = 40.0;
+
     public const DEFAULT_COST_SPENT_LABELS = [
         'Biaya kirim barang masuk',
         'Biaya kirim barang keluar',
         'Biaya operational custom duty tax',
+    ];
+
+    /**
+     * Persentase bawaan biaya operasional yang dihitung dari total HPP (Rp)
+     * vendor bermata uang selain IDR. Null = nominal diinput manual.
+     * (Kirim masuk 18% mengikuti lembar contoh; kirim keluar diisi user.)
+     */
+    public const DEFAULT_COST_SPENT_PERCENT = [
+        'Biaya kirim barang masuk' => 18,
+        'Biaya kirim barang keluar' => 0,
+        'Biaya operational custom duty tax' => null,
     ];
 
     public const DEFAULT_COST_PLANNED_LABELS = [
@@ -250,28 +270,51 @@ class ProfitEstimate extends Model
 
         $linesOut = [];
         $linesTotal = 0.0;
+        $foreignHppIdr = 0.0;
 
+        // Pass 1: konversi tiap baris; total HPP (Rp) vendor non-IDR dipakai
+        // sebagai dasar biaya operasional berbasis persentase.
         foreach (array_values($lines) as $i => $line) {
             $section = $line['section'] ?? self::SECTION_PRODUCT;
-            $currency = strtoupper(trim((string) ($line['currency'] ?? '')));
+            $currency = strtoupper(trim((string) ($line['currency'] ?? ''))) ?: self::BASE_CURRENCY;
             $amount = (float) ($line['amount'] ?? 0);
+            // Persentase hanya dipakai bila nominal kosong; nominal yang diisi
+            // (> 0) selalu menang dan persentase diabaikan (disimpan null).
+            $percent = isset($line['percent']) && $line['percent'] !== '' && $line['percent'] !== null && $amount <= 0
+                ? (float) $line['percent']
+                : null;
 
-            $idr = self::toIdr($amount, $currency ?: self::BASE_CURRENCY, $rates);
+            $idr = self::toIdr($amount, $currency, $rates);
 
-            // Baris item tidak dihitung sebagai biaya (sudah diwakili baris HPP).
-            if ($section !== self::SECTION_PRODUCT) {
-                $linesTotal += $idr;
+            if ($section === self::SECTION_HPP && $currency !== self::BASE_CURRENCY) {
+                $foreignHppIdr += $idr;
             }
 
             $linesOut[] = array_merge($line, [
                 'section' => $section,
-                'currency' => $currency ?: self::BASE_CURRENCY,
+                'currency' => $currency,
                 'amount' => $amount,
                 'amount_idr' => $idr,
                 'is_manual' => $section === self::SECTION_HPP && ! empty($line['is_manual']),
+                'is_up' => $section === self::SECTION_HPP && ! empty($line['is_up']),
+                'percent' => in_array($section, [self::SECTION_COST_SPENT, self::SECTION_COST_PLANNED], true) ? $percent : null,
                 'sort_order' => $i + 1,
             ]);
         }
+
+        // Pass 2: baris biaya berpersentase = percent% x total HPP non-IDR (Rp),
+        // disimpan sebagai IDR; lalu jumlahkan seluruh biaya (item tidak dihitung).
+        foreach ($linesOut as &$line) {
+            if ($line['percent'] !== null) {
+                $line['currency'] = self::BASE_CURRENCY;
+                $line['amount_idr'] = round($foreignHppIdr * $line['percent'] / 100, 2);
+                $line['amount'] = $line['amount_idr'];
+            }
+            if ($line['section'] !== self::SECTION_PRODUCT) {
+                $linesTotal += $line['amount_idr'];
+            }
+        }
+        unset($line);
 
         $investment = round($real * $investmentPct / 100, 2);
         $totalCost = round($linesTotal + $investment, 2);
@@ -310,15 +353,20 @@ class ProfitEstimate extends Model
 
     /**
      * Bentuk ulang baris HPP dari baris item: dikelompokkan per (vendor, mata
-     * uang), nominal = Σ amount item. Baris HPP masukan yang bertanda
-     * is_manual dan cocok kelompoknya dipakai sebagai override nominal;
-     * baris HPP lain dibuang. Urutan hasil: item, HPP, baris biaya lainnya.
+     * uang), nominal = Σ amount item. Baris HPP masukan dicocokkan lewat kunci
+     * (vendor, mata uang) untuk menentukan koreksi:
+     *   - is_up    : nominal = otomatis + HPP_UP_AMOUNT, dihitung ULANG dari
+     *                item saat ini (bukan nilai tersimpan) — toggle tetap
+     *                benar walau item berubah di antara dua kali simpan/edit.
+     *   - is_manual: nominal = nilai kiriman apa adanya (custom user).
+     * Baris HPP lain (tanpa keduanya) dibuang. Urutan hasil: item, HPP, lain-lain.
      */
     public static function deriveHppLines(array $lines): array
     {
         $products = [];
         $others = [];
         $overrides = [];
+        $upFlags = [];
 
         foreach ($lines as $line) {
             $section = $line['section'] ?? '';
@@ -326,8 +374,11 @@ class ProfitEstimate extends Model
             if ($section === self::SECTION_PRODUCT) {
                 $products[] = $line;
             } elseif ($section === self::SECTION_HPP) {
-                if (! empty($line['is_manual'])) {
-                    $overrides[self::hppKey($line)] = round((float) ($line['amount'] ?? 0), 4);
+                $key = self::hppKey($line);
+                if (! empty($line['is_up'])) {
+                    $upFlags[$key] = true;
+                } elseif (! empty($line['is_manual'])) {
+                    $overrides[$key] = round((float) ($line['amount'] ?? 0), 4);
                 }
             } else {
                 $others[] = $line;
@@ -347,6 +398,7 @@ class ProfitEstimate extends Model
                     'currency' => strtoupper(trim((string) ($p['currency'] ?? ''))) ?: self::BASE_CURRENCY,
                     'amount' => 0.0,
                     'is_manual' => false,
+                    'is_up' => false,
                 ];
             }
             $groups[$key]['amount'] += (float) ($p['amount'] ?? 0);
@@ -356,7 +408,11 @@ class ProfitEstimate extends Model
         foreach ($groups as $key => $g) {
             $g['amount'] = round($g['amount'], 4);
             $g['derived_amount'] = $g['amount'];
-            if (array_key_exists($key, $overrides)) {
+
+            if (! empty($upFlags[$key]) && $g['currency'] !== self::BASE_CURRENCY) {
+                $g['amount'] = round($g['amount'] + self::HPP_UP_AMOUNT, 4);
+                $g['is_up'] = true;
+            } elseif (array_key_exists($key, $overrides)) {
                 $g['amount'] = $overrides[$key];
                 $g['is_manual'] = true;
             }

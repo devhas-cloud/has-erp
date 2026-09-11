@@ -6,6 +6,14 @@
     $fx = $estimate->foreignCurrenciesUsed();
     $rates = $estimate->rates ?? [];
     $sub = fn (string $section) => $estimate->linesOf($section)->sum('amount_idr');
+    // Simbol mata uang dari master currency; fallback bila tidak dikirim.
+    $symbol = array_merge(['IDR' => 'Rp', 'USD' => '$', 'EUR' => '€', 'GBP' => '£'], $currencySymbols ?? []);
+    $money = function ($amount, ?string $code) use ($symbol) {
+        $code = strtoupper($code ?: 'IDR');
+        $sym = $symbol[$code] ?? $code;
+
+        return $sym.' '.($code === 'IDR' ? PL::formatMoney($amount, 0) : PL::formatMoney($amount));
+    };
 @endphp
 
 @section('title', 'Estimasi PL '.($q?->quotation_number ?? '#'.$estimate->id))
@@ -83,6 +91,19 @@
 
 <div class="row g-3">
     <div class="col-lg-6">
+         <div class="card-custom pl-card">
+            <div class="card-header-custom"><span><i class="fa-solid fa-money-bill-transfer me-2" style="color:var(--accent)"></i>Kurs (snapshot)</span></div>
+            <div class="card-body-custom">
+                <table class="info-table w-100">
+                    @forelse($rates as $code => $rate)
+                        <tr><td>Kurs {{ $code }}</td><td>{{ PL::formatMoney($rate) }}</td></tr>
+                    @empty
+                        <tr><td colspan="2" style="color:var(--text-muted)">Tidak ada kurs tersimpan.</td></tr>
+                    @endforelse
+                </table>
+            </div>
+        </div>
+
         <div class="card-custom pl-card">
             <div class="card-header-custom"><span><i class="fa-solid fa-coins me-2" style="color:var(--accent)"></i>Nilai Project</span></div>
             <div class="card-body-custom p-2">
@@ -100,18 +121,7 @@
         </div>
     </div>
     <div class="col-lg-6">
-        <div class="card-custom pl-card">
-            <div class="card-header-custom"><span><i class="fa-solid fa-money-bill-transfer me-2" style="color:var(--accent)"></i>Kurs (snapshot)</span></div>
-            <div class="card-body-custom">
-                <table class="info-table w-100">
-                    @forelse($rates as $code => $rate)
-                        <tr><td>Kurs {{ $code }}</td><td>{{ PL::formatMoney($rate) }}</td></tr>
-                    @empty
-                        <tr><td colspan="2" style="color:var(--text-muted)">Tidak ada kurs tersimpan.</td></tr>
-                    @endforelse
-                </table>
-            </div>
-        </div>
+
         <div class="card-custom pl-card">
             <div class="card-header-custom"><span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Daftar Item</span></div>
             <div class="card-body-custom p-2">
@@ -123,7 +133,7 @@
                             <td>{{ $l->label }}</td>
                             <td class="text-center">{{ $l->qty + 0 }} {{ $l->unit }}</td>
                             <td>{{ $l->vendor ?? '—' }}</td>
-                            <td class="num">{{ $l->currency }} {{ PL::formatMoney($l->amount) }}</td>
+                            <td class="num">{{ $money($l->amount, $l->currency) }}</td>
                             <td class="num">{{ PL::formatMoney($l->amount_idr) }}</td>
                         </tr>
                     @empty
@@ -155,15 +165,17 @@
                             <td style="padding-left:24px">{{ $l->vendor ?: $l->label }}
                                 @if($l->is_manual)<span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px">manual</span>@endif
                             </td>
-                            @foreach($fx as $code)<td class="num">{{ $l->currency === $code ? PL::formatMoney($l->amount) : '' }}</td>@endforeach
+                            @foreach($fx as $code)<td class="num">{{ $l->currency === $code ? $money($l->amount, $code) : '' }}</td>@endforeach
                             <td class="num">{{ PL::formatMoney($l->amount_idr) }}</td>
                         </tr>
                     @endforeach
                     <tr style="background:var(--bg)"><td colspan="{{ 2 + count($fx) }}" style="font-weight:700">Operasional Cost &mdash; 1. Yang Telah Dikeluarkan</td></tr>
                     @foreach($estimate->linesOf(PL::SECTION_COST_SPENT) as $l)
                         <tr>
-                            <td style="padding-left:24px">{{ chr(97 + $loop->index) }}. {{ $l->label }}</td>
-                            @foreach($fx as $code)<td class="num">{{ $l->currency === $code ? PL::formatMoney($l->amount) : '' }}</td>@endforeach
+                            <td style="padding-left:24px">{{ chr(97 + $loop->index) }}. {{ $l->label }}
+                                @if($l->percent !== null)<span style="font-size:11px;color:var(--text-muted)">({{ number_format($l->percent, 2) }}% dari HPP non-IDR)</span>@endif
+                            </td>
+                            @foreach($fx as $code)<td class="num">{{ $l->currency === $code ? $money($l->amount, $code) : '' }}</td>@endforeach
                             <td class="num">{{ PL::formatMoney($l->amount_idr) }}</td>
                         </tr>
                     @endforeach
@@ -171,7 +183,7 @@
                     @foreach($estimate->linesOf(PL::SECTION_COST_PLANNED) as $l)
                         <tr>
                             <td style="padding-left:24px">{{ $l->label }}</td>
-                            @foreach($fx as $code)<td class="num">{{ $l->currency === $code ? PL::formatMoney($l->amount) : '' }}</td>@endforeach
+                            @foreach($fx as $code)<td class="num">{{ $l->currency === $code ? $money($l->amount, $code) : '' }}</td>@endforeach
                             <td class="num">{{ PL::formatMoney($l->amount_idr) }}</td>
                         </tr>
                     @endforeach
@@ -183,7 +195,7 @@
                     <tr style="background:var(--accent-soft);color:var(--accent);font-weight:700">
                         <td>Total Biaya Yang Dikeluarkan</td>
                         @foreach($fx as $code)
-                            <td class="num">{{ PL::formatMoney($estimate->lines->where('section', '!=', PL::SECTION_PRODUCT)->where('currency', $code)->sum('amount')) }}</td>
+                            <td class="num">{{ $money($estimate->lines->where('section', '!=', PL::SECTION_PRODUCT)->where('currency', $code)->sum('amount'), $code) }}</td>
                         @endforeach
                         <td class="num">{{ PL::formatMoney($estimate->total_cost) }}</td>
                     </tr>
