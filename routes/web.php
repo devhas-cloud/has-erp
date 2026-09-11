@@ -16,6 +16,7 @@ use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\WaterConfigurationController;
+use App\Models\Module;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -24,9 +25,15 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth', 'access.control'])->group(function () {
+    // Universal: arahkan ke modul pertama yang boleh dibaca akun ini (bukan
+    // hardcode ke satu modul), karena tiap akun bisa punya modul berbeda.
     Route::get('/', function () {
-        return redirect()->route('user-management.index');
+        $module = Module::firstAccessibleFor(auth()->user());
+
+        return redirect($module ? route($module->route_name.'.index') : route('no-access'));
     });
+
+    Route::get('/no-access', [AuthController::class, 'noAccess'])->name('no-access');
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('user-management/data', [UserManagementController::class, 'data'])->name('user-management.data');
