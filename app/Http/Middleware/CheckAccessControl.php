@@ -42,6 +42,7 @@ class CheckAccessControl
         $method = $request->method();
         $permissionField = match (true) {
             $action === 'approve', $action === 'reject', $action === 'unlock' => 'can_approve',
+            $action === 'upload-po' => 'can_update',
             $method === 'POST' => 'can_create',
             $method === 'PUT', $method === 'PATCH' => 'can_update',
             $method === 'DELETE' => 'can_delete',

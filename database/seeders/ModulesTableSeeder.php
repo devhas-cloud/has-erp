@@ -123,6 +123,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-chart-line',
                 'group' => 'Admin',
             ],
+            [
+                'module_code' => 'MOD_PO_SUPPLIER_APPROVAL',
+                'module_name' => 'PO Supplier Approval',
+                'description' => 'Menu approval quotation status Finish (PO customer terupload) agar purchasing boleh melanjutkan PO barang ke supplier — memerlukan 2 approver berbeda',
+                'route_name' => 'po-supplier-approval',
+                'icon' => 'fa fa-truck-fast',
+                'group' => 'Admin',
+            ],
         ];
 
         foreach ($modules as $module) {

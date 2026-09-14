@@ -304,11 +304,11 @@
 {{-- Workflow --}}
 <div class="qt-action-bar">
     <div class="flow-steps">
-        <span class="flow-step {{ in_array($quotation->status, ['draft', 'waiting_approval', 'approved']) ? 'done' : '' }}">
+        <span class="flow-step {{ in_array($quotation->status, ['draft', 'waiting_approval', 'approved', 'finish']) ? 'done' : '' }}">
             <i class="fa fa-file-pen"></i> Draft
         </span>
         <span class="flow-arrow"><i class="fa fa-chevron-right"></i></span>
-        <span class="flow-step {{ $quotation->status === 'waiting_approval' ? 'active' : ($quotation->status === 'approved' || $quotation->status === 'rejected' ? 'done' : '') }}">
+        <span class="flow-step {{ $quotation->status === 'waiting_approval' ? 'active' : (in_array($quotation->status, ['approved', 'finish']) || $quotation->status === 'rejected' ? 'done' : '') }}">
             <i class="fa fa-paper-plane"></i> Waiting Approval
         </span>
         <span class="flow-arrow"><i class="fa fa-chevron-right"></i></span>
@@ -317,8 +317,12 @@
                 <i class="fa fa-xmark"></i> Rejected
             </span>
         @else
-            <span class="flow-step {{ $quotation->status === 'approved' ? 'done' : '' }}">
+            <span class="flow-step {{ $quotation->status === 'approved' ? 'active' : ($quotation->status === 'finish' ? 'done' : '') }}">
                 <i class="fa fa-check"></i> Approved
+            </span>
+            <span class="flow-arrow"><i class="fa fa-chevron-right"></i></span>
+            <span class="flow-step {{ $quotation->status === 'finish' ? 'done' : '' }}">
+                <i class="fa fa-file-circle-check"></i> Finish
             </span>
         @endif
     </div>
@@ -375,6 +379,38 @@
         </button>
     </div>
     @endif
+    @if($canUpdate || auth()->user()->role === 'Admin')
+    <div class="qt-action-bar justify-content-end">
+        <button type="button" class="btn btn-primary btn-sm" onclick="openQtUploadPo()">
+            <i class="fa fa-upload me-1"></i> Upload PO
+        </button>
+    </div>
+    @endif
+@endif
+
+@if($quotation->status === 'finish' && ($canUpdate || auth()->user()->role === 'Admin'))
+<div class="qt-action-bar justify-content-end">
+    <button type="button" class="btn btn-secondary btn-sm" onclick="openQtUploadPo()">
+        <i class="fa fa-rotate me-1"></i> Ganti PO
+    </button>
+</div>
+@endif
+
+@if($quotation->hasPoDocument())
+<div class="qt-action-bar" style="border-color:#bbf7d0;background:#f0fdf4;">
+    <i class="fa fa-file-pdf" style="color:#b91c1c"></i>
+    <div>
+        <div style="font-weight:600;font-size:13px;color:#166534">Dokumen PO</div>
+        <div style="font-size:12px;color:var(--text-muted)">
+            {{ $quotation->po_document_name }} — diupload oleh {{ $quotation->poUploader?->username ?? '—' }}
+            pada {{ $quotation->po_uploaded_at?->format('d/m/Y H:i') }}
+        </div>
+    </div>
+    <div class="spacer"></div>
+    <a href="{{ route('quotation.view-po', $quotation->id) }}" target="_blank" class="btn btn-sm btn-soft">
+        <i class="fa fa-eye me-1"></i> Lihat PO
+    </a>
+</div>
 @endif
 
 @if($quotation->status === 'rejected' && ($canCreate || $canUpdate || auth()->user()->role === 'Admin'))
@@ -916,6 +952,30 @@
     </div>
 </div>
 
+<div class="modal fade" id="qtUploadPoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Upload PO</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label">Dokumen PO <span class="text-danger">*</span></label>
+                    <input type="file" id="qt-po-file" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                    <small style="color:var(--text-muted)">Format PDF, JPG, atau PNG, maksimal 10MB. Quotation akan berstatus Finish setelah PO diupload.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-upload-po-qt">
+                    <i class="fa fa-upload me-1"></i> Upload
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="qtTrackModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -954,6 +1014,7 @@
 let qtRejectModalInstance = null;
 let qtTrackModalInstance = null;
 let qtNotesModalInstance = null;
+let qtUploadPoModalInstance = null;
 const qtId = {{ $quotation->id }};
 let initialQtNotes = @json((string) ($quotation->notes ?? ''));
 
@@ -973,6 +1034,7 @@ const quotationVersionsUrl = '{{ route("quotation.versions", "__ID__") }}';
 const quotationDeleteUrl = '{{ route("quotation.destroy", "__ID__") }}';
 const quotationEditUrl = '{{ route("quotation.edit", "__ID__") }}';
 const quotationNotesUrl = '{{ route("quotation.update-notes", "__ID__") }}';
+const quotationUploadPoUrl = '{{ route("quotation.upload-po", "__ID__") }}';
 
 function escapeHtmlNotes(text) {
     if (text === null || text === undefined) return '';
@@ -1083,6 +1145,45 @@ $(document).on('click', '#btn-reject-qt', function() {
         toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menolak.');
     }).always(function() {
         $('#btn-reject-qt').prop('disabled', false);
+    });
+});
+
+function openQtUploadPo() {
+    $('#qt-po-file').val('');
+    if (!qtUploadPoModalInstance) {
+        qtUploadPoModalInstance = new bootstrap.Modal(document.getElementById('qtUploadPoModal'));
+    }
+    qtUploadPoModalInstance.show();
+}
+
+$(document).on('click', '#btn-upload-po-qt', function() {
+    var fileInput = document.getElementById('qt-po-file');
+    var file = fileInput.files[0];
+    if (!file) {
+        toastr.error('Dokumen PO wajib dipilih.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('po_document', file);
+    formData.append('_token', '{{ csrf_token() }}');
+
+    $('#btn-upload-po-qt').prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Mengupload...');
+
+    $.ajax({
+        url: quotationUploadPoUrl.replace('__ID__', qtId),
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false
+    }).done(function(res) {
+        toastr.success(res.message || 'PO berhasil diupload.');
+        qtUploadPoModalInstance.hide();
+        setTimeout(function() { window.location.reload(); }, 800);
+    }).fail(function(xhr) {
+        toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal mengupload PO.');
+    }).always(function() {
+        $('#btn-upload-po-qt').prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload');
     });
 });
 

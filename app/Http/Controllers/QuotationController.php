@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class QuotationController extends Controller
 {
@@ -798,6 +799,7 @@ class QuotationController extends Controller
                 'can_approve' => $this->isApprover(),
                 'can_revise' => ($quotation->status === Quotation::STATUS_REJECTED
                     || ($quotation->status === Quotation::STATUS_APPROVED && $quotation->unlocked_at)),
+                'can_upload_po' => $quotation->status === Quotation::STATUS_APPROVED && $this->canUpdateModule(),
                 'is_creator' => (int) $quotation->created_by === (int) Auth::id(),
                 'task_title' => $quotation->task?->title ?? '—',
                 'source_config' => $quotation->configurations->isNotEmpty()
@@ -863,6 +865,7 @@ class QuotationController extends Controller
                     'your_ref' => $validated['your_ref'] ?? null,
                     'no_of_pages' => (int) ($validated['no_of_pages'] ?? 1),
                     'is_portable' => (bool) ($validated['is_portable'] ?? false),
+                    'requires_dp' => (bool) ($validated['requires_dp'] ?? false),
                     'to_name' => $validated['to_name'] ?? null,
                     'address' => $validated['address'] ?? null,
                     'attn_name' => $validated['attn_name'] ?? null,
@@ -1078,6 +1081,7 @@ class QuotationController extends Controller
                     'your_ref' => $validated['your_ref'] ?? null,
                     'no_of_pages' => (int) ($validated['no_of_pages'] ?? 1),
                     'is_portable' => (bool) ($validated['is_portable'] ?? false),
+                    'requires_dp' => (bool) ($validated['requires_dp'] ?? false),
                     'to_name' => $validated['to_name'] ?? null,
                     'address' => $validated['address'] ?? null,
                     'attn_name' => $validated['attn_name'] ?? null,
@@ -1517,6 +1521,7 @@ class QuotationController extends Controller
                 'your_ref' => $source->your_ref,
                 'no_of_pages' => $source->no_of_pages,
                 'is_portable' => $source->is_portable,
+                'requires_dp' => $source->requires_dp,
                 'to_name' => $source->to_name,
                 'address' => $source->address,
                 'attn_name' => $source->attn_name,
@@ -1631,6 +1636,88 @@ class QuotationController extends Controller
     }
 
     /**
+     * Upload dokumen PO sebagai bukti penawaran selesai/deal, menandai
+     * quotation menjadi Finish. Boleh dilakukan dari status Approved
+     * (upload pertama) maupun Finish (re-upload/koreksi dokumen PO).
+     */
+    public function uploadPo(Request $request, $id): JsonResponse
+    {
+        $quotation = Quotation::findOrFail($id);
+
+        if (! in_array($quotation->status, [Quotation::STATUS_APPROVED, Quotation::STATUS_FINISH], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya quotation berstatus Approved atau Finish yang bisa diupload PO-nya.',
+            ], 422);
+        }
+
+        if (! $this->canUpdateModule()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak untuk mengupload PO.',
+            ], 403);
+        }
+
+        $request->validate([
+            'po_document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
+        ], [
+            'po_document.mimes' => 'File PO harus berformat PDF, JPG, atau PNG.',
+            'po_document.max' => 'Ukuran file tidak boleh lebih dari 10MB.',
+        ]);
+
+        $file = $request->file('po_document');
+        $path = $file->store('quotation-po', 'public');
+
+        if ($quotation->po_document_path && Storage::disk('public')->exists($quotation->po_document_path)) {
+            Storage::disk('public')->delete($quotation->po_document_path);
+        }
+
+        $quotation->update([
+            'po_document_path' => $path,
+            'po_document_name' => $file->getClientOriginalName(),
+            'po_uploaded_by' => Auth::id(),
+            'po_uploaded_at' => now(),
+            'status' => Quotation::STATUS_FINISH,
+        ]);
+
+        Log::record(
+            'upload_po_quotation',
+            "PO untuk Quotation #{$quotation->id} ({$quotation->quotation_number}) diupload oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        if ($quotation->task) {
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'upload_po_quotation',
+                "PO diupload, Quotation #{$quotation->id} ({$quotation->quotation_number}) -> Finish"
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'PO berhasil diupload. Quotation berstatus Finish.',
+        ]);
+    }
+
+    /**
+     * Tampilkan/unduh dokumen PO yang sudah diupload.
+     */
+    public function viewPo($id)
+    {
+        $quotation = Quotation::findOrFail($id);
+
+        if (! $quotation->po_document_path || ! Storage::disk('public')->exists($quotation->po_document_path)) {
+            abort(404, 'File PO tidak ditemukan.');
+        }
+
+        return Storage::disk('public')->response($quotation->po_document_path, $quotation->po_document_name, [
+            'Content-Disposition' => 'inline; filename="'.$quotation->po_document_name.'"',
+        ]);
+    }
+
+    /**
      * Daftar versi (riwayat) satu group quotation untuk modal Track.
      */
     public function versions($id): JsonResponse
@@ -1705,6 +1792,29 @@ class QuotationController extends Controller
             ->exists();
     }
 
+    /**
+     * User berhak update modul Quotation (can_update murni, dipakai khusus
+     * untuk upload PO — bukan hasModuleAccess() yang juga meng-OR can_create).
+     */
+    private function canUpdateModule(): bool
+    {
+        $user = Auth::user();
+
+        if ($user->role === 'Admin') {
+            return true;
+        }
+
+        $module = Module::where('module_code', self::MODULE_CODE)->first();
+        if (! $module) {
+            return false;
+        }
+
+        return UserAccessControl::where('user_id', $user->id)
+            ->where('module_id', $module->id)
+            ->where('can_update', true)
+            ->exists();
+    }
+
     public function pdf($id)
     {
         $quotation = Quotation::with([
@@ -1718,7 +1828,8 @@ class QuotationController extends Controller
             'task.creator',
         ])->findOrFail($id);
 
-        $pdf = $this->renderPdfWithPageCount('quotation.pdf', compact('quotation'));
+        $view = $quotation->is_portable ? 'quotation.pdf-portable' : 'quotation.pdf-non-portable';
+        $pdf = $this->renderPdfWithPageCount($view, compact('quotation'));
 
         return $pdf->stream('Quotation-'.$quotation->id.'.pdf');
     }
@@ -1789,6 +1900,7 @@ class QuotationController extends Controller
             'your_ref' => 'nullable|string|max:100',
             'no_of_pages' => 'nullable|integer|min:1',
             'is_portable' => 'nullable|boolean',
+            'requires_dp' => 'nullable|boolean',
             'to_name' => 'nullable|string|max:200',
             'address' => 'nullable|string',
             'attn_name' => 'nullable|string|max:150',

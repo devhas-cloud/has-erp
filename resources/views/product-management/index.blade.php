@@ -462,7 +462,9 @@ function openDetailModal(id) {
         $('#pd-status').html(p.status === 'Active'
             ? '<span class="status-badge status-active">Active</span>'
             : '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Inactive</span>');
-        $('#pd-description').text(p.description || '—');
+        $('#pd-description').html(
+                $('<div>').text(p.description).html().replace(/\r?\n/g, '<br>')
+        );
         $('#pd-created').text(p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : '—');
         $('#pd-updated').text(p.updated_at ? new Date(p.updated_at).toLocaleString('id-ID') : '—');
 

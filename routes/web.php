@@ -12,6 +12,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\ProfitEstimateController;
+use App\Http\Controllers\PoSupplierApprovalController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
@@ -152,7 +153,13 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('quotation/{id}/pdf', [QuotationController::class, 'pdf'])->name('quotation.pdf');
     Route::get('quotation/{id}/pdf-cost', [QuotationController::class, 'pdfCost'])->name('quotation.pdf-cost');
     Route::put('quotation/{id}/update-notes', [QuotationController::class, 'updateNotes'])->name('quotation.update-notes');
+    Route::post('quotation/{id}/upload-po', [QuotationController::class, 'uploadPo'])->name('quotation.upload-po');
+    Route::get('quotation/{id}/view-po', [QuotationController::class, 'viewPo'])->name('quotation.view-po');
     Route::resource('quotation', QuotationController::class);
+
+    Route::get('po-supplier-approval/data', [PoSupplierApprovalController::class, 'data'])->name('po-supplier-approval.data');
+    Route::post('po-supplier-approval/{id}/approve', [PoSupplierApprovalController::class, 'approve'])->name('po-supplier-approval.approve');
+    Route::get('po-supplier-approval', [PoSupplierApprovalController::class, 'index'])->name('po-supplier-approval.index');
 
     Route::get('profit-estimate/data', [ProfitEstimateController::class, 'data'])->name('profit-estimate.data');
     Route::get('profit-estimate/{id}/sync', [ProfitEstimateController::class, 'sync'])->name('profit-estimate.sync');

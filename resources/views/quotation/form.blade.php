@@ -189,7 +189,7 @@
         </div>
         <div class="card-body-custom">
             <div class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-4" style="display: none">
                     <label class="form-label">Our Ref (Nomor Quotation)</label>
                     <input type="text" class="form-control" id="qt-number" value="{{ $quotation?->quotation_number }}"
                         placeholder="Otomatis (cth: 087/HAS/QT-ZM/II/2026)" readonly>
@@ -204,7 +204,7 @@
                     <label class="form-label">Your Ref</label>
                     <input type="text" class="form-control" id="qt-your-ref" name="your_ref" value="{{ $quotation?->your_ref }}">
                 </div>
-                <div class="col-md-1">
+                <div class="col-md-1" style="display: none">
                     <label class="form-label">No of Pages</label>
                     <input type="number" min="1" class="form-control" id="qt-pages" name="no_of_pages"
                         value="{{ $quotation?->no_of_pages ?? 1 }}">
@@ -214,6 +214,13 @@
                     <select id="qt-is-portable" name="is_portable" class="form-select">
                         <option value="0" {{ ($quotation?->is_portable ?? false) ? '' : 'selected' }}>Non-Portable</option>
                         <option value="1" {{ ($quotation?->is_portable ?? false) ? 'selected' : '' }}>Portable</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Uang Muka (DP)</label>
+                    <select id="qt-requires-dp" name="requires_dp" class="form-select">
+                        <option value="0" {{ ($quotation?->requires_dp ?? false) ? 'selected' : '' }}>Tidak Perlu DP</option>
+                        <option value="1" {{ ($quotation?->requires_dp ?? false) ? '' : 'selected' }}>Perlu DP</option>
                     </select>
                 </div>
             </div>
@@ -2094,6 +2101,7 @@ $(document).ready(function() {
                     your_ref: $('#qt-your-ref').val(),
                     no_of_pages: $('#qt-pages').val(),
                     is_portable: $('#qt-is-portable').val(),
+                    requires_dp: $('#qt-requires-dp').val(),
                     to_name: $('#qt-to').val(),
                     address: $('#qt-address').val(),
                     attn_name: $('#qt-attn').val(),

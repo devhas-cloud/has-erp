@@ -23,12 +23,21 @@ class Quotation extends Model
 
     public const STATUS_ARCHIVED = 'archived';
 
+    /**
+     * Status akhir setelah quotation Approved dan PO dari pelanggan sudah
+     * diupload sebagai bukti penawaran selesai/deal. Status tidak maju lagi
+     * setelah ini — approval final 2 orang di modul Approve Quotation hanya
+     * dicatat terpisah, bukan transisi status baru.
+     */
+    public const STATUS_FINISH = 'finish';
+
     public const STATUS_LABELS = [
         self::STATUS_DRAFT => 'Draft',
         self::STATUS_WAITING_APPROVAL => 'Waiting Approval',
         self::STATUS_APPROVED => 'Approved',
         self::STATUS_REJECTED => 'Rejected',
         self::STATUS_ARCHIVED => 'Archived',
+        self::STATUS_FINISH => 'Finish',
     ];
 
     /**
@@ -61,6 +70,7 @@ class Quotation extends Model
         'your_ref',
         'no_of_pages',
         'is_portable',
+        'requires_dp',
         'to_name',
         'address',
         'attn_name',
@@ -88,6 +98,10 @@ class Quotation extends Model
         'approval_note',
         'approved_at',
         'rejected_at',
+        'po_document_path',
+        'po_document_name',
+        'po_uploaded_by',
+        'po_uploaded_at',
     ];
 
     protected function casts(): array
@@ -96,10 +110,12 @@ class Quotation extends Model
             'date' => 'date',
             'no_of_pages' => 'integer',
             'is_portable' => 'boolean',
+            'requires_dp' => 'boolean',
             'is_current' => 'boolean',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
             'unlocked_at' => 'datetime',
+            'po_uploaded_at' => 'datetime',
             'subtotal' => 'float',
             'dpp' => 'float',
             'ppn' => 'float',
@@ -158,6 +174,20 @@ class Quotation extends Model
         return $this->belongsTo(User::class, 'final_checked_by');
     }
 
+    public function poUploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'po_uploaded_by');
+    }
+
+    /**
+     * Approval "boleh lanjut PO ke supplier" (modul PO Supplier Approval),
+     * BUKAN approval quotation itu sendiri (lihat finalChecker() untuk itu).
+     */
+    public function poSupplierApprovals(): HasMany
+    {
+        return $this->hasMany(QuotationPoSupplierApproval::class);
+    }
+
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
@@ -186,6 +216,21 @@ class Quotation extends Model
         return $this->status === self::STATUS_APPROVED && ! $this->unlocked_at;
     }
 
+    public function hasPoDocument(): bool
+    {
+        return ! empty($this->po_document_path);
+    }
+
+    /**
+     * Purchasing boleh lanjut PO barang ke supplier = kuorum 2 approver
+     * berbeda di modul PO Supplier Approval sudah terpenuhi. Tidak mengubah
+     * status quotation (tetap 'finish').
+     */
+    public function isReadyForSupplierPo(): bool
+    {
+        return $this->poSupplierApprovals()->count() >= 2;
+    }
+
     public function nextVersion(): int
     {
         return ((int) $this->groupVersions()->max('version')) + 1;
@@ -204,6 +249,7 @@ class Quotation extends Model
             self::STATUS_APPROVED => '<span class="status-badge status-active">Approved</span>',
             self::STATUS_REJECTED => '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Rejected</span>',
             self::STATUS_ARCHIVED => '<span class="status-badge" style="background:#e2e8f0;color:#475569;">Archived</span>',
+            self::STATUS_FINISH => '<span class="status-badge" style="background:#dcfce7;color:#166534;">Finish</span>',
             default => '<span class="status-badge">'.ucfirst($this->status).'</span>',
         };
     }
