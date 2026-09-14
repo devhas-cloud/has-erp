@@ -699,18 +699,21 @@ class QuotationTest extends TestCase
     }
 
     /**
-     * Tab "Biaya" bisa disinkronkan ke satu baris item pada tab "List Item
-     * Quotation" (harga item = Total Price Biaya). Flag persisten per baris
-     * item, bukan referensi id (karena syncItems() hapus-total lalu insert
-     * ulang tiap simpan).
+     * Tab "Biaya" / tiap subtotal kategori pada tab "List Configuration" bisa
+     * disinkronkan ke satu baris item pada tab "List Item Quotation". Sumber
+     * disimpan per baris item sebagai string (bukan referensi id), karena
+     * syncItems() hapus-total lalu insert ulang tiap simpan. Format:
+     * 'biaya', atau 'config:<quote_configuration_id>:<kategori>'. Satu item
+     * hanya boleh mengikuti satu sumber.
      */
-    public function test_store_persists_is_cost_sync_target_flag(): void
+    public function test_store_persists_cost_sync_source(): void
     {
         $config = $this->createApprovedConfiguration();
 
         $items = [
             $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000]),
-            $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Biaya', 'qty' => 1, 'price' => 500000, 'is_cost_sync_target' => 1]),
+            $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Biaya', 'qty' => 1, 'price' => 500000, 'cost_sync_source' => 'biaya']),
+            $this->itemPayload($config, ['_key' => 'row-3', 'description' => 'Item Configuration', 'qty' => 1, 'price' => 250000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']),
         ];
 
         $this->actingAs($this->admin)->postJson(route('quotation.store'), [
@@ -721,11 +724,27 @@ class QuotationTest extends TestCase
 
         $quotation = Quotation::latest('id')->firstOrFail();
 
-        $this->assertFalse((bool) $quotation->items()->where('description', 'Item A')->first()->is_cost_sync_target);
-        $this->assertTrue((bool) $quotation->items()->where('description', 'Item Biaya')->first()->is_cost_sync_target);
+        $this->assertNull($quotation->items()->where('description', 'Item A')->first()->cost_sync_source);
+        $this->assertSame('biaya', $quotation->items()->where('description', 'Item Biaya')->first()->cost_sync_source);
+        $this->assertSame('config:'.$config->id.':SPARING', $quotation->items()->where('description', 'Item Configuration')->first()->cost_sync_source);
     }
 
-    public function test_revise_copies_is_cost_sync_target_flag(): void
+    public function test_store_rejects_invalid_cost_sync_source(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $items = [
+            $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000, 'cost_sync_source' => 'invalid']),
+        ];
+
+        $this->actingAs($this->admin)->postJson(route('quotation.store'), [
+            'task_id' => $config->task_id,
+            'quote_configuration_ids' => [$config->id],
+            'items' => $items,
+        ])->assertStatus(422);
+    }
+
+    public function test_revise_copies_cost_sync_source(): void
     {
         $config = $this->createApprovedConfiguration();
 
@@ -743,14 +762,43 @@ class QuotationTest extends TestCase
             'created_by' => $this->user->id,
         ]);
         $quotation->update(['group_id' => $quotation->id]);
-        $quotation->items()->create(['description' => 'Item Biaya', 'qty' => 1, 'price' => 1000, 'is_cost_sync_target' => true]);
+        $quotation->items()->create(['description' => 'Item Configuration', 'qty' => 1, 'price' => 1000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']);
 
         $response = $this->actingAs($this->admin)
             ->postJson(route('quotation.revise', $quotation->id))
             ->assertOk();
 
         $revision = Quotation::findOrFail($response->json('id'));
-        $this->assertTrue((bool) $revision->items()->first()->is_cost_sync_target);
+        $this->assertSame('config:'.$config->id.':SPARING', $revision->items()->first()->cost_sync_source);
+    }
+
+    /**
+     * Regresi: halaman edit sempat membuang cost_sync_source berformat
+     * "config:<id>:<kategori>" karena render item masih mengecek kecocokan
+     * PERSIS terhadap string literal 'config' (peninggalan sebelum sumber
+     * per-kategori ditambahkan). Field harga item yang tersinkron harus
+     * tetap membawa atribut data-cost-sync-source dan readonly saat halaman
+     * edit dibuka ulang, baik untuk sumber 'biaya' maupun 'config:...'.
+     */
+    public function test_edit_page_preserves_cost_sync_source_for_config_category(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $this->actingAs($this->admin)->postJson(route('quotation.store'), [
+            'task_id' => $config->task_id,
+            'quote_configuration_ids' => [$config->id],
+            'items' => [
+                $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item Biaya', 'qty' => 1, 'price' => 1000000, 'cost_sync_source' => 'biaya']),
+                $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Config', 'qty' => 1, 'price' => 300000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']),
+            ],
+        ])->assertOk();
+
+        $quotation = Quotation::latest('id')->firstOrFail();
+
+        $response = $this->actingAs($this->admin)->get(route('quotation.edit', $quotation->id))->assertOk();
+
+        $response->assertSee('data-cost-sync-source="biaya"', false);
+        $response->assertSee('data-cost-sync-source="config:'.$config->id.':SPARING"', false);
     }
 
     public function test_store_rejected_when_task_has_unapproved_current_config(): void
