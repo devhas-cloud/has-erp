@@ -131,6 +131,14 @@ class ModulesTableSeeder extends Seeder
                 'icon' => 'fa fa-truck-fast',
                 'group' => 'Admin',
             ],
+            [
+                'module_code' => 'MOD_GOODS_REQUEST',
+                'module_name' => 'Permintaan Barang',
+                'description' => 'Menu pengajuan permintaan barang ke purchasing, terikat pada quotation yang PO Supplier Approval-nya sudah disetujui 2 approver',
+                'route_name' => 'goods-request',
+                'icon' => 'fa fa-dolly',
+                'group' => 'Purchasing',
+            ],
         ];
 
         foreach ($modules as $module) {

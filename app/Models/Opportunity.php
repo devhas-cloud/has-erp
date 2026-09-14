@@ -109,4 +109,9 @@ class Opportunity extends Model
     {
         return $this->hasMany(QuoteConfiguration::class);
     }
+
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class);
+    }
 }

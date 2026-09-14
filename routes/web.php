@@ -6,6 +6,7 @@ use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\DashboardTaskPlannerController;
+use App\Http\Controllers\GoodsRequestController;
 use App\Http\Controllers\ImsConfigurationController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\NotificationController;
@@ -160,6 +161,14 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('po-supplier-approval/data', [PoSupplierApprovalController::class, 'data'])->name('po-supplier-approval.data');
     Route::post('po-supplier-approval/{id}/approve', [PoSupplierApprovalController::class, 'approve'])->name('po-supplier-approval.approve');
     Route::get('po-supplier-approval', [PoSupplierApprovalController::class, 'index'])->name('po-supplier-approval.index');
+
+    Route::get('goods-request/data', [GoodsRequestController::class, 'data'])->name('goods-request.data');
+    Route::get('goods-request/fetch-config-items', [GoodsRequestController::class, 'fetchConfigItems'])->name('goods-request.fetch-config-items');
+    Route::get('goods-request/search-products', [GoodsRequestController::class, 'searchProducts'])->name('goods-request.search-products');
+    Route::post('goods-request/{id}/submit', [GoodsRequestController::class, 'submit'])->name('goods-request.submit');
+    Route::post('goods-request/{id}/approve', [GoodsRequestController::class, 'approve'])->name('goods-request.approve');
+    Route::post('goods-request/{id}/reject', [GoodsRequestController::class, 'reject'])->name('goods-request.reject');
+    Route::resource('goods-request', GoodsRequestController::class);
 
     Route::get('profit-estimate/data', [ProfitEstimateController::class, 'data'])->name('profit-estimate.data');
     Route::get('profit-estimate/{id}/sync', [ProfitEstimateController::class, 'sync'])->name('profit-estimate.sync');
