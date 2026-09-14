@@ -223,9 +223,9 @@ class GoodsRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Hanya permintaan barang berstatus Draft yang bisa dihapus.'], 422);
         }
 
-        if (! $this->hasModuleAccess()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk menghapus permintaan barang.'], 403);
-        }
+        // Middleware (DELETE -> can_delete) sudah menjaga izin hapus; tidak perlu
+        // dicek ulang lewat hasModuleAccess() (can_create/can_update) di sini —
+        // itu justru salah menolak user yang hanya diberi can_delete.
 
         $goodsRequest->delete();
 

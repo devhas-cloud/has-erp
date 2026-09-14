@@ -28,10 +28,16 @@ class CheckAccessControl
             return $next($request);
         }
 
-        $lastDot = strrpos($routeName, '.');
-        $baseName = $lastDot !== false ? substr($routeName, 0, $lastDot) : $routeName;
+        // Modul selalu berupa satu segmen pertama (route_name di tabel modules
+        // tidak pernah mengandung titik) — split di titik PERTAMA, bukan
+        // terakhir. Route bertingkat 3 segmen (mis. leads-management.activities.destroy)
+        // punya 2 titik; split di titik terakhir akan menghasilkan baseName
+        // "leads-management.activities" yang tidak cocok modul manapun,
+        // sehingga permission check di-skip total untuk route tersebut.
+        $firstDot = strpos($routeName, '.');
+        $baseName = $firstDot !== false ? substr($routeName, 0, $firstDot) : $routeName;
 
-        $action = $lastDot !== false ? substr($routeName, $lastDot + 1) : 'index';
+        $action = $firstDot !== false ? substr($routeName, $firstDot + 1) : 'index';
 
         $module = Module::where('route_name', $baseName)->first();
 
