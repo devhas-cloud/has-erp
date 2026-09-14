@@ -55,7 +55,7 @@ class QuotationController extends Controller
     {
         return Quotation::withCount('items')
             ->whereHas('items')
-            ->where('status', Quotation::STATUS_APPROVED)
+            ->whereIn('status', [Quotation::STATUS_APPROVED, Quotation::STATUS_FINISH])
             ->orderByDesc('id')
             ->get(['id', 'quotation_number', 'to_name']);
     }
@@ -69,7 +69,7 @@ class QuotationController extends Controller
     {
         return Quotation::withCount('costItems')
             ->whereHas('costItems')
-            ->where('status', Quotation::STATUS_APPROVED)
+            ->whereIn('status', [Quotation::STATUS_APPROVED, Quotation::STATUS_FINISH])
             ->orderByDesc('id')
             ->get(['id', 'quotation_number', 'to_name']);
     }
@@ -1219,13 +1219,6 @@ class QuotationController extends Controller
     public function updateNotes(Request $request, $id): JsonResponse
     {
         $quotation = Quotation::findOrFail($id);
-
-        if ((int) $quotation->created_by !== (int) Auth::id() && Auth::user()->role !== 'Admin') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya pembuat quotation atau Admin yang bisa mengubah catatan.',
-            ], 403);
-        }
 
         $validated = $request->validate([
             'notes' => 'nullable|string',

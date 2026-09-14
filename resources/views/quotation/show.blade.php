@@ -827,7 +827,7 @@
             </div>
             <div class="tab-pane fade" id="qt-show-notes" role="tabpanel">
                 <div class="d-flex justify-content-end" style="padding:10px 14px 0">
-                    @if((int) $quotation->created_by === (int) auth()->id() || auth()->user()->role === 'Admin')
+                    @if($canUpdate)
                     <button type="button" class="btn btn-sm btn-soft" onclick="openQtNotesModal()">
                         <i class="fa fa-pen me-1"></i> Edit Catatan
                     </button>
