@@ -27,6 +27,11 @@
         color: #999;
     }
     .qt-desc-wrap { position: relative; }
+    .qt-price-synced {
+        background: #f0fdf4 !important;
+        border-color: #86efac !important;
+        color: #166534;
+    }
     .qt-desc-toolbar {
         position: absolute;
         top: 2px;
@@ -345,9 +350,11 @@
                                             : ($item['_parent'] ?? '');
                                         $fxQty = isset($item['formula']['qty']) ? ' data-fx="'.e($item['formula']['qty']).'"' : '';
                                         $fxPrice = isset($item['formula']['price']) ? ' data-fx="'.e($item['formula']['price']).'"' : '';
+                                        $costSync = ! empty($item['is_cost_sync_target']);
                                         echo '<tr data-key="'.$key.'"'
                                             .' data-parent="'.$parentKey.'"'
-                                            .' data-depth="'.$depth.'">';
+                                            .' data-depth="'.$depth.'"'
+                                            .' data-cost-sync="'.($costSync ? '1' : '0').'">';
                                         echo '<td class="text-center qt-row-col qt-row-num"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-no" value="'.e($item['item_no'] ?? '').'" placeholder="1 / 1.1"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-pn" value="'.e($item['part_number'] ?? '').'" placeholder="Part No"></td>';
@@ -360,7 +367,7 @@
                                         echo '</div></div></td>';
                                         echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" data-fx-table="items"'.$fxQty.' value="'.($item['qty'] ?? '').'"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" data-fx-table="items"'.$fxPrice.' value="'.($item['price'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end'.($costSync ? ' qt-price-synced' : '').'" data-fx-table="items"'.$fxPrice.($costSync ? ' readonly' : '').' value="'.($item['price'] ?? '').'"></td>';
                                         echo '<td class="qt-amount text-end"></td>';
                                         echo '<td class="text-center">';
                                         echo '<button type="button" class="btn-icon" title="Add Item dari Config" onclick="openQtItemPicker(this)"><i class="fa fa-cart-plus"></i></button>';
@@ -490,6 +497,15 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="d-flex justify-content-end align-items-center gap-2 mt-2">
+                        <label class="form-label mb-0" style="font-size:12px;color:var(--text-muted);white-space:nowrap">
+                            <i class="fa fa-link me-1"></i>Sinkronkan Total Biaya ke Item
+                        </label>
+                        <select id="qt-cost-sync-target" class="form-select form-select-sm" style="width:auto;max-width:300px">
+                            <option value="">— Tidak Disinkronkan —</option>
+                        </select>
+                    </div>
+                    <small style="color:var(--text-muted);display:block;text-align:right">Bila dipilih, harga item tersebut di tab "List Item Quotation" otomatis mengikuti Total Price Biaya (field harga terkunci).</small>
                     <div class="d-flex justify-content-end mt-2">
                         <table class="table table-custom align-middle mb-0" style="max-width:340px">
                             <tr>
@@ -591,6 +607,7 @@
 <script>
 let qtKeySeq = 0;
 let qtTaskData = null;
+let qtCostTotalRaw = 0;
 
 const qtFetchTaskUrl = '{{ route("quotation.fetch-task") }}';
 const qtFetchTemplateUrl = '{{ route("quotation.fetch-template") }}';
@@ -994,7 +1011,7 @@ function addQtRow(item, parentKey) {
         depth = (parseInt(parentRow.attr('data-depth')) || 0) + 1;
     }
 
-    var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '">';
+    var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" data-cost-sync="0">';
     html += '<td class="text-center qt-row-col qt-row-num"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-no" value="' + (item.item_no || '') + '" placeholder="1 / 1.1"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-pn" value="' + (item.part_number || '') + '" placeholder="Part No"></td>';
@@ -1036,6 +1053,7 @@ function addQtRow(item, parentKey) {
     $('#qt-items-empty').hide();
     qtFormatAllNumeric();
     qtRecalc();
+    qtRefreshCostSyncOptions();
     return key;
 }
 
@@ -1064,6 +1082,7 @@ function removeQtItem(btn) {
     qtRecalc();
     qtSyncEmpty();
     qtRenumberRows();
+    qtRefreshCostSyncOptions();
 }
 
 function qtSyncEmpty() {
@@ -1097,6 +1116,7 @@ function qtCollectItems() {
             description: $(this).find('.qt-desc').html(),
             qty: qtToRaw($qty.val()),
             price: qtToRaw($price.val()),
+            is_cost_sync_target: $(this).attr('data-cost-sync') === '1' ? 1 : 0,
             unit: $(this).find('.qt-unit').val(),
             formula: formula
         });
@@ -1728,8 +1748,69 @@ function qtCostRecalc() {
         $(this).find('.qt-cost-amount').text(amount ? qtFmt(amount) : '');
         total += amount;
     });
+    qtCostTotalRaw = total;
     $('#qt-cost-total').text(qtFmt(total));
+    qtPushCostSyncValue();
 }
+
+// ── Sinkronisasi Total Price Biaya ke salah satu item (Tab List Item Quotation) ──
+
+function qtRefreshCostSyncOptions() {
+    var $select = $('#qt-cost-sync-target');
+    if (!$select.length) return;
+
+    var currentKey = $select.attr('data-initialized') ? $select.val() : null;
+    if (currentKey === null) {
+        var $flagged = $('#qt-items-body tr[data-cost-sync="1"]').first();
+        currentKey = $flagged.length ? $flagged.attr('data-key') : '';
+    }
+
+    $select.empty();
+    $select.append($('<option>').val('').text('— Tidak Disinkronkan —'));
+
+    var found = (currentKey === '');
+    $('#qt-items-body tr').each(function(i) {
+        var key = $(this).attr('data-key');
+        var no = ($(this).find('.qt-no').val() || '').trim();
+        var desc = $(this).find('.qt-desc').text().trim();
+        if (desc.length > 40) desc = desc.slice(0, 40) + '…';
+        var label = (no ? no + ' — ' : ('Baris ' + (i + 1) + ' — ')) + (desc || '(tanpa deskripsi)');
+        $select.append($('<option>').val(key).text(label));
+        if (key === currentKey) found = true;
+    });
+
+    var finalKey = found ? currentKey : '';
+    $select.val(finalKey);
+    $select.attr('data-initialized', '1');
+    qtApplyCostSyncTarget(finalKey);
+}
+
+function qtApplyCostSyncTarget(key) {
+    $('#qt-items-body tr').each(function() {
+        var isTarget = !!key && $(this).attr('data-key') === key;
+        $(this).attr('data-cost-sync', isTarget ? '1' : '0');
+        $(this).find('.qt-price').prop('readonly', isTarget).toggleClass('qt-price-synced', isTarget);
+    });
+    qtPushCostSyncValue();
+}
+
+function qtPushCostSyncValue() {
+    var $target = $('#qt-items-body tr[data-cost-sync="1"]');
+    if (!$target.length) return;
+    var $price = $target.find('.qt-price');
+    if ($price.hasClass('fx-editing')) return;
+    $price.val(qtFormatInput(qtCostTotalRaw.toFixed(2)));
+    var $qty = $target.find('.qt-qty');
+    if (!qtToRaw($qty.val())) {
+        $qty.val('1');
+    }
+    qtRecalc();
+}
+
+$(document).on('change', '#qt-cost-sync-target', function() {
+    $(this).attr('data-initialized', '1');
+    qtApplyCostSyncTarget($(this).val());
+});
 
 function qtCostRowHtml(item, parentKey) {
     var key = item._key || qtCostNewKey();
@@ -1859,6 +1940,15 @@ $(document).ready(function() {
     // Ringkasan Harga hanya tampil saat tab "List Item Quotation" aktif.
     $(document).on('shown.bs.tab', 'button[data-bs-toggle="tab"]', function(e) {
         $('#qt-price-summary').toggle($(e.target).attr('data-bs-target') === '#qt-tab-items');
+
+        // Refresh label dropdown "Sinkronkan Total Biaya ke Item" setiap masuk
+        // tab Biaya, karena deskripsi item bisa diedit di tab List Item
+        // Quotation setelah dropdown terakhir dibangun (baris ditambah kosong,
+        // lalu diisi belakangan) — tanpa ini label lama ("tanpa deskripsi")
+        // akan tetap terlihat sampai ada baris ditambah/dihapus.
+        if ($(e.target).attr('data-bs-target') === '#qt-tab-costs') {
+            qtRefreshCostSyncOptions();
+        }
     });
 
     // Cegah Enter mentriger submit (kecuali textarea/contenteditable/ƒx editing).
@@ -2178,6 +2268,7 @@ $(document).ready(function() {
 
     qtRecalc();
     qtCostRecalc();
+    qtRefreshCostSyncOptions();
     fxRecalcAll();
 });
 

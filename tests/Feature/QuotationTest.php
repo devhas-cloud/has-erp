@@ -698,6 +698,61 @@ class QuotationTest extends TestCase
         $this->assertSame(['price' => '=A1*B1'], $revision->items()->first()->formula);
     }
 
+    /**
+     * Tab "Biaya" bisa disinkronkan ke satu baris item pada tab "List Item
+     * Quotation" (harga item = Total Price Biaya). Flag persisten per baris
+     * item, bukan referensi id (karena syncItems() hapus-total lalu insert
+     * ulang tiap simpan).
+     */
+    public function test_store_persists_is_cost_sync_target_flag(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $items = [
+            $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000]),
+            $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Biaya', 'qty' => 1, 'price' => 500000, 'is_cost_sync_target' => 1]),
+        ];
+
+        $this->actingAs($this->admin)->postJson(route('quotation.store'), [
+            'task_id' => $config->task_id,
+            'quote_configuration_ids' => [$config->id],
+            'items' => $items,
+        ])->assertOk();
+
+        $quotation = Quotation::latest('id')->firstOrFail();
+
+        $this->assertFalse((bool) $quotation->items()->where('description', 'Item A')->first()->is_cost_sync_target);
+        $this->assertTrue((bool) $quotation->items()->where('description', 'Item Biaya')->first()->is_cost_sync_target);
+    }
+
+    public function test_revise_copies_is_cost_sync_target_flag(): void
+    {
+        $config = $this->createApprovedConfiguration();
+
+        $quotation = Quotation::create([
+            'quote_configuration_id' => $config->id,
+            'task_id' => $config->task_id,
+            'date' => '2026-08-11',
+            'status' => Quotation::STATUS_APPROVED,
+            'group_id' => null,
+            'version' => 1,
+            'is_current' => true,
+            'quotation_number' => '001/HAS/QT-ZM/VIII/2026',
+            'unlocked_at' => now(),
+            'unlocked_by' => $this->admin->id,
+            'created_by' => $this->user->id,
+        ]);
+        $quotation->update(['group_id' => $quotation->id]);
+        $quotation->items()->create(['description' => 'Item Biaya', 'qty' => 1, 'price' => 1000, 'is_cost_sync_target' => true]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson(route('quotation.revise', $quotation->id))
+            ->assertOk();
+
+        $revision = Quotation::findOrFail($response->json('id'));
+        $this->assertTrue((bool) $revision->items()->first()->is_cost_sync_target);
+    }
+
     public function test_store_rejected_when_task_has_unapproved_current_config(): void
     {
         $task = $this->createTask();

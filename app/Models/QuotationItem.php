@@ -20,6 +20,7 @@ class QuotationItem extends Model
         'description',
         'qty',
         'price',
+        'is_cost_sync_target',
         'unit',
         'formula',
         'sort_order',
@@ -30,6 +31,7 @@ class QuotationItem extends Model
         return [
             'qty' => 'integer',
             'price' => 'float',
+            'is_cost_sync_target' => 'boolean',
             'formula' => 'array',
         ];
     }
