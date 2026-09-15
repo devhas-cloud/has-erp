@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Module;
 use App\Models\Quotation;
 use App\Models\QuotationPoSupplierApproval;
-use App\Models\UserAccessControl;
+use App\Support\ModuleAccess;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,7 +50,7 @@ class PoSupplierApprovalController extends Controller
         $quotations = $query->orderBy('id', 'desc')->offset($start)->limit($length)->get();
 
         $userId = Auth::id();
-        $canApprove = $this->isPoSupplierApprover();
+        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
 
         $data = [];
         foreach ($quotations as $i => $quotation) {
@@ -95,13 +94,6 @@ class PoSupplierApprovalController extends Controller
             ], 422);
         }
 
-        if (! $this->isPoSupplierApprover()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki hak approve pada modul ini.',
-            ], 403);
-        }
-
         if ($quotation->poSupplierApprovals()->where('user_id', Auth::id())->exists()) {
             return response()->json([
                 'success' => false,
@@ -133,27 +125,5 @@ class PoSupplierApprovalController extends Controller
             'approval_count' => $quotation->poSupplierApprovals()->count(),
             'ready_for_supplier_po' => $quotation->isReadyForSupplierPo(),
         ]);
-    }
-
-    /**
-     * User berhak approve modul PO Supplier Approval (UAC can_approve atau Admin).
-     */
-    private function isPoSupplierApprover(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where('can_approve', true)
-            ->exists();
     }
 }
