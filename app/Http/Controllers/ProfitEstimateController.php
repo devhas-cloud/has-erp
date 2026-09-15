@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Currency;
 use App\Models\Log;
-use App\Models\Module;
 use App\Models\ProfitEstimate;
 use App\Models\Quotation;
-use App\Models\UserAccessControl;
+use App\Support\ModuleAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -715,22 +714,6 @@ class ProfitEstimateController extends Controller
      */
     public static function userCanRead(): bool
     {
-        $user = Auth::user();
-        if (! $user) {
-            return false;
-        }
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where('can_read', true)
-            ->exists();
+        return ModuleAccess::for()->module(self::MODULE_CODE)->canRead();
     }
 }

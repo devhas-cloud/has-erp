@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Currency;
 use App\Models\Log;
 use App\Models\MasterProduct;
-use App\Models\Module;
 use App\Models\ProfitEstimate;
 use App\Models\Quotation;
 use App\Models\QuotationConfigItem;
@@ -13,7 +12,7 @@ use App\Models\QuotationCostItem;
 use App\Models\QuotationItem;
 use App\Models\QuoteConfiguration;
 use App\Models\Task;
-use App\Models\UserAccessControl;
+use App\Support\ModuleAccess;
 use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -777,6 +776,9 @@ class QuotationController extends Controller
 
         $quotations = $query->offset($start)->limit($length)->get();
 
+        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
+        $canUpdate = ModuleAccess::for()->module(self::MODULE_CODE)->canUpdate();
+
         $data = [];
         foreach ($quotations as $i => $quotation) {
             $data[] = [
@@ -796,10 +798,10 @@ class QuotationController extends Controller
                 'status_label' => $quotation->status_label,
                 'status_badge' => $quotation->statusBadgeHtml(),
                 'locked' => $quotation->isLocked(),
-                'can_approve' => $this->isApprover(),
+                'can_approve' => $canApprove,
                 'can_revise' => ($quotation->status === Quotation::STATUS_REJECTED
                     || ($quotation->status === Quotation::STATUS_APPROVED && $quotation->unlocked_at)),
-                'can_upload_po' => $quotation->status === Quotation::STATUS_APPROVED && $this->canUpdateModule(),
+                'can_upload_po' => $quotation->status === Quotation::STATUS_APPROVED && $canUpdate,
                 'is_creator' => (int) $quotation->created_by === (int) Auth::id(),
                 'task_title' => $quotation->task?->title ?? '—',
                 'source_config' => $quotation->configurations->isNotEmpty()
@@ -1314,13 +1316,6 @@ class QuotationController extends Controller
             ], 422);
         }
 
-        if (! $this->isApprover()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki hak approve quotation ini.',
-            ], 403);
-        }
-
         DB::transaction(function () use ($quotation) {
             $quotation->update([
                 'status' => Quotation::STATUS_APPROVED,
@@ -1374,13 +1369,6 @@ class QuotationController extends Controller
             ], 422);
         }
 
-        if (! $this->isApprover()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki hak menolak quotation ini.',
-            ], 403);
-        }
-
         $validated = $request->validate([
             'approval_note' => 'required|string|max:1000',
         ]);
@@ -1425,13 +1413,6 @@ class QuotationController extends Controller
                 'success' => false,
                 'message' => 'Hanya quotation berstatus Approved yang bisa dibuka kunci.',
             ], 422);
-        }
-
-        if (! $this->isApprover()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya user dengan hak approve yang bisa membuka kunci.',
-            ], 403);
         }
 
         // jika Task yang terikat quote status done maka tidak bisa di buka
@@ -1484,13 +1465,6 @@ class QuotationController extends Controller
                 'success' => false,
                 'message' => 'Quotation ini belum bisa direvisi. Kunci harus dibuka oleh approver terlebih dahulu.',
             ], 422);
-        }
-
-        if (! $this->hasModuleAccess()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki akses untuk membuat revisi quotation.',
-            ], 403);
         }
 
         $revision = DB::transaction(function () use ($source) {
@@ -1646,13 +1620,6 @@ class QuotationController extends Controller
             ], 422);
         }
 
-        if (! $this->canUpdateModule()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki hak untuk mengupload PO.',
-            ], 403);
-        }
-
         $request->validate([
             'po_document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ], [
@@ -1741,73 +1708,6 @@ class QuotationController extends Controller
             'success' => true,
             'versions' => $versions,
         ]);
-    }
-
-    /**
-     * User berhak approve modul Quotation (UAC can_approve atau Admin).
-     */
-    private function isApprover(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where('can_approve', true)
-            ->exists();
-    }
-
-    /**
-     * User memiliki akses modul Quotation (can_create / can_update / Admin).
-     */
-    private function hasModuleAccess(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where(fn ($q) => $q->where('can_create', true)->orWhere('can_update', true))
-            ->exists();
-    }
-
-    /**
-     * User berhak update modul Quotation (can_update murni, dipakai khusus
-     * untuk upload PO — bukan hasModuleAccess() yang juga meng-OR can_create).
-     */
-    private function canUpdateModule(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where('can_update', true)
-            ->exists();
     }
 
     public function pdf($id)

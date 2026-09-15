@@ -61,6 +61,16 @@ class CheckAccessControl
             ->exists();
 
         if (! $hasAccess && $method === 'GET') {
+            // Endpoint JSON/DataTables (data, fetch-*, search) mengirim Accept
+            // application/json -> balas 403 JSON agar client bisa memproses error.
+            // Halaman HTML biasa tetap di-redirect (302) seperti sebelumnya.
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki izin untuk melakukan aksi ini.',
+                ], 403);
+            }
+
             return redirect()->back()->with('error', 'Anda tidak memiliki akses ke modul ini.');
         }
 

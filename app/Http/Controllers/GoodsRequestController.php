@@ -5,10 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\GoodsRequest;
 use App\Models\GoodsRequestItem;
 use App\Models\MasterProduct;
-use App\Models\Module;
 use App\Models\QuoteConfiguration;
 use App\Models\Quotation;
-use App\Models\UserAccessControl;
+use App\Support\ModuleAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -60,7 +59,7 @@ class GoodsRequestController extends Controller
 
         $requests = $query->orderBy('id', 'desc')->offset($start)->limit($length)->get();
 
-        $isApprover = $this->isApprover();
+        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
 
         $data = [];
         foreach ($requests as $i => $gr) {
@@ -76,7 +75,7 @@ class GoodsRequestController extends Controller
                 'status' => $gr->status,
                 'status_label' => $gr->status_label,
                 'status_badge' => $gr->statusBadgeHtml(),
-                'can_approve' => $isApprover && $gr->status === GoodsRequest::STATUS_WAITING_APPROVAL,
+                'can_approve' => $canApprove && $gr->status === GoodsRequest::STATUS_WAITING_APPROVAL,
                 'is_creator' => (int) $gr->created_by === (int) Auth::id(),
             ];
         }
@@ -108,10 +107,6 @@ class GoodsRequestController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if (! $this->hasModuleAccess()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk membuat permintaan barang.'], 403);
-        }
-
         $validated = $this->validateGoodsRequest($request);
 
         $quotation = Quotation::findOrFail($validated['quotation_id']);
@@ -150,8 +145,8 @@ class GoodsRequestController extends Controller
 
         return view('goods-request.show', [
             'goodsRequest' => $goodsRequest,
-            'canApprove' => $this->isApprover(),
-            'canUpdate' => $this->hasModuleAccess(),
+            'canApprove' => ModuleAccess::for()->module(self::MODULE_CODE)->canApprove(),
+            'canUpdate' => ModuleAccess::for()->module(self::MODULE_CODE)->canManage(),
         ]);
     }
 
@@ -193,10 +188,6 @@ class GoodsRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Hanya permintaan barang berstatus Draft yang bisa diubah.'], 422);
         }
 
-        if (! $this->hasModuleAccess()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk mengubah permintaan barang.'], 403);
-        }
-
         $validated = $this->validateGoodsRequest($request);
 
         // Quotation (dan opportunity turunannya) tidak bisa diganti setelah dibuat —
@@ -224,8 +215,7 @@ class GoodsRequestController extends Controller
         }
 
         // Middleware (DELETE -> can_delete) sudah menjaga izin hapus; tidak perlu
-        // dicek ulang lewat hasModuleAccess() (can_create/can_update) di sini —
-        // itu justru salah menolak user yang hanya diberi can_delete.
+        // dicek ulang di sini — itu justru salah menolak user yang hanya diberi can_delete.
 
         $goodsRequest->delete();
 
@@ -238,10 +228,6 @@ class GoodsRequestController extends Controller
 
         if ($goodsRequest->status !== GoodsRequest::STATUS_DRAFT) {
             return response()->json(['success' => false, 'message' => 'Hanya permintaan barang berstatus Draft yang bisa di-submit.'], 422);
-        }
-
-        if (! $this->hasModuleAccess()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk submit permintaan barang.'], 403);
         }
 
         if ($goodsRequest->items()->count() === 0) {
@@ -261,10 +247,6 @@ class GoodsRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Permintaan barang ini tidak sedang menunggu approval.'], 422);
         }
 
-        if (! $this->isApprover()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak approve pada modul ini.'], 403);
-        }
-
         $goodsRequest->update([
             'status' => GoodsRequest::STATUS_APPROVED,
             'final_checked_by' => Auth::id(),
@@ -280,10 +262,6 @@ class GoodsRequestController extends Controller
 
         if ($goodsRequest->status !== GoodsRequest::STATUS_WAITING_APPROVAL) {
             return response()->json(['success' => false, 'message' => 'Permintaan barang ini tidak sedang menunggu approval.'], 422);
-        }
-
-        if (! $this->isApprover()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak approve pada modul ini.'], 403);
         }
 
         $validated = $request->validate([
@@ -440,50 +418,5 @@ class GoodsRequestController extends Controller
         if (! empty($payload)) {
             GoodsRequestItem::insert($payload);
         }
-    }
-
-    /**
-     * User berhak create/update modul Permintaan Barang (can_create/can_update atau Admin).
-     */
-    private function hasModuleAccess(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where(fn ($q) => $q->where('can_create', true)->orWhere('can_update', true))
-            ->exists();
-    }
-
-    /**
-     * User berhak approve modul Permintaan Barang (can_approve atau Admin).
-     * Tidak dibatasi divisi — cukup punya hak approve pada modul ini.
-     */
-    private function isApprover(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where('can_approve', true)
-            ->exists();
     }
 }
