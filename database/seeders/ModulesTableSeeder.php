@@ -92,6 +92,14 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Master Data',
             ],
             [
+                'module_code' => 'MOD_SUPPLIER',
+                'module_name' => 'Supplier',
+                'description' => 'Menu untuk mengelola data master supplier — dipakai sebagai sumber pilihan supplier pada Purchase Order',
+                'route_name' => 'supplier',
+                'icon' => 'fa fa-truck',
+                'group' => 'Master Data',
+            ],
+            [
                 'module_code' => 'MOD_WATER_CONFIGURATION',
                 'module_name' => 'Water Configuration',
                 'description' => 'Menu quotation water configuration (parameter pH, Ammonia, COD, TSS dan Debit)',
@@ -137,6 +145,14 @@ class ModulesTableSeeder extends Seeder
                 'description' => 'Menu pengajuan permintaan barang ke purchasing, terikat pada quotation yang PO Supplier Approval-nya sudah disetujui 2 approver',
                 'route_name' => 'goods-request',
                 'icon' => 'fa fa-dolly',
+                'group' => 'Purchasing',
+            ],
+            [
+                'module_code' => 'MOD_PURCHASE_ORDER',
+                'module_name' => 'Purchase Order',
+                'description' => 'Menu pembuatan PO ke supplier dari item Permintaan Barang yang sudah Approved — satu PO boleh menggabungkan item dari beberapa Permintaan Barang lintas divisi',
+                'route_name' => 'purchase-order',
+                'icon' => 'fa fa-file-invoice-dollar',
                 'group' => 'Purchasing',
             ],
         ];
