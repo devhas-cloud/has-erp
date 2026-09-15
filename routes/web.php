@@ -14,7 +14,9 @@ use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\ProfitEstimateController;
 use App\Http\Controllers\PoSupplierApprovalController;
+use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\QuotationController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\WaterConfigurationController;
@@ -169,6 +171,18 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('goods-request/{id}/approve', [GoodsRequestController::class, 'approve'])->name('goods-request.approve');
     Route::post('goods-request/{id}/reject', [GoodsRequestController::class, 'reject'])->name('goods-request.reject');
     Route::resource('goods-request', GoodsRequestController::class);
+
+    Route::get('purchase-order/data', [PurchaseOrderController::class, 'data'])->name('purchase-order.data');
+    Route::get('purchase-order/fetch-available-items', [PurchaseOrderController::class, 'fetchAvailableItems'])->name('purchase-order.fetch-available-items');
+    Route::post('purchase-order/{id}/submit', [PurchaseOrderController::class, 'submit'])->name('purchase-order.submit');
+    Route::post('purchase-order/{id}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-order.approve');
+    Route::post('purchase-order/{id}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-order.reject');
+    Route::get('purchase-order/{id}/pdf', [PurchaseOrderController::class, 'pdf'])->name('purchase-order.pdf');
+    Route::resource('purchase-order', PurchaseOrderController::class);
+
+    Route::get('supplier/data', [SupplierController::class, 'data'])->name('supplier.data');
+    Route::get('supplier/search', [SupplierController::class, 'search'])->name('supplier.search');
+    Route::resource('supplier', SupplierController::class)->except(['create', 'show']);
 
     Route::get('profit-estimate/data', [ProfitEstimateController::class, 'data'])->name('profit-estimate.data');
     Route::get('profit-estimate/{id}/sync', [ProfitEstimateController::class, 'sync'])->name('profit-estimate.sync');

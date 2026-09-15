@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class GoodsRequestItem extends Model
 {
@@ -38,5 +39,19 @@ class GoodsRequestItem extends Model
     public function masterProduct(): BelongsTo
     {
         return $this->belongsTo(MasterProduct::class);
+    }
+
+    /**
+     * PurchaseOrderItem yang memakai item ini (unique di level DB — satu item
+     * Permintaan Barang hanya boleh diorder di SATU PO manapun).
+     */
+    public function purchaseOrderItem(): HasOne
+    {
+        return $this->hasOne(PurchaseOrderItem::class);
+    }
+
+    public function isOrdered(): bool
+    {
+        return $this->purchaseOrderItem()->exists();
     }
 }

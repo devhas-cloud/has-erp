@@ -208,6 +208,102 @@ class GoodsRequestTest extends TestCase
         ])->assertStatus(403);
     }
 
+    /**
+     * User yang HANYA diberi can_update (tanpa can_create) harus tetap bisa
+     * mengubah permintaan barang Draft — permission gate untuk update() adalah
+     * can_update lewat middleware (PUT), bukan gate tambahan di controller.
+     */
+    public function test_update_allowed_for_user_with_only_can_update_permission(): void
+    {
+        $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
+        $updateOnlyUser = $this->makeUser('updateonly', $module, ['can_update' => true]);
+
+        $quotation = $this->createEligibleQuotation();
+        $gr = GoodsRequest::create([
+            'opportunity_id' => $quotation->opportunity_id,
+            'quotation_id' => $quotation->id,
+            'division_id' => $this->division->id,
+            'status' => GoodsRequest::STATUS_DRAFT,
+            'created_by' => $this->creator->id,
+        ]);
+
+        $this->actingAs($updateOnlyUser)->putJson(route('goods-request.update', $gr->id), [
+            'quotation_id' => $quotation->id,
+            'notes' => 'Update oleh user can_update-only',
+            'items' => [],
+        ])->assertOk();
+
+        $this->assertSame('Update oleh user can_update-only', $gr->fresh()->notes);
+    }
+
+    /**
+     * User can_update-only TIDAK boleh membuat (POST store butuh can_create) —
+     * konsisten dengan mapping middleware: POST -> can_create.
+     */
+    public function test_store_blocked_for_user_with_only_can_update_permission(): void
+    {
+        $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
+        $updateOnlyUser = $this->makeUser('updateonly', $module, ['can_update' => true]);
+
+        $quotation = $this->createEligibleQuotation();
+
+        $this->actingAs($updateOnlyUser)->postJson(route('goods-request.store'), [
+            'quotation_id' => $quotation->id,
+            'items' => [],
+        ])->assertStatus(403);
+
+        $this->assertSame(0, GoodsRequest::count());
+    }
+
+    /**
+     * User can_update-only TIDAK bisa submit (POST submit butuh can_create) —
+     * state transition ditangani middleware dengan hak yang sama seperti create,
+     * konsisten dengan modul configuration lain ("sebelumnya").
+     */
+    public function test_submit_blocked_for_user_with_only_can_update_permission(): void
+    {
+        $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
+        $updateOnlyUser = $this->makeUser('updateonly', $module, ['can_update' => true]);
+
+        $quotation = $this->createEligibleQuotation();
+        $gr = GoodsRequest::create([
+            'opportunity_id' => $quotation->opportunity_id,
+            'quotation_id' => $quotation->id,
+            'division_id' => $this->division->id,
+            'status' => GoodsRequest::STATUS_DRAFT,
+            'created_by' => $this->creator->id,
+        ]);
+        $gr->items()->create(['description' => 'Item', 'qty' => 1]);
+
+        $this->actingAs($updateOnlyUser)->postJson(route('goods-request.submit', $gr->id))->assertStatus(403);
+
+        $this->assertSame(GoodsRequest::STATUS_DRAFT, $gr->fresh()->status);
+    }
+
+    /**
+     * User yang HANYA diberi can_delete (tanpa can_create/can_update) harus
+     * tetap bisa menghapus permintaan barang Draft — permission gate untuk
+     * destroy() adalah can_delete lewat middleware (DELETE).
+     */
+    public function test_destroy_allowed_for_user_with_only_can_delete_permission(): void
+    {
+        $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
+        $deleteOnlyUser = $this->makeUser('deleteonly', $module, ['can_delete' => true]);
+
+        $quotation = $this->createEligibleQuotation();
+        $gr = GoodsRequest::create([
+            'opportunity_id' => $quotation->opportunity_id,
+            'quotation_id' => $quotation->id,
+            'division_id' => $this->division->id,
+            'status' => GoodsRequest::STATUS_DRAFT,
+            'created_by' => $this->creator->id,
+        ]);
+
+        $this->actingAs($deleteOnlyUser)->deleteJson(route('goods-request.destroy', $gr->id))->assertOk();
+
+        $this->assertSame(0, GoodsRequest::count());
+    }
+
     public function test_submit_requires_at_least_one_item(): void
     {
         $quotation = $this->createEligibleQuotation();

@@ -1476,10 +1476,11 @@ class QuotationTest extends TestCase
         ]);
         $quotation->update(['group_id' => $quotation->id]);
 
-        // Middleware access.control memblokir approve untuk user tanpa can_approve.
+        // Middleware access.control memblokir approve untuk user tanpa can_approve
+        // (POST JSON -> 403, konsisten dengan endpoint JSON/DataTables lain).
         $this->actingAs($noApprover)
             ->postJson(route('quotation.approve', $quotation->id))
-            ->assertStatus(302);
+            ->assertStatus(403);
 
         $this->assertSame(Quotation::STATUS_WAITING_APPROVAL, $quotation->fresh()->status);
     }
@@ -1547,10 +1548,10 @@ class QuotationTest extends TestCase
         ]);
         $quotation->update(['group_id' => $quotation->id]);
 
-        // User tanpa can_approve tidak bisa unlock.
+        // User tanpa can_approve tidak bisa unlock (POST JSON -> 403).
         $this->actingAs($noApprover)
             ->postJson(route('quotation.unlock', $quotation->id))
-            ->assertStatus(302);
+            ->assertStatus(403);
 
         // Approver (admin) bisa unlock.
         $this->actingAs($this->admin)

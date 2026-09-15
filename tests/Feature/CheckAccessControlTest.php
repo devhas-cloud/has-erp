@@ -128,9 +128,9 @@ class CheckAccessControlTest extends TestCase
         $admin = User::create(['username' => 'admin', 'email' => 'admin@has.com', 'password' => bcrypt('secret'), 'division_id' => $this->division->id, 'role' => 'Admin']);
         $opportunity = Opportunity::create(['opportunity_name' => 'Test', 'account_companies_id' => $company->id, 'owner_id' => $admin->id, 'probability' => 50]);
 
-        // Middleware selalu redirect (302) untuk GET yang tidak diizinkan,
-        // terlepas dari header Accept (lihat CheckAccessControl::handle()) —
-        // sama seperti perilaku route single-segment biasa.
+        // Request GET biasa tanpa Accept JSON tetap di-redirect (302) oleh
+        // middleware untuk GET yang tidak diizinkan — endpoint JSON/DataTables
+        // (Accept application/json) justru menerima 403 JSON.
         $noAccessUser = $this->makeUser('zeroaccess');
         $this->actingAs($noAccessUser)
             ->get(route('opportunity-management.activities.fetch', $opportunity->id))
@@ -141,5 +141,25 @@ class CheckAccessControlTest extends TestCase
         $this->actingAs($readerUser)
             ->getJson(route('opportunity-management.activities.fetch', $opportunity->id))
             ->assertOk();
+    }
+
+    /**
+     * GET ke endpoint JSON (data/fetch-*) yang tidak diizinkan membalas 403
+     * JSON (bukan redirect HTML) agar client bisa memproses error; request
+     * biasa (tanpa Accept JSON) tetap di-redirect 302 seperti sebelumnya.
+     */
+    public function test_json_get_endpoint_returns_403_json_when_forbidden(): void
+    {
+        Module::create(['module_code' => 'MOD_LEADS_MANAGEMENT', 'module_name' => 'Leads', 'route_name' => 'leads-management', 'icon' => 'fa', 'group' => 'CRM']);
+        $user = $this->makeUser('zeroaccess');
+
+        $this->actingAs($user)
+            ->getJson(route('leads-management.data'))
+            ->assertStatus(403)
+            ->assertJson(['success' => false]);
+
+        $this->actingAs($user)
+            ->get(route('leads-management.index'))
+            ->assertStatus(302);
     }
 }

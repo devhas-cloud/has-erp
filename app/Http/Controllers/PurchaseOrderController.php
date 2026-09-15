@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Currency;
 use App\Models\GoodsRequest;
 use App\Models\GoodsRequestItem;
-use App\Models\Module;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
-use App\Models\UserAccessControl;
+use App\Support\ModuleAccess;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,7 +57,7 @@ class PurchaseOrderController extends Controller
 
         $orders = $query->orderBy('id', 'desc')->offset($start)->limit($length)->get();
 
-        $isApprover = $this->isApprover();
+        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
 
         $data = [];
         foreach ($orders as $i => $po) {
@@ -73,7 +73,7 @@ class PurchaseOrderController extends Controller
                 'status' => $po->status,
                 'status_label' => $po->status_label,
                 'status_badge' => $po->statusBadgeHtml(),
-                'can_approve' => $isApprover && $po->status === PurchaseOrder::STATUS_WAITING_APPROVAL,
+                'can_approve' => $canApprove && $po->status === PurchaseOrder::STATUS_WAITING_APPROVAL,
                 'is_creator' => (int) $po->created_by === (int) Auth::id(),
             ];
         }
@@ -97,19 +97,24 @@ class PurchaseOrderController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if (! $this->hasModuleAccess()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk membuat purchase order.'], 403);
-        }
-
         $validated = $this->validatePurchaseOrder($request);
 
         $purchaseOrder = DB::transaction(function () use ($validated) {
             $po = PurchaseOrder::create([
                 'supplier_name' => $validated['supplier_name'],
+                'supplier_id' => $validated['supplier_id'] ?? null,
+                'supplier_address' => $validated['supplier_address'] ?? null,
+                'supplier_phone' => $validated['supplier_phone'] ?? null,
+                'supplier_fax' => $validated['supplier_fax'] ?? null,
+                'supplier_attn' => $validated['supplier_attn'] ?? null,
                 'po_number' => $validated['po_number'] ?? null,
                 'date' => $validated['date'] ?? null,
+                'terms' => $validated['terms'] ?? null,
                 'status' => PurchaseOrder::STATUS_DRAFT,
                 'notes' => $validated['notes'] ?? null,
+                'request_by_name' => $validated['request_by_name'] ?? null,
+                'finance_name' => $validated['finance_name'] ?? null,
+                'accounting_name' => $validated['accounting_name'] ?? null,
                 'created_by' => Auth::id(),
             ]);
 
@@ -127,12 +132,12 @@ class PurchaseOrderController extends Controller
 
     public function show($id)
     {
-        $purchaseOrder = PurchaseOrder::with(['items.goodsRequest.division', 'items.goodsRequest.opportunity', 'items.goodsRequest.quotation', 'creator', 'finalChecker'])->findOrFail($id);
+        $purchaseOrder = PurchaseOrder::with(['items.goodsRequest.division', 'items.goodsRequest.opportunity', 'items.goodsRequest.quotation', 'supplier', 'creator', 'finalChecker'])->findOrFail($id);
 
         return view('purchase-order.show', [
             'purchaseOrder' => $purchaseOrder,
-            'canApprove' => $this->isApprover(),
-            'canUpdate' => $this->hasModuleAccess(),
+            'canApprove' => ModuleAccess::for()->module(self::MODULE_CODE)->canApprove(),
+            'canUpdate' => ModuleAccess::for()->module(self::MODULE_CODE)->canManage(),
         ]);
     }
 
@@ -163,6 +168,26 @@ class PurchaseOrderController extends Controller
         ]);
     }
 
+    public function pdf($id)
+    {
+        $purchaseOrder = PurchaseOrder::with([
+            'items.goodsRequest.division',
+            'items.goodsRequest.opportunity',
+            'supplier',
+            'creator',
+        ])->findOrFail($id);
+
+        $printCurrency = $purchaseOrder->printCurrency();
+        $currencySymbol = $printCurrency
+            ? (Currency::where('name', $printCurrency)->value('symbol') ?: $printCurrency)
+            : 'Rp';
+
+        $pdf = Pdf::loadView('purchase-order.pdf', compact('purchaseOrder', 'currencySymbol'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->stream('PO-'.($purchaseOrder->po_number ?: $purchaseOrder->id).'.pdf');
+    }
+
     public function update(Request $request, $id): JsonResponse
     {
         $purchaseOrder = PurchaseOrder::findOrFail($id);
@@ -171,18 +196,23 @@ class PurchaseOrderController extends Controller
             return response()->json(['success' => false, 'message' => 'Hanya purchase order berstatus Draft yang bisa diubah.'], 422);
         }
 
-        if (! $this->hasModuleAccess()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk mengubah purchase order.'], 403);
-        }
-
         $validated = $this->validatePurchaseOrder($request);
 
         DB::transaction(function () use ($purchaseOrder, $validated) {
             $purchaseOrder->update([
                 'supplier_name' => $validated['supplier_name'],
+                'supplier_id' => $validated['supplier_id'] ?? null,
+                'supplier_address' => $validated['supplier_address'] ?? null,
+                'supplier_phone' => $validated['supplier_phone'] ?? null,
+                'supplier_fax' => $validated['supplier_fax'] ?? null,
+                'supplier_attn' => $validated['supplier_attn'] ?? null,
                 'po_number' => $validated['po_number'] ?? null,
                 'date' => $validated['date'] ?? null,
+                'terms' => $validated['terms'] ?? null,
                 'notes' => $validated['notes'] ?? null,
+                'request_by_name' => $validated['request_by_name'] ?? null,
+                'finance_name' => $validated['finance_name'] ?? null,
+                'accounting_name' => $validated['accounting_name'] ?? null,
             ]);
 
             $this->syncItems($purchaseOrder, $validated['items'] ?? []);
@@ -203,8 +233,7 @@ class PurchaseOrderController extends Controller
         }
 
         // Middleware (DELETE -> can_delete) sudah menjaga izin hapus; tidak perlu
-        // dicek ulang lewat hasModuleAccess() (can_create/can_update) di sini —
-        // itu justru salah menolak user yang hanya diberi can_delete.
+        // dicek ulang di sini — itu justru salah menolak user yang hanya diberi can_delete.
 
         $purchaseOrder->delete();
 
@@ -217,10 +246,6 @@ class PurchaseOrderController extends Controller
 
         if ($purchaseOrder->status !== PurchaseOrder::STATUS_DRAFT) {
             return response()->json(['success' => false, 'message' => 'Hanya purchase order berstatus Draft yang bisa di-submit.'], 422);
-        }
-
-        if (! $this->hasModuleAccess()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk submit purchase order.'], 403);
         }
 
         if ($purchaseOrder->items()->count() === 0) {
@@ -240,10 +265,6 @@ class PurchaseOrderController extends Controller
             return response()->json(['success' => false, 'message' => 'Purchase order ini tidak sedang menunggu approval.'], 422);
         }
 
-        if (! $this->isApprover()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak approve pada modul ini.'], 403);
-        }
-
         $purchaseOrder->update([
             'status' => PurchaseOrder::STATUS_APPROVED,
             'final_checked_by' => Auth::id(),
@@ -259,10 +280,6 @@ class PurchaseOrderController extends Controller
 
         if ($purchaseOrder->status !== PurchaseOrder::STATUS_WAITING_APPROVAL) {
             return response()->json(['success' => false, 'message' => 'Purchase order ini tidak sedang menunggu approval.'], 422);
-        }
-
-        if (! $this->isApprover()) {
-            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak approve pada modul ini.'], 403);
         }
 
         $validated = $request->validate([
@@ -324,9 +341,18 @@ class PurchaseOrderController extends Controller
     {
         return $request->validate([
             'supplier_name' => 'required|string|max:200',
+            'supplier_id' => 'nullable|integer|exists:suppliers,id',
+            'supplier_address' => 'nullable|string',
+            'supplier_phone' => 'nullable|string|max:50',
+            'supplier_fax' => 'nullable|string|max:50',
+            'supplier_attn' => 'nullable|string|max:150',
             'po_number' => 'nullable|string|max:50',
             'date' => 'nullable|date',
+            'terms' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
+            'request_by_name' => 'nullable|string|max:150',
+            'finance_name' => 'nullable|string|max:150',
+            'accounting_name' => 'nullable|string|max:150',
             'items' => 'nullable|array',
             'items.*.goods_request_item_id' => 'nullable|integer|exists:goods_request_items,id',
             'items.*.goods_request_id' => 'nullable|integer|exists:goods_requests,id',
@@ -395,49 +421,5 @@ class PurchaseOrderController extends Controller
                 'message' => 'Salah satu item sudah dipakai di Purchase Order lain. Muat ulang halaman dan coba lagi.',
             ], 422));
         }
-    }
-
-    /**
-     * User berhak create/update modul Purchase Order (can_create/can_update atau Admin).
-     */
-    private function hasModuleAccess(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where(fn ($q) => $q->where('can_create', true)->orWhere('can_update', true))
-            ->exists();
-    }
-
-    /**
-     * User berhak approve modul Purchase Order (can_approve atau Admin).
-     */
-    private function isApprover(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where('can_approve', true)
-            ->exists();
     }
 }

@@ -89,4 +89,17 @@ class GoodsRequest extends Model
             default => '<span class="status-badge">'.ucfirst($this->status).'</span>',
         };
     }
+
+    /**
+     * Sudah semua item permintaan ini masuk ke suatu Purchase Order (lintas
+     * PO manapun, lihat GoodsRequestItem::isOrdered()).
+     */
+    public function isFullyOrdered(): bool
+    {
+        if ($this->items->isEmpty()) {
+            return false;
+        }
+
+        return $this->items->every(fn (GoodsRequestItem $item) => $item->isOrdered());
+    }
 }
