@@ -106,7 +106,7 @@
                         <th>Opportunity Name</th>
                         <th>Account Company</th>
                         <th>Stage</th>
-                        <th>Close Date</th>
+                        <th>Next Step</th>
                         <th>Owner</th>
                         <th class="text-center" style="width:120px">Action</th>
                     </tr>
@@ -154,13 +154,13 @@
                                     <input type="hidden" name="account_companies_id" id="opp-company-id">
                                 </div>
                                 <div class="form-group">
-                                    <label>Contact Name</label>
+                                    <label>Contact Name <span class="text-danger">*</span></label>
                                     <select id="opp-contact" style="width:100%">
                                         <option value=""></option>
                                     </select>
                                     <input type="hidden" name="account_contacts_id" id="opp-contact-id">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display: none">
                                     <label>Type</label>
                                     <select name="type" id="opp-type">
                                         <option value="">— Select —</option>
@@ -169,7 +169,7 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="opp-form-row">
+                            <div class="opp-form-row" style="display: none">
                                 <div class="form-group">
                                     <label>Stage</label>
                                     <select name="stage_id" id="opp-stage">
@@ -194,7 +194,7 @@
                                 </div>
                             </div>
                             <div class="opp-form-row">
-                                <div class="form-group">
+                                <div class="form-group" style="display: none">
                                     <label>Loss Reason</label>
                                     <select name="loss_reasons_id" id="opp-loss-reason">
                                         <option value="">— Pilih —</option>
@@ -223,7 +223,7 @@
                                 </div>
                             </div>
                             <div class="opp-form-row">
-                                <div class="form-group">
+                                <div class="form-group" style="display: none">
                                     <label>Close Date</label>
                                     <input type="date" name="close_date" id="opp-close-date">
                                 </div>
@@ -243,7 +243,7 @@
                                     <textarea name="next_step" id="opp-next-step" rows="2"></textarea>
                                 </div>
                             </div>
-                            <div class="opp-form-row">
+                            <div class="opp-form-row" style="display: none">
                                 <label class="form-check-inline">
                                     <input type="checkbox" name="quote_ready" id="opp-quote-ready" value="1">
                                     Quote Ready
@@ -252,7 +252,7 @@
                         </div>
                     </div>
 
-                    <div class="opp-form-section">
+                    <div class="opp-form-section" style="display: none">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
                             <span><i class="fa fa-check-circle me-2" style="color:var(--accent)"></i>BAT Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -281,7 +281,7 @@
                         </div>
                     </div>
 
-                    <div class="opp-form-section">
+                    <div class="opp-form-section" style="display: none">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
                             <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -468,7 +468,7 @@ function initOpportunityTable() {
                     return '<span class="status-badge badge-success" style="background:var(--success-soft);color:var(--success)">' + (data || '—') + '</span>';
                 }
             },
-            { data: 'close_won_date', orderable: true, searchable: false },
+            { data: 'next_step', orderable: true, searchable: false },
             { data: 'owner_name', orderable: true, searchable: true },
             {
                 data: null,
@@ -505,7 +505,8 @@ $(document).on('click', '#btn-save-opportunity', function() {
     const validations = [
         { field: '#opp-name', label: 'Opportunity Name' },
         { field: '#opp-company-id', label: 'Account Name', type: 'hidden', select2: '#opp-company' },
-        { field: '#opp-forecast', label: 'Forecast' },
+        { field: '#opp-contact-id', label: 'Contact Name', type: 'hidden', select2: '#opp-contact' },
+        //{ field: '#opp-forecast', label: 'Forecast' },
     ];
 
     for (let i = 0; i < validations.length; i++) {

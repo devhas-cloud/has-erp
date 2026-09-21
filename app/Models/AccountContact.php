@@ -22,6 +22,7 @@ class AccountContact extends Model
         'contact_methods_id',
         'divisions_id',
         'contact_owner_id',
+        'assigned_to_id',
         'address_street',
         'address_city',
         'address_province',
@@ -64,6 +65,11 @@ class AccountContact extends Model
     public function contactOwner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'contact_owner_id');
+    }
+
+    public function assignedTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to_id');
     }
 
     public function leads(): HasMany

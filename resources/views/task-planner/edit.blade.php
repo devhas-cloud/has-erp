@@ -177,14 +177,25 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Category<span class="field-required">*</span></label>
-                            <select name="category_id" class="form-select" required>
+                            <select name="category_id" id="edit_category_id" class="form-select" required>
                                 @foreach ($categories as $cat)
                                     <option value="{{ $cat->id }}"
-                                        {{ $task->category_id == $cat->id ? 'selected' : '' }}>
+                                        {{ $task->category_id == $cat->id ? 'selected' : '' }}
+                                        @if(strtolower($cat->name) === 'visit') data-visit="1" @endif>
                                         {{ $cat->division_id ? '[' . optional($cat->division)->division_name . '] ' : '[Global] ' }}
                                         {{ $cat->name }}
                                     </option>
                                 @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="edit_account_contact_container" style="display:none">
+                            <label class="form-label">Account Contact<span class="field-optional">(yang dikunjungi, opsional)</span></label>
+                            <select name="account_contact_id" id="edit_account_contact" class="form-select" style="width:100%">
+                                @if ($task->accountContact)
+                                    <option value="{{ $task->accountContact->id }}" selected>
+                                        {{ $task->accountContact->full_name }}{{ $task->accountContact->accountCompany ? ' — '.$task->accountContact->accountCompany->account_name : '' }}
+                                    </option>
+                                @endif
                             </select>
                         </div>
 
@@ -301,7 +312,35 @@
         $(header).closest('.task-section').toggleClass('open');
     }
 
+    function toggleAccountContact() {
+        var isVisit = !!($('#edit_category_id option:selected').attr('data-visit'));
+        $('#edit_account_contact_container').toggle(isVisit);
+        if (!isVisit) {
+            $('#edit_account_contact').val(null).trigger('change');
+        }
+    }
+
     $(function() {
+        toggleAccountContact();
+        $(document).on('change', '#edit_category_id', toggleAccountContact);
+
+        $('#edit_account_contact').select2({
+            placeholder: 'Cari kontak yang dikunjungi...',
+            allowClear: true,
+            ajax: {
+                url: '{{ route('task-planner.fetch-account-contacts') }}',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) {
+                    return { q: params.term };
+                },
+                processResults: function(data) {
+                    return { results: data.results };
+                }
+            },
+            minimumInputLength: 1
+        });
+
         $('#edit_assignees').select2({
             placeholder: 'Cari assignee...',
             ajax: {

@@ -670,13 +670,19 @@
                 </div>
 
                 <div class="opp-header__meta">
-                    <span><i class="fa fa-calendar-check"></i>Close Won: {{ $opportunity->close_won_date?->format('d M Y') ?? '—' }}</span>
+                    <span><i class="fa fa-calendar-check"></i><b>Close Date: {{ $opportunity->close_date?->format('d M Y') ?? '—' }}</b></span>
                     <span><i class="fa fa-chart-bar"></i>Forecast: {{ $opportunity->forecast?->forecast_name ?? '—' }}</span>
                     <span>{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Budget</span>
                     <span>{!! $opportunity->authorize ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Authorize</span>
                     <span>{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Timeline</span>
                     <span>{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Quote Ready</span>
                 </div>
+
+                <div class="opp-header__meta" style="color: black; font-weight: 600; font-size: 14px; margin-top: 8px">
+                    <span><i class="fa fa-tasks"></i><b>Next Step: {{ $opportunity->next_step ?? '—' }}</b></span>
+                </div>
+
+
             </div>
         </div>
 
@@ -690,11 +696,11 @@
                             <i class="fa fa-chart-line me-1"></i> Activity
                         </button>
                     </li>
-                    <li class="nav-item" role="presentation">
+                    {{-- <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-noted" type="button" role="tab">
                             <i class="fa fa-sticky-note me-1"></i> Noted
                         </button>
-                    </li>
+                    </li> --}}
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-logs" type="button" role="tab">
                             <i class="fa fa-history me-1"></i> Logs
@@ -800,7 +806,7 @@
                     <tr><td>Company</td><td><strong>{{ $opportunity->accountCompany?->account_name ?? '—' }}</strong></td></tr>
                     <tr><td>Field Type</td><td>{{ $opportunity->accountCompany?->typesAccountsCompany?->type_name ?? '—' }}</td></tr>
                     <tr><td>Segmentation</td><td>{{ $opportunity->accountCompany?->segmentation?->segmentation_name ?? '—' }}</td></tr>
-                    <tr><td>Account Type</td><td>{{ $opportunity->accountCompany?->accountType?->type_name ?? '—' }}</td></tr>
+                    {{-- <tr><td>Account Type</td><td>{{ $opportunity->accountCompany?->accountType?->type_name ?? '—' }}</td></tr> --}}
                     <tr><td>Business Entity</td><td>{{ $opportunity->accountCompany?->businessEntity?->entity_name ?? '—' }}</td></tr>
                     <tr><td>Business Value</td><td>{{ $opportunity->accountCompany?->businessValue?->value_name ?? '—' }}</td></tr>
                     <tr><td>Interaction Level</td><td>{{ $opportunity->accountCompany?->interactionLevel?->level_name ?? '—' }}</td></tr>

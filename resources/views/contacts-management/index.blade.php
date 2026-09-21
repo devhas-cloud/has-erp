@@ -65,6 +65,9 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
     }
+    .mobile-picker { display: flex; gap: 8px; align-items: stretch; }
+    .mobile-picker select { width: 92px; flex: 0 0 92px; }
+    .mobile-picker input { flex: 1; }
 </style>
 @endsection
 
@@ -100,6 +103,7 @@
                     <th>Phone</th>
                     <th>Email</th>
                     <th>Owner</th>
+                    <th>Assigned To</th>
                     <th class="text-center" style="width:120px">Action</th>
                 </tr>
             </thead>
@@ -163,7 +167,11 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Mobile <span class="text-danger">*</span></label>
-                                    <input type="text" name="mobile" id="contact-mobile">
+                                    <div class="mobile-picker">
+                                        <select id="contact-mobile-country" class="form-select"></select>
+                                        <input type="tel" id="contact-mobile" placeholder="8123456789" inputmode="numeric">
+                                    </div>
+                                    <input type="hidden" name="mobile" id="contact-mobile-full">
                                 </div>
                             </div>
                             <div class="contact-form-row">
@@ -214,11 +222,22 @@
                                         @endforeach
                                     </select>
                                 </div>
+
+                                @php($contactCurrentUserIsSales = strtolower(auth()->user()->division?->division_name ?? '') === 'sales')
+                                <div class="form-group" id="contact-assigned-to-group" @if($contactCurrentUserIsSales) style="display:none" @endif>
+                                    <label>Assigned To</label>
+                                    <select name="assigned_to_id" id="contact-assigned-to">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($assignableUsers as $au)
+                                        <option value="{{ $au->id }}">{{ $au->username }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="contact-form-section">
+                    <div class="contact-form-section" style="display: none">
                         <div class="contact-form-section-header" onclick="toggleContactSection(this)">
                             <span><i class="fa fa-map-marker-alt me-2" style="color:var(--accent)"></i>Address Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -273,6 +292,88 @@ const contactsCanUpdate = {{ $canUpdate ? 'true' : 'false' }};
 const contactsCanDelete = {{ $canDelete ? 'true' : 'false' }};
 const showUrl = '{{ route("contact-management.show", "__ID__") }}';
 
+// Assigned To default = pembuat kontak (dipakai saat Add Contact); field ini
+// disembunyikan di form untuk user divisi Sales (lihat contactCurrentUserIsSales).
+const contactCurrentUserId = {{ auth()->id() }};
+
+const contactCountryCodes = [
+    { code: '+62', flag: '🇮🇩', name: 'Indonesia' },
+    { code: '+1',  flag: '🇺🇸', name: 'United States' },
+    { code: '+65', flag: '🇸🇬', name: 'Singapore' },
+    { code: '+60', flag: '🇲🇾', name: 'Malaysia' },
+    { code: '+86', flag: '🇨🇳', name: 'China' },
+    { code: '+91', flag: '🇮🇳', name: 'India' },
+    { code: '+81', flag: '🇯🇵', name: 'Japan' },
+    { code: '+82', flag: '🇰🇷', name: 'South Korea' },
+    { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
+    { code: '+33', flag: '🇫🇷', name: 'France' },
+    { code: '+49', flag: '🇩🇪', name: 'Germany' },
+    { code: '+39', flag: '🇮🇹', name: 'Italy' },
+    { code: '+34', flag: '🇪🇸', name: 'Spain' },
+    { code: '+31', flag: '🇳🇱', name: 'Netherlands' },
+    { code: '+61', flag: '🇦🇺', name: 'Australia' },
+    { code: '+64', flag: '🇳🇿', name: 'New Zealand' },
+    { code: '+66', flag: '🇹🇭', name: 'Thailand' },
+    { code: '+84', flag: '🇻🇳', name: 'Vietnam' },
+    { code: '+63', flag: '🇵🇭', name: 'Philippines' },
+    { code: '+55', flag: '🇧🇷', name: 'Brazil' },
+];
+
+function contactPopulateCountryCodes() {
+    const $sel = $('#contact-mobile-country');
+    if ($sel.children().length) {
+        return;
+    }
+    contactCountryCodes.forEach(function(c) {
+        $sel.append('<option value="' + c.code + '">' + c.flag + ' ' + c.code + '</option>');
+    });
+    $sel.val('+62');
+    if (!$sel.hasClass('select2-hidden-accessible')) {
+        $sel.select2({
+            theme: 'bootstrap-5',
+            dropdownAutoWidth: true,
+            width: '92px',
+            minimumResultsForSearch: 5,
+            dropdownParent: $('#contactModal'),
+        });
+    }
+}
+
+function contactBuildMobile() {
+    const code = $('#contact-mobile-country').val() || '+62';
+    let local = ($('#contact-mobile').val() || '').replace(/\D/g, '');
+    // Strip leading trunk prefix 0 for Indonesia (+62).
+    if (code === '+62' && local.startsWith('0')) {
+        local = local.replace(/^0+/, '');
+    }
+    return local ? code + local : '';
+}
+
+function contactParseMobile(full) {
+    const value = (full || '').trim();
+    if (!value) {
+        return { code: '+62', local: '' };
+    }
+    let digits = value.replace(/\D/g, '');
+    // Already has international prefix (doesn't start with bare 0).
+    if (value.startsWith('+') || (digits.length > 1 && !value.startsWith('0'))) {
+        let best = '+62';
+        let bestLen = 0;
+        contactCountryCodes.forEach(function(c) {
+            const cd = c.code.replace(/\D/g, '');
+            if (digits.startsWith(cd) && cd.length > bestLen) {
+                best = c.code;
+                bestLen = cd.length;
+            }
+        });
+        const local = digits.slice(bestLen);
+        return { code: best, local: local };
+    }
+    // Legacy local number starting with 0.
+    let local = digits.replace(/^0+/, '');
+    return { code: '+62', local: local };
+}
+
 function toggleContactSection(header) {
     header.closest('.contact-form-section').classList.toggle('open');
 }
@@ -286,10 +387,15 @@ function resetContactForm() {
     document.querySelector('.contact-form-section').classList.add('open');
     $('#contact-form .is-invalid').removeClass('is-invalid');
     $('#contact-account').val('').trigger('change');
+    $('#contact-assigned-to').val('').trigger('change');
+    $('#contact-mobile-country').val('+62').trigger('change');
+    $('#contact-mobile').val('');
+    $('#contact-mobile-full').val('');
 }
 
 function openCreateModal() {
     resetContactForm();
+    $('#contact-assigned-to').val(contactCurrentUserId).trigger('change');
     document.getElementById('contactModalTitle').textContent = 'Add Contact';
     if (!contactModalInstance) {
         contactModalInstance = new bootstrap.Modal(document.getElementById('contactModal'));
@@ -308,9 +414,13 @@ function openEditModal(id) {
             $('#contact-salutation').val(res.data.salutation);
             $('#contact-full-name').val(res.data.full_name);
             $('#contact-account').val(res.data.account_companies_id).trigger('change');
+            $('#contact-assigned-to').val(res.data.assigned_to_id).trigger('change');
             $('#contact-email').val(res.data.email);
             $('#contact-phone').val(res.data.phone);
-            $('#contact-mobile').val(res.data.mobile);
+            const parsedMobile = contactParseMobile(res.data.mobile);
+            $('#contact-mobile-country').val(parsedMobile.code).trigger('change');
+            $('#contact-mobile').val(parsedMobile.local);
+            $('#contact-mobile-full').val(res.data.mobile);
             $('#contact-job-title').val(res.data.job_titles_id);
             $('#contact-source').val(res.data.sources_id);
             $('#contact-division').val(res.data.divisions_id);
@@ -360,6 +470,7 @@ function initContactsTable() {
             { data: 'phone' },
             { data: 'email' },
             { data: 'owner_name', orderable: false },
+            { data: 'assigned_to_name', orderable: false },
             {
                 data: null,
                 orderable: false,
@@ -438,6 +549,14 @@ $(document).on('click', '#btn-save-contact', function() {
         }
     }
 
+    if (!$('#contact-mobile').val() || !$('#contact-mobile').val().replace(/\D/g, '')) {
+        $('#contact-mobile').addClass('is-invalid');
+        toastr.error('Mobile wajib diisi.');
+        $('#contact-mobile').focus();
+        return;
+    }
+    $('#contact-mobile-full').val(contactBuildMobile());
+
     const formData = new FormData(document.getElementById('contact-form'));
 
     const url = isEdit
@@ -472,6 +591,7 @@ $(document).on('click', '#btn-save-contact', function() {
                 toastr.success(res.message);
                 if (contactModalInstance) contactModalInstance.hide();
                 if (contactsTable) contactsTable.ajax.reload(null, false);
+                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
             },
             error: function(xhr) {
                 $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
@@ -526,6 +646,7 @@ $(document).on('change', '#contact-account', function() {
 });
 
 $(document).on('shown.bs.modal', '#contactModal', function() {
+    contactPopulateCountryCodes();
     if (!$('#contact-account').hasClass('select2-hidden-accessible')) {
         $('#contact-account').select2({
             theme: 'bootstrap-5',

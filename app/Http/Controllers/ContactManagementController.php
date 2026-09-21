@@ -9,6 +9,7 @@ use App\Models\Division;
 use App\Models\JobTitle;
 use App\Models\RoleInProject;
 use App\Models\Source;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,20 +21,36 @@ class ContactManagementController extends Controller
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $jobTitles = JobTitle::where('status', 'Active')->get();
         $sources = Source::where('status', 'Active')->get();
-        $divisions = Division::where('status', 'Active')->get();
+        $divisions = Division::where('type','External')->where('status', 'Active')->get();
         $contactMethods = ContactMethod::where('status', 'Active')->get();
         $roleInProjects = RoleInProject::where('status', 'Active')->get();
 
+        // Pilihan "Assigned To" hanya user divisi Sales — kontak pada
+        // akhirnya harus dikerjakan oleh sales, siapa pun yang membuatnya.
+        $assignableUsers = User::whereHas('division', fn ($q) => $q->whereRaw('LOWER(division_name) = ?', ['sales']))
+            ->orderBy('username')
+            ->get();
+
         return view('contacts-management.index', compact(
             'accountCompanies', 'jobTitles', 'sources', 'divisions',
-            'contactMethods', 'roleInProjects'
+            'contactMethods', 'roleInProjects', 'assignableUsers'
         ));
     }
 
     public function data(Request $request): JsonResponse
     {
-        $query = AccountContact::with(['accountCompany', 'contactOwner', 'jobTitle']);
 
+        $query = AccountContact::with([
+            'accountCompany',
+            'contactOwner',
+            'assignedTo',
+            'jobTitle'
+        ]);
+
+        // Jika divisi sales dan bukan manager, filter hanya kontak yang dimiliki oleh user saat ini
+        if (strtolower(Auth::user()->division?->division_name) === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
+            $query->where('assigned_to_id', Auth::id());
+        }
         $recordsTotal = AccountContact::count();
 
         $searchValue = $request->input('search.value');
@@ -55,6 +72,7 @@ class ContactManagementController extends Controller
             });
         }
 
+        $query->where('status', 'Active');
         $recordsFiltered = $query->count();
 
         $orderColumnIndex = $request->input('order.0.column', 1);
@@ -90,6 +108,7 @@ class ContactManagementController extends Controller
                 'phone' => $contact->phone ?? '—',
                 'email' => $contact->email ?? '—',
                 'owner_name' => $contact->contactOwner?->username ?? '—',
+                'assigned_to_name' => $contact->assignedTo?->username ?? '—',
             ];
         }
 
@@ -109,18 +128,23 @@ class ContactManagementController extends Controller
             'account_companies_id' => 'required|exists:account_companies,id',
             'email' => 'required|email|max:100|unique:account_contacts,email',
             'phone' => 'nullable|string|max:30',
-            'mobile' => 'required|string|max:30',
+            'mobile' => 'required|string|max:30|unique:account_contacts,mobile',
             'job_titles_id' => 'required|exists:job_titles,id',
             'sources_id' => 'required|exists:sources,id',
             'divisions_id' => 'required|exists:divisions,id',
             'contact_methods_id' => 'required|exists:contact_methods,id',
             'role_in_projects_id' => 'required|exists:role_in_projects,id',
+            'assigned_to_id' => 'nullable|exists:users,id',
             'address_street' => 'nullable|string',
             'address_city' => 'nullable|string|max:100',
             'address_province' => 'nullable|string|max:100',
             'address_postal_code' => 'nullable|string|max:10',
             'address_country' => 'nullable|string|max:100',
         ]);
+
+        // Default assigned_to ke pembuat kontak kalau tidak diisi (field ini
+        // disembunyikan untuk user divisi Sales, jadi selalu jatuh ke sini).
+        $validated['assigned_to_id'] = $validated['assigned_to_id'] ?? Auth::id();
 
         AccountContact::create(array_merge($validated, [
             'contact_owner_id' => Auth::id(),
@@ -153,12 +177,13 @@ class ContactManagementController extends Controller
             'account_companies_id' => 'required|exists:account_companies,id',
             'email' => 'required|email|max:100|unique:account_contacts,email,'.$contact->id,
             'phone' => 'nullable|string|max:30',
-            'mobile' => 'required|string|max:30',
+            'mobile' => 'required|string|max:30|unique:account_contacts,mobile,'.$contact->id,
             'job_titles_id' => 'required|exists:job_titles,id',
             'sources_id' => 'required|exists:sources,id',
             'divisions_id' => 'required|exists:divisions,id',
             'contact_methods_id' => 'required|exists:contact_methods,id',
             'role_in_projects_id' => 'required|exists:role_in_projects,id',
+            'assigned_to_id' => 'nullable|exists:users,id',
             'address_street' => 'nullable|string',
             'address_city' => 'nullable|string|max:100',
             'address_province' => 'nullable|string|max:100',
@@ -177,7 +202,7 @@ class ContactManagementController extends Controller
     public function show($id)
     {
         $contact = AccountContact::with([
-            'accountCompany', 'contactOwner', 'jobTitle',
+            'accountCompany', 'contactOwner', 'assignedTo', 'jobTitle',
             'source', 'division', 'contactMethod', 'roleInProject',
         ])->findOrFail($id);
 

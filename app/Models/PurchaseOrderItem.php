@@ -4,13 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseOrderItem extends Model
 {
     protected $fillable = [
         'purchase_order_id',
+        'parent_id',
+        'category',
         'goods_request_item_id',
         'goods_request_id',
+        'master_product_id',
         'part_number',
         'description',
         'qty',
@@ -35,6 +39,16 @@ class PurchaseOrderItem extends Model
         return $this->belongsTo(PurchaseOrder::class);
     }
 
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id')->orderBy('sort_order');
+    }
+
     public function goodsRequestItem(): BelongsTo
     {
         return $this->belongsTo(GoodsRequestItem::class);
@@ -43,6 +57,20 @@ class PurchaseOrderItem extends Model
     public function goodsRequest(): BelongsTo
     {
         return $this->belongsTo(GoodsRequest::class);
+    }
+
+    public function masterProduct(): BelongsTo
+    {
+        return $this->belongsTo(MasterProduct::class);
+    }
+
+    /**
+     * Baris header/kategori (parent) — label group yang memisahkan item per
+     * project. Tidak punya data item (part_number/qty/harga), hanya `category`.
+     */
+    public function isHeader(): bool
+    {
+        return $this->category !== null && $this->category !== '';
     }
 
     public function amount(): float

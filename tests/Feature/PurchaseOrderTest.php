@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\AccountCompany;
+use App\Models\Currency;
 use App\Models\Division;
 use App\Models\GoodsRequest;
+use App\Models\MasterProduct;
 use App\Models\Module;
 use App\Models\Opportunity;
 use App\Models\PurchaseOrder;
@@ -575,6 +577,154 @@ class PurchaseOrderTest extends TestCase
         $this->assertGreaterThan(1000, strlen($response->getContent()));
 
         $this->assertNull($po->fresh(['items'])->printCurrency());
+    }
+
+    /**
+     * Hirarki parent-child: baris group (kategori/project) sebagai parent,
+     * item sebagai anak. Baris group tidak dihitung ke total.
+     */
+    public function test_store_persists_hierarchy_with_category_group_and_children(): void
+    {
+        $gr = $this->makeApprovedGoodsRequest($this->division, [
+            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
+        ]);
+        $opportunityName = $gr->opportunity->opportunity_name;
+
+        $response = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
+            'supplier_name' => 'PT Supplier Jaya',
+            'items' => [
+                ['_key' => 'g1', 'category' => $opportunityName],
+                [
+                    '_key' => 'i1',
+                    'parent_key' => 'g1',
+                    'goods_request_item_id' => $gr->items->first()->id,
+                    'goods_request_id' => $gr->id,
+                    'part_number' => 'PN-1',
+                    'description' => 'Sensor A',
+                    'qty' => 2,
+                    'unit' => 'Unit',
+                    'currency' => 'IDR',
+                    'price_currency' => 100000,
+                    'price' => 100000,
+                ],
+            ],
+        ])->assertOk();
+
+        $po = PurchaseOrder::with('items')->findOrFail($response->json('id'));
+
+        $this->assertCount(2, $po->items);
+
+        $header = $po->items->first();
+        $this->assertSame($opportunityName, $header->category);
+        $this->assertTrue($header->isHeader());
+        $this->assertNull($header->goods_request_item_id);
+
+        $child = $po->items->last();
+        $this->assertSame($header->id, $child->parent_id);
+        $this->assertNull($child->category);
+
+        // Total & jumlah item hanya menghitung item; baris group tidak ikut.
+        $this->assertSame(2 * 100000, (int) $po->grandTotal());
+        $this->assertSame(1, $po->itemCount());
+
+        // PDF dengan baris group kategori tetap render (label grup dari hirarki).
+        $this->actingAs($this->creator)->get(route('purchase-order.pdf', $po->id))->assertOk();
+    }
+
+    /**
+     * Picker produk master (search-products) mengembalikan harga + mata uang
+     * agar form bisa mengisi currency & price otomatis saat part number dipilih.
+     */
+    public function test_search_products_returns_price_and_currency(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
+        $product = MasterProduct::create([
+            'name' => 'pH::lyser pro',
+            'code' => 'E-514-4-075',
+            'division_id' => $this->division->id,
+            'price' => 100,
+            'currency_id' => $usd->id,
+            'status' => 'Active',
+        ]);
+
+        $response = $this->actingAs($this->creator)
+            ->getJson(route('purchase-order.search-products').'?q=E-514')
+            ->assertOk();
+
+        $this->assertSame($product->id, $response->json('data.0.id'));
+        $this->assertSame('USD', $response->json('data.0.currency'));
+        $this->assertEquals(100.0, $response->json('data.0.price'));
+        $this->assertEquals(20000, $response->json('data.0.rate'));
+    }
+
+    /**
+     * Saat item memakai master_product_id dan user tidak mengirim harga,
+     * currency + harga diisi otomatis dari master product (Q2=A: tetap bisa
+     * diedit/negosiasi — nilai client dipakai bila dikirim).
+     */
+    public function test_store_autofills_pricing_from_master_product(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
+        $product = MasterProduct::create([
+            'name' => 'Sensor DO',
+            'code' => 'DO-001',
+            'division_id' => $this->division->id,
+            'price' => 100,
+            'currency_id' => $usd->id,
+            'status' => 'Active',
+        ]);
+
+        $response = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
+            'supplier_name' => 'PT Supplier Jaya',
+            'items' => [
+                [
+                    '_key' => 'i1',
+                    'master_product_id' => $product->id,
+                    'part_number' => 'DO-001',
+                    'description' => 'Sensor DO',
+                    'qty' => 2,
+                    'unit' => 'Unit',
+                ],
+            ],
+        ])->assertOk();
+
+        $po = PurchaseOrder::with('items')->findOrFail($response->json('id'));
+        $item = $po->items->first();
+
+        $this->assertSame($product->id, $item->master_product_id);
+        $this->assertSame(100.0, (float) $item->price_currency);
+        $this->assertSame('USD', $item->currency);
+        $this->assertSame(2000000.0, (float) $item->price);
+        $this->assertSame(4000000, (int) $po->grandTotal());
+    }
+
+    /**
+     * fetchAvailableItems membawa master_product_id & project (opportunity)
+     * agar form bisa membuat group kategori per project saat item diambil.
+     */
+    public function test_fetch_available_items_includes_master_product_and_project(): void
+    {
+        $product = MasterProduct::create([
+            'name' => 'Sensor A',
+            'code' => 'PN-1',
+            'division_id' => $this->division->id,
+            'price' => 50000,
+            'status' => 'Active',
+        ]);
+        $gr = $this->makeApprovedGoodsRequest($this->division, [
+            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
+        ]);
+        $gr->items->first()->update(['master_product_id' => $product->id]);
+
+        $response = $this->actingAs($this->creator)
+            ->getJson(route('purchase-order.fetch-available-items'))
+            ->assertOk();
+
+        $this->assertSame($gr->opportunity->opportunity_name, $response->json('data.0.opportunity_name'));
+        $this->assertSame($gr->opportunity->opportunity_name, $response->json('data.0.items.0.project_name'));
+        $this->assertSame($product->id, $response->json('data.0.items.0.master_product_id'));
     }
 
 }

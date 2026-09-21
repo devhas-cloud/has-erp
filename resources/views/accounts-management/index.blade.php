@@ -65,6 +65,61 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
     }
+    .account-map-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+    }
+    .account-map-toolbar .map-coords {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-left: auto;
+    }
+    .account-map {
+        width: 100%;
+        height: 280px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--card-border);
+        background: #f1f5f9;
+        z-index: 1;
+    }
+    .account-map-status {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin: 6px 0;
+        min-height: 16px;
+    }
+    .account-map-status.loading { color: #2563eb; }
+    .account-map-status.error { color: #b91c1c; }
+    .account-map-preview {
+        display: none;
+        border: 1px solid var(--accent-soft);
+        background: #fff;
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        margin-top: 8px;
+    }
+    .account-map-preview-title {
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--accent);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .account-map-preview-body {
+        font-size: 12px;
+        color: var(--text-primary);
+        line-height: 1.5;
+        margin-bottom: 8px;
+        white-space: pre-line;
+    }
+    .account-map-preview-actions {
+        display: flex;
+        gap: 8px;
+    }
 </style>
 @endsection
 
@@ -153,11 +208,19 @@
                                     <label>Website</label>
                                     <input type="text" name="website" id="account-website" placeholder="https://">
                                 </div>
-                                <div class="form-group" style="flex: 2">
-                                    <label>Description</label>
-                                    <textarea name="description" id="account-description" rows="2"></textarea>
+                                <div class="form-group">
+                                    <label>Phone</label>
+                                    <input type="text" name="phone" id="account-phone">
                                 </div>
                             </div>
+                            <div class="account-form-row">
+                                <div class="form-group" style="flex:1 1 100%">
+                                    <label>Description</label>
+                                    <textarea name="description" id="account-description" rows="3"></textarea>
+                                </div>
+                            </div>
+
+
                             <div class="account-form-row">
                                 <div class="form-group">
                                     <label>Segmentation <span class="text-danger">*</span></label>
@@ -180,7 +243,17 @@
                             </div>
                             <div class="account-form-row">
                                 <div class="form-group">
-                                    <label>End User</label>
+                                    <label>Business Value <span class="text-danger">*</span></label>
+                                    <select name="business_values_id" id="account-biz-value">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($businessValues as $bv)
+                                        <option value="{{ $bv->id }}">{{ $bv->value_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="form-group" id="account-end-user-group" style="display:none">
+                                    <label>End User <span class="text-danger" id="account-end-user-required" style="display:none">*</span></label>
                                     <select name="end_user" id="account-end-user">
                                         <option value="">— Pilih —</option>
                                         @foreach($accountCompanies as $ac)
@@ -188,7 +261,7 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" id="account-parent-group">
                                     <label>Parent Account</label>
                                     <select name="parent_account_id" id="account-parent">
                                         <option value="">— Pilih —</option>
@@ -198,20 +271,7 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="account-form-row">
-                                <div class="form-group">
-                                    <label>Phone</label>
-                                    <input type="text" name="phone" id="account-phone">
-                                </div>
-                                <div class="form-group">
-                                    <label>Business Value <span class="text-danger">*</span></label>
-                                    <select name="business_values_id" id="account-biz-value">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($businessValues as $bv)
-                                        <option value="{{ $bv->id }}">{{ $bv->value_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
+                            <div class="account-form-row" style="display: none">
                                 <div class="form-group">
                                     <label>Interaction Level <span class="text-danger">*</span></label>
                                     <select name="interaction_levels_id" id="account-interaction">
@@ -231,6 +291,26 @@
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="account-form-section-body">
+                            <div class="account-map-toolbar">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapPickLocation('billing')">
+                                    <i class="fa fa-map-marker-alt me-1"></i> Pilih Titik di Peta
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapUseMyLocation('billing')">
+                                    <i class="fa fa-location-crosshairs me-1"></i> Lokasi Saya
+                                </button>
+                                <span class="map-coords" id="account-map-coords">Belum ada titik.</span>
+                            </div>
+                            <div class="account-map" id="account-billing-map"></div>
+                            <div class="account-map-status" id="account-map-status"></div>
+                            <div class="account-map-preview" id="account-map-preview">
+                                <div class="account-map-preview-title"><i class="fa fa-map-pin me-1"></i>Alamat dari Peta</div>
+                                <div class="account-map-preview-body" id="account-map-preview-body"></div>
+                                <div class="account-map-preview-actions">
+                                    <button type="button" class="btn btn-primary btn-sm" id="account-map-apply" disabled onclick="accountMapApply('billing')">
+                                        <i class="fa fa-check me-1"></i> Gunakan Alamat Ini
+                                    </button>
+                                </div>
+                            </div>
                             <div class="account-form-row">
                                 <div class="form-group">
                                     <label>Billing Street</label>
@@ -264,6 +344,29 @@
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="account-form-section-body">
+                            <div class="account-map-toolbar">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="accountCopyBillingToShipping()">
+                                    <i class="fa fa-copy me-1"></i> Same as billing address
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapPickLocation('shipping')">
+                                    <i class="fa fa-map-marker-alt me-1"></i> Pilih Titik di Peta
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapUseMyLocation('shipping')">
+                                    <i class="fa fa-location-crosshairs me-1"></i> Lokasi Saya
+                                </button>
+                                <span class="map-coords" id="account-ship-map-coords">Belum ada titik.</span>
+                            </div>
+                            <div class="account-map" id="account-shipping-map"></div>
+                            <div class="account-map-status" id="account-ship-map-status"></div>
+                            <div class="account-map-preview" id="account-ship-map-preview">
+                                <div class="account-map-preview-title"><i class="fa fa-map-pin me-1"></i>Alamat dari Peta</div>
+                                <div class="account-map-preview-body" id="account-ship-map-preview-body"></div>
+                                <div class="account-map-preview-actions">
+                                    <button type="button" class="btn btn-primary btn-sm" id="account-ship-map-apply" disabled onclick="accountMapApply('shipping')">
+                                        <i class="fa fa-check me-1"></i> Gunakan Alamat Ini
+                                    </button>
+                                </div>
+                            </div>
                             <div class="account-form-row">
                                 <div class="form-group">
                                     <label>Shipping Street</label>
@@ -313,8 +416,86 @@ const accountsCanUpdate = {{ $canUpdate ? 'true' : 'false' }};
 const accountsCanDelete = {{ $canDelete ? 'true' : 'false' }};
 const showUrl = '{{ route("accounts-management.show", "__ID__") }}';
 
+// Billing Address dan Shipping Address masing-masing punya peta pilih-titik
+// sendiri (independen) — dikonfigurasi lewat context supaya satu set fungsi
+// generik (accountMapEnsure, accountMapPickLocation, dst) bisa dipakai untuk
+// keduanya tanpa duplikasi kode.
+const accountMapContexts = {
+    billing: {
+        mapId: 'account-billing-map',
+        coordsId: 'account-map-coords',
+        statusId: 'account-map-status',
+        previewId: 'account-map-preview',
+        previewBodyId: 'account-map-preview-body',
+        applyBtnId: 'account-map-apply',
+        fields: {
+            street: 'account-bill-street',
+            city: 'account-bill-city',
+            province: 'account-bill-province',
+            postal_code: 'account-bill-zip',
+            country: 'account-bill-country',
+        },
+        map: null, marker: null, resolved: null, clickTimer: null,
+    },
+    shipping: {
+        mapId: 'account-shipping-map',
+        coordsId: 'account-ship-map-coords',
+        statusId: 'account-ship-map-status',
+        previewId: 'account-ship-map-preview',
+        previewBodyId: 'account-ship-map-preview-body',
+        applyBtnId: 'account-ship-map-apply',
+        fields: {
+            street: 'account-ship-street',
+            city: 'account-ship-city',
+            province: 'account-ship-province',
+            postal_code: 'account-ship-zip',
+            country: 'account-ship-country',
+        },
+        map: null, marker: null, resolved: null, clickTimer: null,
+    },
+};
+
 function toggleAccountSection(header) {
-    header.closest('.account-form-section').classList.toggle('open');
+    const section = header.closest('.account-form-section');
+    section.classList.toggle('open');
+    if (!section.classList.contains('open')) return;
+    Object.keys(accountMapContexts).forEach(function(key) {
+        if (section.querySelector('#' + accountMapContexts[key].mapId)) {
+            accountMapEnsure(key);
+            setTimeout(function() { invalidateAccountMap(key); }, 150);
+        }
+    });
+}
+
+// End User dan Parent Account saling eksklusif tergantung Segmentation:
+// - Segmentation "Distributor/Partner" -> akun ini adalah distributor, jadi
+//   yang relevan (dan wajib diisi) adalah End User (distributor menyebutkan
+//   end user akhirnya); Parent Account disembunyikan & dikosongkan.
+// - Segmentation lain -> yang relevan adalah Parent Account (opsional, boleh
+//   tidak dipilih); End User disembunyikan & dikosongkan.
+function accountSegmentationIsDistributor() {
+    var text = $('#account-segmentation option:selected').text() || '';
+    return text.toLowerCase().indexOf('distributor') !== -1;
+}
+
+function accountUpdateSegmentationDependentFields() {
+    var isDistributor = accountSegmentationIsDistributor();
+
+    var $endUserGroup = $('#account-end-user-group');
+    var $endUserRequired = $('#account-end-user-required');
+    var $parentGroup = $('#account-parent-group');
+
+    if (isDistributor) {
+        $endUserGroup.show();
+        $endUserRequired.show();
+        $parentGroup.hide();
+        $('#account-parent').removeClass('is-invalid').val('').trigger('change');
+    } else {
+        $parentGroup.show();
+        $endUserGroup.hide();
+        $endUserRequired.hide();
+        $('#account-end-user').removeClass('is-invalid').val('').trigger('change');
+    }
 }
 
 function resetAccountForm() {
@@ -327,6 +508,8 @@ function resetAccountForm() {
     $('#account-form .is-invalid').removeClass('is-invalid');
     $('#account-end-user').val('').trigger('change');
     $('#account-parent').val('').trigger('change');
+    accountUpdateSegmentationDependentFields();
+    accountMapResetAll();
 }
 
 function openCreateModal() {
@@ -352,6 +535,7 @@ function openEditModal(id) {
             $('#account-website').val(res.data.website);
             $('#account-description').val(res.data.description);
             $('#account-segmentation').val(res.data.segmentation_id);
+            accountUpdateSegmentationDependentFields();
             $('#account-biz-entity').val(res.data.business_entities_id);
             $('#account-end-user').val(res.data.end_user).trigger('change');
             $('#account-parent').val(res.data.parent_account_id).trigger('change');
@@ -377,6 +561,199 @@ function openEditModal(id) {
             toastr.error('Gagal memuat data akun.');
         }
     });
+}
+
+// ── Peta alamat (Leaflet + OSM, sudah dimuat global di layout) ──
+// Semua fungsi di bawah generik lewat parameter ctxKey ('billing'/'shipping'),
+// lihat accountMapContexts di atas untuk konfigurasi/state per konteks.
+
+function accountMapEnsure(ctxKey) {
+    const ctx = accountMapContexts[ctxKey];
+    if (ctx.map) {
+        return;
+    }
+    ctx.map = L.map(ctx.mapId, {
+        center: [-6.2088, 106.8456],
+        zoom: 12,
+        zoomControl: true,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap',
+    }).addTo(ctx.map);
+    ctx.map.on('click', function (e) {
+        accountMapOnPick(ctxKey, e.latlng.lat, e.latlng.lng);
+    });
+}
+
+function invalidateAccountMap(ctxKey) {
+    const ctx = accountMapContexts[ctxKey];
+    if (ctx.map) {
+        ctx.map.invalidateSize();
+    }
+}
+
+function accountMapReset(ctxKey) {
+    const ctx = accountMapContexts[ctxKey];
+    if (ctx.marker) {
+        ctx.map.removeLayer(ctx.marker);
+        ctx.marker = null;
+    }
+    ctx.resolved = null;
+    if (ctx.clickTimer) {
+        clearTimeout(ctx.clickTimer);
+        ctx.clickTimer = null;
+    }
+    const coords = document.getElementById(ctx.coordsId);
+    const status = document.getElementById(ctx.statusId);
+    const preview = document.getElementById(ctx.previewId);
+    if (coords) coords.textContent = 'Belum ada titik.';
+    if (status) { status.textContent = ''; status.className = 'account-map-status'; }
+    if (preview) preview.style.display = 'none';
+    const applyBtn = document.getElementById(ctx.applyBtnId);
+    if (applyBtn) applyBtn.disabled = true;
+}
+
+function accountMapResetAll() {
+    Object.keys(accountMapContexts).forEach(accountMapReset);
+}
+
+function accountMapPickLocation(ctxKey) {
+    const ctx = accountMapContexts[ctxKey];
+    const section = document.querySelector('#' + ctx.mapId).closest('.account-form-section');
+    if (section && !section.classList.contains('open')) {
+        section.classList.add('open');
+    }
+    accountMapEnsure(ctxKey);
+    setTimeout(function() { invalidateAccountMap(ctxKey); }, 150);
+    toastr.info('Klik pada peta untuk memilih titik alamat.');
+}
+
+function accountMapUseMyLocation(ctxKey) {
+    if (!navigator.geolocation) {
+        toastr.error('Geolocation tidak didukung browser.');
+        return;
+    }
+    const ctx = accountMapContexts[ctxKey];
+    accountMapEnsure(ctxKey);
+    setTimeout(function() { invalidateAccountMap(ctxKey); }, 150);
+    const status = document.getElementById(ctx.statusId);
+    status.className = 'account-map-status loading';
+    status.textContent = 'Mendapatkan lokasi Anda...';
+    navigator.geolocation.getCurrentPosition(
+        function (pos) {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            ctx.map.setView([lat, lng], 15);
+            accountMapOnPick(ctxKey, lat, lng);
+        },
+        function () {
+            status.className = 'account-map-status error';
+            status.textContent = 'Gagal mendapatkan lokasi. Berikan izin lalu coba lagi.';
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+function accountMapOnPick(ctxKey, lat, lng) {
+    const ctx = accountMapContexts[ctxKey];
+    if (ctx.marker) {
+        ctx.map.removeLayer(ctx.marker);
+    }
+    ctx.marker = L.marker([lat, lng]).addTo(ctx.map);
+    ctx.map.setView([lat, lng], 15);
+
+    const coords = document.getElementById(ctx.coordsId);
+    if (coords) coords.textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
+
+    const status = document.getElementById(ctx.statusId);
+    status.className = 'account-map-status loading';
+    status.textContent = 'Mengambil alamat dari titik...';
+
+    if (ctx.clickTimer) {
+        clearTimeout(ctx.clickTimer);
+    }
+    ctx.clickTimer = setTimeout(function () {
+        accountMapReverseGeocode(ctxKey, lat, lng);
+    }, 600);
+}
+
+function accountMapReverseGeocode(ctxKey, lat, lng) {
+    const ctx = accountMapContexts[ctxKey];
+    const status = document.getElementById(ctx.statusId);
+    const url = 'https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json&addressdetails=1&accept-language=id';
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data || data.error) {
+                throw new Error(data && data.error ? data.error : 'Alamat tidak ditemukan');
+            }
+            const addr = data.address || {};
+            const street = [addr.road, addr.house_number].filter(Boolean).join(' ') || [addr.neighbourhood, addr.suburb, addr.pedestrian].filter(Boolean).join(', ') || '';
+            const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+            const province = addr.state || addr.region || addr.county || '';
+            const postal = addr.postcode || '';
+            const country = addr.country || '';
+
+            ctx.resolved = {
+                street: street,
+                city: city,
+                province: province,
+                postal_code: postal,
+                country: country,
+                display: [street, city, province, postal, country].filter(Boolean).join('\n'),
+            };
+
+            const preview = document.getElementById(ctx.previewId);
+            const body = document.getElementById(ctx.previewBodyId);
+            body.textContent = ctx.resolved.display || 'Alamat tidak lengkap.';
+            preview.style.display = 'block';
+
+            status.className = 'account-map-status';
+            status.textContent = 'Alamat ditemukan. Klik "Gunakan Alamat Ini" untuk mengisi form.';
+
+            const applyBtn = document.getElementById(ctx.applyBtnId);
+            if (applyBtn) applyBtn.disabled = false;
+        })
+        .catch(function (err) {
+            ctx.resolved = null;
+            status.className = 'account-map-status error';
+            status.textContent = 'Gagal mengambil alamat: ' + (err.message || 'coba lagi.');
+            const preview = document.getElementById(ctx.previewId);
+            if (preview) preview.style.display = 'none';
+            const applyBtn = document.getElementById(ctx.applyBtnId);
+            if (applyBtn) applyBtn.disabled = true;
+        });
+}
+
+function accountMapApply(ctxKey) {
+    const ctx = accountMapContexts[ctxKey];
+    if (!ctx.resolved) {
+        return;
+    }
+    const r = ctx.resolved;
+    if (r.street) document.getElementById(ctx.fields.street).value = r.street;
+    if (r.city) document.getElementById(ctx.fields.city).value = r.city;
+    if (r.province) document.getElementById(ctx.fields.province).value = r.province;
+    if (r.postal_code) document.getElementById(ctx.fields.postal_code).value = r.postal_code;
+    if (r.country) document.getElementById(ctx.fields.country).value = r.country;
+    toastr.success((ctxKey === 'billing' ? 'Alamat billing' : 'Alamat shipping') + ' diisi dari peta.');
+}
+
+function accountCopyBillingToShipping() {
+    const fields = [
+        ['account-bill-street', 'account-ship-street'],
+        ['account-bill-city', 'account-ship-city'],
+        ['account-bill-province', 'account-ship-province'],
+        ['account-bill-zip', 'account-ship-zip'],
+        ['account-bill-country', 'account-ship-country'],
+    ];
+    fields.forEach(function(pair) {
+        const src = document.getElementById(pair[0]);
+        const dst = document.getElementById(pair[1]);
+        if (src && dst) dst.value = src.value;
+    });
+    toastr.success('Alamat billing disalin ke shipping.');
 }
 
 function initAccountsTable() {
@@ -443,8 +820,12 @@ $(document).on('click', '#btn-save-account', function() {
         { field: '#account-segmentation', label: 'Segmentation' },
         { field: '#account-biz-entity', label: 'Business Entity' },
         { field: '#account-biz-value', label: 'Business Value' },
-        { field: '#account-interaction', label: 'Interaction Level' },
+        //{ field: '#account-interaction', label: 'Interaction Level' },
     ];
+
+    if (accountSegmentationIsDistributor()) {
+        validations.push({ field: '#account-end-user', label: 'End User' });
+    }
 
     for (let i = 0; i < validations.length; i++) {
         const v = validations[i];
@@ -496,6 +877,7 @@ $(document).on('click', '#btn-save-account', function() {
                 toastr.success(res.message);
                 if (accountModalInstance) accountModalInstance.hide();
                 if (accountsTable) accountsTable.ajax.reload(null, false);
+                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
             },
             error: function(xhr) {
                 $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
@@ -518,6 +900,8 @@ $(document).on('change input', '#account-form input.is-invalid, #account-form se
 $(document).on('change', '#account-end-user', function() {
     $(this).removeClass('is-invalid');
 });
+
+$(document).on('change', '#account-segmentation', accountUpdateSegmentationDependentFields);
 
 $(document).on('change', '#account-parent', function() {
     $(this).removeClass('is-invalid');
@@ -542,6 +926,10 @@ $(document).on('shown.bs.modal', '#accountModal', function() {
             dropdownParent: $('#accountModal')
         });
     }
+    Object.keys(accountMapContexts).forEach(function(key) {
+        accountMapEnsure(key);
+        setTimeout(function() { invalidateAccountMap(key); }, 200);
+    });
 });
 
 $(document).on('click', '.btn-delete-account', function() {

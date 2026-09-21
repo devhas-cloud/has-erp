@@ -80,6 +80,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('task-planner/fetch-assignees', [TaskPlannerController::class, 'fetchAssignees'])->name('task-planner.fetch-assignees');
     Route::get('task-planner/fetch-handling-group-users', [TaskPlannerController::class, 'fetchHandlingGroupUsers'])->name('task-planner.fetch-handling-group-users');
     Route::get('task-planner/fetch-whatsapp-groups', [TaskPlannerController::class, 'fetchWhatsAppGroups'])->name('task-planner.fetch-whatsapp-groups');
+    Route::get('task-planner/fetch-account-contacts', [TaskPlannerController::class, 'fetchAccountContacts'])->name('task-planner.fetch-account-contacts');
     Route::post('task-planner/{id}/approve', [TaskPlannerController::class, 'approve'])->name('task-planner.approve');
     Route::post('task-planner/{id}/reject', [TaskPlannerController::class, 'reject'])->name('task-planner.reject');
     Route::post('task-planner/{id}/transition', [TaskPlannerController::class, 'transition'])->name('task-planner.transition');
@@ -174,6 +175,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('purchase-order/data', [PurchaseOrderController::class, 'data'])->name('purchase-order.data');
     Route::get('purchase-order/fetch-available-items', [PurchaseOrderController::class, 'fetchAvailableItems'])->name('purchase-order.fetch-available-items');
+    Route::get('purchase-order/search-products', [PurchaseOrderController::class, 'searchProducts'])->name('purchase-order.search-products');
     Route::post('purchase-order/{id}/submit', [PurchaseOrderController::class, 'submit'])->name('purchase-order.submit');
     Route::post('purchase-order/{id}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-order.approve');
     Route::post('purchase-order/{id}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-order.reject');

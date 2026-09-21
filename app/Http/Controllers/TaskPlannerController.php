@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountContact;
 use App\Models\HandlingGroup;
 use App\Models\Log;
 use App\Models\Notification;
@@ -259,12 +260,45 @@ class TaskPlannerController extends Controller
         return response()->json(['results' => $results]);
     }
 
+    /**
+     * Picker "Account Contact" (kontak yang dikunjungi) — hanya relevan
+     * untuk task kategori Visit, opsional.
+     */
+    public function fetchAccountContacts(Request $request): JsonResponse
+    {
+
+
+        $query = AccountContact::with('accountCompany');
+
+        // Jika divisi sales dan bukan manager, filter hanya kontak yang dimiliki oleh user saat ini
+        if (strtolower(Auth::user()->division?->division_name) === 'sales' && strtolower(Auth::user()->taskRole?->role_name) !== 'manager') {
+            $query->where('assigned_to_id', Auth::id());
+        }
+
+        if ($q = $request->get('q')) {
+            $query->where(function ($qry) use ($q) {
+                $qry->where('full_name', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%")
+                    ->orWhere('mobile', 'like', "%{$q}%");
+            });
+        }
+
+        $results = $query->limit(30)->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'text' => $c->full_name.($c->accountCompany ? ' — '.$c->accountCompany->account_name : ''),
+            ]);
+
+        return response()->json(['results' => $results]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
+            'account_contact_id' => 'nullable|exists:account_contacts,id',
             'handling_group_id' => 'nullable|exists:handling_groups,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
@@ -318,7 +352,7 @@ class TaskPlannerController extends Controller
 
     public function edit($id)
     {
-        $task = Task::with(['assignees', 'category', 'whatsappGroup'])->findOrFail($id);
+        $task = Task::with(['assignees', 'category', 'whatsappGroup', 'accountContact'])->findOrFail($id);
         $whatsappGroups = WhatsAppGroup::with('division')->where('status', 'Active')->get();
         $categories = TaskCategory::all();
         $users = User::all();
@@ -337,6 +371,7 @@ class TaskPlannerController extends Controller
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
+            'account_contact_id' => 'nullable|exists:account_contacts,id',
             'handling_group_id' => 'nullable|exists:handling_groups,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
@@ -487,6 +522,12 @@ class TaskPlannerController extends Controller
         $description = $isCompleteCategory
             ? "{$task->title} di-complete"
             : "{$task->title} disetujui";
+
+        //  Jika task kategori quote/proposal selesai, maka update probability opportunity menjadi 50%.
+        if ($isCompleteCategory && $task->opportunity) {
+            $task->opportunity->update(['probability' => 50, 'stage_id' => 2]); // stage_id 2 = Proposal/Quote
+
+        }
 
         Log::record($action, $description, 'MOD_TASK_PLANNER', $task);
         return response()->json([

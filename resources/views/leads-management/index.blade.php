@@ -72,6 +72,9 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
     }
+    .mobile-picker { display: flex; gap: 8px; align-items: stretch; }
+    .mobile-picker select { width: 92px; flex: 0 0 92px; }
+    .mobile-picker input { flex: 1; }
 </style>
 @endsection
 
@@ -116,6 +119,7 @@
                         <th>Mobile</th>
                         <th>Lead Status</th>
                         <th>Owner</th>
+                        <th>Assigned To</th>
                         <th class="text-center" style="width:120px">Action</th>
                     </tr>
                 </thead>
@@ -177,7 +181,11 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Mobile  <span class="text-danger">*</span></label>
-                                    <input type="text" name="mobile" id="lead-mobile">
+                                    <div class="mobile-picker">
+                                        <select id="lead-mobile-country" class="form-select"></select>
+                                        <input type="tel" id="lead-mobile" placeholder="8123456789" inputmode="numeric">
+                                    </div>
+                                    <input type="hidden" name="mobile" id="lead-mobile-full">
                                 </div>
                                 <div class="form-group" style="display:none">
                                     <label>Phone</label>
@@ -210,7 +218,7 @@
                                     <select name="source_id" id="lead-source">
                                         <option value="">— Pilih —</option>
                                         @foreach($sources as $src)
-                                        <option value="{{ $src->id }}">{{ $src->source_name }}</option>
+                                        <option value="{{ $src->id }}" @if($src->source_name === 'Referral' or $src->source_name === 'Employe Referral') data-referral="1" @endif>{{ $src->source_name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -233,6 +241,30 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="lead-form-row">
+                                <div class="form-group" id="lead-referral-group" style="display:none">
+                                    <label>Referral Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="name_referral" id="lead-referral" maxlength="150" placeholder="Nama pemberi referensi">
+                                </div>
+                            </div>
+                            <div class="lead-form-row">
+                                <div class="form-group">
+                                        <label>Follow Up Date <span class="text-danger">*</span></label>
+                                        <input type="date" name="lead_follow_up_date" id="lead-follow-up">
+                                </div>
+                                @if($canUpdate && !$isSales)
+                                <div class="form-group">
+                                        <label>Assign To</label>
+                                        <select name="assigned_to" id="lead-assigned">
+                                            <option value="">— Pilih —</option>
+                                            @foreach($users as $u)
+                                            <option value="{{ $u->id }}">{{ $u->username }}</option>
+                                            @endforeach
+                                        </select>
+                                </div>
+                                @endif
+                            </div>
+
                             <div class="lead-form-row" style="display:none;">
                                 <div class="form-group" style="flex:0 0 180px;">
                                     <label>Close Date</label>
@@ -317,7 +349,7 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display: none">
                                     <label>Interaction Level</label>
                                     <select name="interaction_levels_id" id="lead-interaction">
                                         <option value="">— Pilih —</option>
@@ -365,7 +397,7 @@
                         </div>
                     </div>
 
-                    <div class="lead-form-section">
+                    <div class="lead-form-section"  style="display: none">
                         <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
                             <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -385,21 +417,7 @@
                                     Need Identification
                                 </label>
                             </div>
-                            <div class="lead-form-row">
-                                <div class="form-group small">
-                                    <label>Follow Up Date <span class="text-danger">*</span></label>
-                                    <input type="date" name="lead_follow_up_date" id="lead-follow-up">
-                                </div>
-                                <div class="form-group">
-                                    <label>Assign To</label>
-                                    <select name="assigned_to" id="lead-assigned">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($users as $u)
-                                        <option value="{{ $u->id }}">{{ $u->username }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
+
                         </div>
                     </div>
                 </form>
@@ -461,8 +479,96 @@ let leadsTable = null;
 
 const leadsCanUpdate = {{ $canUpdate ? 'true' : 'false' }};
 const leadsCanDelete = {{ $canDelete ? 'true' : 'false' }};
+const isSales = {{ $isSales ? 'true' : 'false' }};
+
 const showUrl = '{{ route("leads-management.show", "__ID__") }}';
 const fetchUrl = '{{ route("leads-management.fetch", "__ID__") }}';
+
+const leadCountryCodes = [
+    { code: '+62', flag: '🇮🇩', name: 'Indonesia' },
+    { code: '+1',  flag: '🇺🇸', name: 'United States' },
+    { code: '+65', flag: '🇸🇬', name: 'Singapore' },
+    { code: '+60', flag: '🇲🇾', name: 'Malaysia' },
+    { code: '+86', flag: '🇨🇳', name: 'China' },
+    { code: '+91', flag: '🇮🇳', name: 'India' },
+    { code: '+81', flag: '🇯🇵', name: 'Japan' },
+    { code: '+82', flag: '🇰🇷', name: 'South Korea' },
+    { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
+    { code: '+33', flag: '🇫🇷', name: 'France' },
+    { code: '+49', flag: '🇩🇪', name: 'Germany' },
+    { code: '+39', flag: '🇮🇹', name: 'Italy' },
+    { code: '+34', flag: '🇪🇸', name: 'Spain' },
+    { code: '+31', flag: '🇳🇱', name: 'Netherlands' },
+    { code: '+61', flag: '🇦🇺', name: 'Australia' },
+    { code: '+64', flag: '🇳🇿', name: 'New Zealand' },
+    { code: '+66', flag: '🇹🇭', name: 'Thailand' },
+    { code: '+84', flag: '🇻🇳', name: 'Vietnam' },
+    { code: '+63', flag: '🇵🇭', name: 'Philippines' },
+    { code: '+55', flag: '🇧🇷', name: 'Brazil' },
+];
+
+function leadPopulateCountryCodes() {
+    const $sel = $('#lead-mobile-country');
+    if ($sel.children().length) {
+        return;
+    }
+    leadCountryCodes.forEach(function(c) {
+        $sel.append('<option value="' + c.code + '">' + c.flag + ' ' + c.code + '</option>');
+    });
+    $sel.val('+62');
+    if (!$sel.hasClass('select2-hidden-accessible')) {
+        $sel.select2({
+            theme: 'bootstrap-5',
+            dropdownAutoWidth: true,
+            width: '92px',
+            minimumResultsForSearch: 5,
+            dropdownParent: $('#leadModal'),
+        });
+    }
+}
+
+function leadBuildMobile() {
+    const code = $('#lead-mobile-country').val() || '+62';
+    let local = ($('#lead-mobile').val() || '').replace(/\D/g, '');
+    // Strip leading trunk prefix 0 for Indonesia (+62).
+    if (code === '+62' && local.startsWith('0')) {
+        local = local.replace(/^0+/, '');
+    }
+    return local ? code + local : '';
+}
+
+function leadParseMobile(full) {
+    const value = (full || '').trim();
+    if (!value) {
+        return { code: '+62', local: '' };
+    }
+    let digits = value.replace(/\D/g, '');
+    // Already has international prefix (doesn't start with bare 0).
+    if (value.startsWith('+') || (digits.length > 1 && !value.startsWith('0'))) {
+        let best = '+62';
+        let bestLen = 0;
+        leadCountryCodes.forEach(function(c) {
+            const cd = c.code.replace(/\D/g, '');
+            if (digits.startsWith(cd) && cd.length > bestLen) {
+                best = c.code;
+                bestLen = cd.length;
+            }
+        });
+        const local = digits.slice(bestLen);
+        return { code: best, local: local };
+    }
+    // Legacy local number starting with 0.
+    let local = digits.replace(/^0+/, '');
+    return { code: '+62', local: local };
+}
+
+function leadToggleReferral() {
+    const isRef = !!($('#lead-source option:selected').attr('data-referral'));
+    $('#lead-referral-group').toggle(isRef).removeClass('is-invalid');
+    if (!isRef) {
+        $('#lead-referral').val('');
+    }
+}
 
 function toggleLeadSection(header) {
     header.closest('.lead-form-section').classList.toggle('open');
@@ -482,6 +588,11 @@ function resetLeadForm() {
     $('#lead-field-type').val('').trigger('change');
     $('#lead-segmentation').val('').trigger('change');
     $('#lead-end-user').val('').trigger('change');
+    $('#lead-mobile-country').val('+62').trigger('change');
+    $('#lead-mobile').val('');
+    $('#lead-mobile-full').val('');
+    $('#lead-referral').val('');
+    $('#lead-referral-group').hide();
 }
 
 function openCreateModal() {
@@ -507,11 +618,15 @@ function openEditModal(id) {
         $('#lead-salutation').val(res.contact ? res.contact.salutation : '').trigger('change');
         $('#lead-full-name').val(res.contact ? res.contact.full_name : '');
         $('#lead-email').val(res.contact ? res.contact.email : '');
-        $('#lead-mobile').val(res.contact ? res.contact.mobile : '');
+        const parsedMobile = leadParseMobile(res.contact ? res.contact.mobile : '');
+        $('#lead-mobile-country').val(parsedMobile.code).trigger('change');
+        $('#lead-mobile').val(parsedMobile.local);
+        $('#lead-mobile-full').val(res.contact ? res.contact.mobile : '');
         $('#lead-phone').val(res.contact ? res.contact.phone : '');
         $('#lead-job-title').val(res.contact ? res.contact.job_titles_id : '').trigger('change');
         $('#lead-division').val(res.contact ? res.contact.divisions_id : '').trigger('change');
         $('#lead-source').val(res.lead.source_id).trigger('change');
+        $('#lead-referral').val(res.lead.name_referral || '');
         $('#lead-contact-method').val(res.contact ? res.contact.contact_methods_id : '').trigger('change');
         $('#lead-role').val(res.contact ? res.contact.role_in_projects_id : '').trigger('change');
         if (res.lead.closed_date) {
@@ -601,6 +716,7 @@ function initLeadsTable() {
             { data: 'mobile' },
             { data: 'status_badge' },
             { data: 'owner_name' },
+            { data: 'assigned_to_name' },
             {
                 data: null,
                 orderable: false,
@@ -609,9 +725,15 @@ function initLeadsTable() {
                 render: function(data, type, row) {
                     var html = '<div style="display:flex;gap:5px;justify-content:center">';
                     html += '<a href="' + showUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
-                    if (leadsCanUpdate && row.lead_status !== 'Converted') {
+                    // cek jika user memiliki permission update dan status lead bukan "Converted" maka tampilkan tombol edit
+                    if (leadsCanUpdate && isSales && row.lead_status !== 'Converted') {
                         html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
+                    // cek jika user memiliki permission update dan bukan divisi sales  dan merupakan sales manager maka tampilkan tombol edit
+                    else if (leadsCanUpdate && !isSales) {
+                        html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
+                    }
+
                     if (leadsCanDelete) {
                         html += ' <button type="button" class="btn-icon danger btn-delete-lead" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
@@ -682,6 +804,13 @@ $(document).on('click', '#btn-save-lead', function() {
     }
 
 
+    if ($('#lead-referral-group').is(':visible') && !($('#lead-referral').val() || '').trim()) {
+        $('#lead-referral').addClass('is-invalid');
+        toastr.error('Referral Name wajib diisi.');
+        $('#lead-referral').focus();
+        return;
+    }
+
     const companyId = $('#lead-company-id').val();
     if (companyId) {
         const companyFields = [
@@ -705,6 +834,14 @@ $(document).on('click', '#btn-save-lead', function() {
             }
         }
     }
+
+    if (!$('#lead-mobile').val() || !$('#lead-mobile').val().replace(/\D/g, '')) {
+        $('#lead-mobile').addClass('is-invalid');
+        toastr.error('Mobile wajib diisi.');
+        $('#lead-mobile').focus();
+        return;
+    }
+    $('#lead-mobile-full').val(leadBuildMobile());
 
     const formData = new FormData(document.getElementById('lead-form'));
     formData.set('all_filed_completed', $('#lead-all-complete').is(':checked') ? '1' : '0');
@@ -773,6 +910,8 @@ $(document).on('click', '#btn-save-lead', function() {
 $(document).on('change input', '#lead-form input.is-invalid, #lead-form select.is-invalid', function() {
     $(this).removeClass('is-invalid');
 });
+
+$(document).on('change', '#lead-source', leadToggleReferral);
 
 $(document).on('click', '.btn-delete-lead', function() {
     const id = $(this).data('id');
@@ -863,6 +1002,7 @@ $(document).on('click', '#btn-import', function() {
 });
 
 $(document).on('shown.bs.modal', '#leadModal', function() {
+    leadPopulateCountryCodes();
     if (!$('#lead-company').hasClass('select2-hidden-accessible')) {
         $('#lead-company').select2({
             theme: 'bootstrap-5',

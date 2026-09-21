@@ -17,6 +17,7 @@ class Lead extends Model
         'account_contacts_id',
         'account_companies_id',
         'source_id',
+        'name_referral',
         'unqualified_reason',
         'closed_date',
         'all_filed_completed',

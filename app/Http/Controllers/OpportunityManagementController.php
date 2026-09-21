@@ -117,6 +117,7 @@ class OpportunityManagementController extends Controller
                 'stage_name' => $opp->stage?->stage_name ?? '—',
                 'close_won_date' => $opp->close_won_date?->format('d M Y') ?? '—',
                 'owner_name' => $opp->owner?->username ?? '—',
+                'next_step' => $opp->next_step ?? '—',
             ];
         }
 
@@ -136,8 +137,8 @@ class OpportunityManagementController extends Controller
             'type' => 'nullable|in:Existing Business,New Business',
             'account_contacts_id' => 'nullable|exists:account_contacts,id',
             'stage_id' => 'nullable|exists:stages,id',
-            'probability' => 'required|integer|min:0|max:100',
-            'forecast_id' => 'required|exists:forecasts,id',
+            'probability' => 'nullable|integer|min:0|max:100',
+            'forecast_id' => 'nullable|exists:forecasts,id',
             'loss_reasons_id' => 'nullable|exists:loss_reasons,id',
             'quote_ready' => 'boolean',
             'division_id' => 'nullable|exists:divisions,id',
@@ -154,6 +155,11 @@ class OpportunityManagementController extends Controller
         ]);
 
         $validated['owner_id'] = Auth::id();
+
+        // Jika close_date tidak di isi, maka set close_date menjadi 3 bulan tanggal sekarang
+        if (empty($validated['close_date'])) {
+            $validated['close_date'] = now()->addMonths(3)->format('Y-m-d');
+        }
 
         DB::beginTransaction();
         try {
@@ -205,8 +211,14 @@ class OpportunityManagementController extends Controller
         $q = $request->get('q', '');
         $companyId = $request->get('company_id');
 
-        $query = AccountContact::where('status', 'Active')
-            ->where(function ($qry) use ($q) {
+        $query = AccountContact::where('status', 'Active');
+
+        // Jika divisi sales dan bukan manager, filter hanya kontak yang dimiliki oleh user saat ini
+        if (strtolower(Auth::user()->division?->division_name) === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
+            $query->where('assigned_to_id', Auth::id());
+        }
+
+        $query->where(function ($qry) use ($q) {
                 $qry->where('full_name', 'like', "%{$q}%");
             });
 
@@ -235,7 +247,7 @@ class OpportunityManagementController extends Controller
             'account_contacts_id' => 'nullable|exists:account_contacts,id',
             'stage_id' => 'nullable|exists:stages,id',
             'probability' => 'nullable|integer|min:0|max:100',
-            'forecast_id' => 'required|exists:forecasts,id',
+            'forecast_id' => 'nullable|exists:forecasts,id',
             'loss_reasons_id' => 'nullable|exists:loss_reasons,id',
             'quote_ready' => 'boolean',
             'division_id' => 'nullable|exists:divisions,id',

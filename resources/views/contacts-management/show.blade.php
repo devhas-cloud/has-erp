@@ -35,6 +35,7 @@
                     <tr><td style="color:var(--text-muted);">Preferred Contact Method</td><td>{{ $contact->contactMethod?->method_name ?? '—' }}</td></tr>
                     <tr><td style="color:var(--text-muted);">Role in Project</td><td>{{ $contact->roleInProject?->role_name ?? '—' }}</td></tr>
                     <tr><td style="color:var(--text-muted);">Owner</td><td><strong>{{ $contact->contactOwner?->username ?? '—' }}</strong></td></tr>
+                    <tr><td style="color:var(--text-muted);">Assigned To</td><td><strong>{{ $contact->assignedTo?->username ?? '—' }}</strong></td></tr>
                     <tr><td style="color:var(--text-muted);">Status</td><td>{{ $contact->status ?? '—' }}</td></tr>
                 </table>
             </div>
@@ -60,11 +61,11 @@
             </div>
             <div class="card-body-custom">
                 <table class="table table-sm table-borderless mb-0" style="font-size:13.5px;">
-                    <tr><td style="color:var(--text-muted);width:140px;">Address Street</td><td>{{ $contact->address_street ?? '—' }}</td></tr>
-                    <tr><td style="color:var(--text-muted);">City</td><td>{{ $contact->address_city ?? '—' }}</td></tr>
-                    <tr><td style="color:var(--text-muted);">Province</td><td>{{ $contact->address_province ?? '—' }}</td></tr>
-                    <tr><td style="color:var(--text-muted);">Postal Code</td><td>{{ $contact->address_postal_code ?? '—' }}</td></tr>
-                    <tr><td style="color:var(--text-muted);">Country</td><td>{{ $contact->address_country ?? '—' }}</td></tr>
+                    <tr><td style="color:var(--text-muted);width:140px;">Address Street</td><td>{{ $contact->accountCompany?->address_billing_street ?? '—' }}</td></tr>
+                    <tr><td style="color:var(--text-muted);">City</td><td>{{ $contact->accountCompany?->address_billing_city ?? '—' }}</td></tr>
+                    <tr><td style="color:var(--text-muted);">Province</td><td>{{ $contact->accountCompany?->address_billing_province ?? '—' }}</td></tr>
+                    <tr><td style="color:var(--text-muted);">Postal Code</td><td>{{ $contact->accountCompany?->address_billing_postal_code ?? '—' }}</td></tr>
+                    <tr><td style="color:var(--text-muted);">Country</td><td>{{ $contact->accountCompany?->address_billing_country ?? '—' }}</td></tr>
                 </table>
             </div>
         </div>

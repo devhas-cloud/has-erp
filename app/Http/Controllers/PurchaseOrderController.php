@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Currency;
 use App\Models\GoodsRequest;
 use App\Models\GoodsRequestItem;
+use App\Models\MasterProduct;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
@@ -37,7 +38,7 @@ class PurchaseOrderController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = PurchaseOrder::withCount('items')->with('creator');
+        $query = PurchaseOrder::withCount(['items' => fn ($q) => $q->whereNull('category')])->with('creator');
 
         $recordsTotal = (clone $query)->count();
 
@@ -136,6 +137,7 @@ class PurchaseOrderController extends Controller
 
         return view('purchase-order.show', [
             'purchaseOrder' => $purchaseOrder,
+            'poGroups' => $purchaseOrder->hierarchyGroups(),
             'canApprove' => ModuleAccess::for()->module(self::MODULE_CODE)->canApprove(),
             'canUpdate' => ModuleAccess::for()->module(self::MODULE_CODE)->canManage(),
         ]);
@@ -153,9 +155,13 @@ class PurchaseOrderController extends Controller
         return view('purchase-order.form', [
             'purchaseOrder' => $purchaseOrder,
             'items' => $purchaseOrder->items->map(fn ($item) => [
+                '_key' => 'db-'.$item->id,
+                'parent_key' => $item->parent_id ? 'db-'.$item->parent_id : null,
+                'category' => $item->category,
                 'id' => $item->id,
                 'goods_request_item_id' => $item->goods_request_item_id,
                 'goods_request_id' => $item->goods_request_id,
+                'master_product_id' => $item->master_product_id,
                 'part_number' => $item->part_number,
                 'description' => Quotation::renderDescription($item->description),
                 'qty' => $item->qty,
@@ -327,11 +333,53 @@ class PurchaseOrderController extends Controller
             'quotation_number' => $gr->quotation?->quotation_number,
             'items' => $gr->items->map(fn (GoodsRequestItem $item) => [
                 'goods_request_item_id' => $item->id,
+                'quote_configuration_item_id' => $item->quote_configuration_item_id,
+                'master_product_id' => $item->master_product_id,
+                'project_name' => $gr->opportunity?->opportunity_name,
                 'part_number' => $item->part_number,
                 'description' => Quotation::renderDescription($item->description),
                 'qty' => $item->qty,
                 'unit' => $item->unit,
             ])->values(),
+        ])->values();
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Katalog Master Product (aktif, lintas divisi — PO bisa menggabungkan
+     * item lintas divisi) untuk picker produk di kolom Part Number pada form
+     * PO. Mengembalikan harga + mata uang agar saat produk dipilih, currency
+     * dan harga satuan langsung terisi (masih bisa diedit / negosiasi supplier).
+     */
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $q = $request->get('q', '');
+        $base = Currency::baseName();
+
+        $products = MasterProduct::with('currency')
+            ->active()
+            ->where(function ($builder) use ($q) {
+                $builder->where('name', 'like', "%{$q}%")
+                    ->orWhere('code', 'like', "%{$q}%")
+                    ->orWhere('brand', 'like', "%{$q}%")
+                    ->orWhere('category', 'like', "%{$q}%")
+                    ->orWhere('description', 'like', "%{$q}%");
+            })
+            ->orderBy('name')
+            ->limit(50)
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price', 'currency_id']);
+
+        $data = $products->map(fn (MasterProduct $product) => [
+            'id' => $product->id,
+            'code' => $product->code,
+            'name' => $product->name,
+            'brand' => $product->brand,
+            'category' => $product->category,
+            'description' => $product->description,
+            'price' => (float) $product->price,
+            'currency' => $product->currency && ! $product->currency->isBase() ? strtoupper($product->currency->name) : $base,
+            'rate' => $product->currency && ! $product->currency->isBase() ? (float) $product->currency->rate : 1,
         ])->values();
 
         return response()->json(['success' => true, 'data' => $data]);
@@ -354,8 +402,12 @@ class PurchaseOrderController extends Controller
             'finance_name' => 'nullable|string|max:150',
             'accounting_name' => 'nullable|string|max:150',
             'items' => 'nullable|array',
+            'items.*._key' => 'nullable|string',
+            'items.*.parent_key' => 'nullable|string',
+            'items.*.category' => 'nullable|string|max:200',
             'items.*.goods_request_item_id' => 'nullable|integer|exists:goods_request_items,id',
             'items.*.goods_request_id' => 'nullable|integer|exists:goods_requests,id',
+            'items.*.master_product_id' => 'nullable|integer|exists:master_products,id',
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'nullable|string',
             'items.*.qty' => 'nullable|integer|min:0',
@@ -367,12 +419,24 @@ class PurchaseOrderController extends Controller
     }
 
     /**
-     * Simpan item PO. goods_request_item_id divalidasi ulang di sini (selain
-     * unique constraint di DB) supaya pesan error jelas kalau ternyata sudah
-     * dipakai PO lain sejak form dibuka (race condition).
+     * Simpan item PO dengan hirarki parent-child (baris kategori sebagai parent).
+     * goods_request_item_id divalidasi ulang di sini (selain unique constraint di
+     * DB) supaya pesan error jelas kalau ternyata sudah dipakai PO lain sejak
+     * form dibuka (race condition).
+     *
+     * Flow dua-pass (pola water/ims syncItems):
+     *   1. insert semua baris (parent & item) tanpa parent_id
+     *   2. ambil id hasil insert (urutan sama dengan payload)
+     *   3. pasang parent_id berdasar parent_key
+     *
+     * Harga: bila baris punya master_product_id dan user belum mengirim
+     * price_currency, diisi otomatis dari master product (Q2=A: tetap bisa
+     * diedit/negosiasi supplier).
      */
     private function syncItems(PurchaseOrder $purchaseOrder, array $items): void
     {
+        $items = array_values($items);
+
         $goodsRequestItemIds = collect($items)->pluck('goods_request_item_id')->filter()->values();
 
         if ($goodsRequestItemIds->isNotEmpty()) {
@@ -390,27 +454,45 @@ class PurchaseOrderController extends Controller
 
         $purchaseOrder->items()->delete();
 
+        if (empty($items)) {
+            return;
+        }
+
+        $productIds = collect($items)->pluck('master_product_id')->filter()->unique()->values();
+        $products = MasterProduct::with('currency')
+            ->whereIn('id', $productIds)
+            ->get(['id', 'price', 'currency_id'])
+            ->keyBy('id');
+        $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
+
+        $now = now();
+        $keyMap = [];
         $payload = [];
-        foreach (array_values($items) as $i => $item) {
+
+        foreach ($items as $i => $item) {
+            $key = $item['_key'] ?? 'row-'.$i;
+            $keyMap[$key] = $i;
+
+            $pricing = $this->pricingForItem($item, $products, $baseCurrency);
+
             $payload[] = [
                 'purchase_order_id' => $purchaseOrder->id,
+                'parent_id' => null,
+                'category' => ($item['category'] ?? '') !== '' ? $item['category'] : null,
                 'goods_request_item_id' => $item['goods_request_item_id'] ?? null,
                 'goods_request_id' => $item['goods_request_id'] ?? null,
+                'master_product_id' => $item['master_product_id'] ?? null,
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'unit' => $item['unit'] ?? null,
-                'price' => $item['price'] ?? null,
-                'price_currency' => $item['price_currency'] ?? null,
-                'currency' => $item['currency'] ?? null,
+                'price' => $pricing['price'],
+                'price_currency' => $pricing['price_currency'],
+                'currency' => $pricing['currency'],
                 'sort_order' => $i + 1,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => $now,
+                'updated_at' => $now,
             ];
-        }
-
-        if (empty($payload)) {
-            return;
         }
 
         try {
@@ -421,5 +503,96 @@ class PurchaseOrderController extends Controller
                 'message' => 'Salah satu item sudah dipakai di Purchase Order lain. Muat ulang halaman dan coba lagi.',
             ], 422));
         }
+
+        // Id hasil insert berurutan sama dengan urutan payload.
+        $ids = PurchaseOrderItem::where('purchase_order_id', $purchaseOrder->id)
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        $parentByChildId = [];
+        foreach ($items as $i => $item) {
+            $parentKey = $item['parent_key'] ?? null;
+            if (! $parentKey || ! isset($keyMap[$parentKey]) || $keyMap[$parentKey] === $i) {
+                continue;
+            }
+            if (isset($ids[$i], $ids[$keyMap[$parentKey]])) {
+                $parentByChildId[$ids[$i]] = $ids[$keyMap[$parentKey]];
+            }
+        }
+
+        $this->assignParents($parentByChildId);
+    }
+
+    /**
+     * Harga item: bila ada master_product_id dan user belum mengirim
+     * price_currency/currency, diisi dari master product (currency + harga asli
+     * sebelum kurs + harga IDR sesudah kurs). Nilai yang dikirim user (hasil
+     * edit/negosiasi) tetap dipakai.
+     *
+     * @return array{currency: ?string, price_currency: ?float, price: ?float}
+     */
+    private function pricingForItem(array $item, \Illuminate\Support\Collection $products, string $baseCurrency): array
+    {
+        $productId = $item['master_product_id'] ?? null;
+        $product = $productId ? $products->get($productId) : null;
+
+        $rawPriceCurrency = $item['price_currency'] ?? null;
+        $hasPriceCurrency = $rawPriceCurrency !== null && $rawPriceCurrency !== '';
+
+        if ($product && ! $hasPriceCurrency) {
+            $priceCurrency = round((float) $product->price, 2);
+            $currency = $product->currency && ! $product->currency->isBase()
+                ? strtoupper($product->currency->name)
+                : $baseCurrency;
+        } else {
+            $priceCurrency = $hasPriceCurrency ? (float) $rawPriceCurrency : null;
+            $currency = ($item['currency'] ?? '') !== '' ? $item['currency'] : ($product && $product->currency && ! $product->currency->isBase() ? strtoupper($product->currency->name) : $baseCurrency);
+        }
+
+        $rate = 1.0;
+        if ($currency && $currency !== $baseCurrency) {
+            $rate = (float) (Currency::where('name', $currency)->value('rate') ?? 1);
+        }
+
+        $price = $item['price'] ?? null;
+        if (($price === null || $price === '') && $priceCurrency !== null) {
+            $price = round($priceCurrency * $rate, 2);
+        }
+
+        return [
+            'currency' => $currency,
+            'price_currency' => $priceCurrency,
+            'price' => $price !== null && $price !== '' ? round((float) $price, 2) : null,
+        ];
+    }
+
+    /**
+     * Pasang parent_id banyak baris dalam satu query:
+     * UPDATE ... SET parent_id = CASE id WHEN ? THEN ? ... END WHERE id IN (...).
+     *
+     * @param  array<int,int>  $parentByChildId  [child_id => parent_id]
+     */
+    private function assignParents(array $parentByChildId): void
+    {
+        if (empty($parentByChildId)) {
+            return;
+        }
+
+        $cases = '';
+        $bindings = [];
+        foreach ($parentByChildId as $childId => $parentId) {
+            $cases .= ' WHEN ? THEN ?';
+            $bindings[] = $childId;
+            $bindings[] = $parentId;
+        }
+
+        $childIds = array_keys($parentByChildId);
+        $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+
+        DB::update(
+            "UPDATE purchase_order_items SET parent_id = CASE id{$cases} END WHERE id IN ({$placeholders})",
+            array_merge($bindings, $childIds)
+        );
     }
 }

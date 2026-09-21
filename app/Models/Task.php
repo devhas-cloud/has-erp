@@ -20,6 +20,7 @@ class Task extends Model
         'opportunity_id',
         'activity_id',
         'category_id',
+        'account_contact_id',
         'handling_group_id',
         'whatsapp_group_id',
         'title',
@@ -49,6 +50,14 @@ class Task extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(TaskCategory::class, 'category_id');
+    }
+
+    /**
+     * Kontak yang dikunjungi — hanya relevan untuk task kategori "Visit".
+     */
+    public function accountContact(): BelongsTo
+    {
+        return $this->belongsTo(AccountContact::class);
     }
 
     public function handlingGroup(): BelongsTo

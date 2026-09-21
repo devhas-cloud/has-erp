@@ -190,14 +190,17 @@
                                     <select name="category_id" id="task-category-id">
                                         <option value="">— Select Category —</option>
                                         @foreach($categories as $cat)
-                                            <option value="{{ $cat->id }}">
+                                            <option value="{{ $cat->id }}" @if(strtolower($cat->name) === 'visit') data-visit="1" @endif>
                                                 {{ $cat->division_id ? '[' . optional($cat->division)->division_name . '] ' : '[Global] ' }}
                                                 {{ $cat->name }}
                                             </option>
                                         @endforeach
                                     </select>
                                 </div>
-
+                                <div class="form-group" id="task-account-contact-container" style="display:none">
+                                    <label>Account Contact <span style="font-size:11px;color:var(--text-muted);text-transform:none;font-weight:500">(yang dikunjungi, opsional)</span></label>
+                                    <select name="account_contact_id" id="task-account-contact" style="width:100%"></select>
+                                </div>
                             </div>
                             <div class="task-form-row">
                                 <div class="form-group">
@@ -330,6 +333,14 @@ function toggleTaskSection(header) {
     header.closest('.task-form-section').classList.toggle('open');
 }
 
+function taskToggleAccountContact() {
+    var isVisit = !!($('#task-category-id option:selected').attr('data-visit'));
+    $('#task-account-contact-container').toggle(isVisit);
+    if (!isVisit) {
+        $('#task-account-contact').val(null).trigger('change');
+    }
+}
+
 function resetTaskForm() {
     document.getElementById('task-form').reset();
     document.getElementById('task-edit-id').value = '';
@@ -342,6 +353,8 @@ function resetTaskForm() {
     $('#task-assignees').val(null).trigger('change');
     $('#task-whatsapp-group').val(null).trigger('change');
     $('#whatsapp-group-container').hide();
+    $('#task-account-contact').val(null).trigger('change');
+    $('#task-account-contact-container').hide();
     $('#task-alert-target').val('personal');
 }
 
@@ -587,6 +600,24 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
             minimumInputLength: 0
         });
     }
+
+    if (!$('#task-account-contact').hasClass('select2-hidden-accessible')) {
+        $('#task-account-contact').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Cari kontak yang dikunjungi...',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#taskModal'),
+            ajax: {
+                url: '{{ route("task-planner.fetch-account-contacts") }}',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(data) { return { results: data.results }; }
+            },
+            minimumInputLength: 1
+        });
+    }
 });
 
 $(document).on('change', '#task-alert-target', function() {
@@ -597,6 +628,8 @@ $(document).on('change', '#task-alert-target', function() {
         $('#whatsapp-group-container').hide();
     }
 });
+
+$(document).on('change', '#task-category-id', taskToggleAccountContact);
 
 initTasksTable();
 

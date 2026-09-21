@@ -119,6 +119,9 @@
             <button type="button" class="btn btn-secondary btn-sm" onclick="poLoadPicker()">
                 <i class="fa fa-dolly me-1"></i> Ambil dari Permintaan Barang
             </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="poAddGroup()">
+                <i class="fa fa-folder-open me-1"></i> Tambah Group (Kategori)
+            </button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="poAddBlankRow()">
                 <i class="fa fa-plus me-1"></i> Tambah Baris Manual
             </button>
@@ -192,6 +195,26 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="poProductPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa-solid fa-box me-2" style="color:var(--accent)"></i>Pilih Produk Master</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="po-product-q" placeholder="Cari kode / nama / brand / kategori produk">
+                    <button type="button" class="btn btn-primary" onclick="poSearchProducts()"><i class="fa fa-search me-1"></i>Cari</button>
+                </div>
+                <div id="po-product-results">
+                    <div class="config-card-empty"><i class="fa-solid fa-inbox"></i>Ketik kata kunci lalu tekan Cari.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endpush
 
 @section('scripts')
@@ -206,6 +229,8 @@ const poUpdateUrl = '{{ $purchaseOrder ? route("purchase-order.update", $purchas
 const poShowUrl = '{{ $purchaseOrder ? route("purchase-order.show", $purchaseOrder->id) : "" }}';
 const poCurrencies = @json($currencies ?? []);
 const poInitialItems = @json($items ?? []);
+
+const poSearchProductsUrl = '{{ route("purchase-order.search-products") }}';
 
 function poNewKey() {
     return 'row-' + (++poKeySeq);
@@ -249,29 +274,115 @@ function poSyncEmpty() {
     $('#po-items-empty').toggle($('#po-items-body tr').length === 0);
 }
 
-function poRowHtml(item) {
+// ── Hirarki: baris group (kategori/project) sebagai parent, item sebagai anak. ──
+
+function poGroupRowHtml(key, label) {
+    var html = '<tr data-key="' + key + '" data-parent="" data-depth="0" data-type="group">';
+    html += '<td class="text-center po-row-num"></td>';
+    html += '<td colspan="7"><input type="text" class="form-control form-control-sm po-category" value="' + poEsc(label || '') + '" placeholder="Nama kategori / project (mis. SPARING Gresik)"></td>';
+    html += '<td class="text-end text-muted" style="font-size:11px">Grup</td>';
+    html += '<td class="text-center">';
+    html += '<button type="button" class="btn-icon" title="Tambah Baris di group ini" onclick="poAddChild(this)"><i class="fa fa-plus"></i></button>';
+    html += '<button type="button" class="btn-icon text-danger" title="Hapus group" onclick="poRemoveRow(this)"><i class="fa fa-trash"></i></button>';
+    html += '</td></tr>';
+    return html;
+}
+
+function poAddGroup() {
+    $('#po-items-body').append(poGroupRowHtml(poNewKey(), ''));
+    poRenumber();
+    poSyncEmpty();
+    poRecalc();
+}
+
+function poEnsureGroup(label) {
+    if (!label) return '';
+    label = String(label).trim();
+    var found = null;
+    $('#po-items-body tr[data-type="group"]').each(function() {
+        if (String($(this).find('.po-category').val()).trim() === label) found = $(this).attr('data-key');
+    });
+    if (found) return found;
     var key = poNewKey();
+    $('#po-items-body').append(poGroupRowHtml(key, label));
+    poRenumber();
+    poSyncEmpty();
+    poRecalc();
+    return key;
+}
+
+function poAddChild(btn) {
+    var parentKey = $(btn).closest('tr').attr('data-key');
+    poAddRow({}, parentKey);
+}
+
+function poRowHtml(item, parentKey) {
+    var key = poNewKey();
+    var parentKeyAttr = parentKey || '';
+    var depth = 0;
+    if (parentKeyAttr) {
+        var parentRow = $('tr[data-key="' + parentKeyAttr + '"]');
+        depth = (parseInt(parentRow.attr('data-depth')) || 0) + 1;
+    }
     var sourceBadge = item.goods_request_item_id
         ? '<span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px;white-space:normal" title="Dari Permintaan Barang">' + poEsc(item.source_label || ('GR#' + item.goods_request_id)) + '</span>'
         : '<span class="text-muted" style="font-size:11px">Manual</span>';
 
-    var html = '<tr data-key="' + key + '" data-goods-request-item-id="' + (item.goods_request_item_id || '') + '" data-goods-request-id="' + (item.goods_request_id || '') + '">';
+    var html = '<tr data-key="' + key + '" data-parent="' + parentKeyAttr + '" data-depth="' + depth + '"';
+    html += ' data-goods-request-item-id="' + (item.goods_request_item_id || '') + '" data-goods-request-id="' + (item.goods_request_id || '') + '"';
+    html += ' data-master-product-id="' + (item.master_product_id || '') + '">';
     html += '<td class="text-center po-row-num"></td>';
     html += '<td>' + sourceBadge + '</td>';
-    html += '<td><input type="text" class="form-control form-control-sm po-pn" value="' + poEsc(item.part_number || '') + '"></td>';
-    html += '<td><div class="form-control form-control-sm po-desc" contenteditable="true" data-placeholder="Nama barang / deskripsi">' + (item.description || '') + '</div></td>';
+    html += '<td><div class="d-flex gap-1">';
+    html += '<input type="text" class="form-control form-control-sm po-pn" value="' + poEsc(item.part_number || '') + '">';
+    html += '<button type="button" class="btn-icon" title="Pilih produk master" onclick="poOpenProductPicker(this)"><i class="fa fa-search"></i></button>';
+    html += '</div></td>';
+    html += '<td><div class="form-control form-control-sm po-desc" contenteditable="true" style="margin-left:' + (depth * 18) + 'px" data-placeholder="Nama barang / deskripsi">' + (item.description || '') + '</div></td>';
     html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm po-qty" value="' + (item.qty != null ? item.qty : '') + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm po-unit" value="' + poEsc(item.unit || '') + '"></td>';
     html += '<td>' + poCurrencySelect(item.currency) + '</td>';
     html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-end po-price-currency" value="' + (item.price_currency != null ? poFmt(item.price_currency) : '') + '"></td>';
     html += '<td class="text-end po-amount">0</td>';
-    html += '<td class="text-center"><button type="button" class="btn-icon text-danger" title="Hapus" onclick="poRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
-    html += '</tr>';
+    html += '<td class="text-center">';
+    html += '<button type="button" class="btn-icon" title="Tambah Baris Anak" onclick="poAddChild(this)"><i class="fa fa-plus"></i></button>';
+    html += '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="poRemoveRow(this)"><i class="fa fa-trash"></i></button>';
+    html += '</td></tr>';
     return html;
 }
 
-function poAddRow(item) {
-    $('#po-items-body').append(poRowHtml(item || {}));
+function poAddRow(item, parentKey) {
+    item = item || {};
+
+    // Baris group (kategori) dari data edit/awal.
+    if (item.category) {
+        var gkey = item._key || poNewKey();
+        $('#po-items-body').append(poGroupRowHtml(gkey, item.category));
+        poRenumber();
+        poSyncEmpty();
+        poRecalc();
+        return gkey;
+    }
+
+    var html = poRowHtml(item, parentKey);
+
+    // Sisipkan langsung setelah keturunan terakhir dari parent (menjaga urutan DFS).
+    if (parentKey) {
+        var last = $('tr[data-key="' + parentKey + '"]');
+        var stack = [parentKey];
+        while (stack.length) {
+            var cur = stack.pop();
+            $('tr[data-key="' + cur + '"]').nextAll('tr').each(function() {
+                var p = $(this).attr('data-parent');
+                if (p === cur) {
+                    last = this;
+                    stack.push($(this).attr('data-key'));
+                }
+            });
+        }
+        $(html).insertAfter(last);
+    } else {
+        $('#po-items-body').append(html);
+    }
     poRenumber();
     poSyncEmpty();
     poRecalc();
@@ -282,20 +393,40 @@ function poAddBlankRow() {
 }
 
 function poRemoveRow(btn) {
-    $(btn).closest('tr').remove();
+    var row = $(btn).closest('tr');
+    var key = row.attr('data-key');
+    // Hapus juga semua turunannya.
+    var toRemove = [];
+    var walk = function(k) {
+        $('tr[data-parent="' + k + '"]').each(function() {
+            toRemove.push(this);
+            walk($(this).attr('data-key'));
+        });
+    };
+    walk(key);
+    toRemove.forEach(function(el) { $(el).remove(); });
+    row.remove();
     poRenumber();
     poSyncEmpty();
     poRecalc();
 }
 
 function poRenumber() {
-    $('#po-items-body tr').each(function(i) { $(this).find('.po-row-num').text(i + 1); });
+    var n = 0;
+    $('#po-items-body tr').each(function() {
+        if ($(this).attr('data-type') === 'group') return;
+        $(this).find('.po-row-num').text(++n);
+    });
 }
 
 function poRecalc() {
     var grand = 0;
     $('#po-items-body tr').each(function() {
         var $row = $(this);
+        if ($row.attr('data-type') === 'group') {
+            $row.find('.po-amount').text('');
+            return;
+        }
         var qty = parseFloat(poToRaw($row.find('.po-qty').val())) || 0;
         var currency = $row.find('.po-currency').val();
         var priceCurrency = parseFloat(poToRaw($row.find('.po-price-currency').val())) || 0;
@@ -311,12 +442,24 @@ function poCollectItems() {
     var items = [];
     $('#po-items-body tr').each(function() {
         var $row = $(this);
+        if ($row.attr('data-type') === 'group') {
+            items.push({
+                _key: $row.attr('data-key'),
+                parent_key: null,
+                category: $row.find('.po-category').val() || null,
+            });
+            return;
+        }
         var currency = $row.find('.po-currency').val();
         var priceCurrency = parseFloat(poToRaw($row.find('.po-price-currency').val())) || 0;
         var price = Math.round(poRateOf(currency) * priceCurrency * 100) / 100;
         items.push({
+            _key: $row.attr('data-key'),
+            parent_key: $row.attr('data-parent') || null,
+            category: null,
             goods_request_item_id: $row.attr('data-goods-request-item-id') || null,
             goods_request_id: $row.attr('data-goods-request-id') || null,
+            master_product_id: $row.attr('data-master-product-id') || null,
             part_number: $row.find('.po-pn').val(),
             description: $row.find('.po-desc').html(),
             qty: $row.find('.po-qty').val(),
@@ -328,6 +471,71 @@ function poCollectItems() {
     });
     return items;
 }
+
+// ── Picker produk master: pilih part number -> isi currency + harga otomatis. ──
+
+let poProductPickerTarget = null;
+let poProductPickerInstance = null;
+let poProductPool = [];
+
+function poOpenProductPicker(btn) {
+    poProductPickerTarget = $(btn).closest('tr');
+    $('#po-product-q').val('');
+    $('#po-product-results').html('<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>Ketik kata kunci lalu tekan Cari.</div>');
+    if (!poProductPickerInstance) {
+        poProductPickerInstance = new bootstrap.Modal(document.getElementById('poProductPickerModal'));
+    }
+    poProductPickerInstance.show();
+}
+
+function poSearchProducts() {
+    var q = $('#po-product-q').val().trim();
+    $('#po-product-results').html('<div class="config-card-empty"><span class="config-spinner"></span>Memuat...</div>');
+    poProductPool = [];
+    $.get(poSearchProductsUrl, { q: q })
+        .done(function(res) {
+            var list = res.data || [];
+            if (list.length === 0) {
+                $('#po-product-results').html('<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>Tidak ditemukan.</div>');
+                return;
+            }
+            var html = '<div class="list-group">';
+            list.forEach(function(p) {
+                var poolIdx = poProductPool.length;
+                poProductPool.push(p);
+                html += '<a href="javascript:void(0)" class="list-group-item list-group-item-action po-product-item" data-idx="' + poolIdx + '">';
+                html += '<div class="d-flex justify-content-between align-items-center">';
+                html += '<strong>' + poEsc(p.code || '') + ' &middot; ' + poEsc(p.name || '') + '</strong>';
+                html += '<span class="badge" style="background:var(--accent-soft);color:var(--accent)">' + poEsc(p.currency) + ' ' + poFmt(p.price) + '</span>';
+                html += '</div>';
+                if (p.brand || p.category) html += '<div class="text-muted" style="font-size:12px">' + poEsc([p.brand, p.category].filter(Boolean).join(' · ')) + '</div>';
+                html += '</a>';
+            });
+            html += '</div>';
+            $('#po-product-results').html(html);
+        })
+        .fail(function() {
+            $('#po-product-results').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Gagal memuat produk.</div>');
+        });
+}
+
+$(document).on('click', '.po-product-item', function() {
+    var p = poProductPool[$(this).data('idx')];
+    if (!p || !poProductPickerTarget) return;
+    var $row = poProductPickerTarget;
+    $row.attr('data-master-product-id', p.id);
+    $row.find('.po-pn').val(p.code || '');
+    var $desc = $row.find('.po-desc');
+    if (!$.trim($desc.text()) && (p.description || p.name)) {
+        $desc.html(poEsc(p.description || p.name));
+    }
+    var $currency = $row.find('.po-currency');
+    $currency.val(p.currency || (poCurrencies.length ? poCurrencies[0].name : 'IDR'));
+    $row.find('.po-price-currency').val(p.price != null ? poFmt(p.price) : '');
+    poRecalc();
+    if (poProductPickerInstance) poProductPickerInstance.hide();
+    toastr.success('Produk diterapkan.');
+});
 
 // ── Ambil dari Permintaan Barang: dikelompokkan per Permintaan Barang, ──
 // supaya jelas asal masing-masing item walau lintas divisi/opportunity.
@@ -364,6 +572,8 @@ function poBuildPickerGroupsHtml(groups) {
             poPickerPool.push({
                 goods_request_item_id: it.goods_request_item_id,
                 goods_request_id: gr.goods_request_id,
+                master_product_id: it.master_product_id,
+                project_name: it.project_name,
                 part_number: it.part_number,
                 description: it.description,
                 qty: it.qty,
@@ -430,10 +640,11 @@ function poApplyPicked() {
     $('.po-picker-check:checked').each(function() {
         var idx = $(this).data('idx');
         var it = poPickerPool[idx];
-        if (it) {
-            poAddRow(it);
-            picked++;
-        }
+        if (!it) return;
+        // Kelompokkan otomatis per project (nama opportunity) lewat group kategori.
+        var groupKey = poEnsureGroup(it.project_name);
+        poAddRow(it, groupKey);
+        picked++;
     });
     if (picked === 0) {
         toastr.error('Pilih minimal satu item.');
@@ -484,7 +695,7 @@ function poSave() {
 }
 
 $(document).ready(function() {
-    (poInitialItems || []).forEach(function(it) { poAddRow(it); });
+    (poInitialItems || []).forEach(function(it) { poAddRow(it, it.parent_key); });
     poSyncEmpty();
     poRecalc();
 

@@ -211,7 +211,7 @@
             @php
                 $printCurrencyMatches = $purchaseOrder->printCurrency() !== null;
             @endphp
-            @forelse($purchaseOrder->projectGroups() as $group)
+            @forelse($purchaseOrder->hierarchyGroups() as $group)
                 <tr class="project-row">
                     <td colspan="5">{{ $group['label'] }}</td>
                 </tr>

@@ -114,6 +114,14 @@ class PurchaseOrder extends Model
     }
 
     /**
+     * Jumlah item sesungguhnya (baris parent/kategori tidak dihitung).
+     */
+    public function itemCount(): int
+    {
+        return $this->items->reject(fn (PurchaseOrderItem $item) => $item->isHeader())->count();
+    }
+
+    /**
      * Item dikelompokkan per "project" untuk dicetak di dokumen PO (label
      * per grup, seperti pada contoh dokumen) — labelnya diambil dari nama
      * opportunity milik Permintaan Barang asal item tersebut. Item tanpa
@@ -125,6 +133,10 @@ class PurchaseOrder extends Model
         $groups = [];
 
         foreach ($this->items as $item) {
+            if ($item->isHeader()) {
+                continue;
+            }
+
             $label = $item->goodsRequest?->opportunity?->opportunity_name ?: 'Stock';
 
             if (! isset($groups[$label])) {
@@ -141,11 +153,64 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Daftar nama project unik (dipakai pada blok "PROJECT :" di dokumen PO).
+     * Group dari hirarki parent yang tersimpan (baris kategori sebagai header).
+     * Dipakai form/show/PDF bila PO memakai grup kategori; PO lama (flat, tanpa
+     * baris parent) jatuh ke projectGroups() sebagai fallback. Item standalone
+     * tanpa parent dikelompokkan per project (sisa "Stock").
+     */
+    public function hierarchyGroups(): array
+    {
+        $items = $this->items;
+
+        if ($items->doesntContain(fn (PurchaseOrderItem $item) => $item->isHeader())) {
+            return $this->projectGroups();
+        }
+
+        $headers = $items->whereNotNull('category')
+            ->map(fn (PurchaseOrderItem $h) => [
+                'id' => $h->id,
+                'label' => $h->category,
+                'items' => collect(),
+            ])
+            ->keyBy('id');
+
+        $leftover = collect();
+        foreach ($items as $item) {
+            if ($item->isHeader()) {
+                continue;
+            }
+
+            if ($item->parent_id && isset($headers[$item->parent_id])) {
+                $headers[$item->parent_id]['items']->push($item);
+            } else {
+                $leftover->push($item);
+            }
+        }
+
+        $groups = $headers
+            ->filter(fn ($group) => $group['items']->isNotEmpty())
+            ->values()
+            ->all();
+
+        $byProject = [];
+        foreach ($leftover as $item) {
+            $label = $item->goodsRequest?->opportunity?->opportunity_name ?: 'Stock';
+            $byProject[$label][] = $item;
+        }
+
+        foreach ($byProject as $label => $projectItems) {
+            $groups[] = ['label' => $label, 'items' => collect($projectItems)];
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Daftar label grup unik (dipakai pada blok "PROJECT :" di dokumen PO).
      */
     public function projectLabels(): array
     {
-        return collect($this->projectGroups())->pluck('label')->all();
+        return collect($this->hierarchyGroups())->pluck('label')->all();
     }
 
     /**

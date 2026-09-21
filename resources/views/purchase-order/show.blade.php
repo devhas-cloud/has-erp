@@ -160,31 +160,36 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($purchaseOrder->items as $i => $item)
-                        <tr>
-                            <td class="text-center">{{ $i + 1 }}</td>
-                            <td>
-                                @if($item->goodsRequest)
-                                    <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px" title="Dari Permintaan Barang #{{ $item->goods_request_id }}">
-                                        {{ $item->goodsRequest->quotation?->quotation_number ?? ('GR#'.$item->goods_request_id) }} / {{ $item->goodsRequest->division?->division_name ?? '-' }}
-                                    </span>
-                                @else
-                                    <span class="text-muted" style="font-size:11px">Manual</span>
-                                @endif
-                            </td>
-                            <td>{{ $item->part_number ?: '—' }}</td>
-                            <td>{!! $item->description ?: '—' !!}</td>
-                            <td class="text-center">{{ $item->qty ?? '—' }}</td>
-                            <td>{{ $item->unit ?: '—' }}</td>
-                            <td class="text-end">
-                                @if($item->price_currency !== null)
-                                    {{ $item->currency ?: 'IDR' }} {{ number_format($item->price_currency, 2, ',', '.') }}
-                                @else
-                                    —
-                                @endif
-                            </td>
-                            <td class="text-end">{{ number_format($item->amount(), 0, ',', '.') }}</td>
+                    @forelse($poGroups as $group)
+                        <tr style="background:#fff7d6;">
+                            <td colspan="8" style="font-weight:600;color:#92400e">{{ $group['label'] }}</td>
                         </tr>
+                        @foreach($group['items'] as $i => $item)
+                            <tr>
+                                <td class="text-center">{{ $i + 1 }}</td>
+                                <td>
+                                    @if($item->goodsRequest)
+                                        <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px" title="Dari Permintaan Barang #{{ $item->goods_request_id }}">
+                                            {{ $item->goodsRequest->quotation?->quotation_number ?? ('GR#'.$item->goods_request_id) }} / {{ $item->goodsRequest->division?->division_name ?? '-' }}
+                                        </span>
+                                    @else
+                                        <span class="text-muted" style="font-size:11px">Manual</span>
+                                    @endif
+                                </td>
+                                <td>{{ $item->part_number ?: '—' }}</td>
+                                <td>{!! $item->description ?: '—' !!}</td>
+                                <td class="text-center">{{ $item->qty ?? '—' }}</td>
+                                <td>{{ $item->unit ?: '—' }}</td>
+                                <td class="text-end">
+                                    @if($item->price_currency !== null)
+                                        {{ $item->currency ?: 'IDR' }} {{ number_format($item->price_currency, 2, ',', '.') }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td class="text-end">{{ number_format($item->amount(), 0, ',', '.') }}</td>
+                            </tr>
+                        @endforeach
                     @empty
                         <tr>
                             <td colspan="8" class="text-center" style="color:var(--text-muted)">Belum ada item.</td>
