@@ -35,10 +35,10 @@ return [
         ],
     ],
 
-    'evolution' => [
-        'url' => env('EVOLUTION_API_URL'),
-        'instance' => env('EVOLUTION_INSTANCE'),
-        'apikey' => env('EVOLUTION_APIKEY'),
+    'wabaileys' => [
+        'url' => env('WABAILEYS_URL'),
+        'api_key' => env('WABAILEYS_API_KEY'),
+        'sender_phone' => env('WABAILEYS_SENDER_PHONE'),
     ],
 
 ];

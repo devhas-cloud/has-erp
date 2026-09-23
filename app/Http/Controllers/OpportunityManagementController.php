@@ -20,6 +20,7 @@ use App\Models\Task;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Services\MentionParser;
+use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -532,11 +533,12 @@ class OpportunityManagementController extends Controller
         $validated['requires_approval'] = ! empty($otherAssignees);
 
         DB::beginTransaction();
+        $notifiedAssignees = [];
         try {
             $task = Task::create($validated);
             $task->assignees()->sync($assigneeIds);
 
-            $task->load('creator');
+            $task->load(['creator', 'category']);
             foreach ($otherAssignees as $assigneeId) {
                 $assignee = User::find($assigneeId);
                 if ($assignee) {
@@ -549,8 +551,11 @@ class OpportunityManagementController extends Controller
                         'notifiable_id' => $task->id,
                         'data' => ['task_id' => $task->id, 'creator' => $task->creator->username],
                     ]);
+                    $notifiedAssignees[] = $assignee;
                 }
             }
+
+
 
             Activity::create([
                 'opportunity_id' => $opportunity->id,
@@ -560,6 +565,11 @@ class OpportunityManagementController extends Controller
             ]);
 
             DB::commit();
+
+            // Kirim WhatsApp SETELAH commit (bukan di dalam transaksi) — panggilan
+            // HTTP ke gateway WA lambat & tidak boleh membuat task creation yang
+            // sudah berhasil ikut ter-rollback kalau pengiriman gagal.
+            $this->notifyAssigneesOnWhatsApp($task, $notifiedAssignees);
 
             $task->load(['creator', 'assignees']);
 
@@ -576,6 +586,49 @@ class OpportunityManagementController extends Controller
                 'message' => 'Failed to create task: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Kirim notifikasi WhatsApp ke assignee (selain pembuat) saat task baru
+     * berhasil dibuat. Kegagalan kirim WA tidak pernah menggagalkan response
+     * storeTask() — WhatsAppService sendiri sudah tidak pernah throw.
+     */
+    private function notifyAssigneesOnWhatsApp(Task $task, array $assignees): void
+    {
+        if (empty($assignees)) {
+            return;
+        }
+
+        $whatsapp = app(WhatsAppService::class);
+        if (! $whatsapp->isConfigured()) {
+            return;
+        }
+
+        $message = $this->buildTaskCreatedMessage($task);
+
+        foreach ($assignees as $i => $assignee) {
+            if (! $assignee->phone_number) {
+                continue;
+            }
+            if ($i > 0) {
+                sleep(1);
+            }
+            $whatsapp->sendText($assignee->phone_number, $message);
+        }
+    }
+
+    private function buildTaskCreatedMessage(Task $task): string
+    {
+        $lines = [
+            '*Tugas Baru*',
+            '',
+            '*Judul:* '.$task->title,
+            '*Kategori:* '.($task->category?->name ?? '—'),
+            '*Tenggal:* '.$task->due_date->format('d M Y'),
+            '*Dari:* '.($task->creator?->username ?? 'Sistem'),
+        ];
+
+        return implode("\n", $lines);
     }
 
     public function searchUsers(Request $request): JsonResponse
