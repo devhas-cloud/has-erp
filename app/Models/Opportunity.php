@@ -33,6 +33,15 @@ class Opportunity extends Model
         'close_won_date',
         'description',
         'owner_id',
+        'close_loss_status',
+        'close_loss_note',
+        'close_loss_requested_at',
+        'close_loss_approved_by',
+        'close_loss_approved_at',
+        'negotiation_status',
+        'negotiation_requested_at',
+        'negotiation_approved_by',
+        'negotiation_approved_at',
     ];
 
     protected $casts = [
@@ -43,6 +52,10 @@ class Opportunity extends Model
         'authorize' => 'boolean',
         'timeline' => 'boolean',
         'probability' => 'integer',
+        'close_loss_requested_at' => 'datetime',
+        'close_loss_approved_at' => 'datetime',
+        'negotiation_requested_at' => 'datetime',
+        'negotiation_approved_at' => 'datetime',
     ];
 
     public function lead(): BelongsTo

@@ -12,6 +12,7 @@ use App\Models\Forecast;
 use App\Models\Lead;
 use App\Models\Log;
 use App\Models\LossReason;
+use App\Models\Module;
 use App\Models\Notification;
 use App\Models\Opportunity;
 use App\Models\Source;
@@ -19,6 +20,7 @@ use App\Models\Stage;
 use App\Models\Task;
 use App\Models\TaskCategory;
 use App\Models\User;
+use App\Models\UserAccessControl;
 use App\Services\MentionParser;
 use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
@@ -283,6 +285,270 @@ class OpportunityManagementController extends Controller
                 'success' => false,
                 'message' => 'Failed to update opportunity: '.$e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function updateNextStep(Request $request, $id): JsonResponse
+    {
+        $opportunity = Opportunity::findOrFail($id);
+
+        $validated = $request->validate([
+            'next_step' => 'nullable|string|max:1000',
+        ]);
+
+        $opportunity->update([
+            'next_step' => ! empty(trim((string) ($validated['next_step'] ?? ''))) ? trim($validated['next_step']) : null,
+        ]);
+
+        Log::record('update_next_step', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} memperbarui Next Step", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Next Step berhasil diperbarui.',
+        ]);
+    }
+
+    public function moveToInReview(Request $request, $id): JsonResponse
+    {
+        $opportunity = Opportunity::findOrFail($id);
+
+        if ((int) $opportunity->stage_id !== 2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya opportunity di stage Proposal & Quote yang bisa pindah ke In Review.',
+            ], 422);
+        }
+
+        $validated = $request->validate(['budget' => 'required|boolean']);
+
+        if (! (bool) $validated['budget']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Budget wajib dicentang untuk bisa masuk In Review.',
+            ], 422);
+        }
+
+        $opportunity->update(['stage_id' => 3, 'budget' => true]);
+
+        Log::record('stage_to_in_review', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} pindah ke stage In Review", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Opportunity pindah ke stage In Review.',
+        ]);
+    }
+
+    public function requestNegotiation(Request $request, $id): JsonResponse
+    {
+        $opportunity = Opportunity::findOrFail($id);
+
+        if ((int) $opportunity->stage_id !== 3) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya opportunity di stage In Review yang bisa request Negotiation.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'authorize' => 'required|boolean',
+            'timeline' => 'required|boolean',
+        ]);
+
+        if (! (bool) $validated['authorize'] || ! (bool) $validated['timeline']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Authorize dan Timeline wajib dicentang untuk mengajukan Negotiation.',
+            ], 422);
+        }
+
+        $isNewRequest = $opportunity->negotiation_status !== 'pending';
+
+        $opportunity->update([
+            'authorize' => true,
+            'timeline' => true,
+            'negotiation_status' => 'pending',
+            'negotiation_requested_at' => now(),
+        ]);
+
+        Log::record('request_negotiation', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} diminta Negotiation", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+
+        if ($isNewRequest) {
+            $this->notifyTransitionApprovers($opportunity, 'negotiation');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $isNewRequest ? 'Permintaan Negotiation dikirim untuk approval.' : 'Permintaan Negotiation diperbarui.',
+        ]);
+    }
+
+    public function approveNegotiation($id): JsonResponse
+    {
+        $opportunity = Opportunity::with('owner')->findOrFail($id);
+
+        if (! $this->isTransitionApprover()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki izin untuk approve.',
+            ], 403);
+        }
+
+        if ($opportunity->negotiation_status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada permintaan Negotiation yang menunggu approval.',
+            ], 422);
+        }
+
+        $opportunity->update([
+            'stage_id' => 4,
+            'negotiation_status' => 'approved',
+            'negotiation_approved_by' => Auth::id(),
+            'negotiation_approved_at' => now(),
+        ]);
+
+        Log::record('approve_negotiation', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} Negotiation disetujui oleh ".Auth::user()->username, 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+
+        if ($opportunity->owner && $opportunity->owner_id !== Auth::id()) {
+            Notification::create([
+                'user_id' => $opportunity->owner_id,
+                'type' => 'negotiation_approved',
+                'title' => 'Negotiation Disetujui',
+                'body' => "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} telah disetujui Negotiation.",
+                'notifiable_type' => Opportunity::class,
+                'notifiable_id' => $opportunity->id,
+                'data' => ['opportunity_id' => $opportunity->id],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Negotiation disetujui. Opportunity pindah ke stage Negotiation.',
+        ]);
+    }
+
+    public function requestCloseLoss(Request $request, $id): JsonResponse
+    {
+        $opportunity = Opportunity::findOrFail($id);
+
+        $validated = $request->validate([
+            'loss_reasons_id' => 'required|exists:loss_reasons,id',
+            'close_loss_note' => 'required|string|max:1000',
+        ]);
+
+        $isNewRequest = $opportunity->close_loss_status !== 'pending';
+
+        $opportunity->update([
+            'loss_reasons_id' => $validated['loss_reasons_id'],
+            'close_loss_note' => $validated['close_loss_note'],
+            'close_loss_status' => 'pending',
+            'close_loss_requested_at' => now(),
+        ]);
+
+        Log::record('request_close_loss', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} diminta Close Loss ({$opportunity->lossReason?->reason_name})", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+
+        if ($isNewRequest) {
+            $this->notifyTransitionApprovers($opportunity, 'close_loss');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $isNewRequest ? 'Permintaan Close Loss dikirim untuk approval.' : 'Permintaan Close Loss diperbarui.',
+        ]);
+    }
+
+    public function approveCloseLoss($id): JsonResponse
+    {
+        $opportunity = Opportunity::with('owner')->findOrFail($id);
+
+        if ($opportunity->close_loss_status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada permintaan Close Loss yang menunggu approval.',
+            ], 422);
+        }
+
+        $opportunity->update([
+            'stage_id' => 6,
+            'close_loss_status' => 'approved',
+            'close_loss_approved_by' => Auth::id(),
+            'close_loss_approved_at' => now(),
+        ]);
+
+        Log::record('approve_close_loss', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} Close Loss disetujui oleh ".Auth::user()->username, 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+
+        if ($opportunity->owner && $opportunity->owner_id !== Auth::id()) {
+            Notification::create([
+                'user_id' => $opportunity->owner_id,
+                'type' => 'close_loss_approved',
+                'title' => 'Close Loss Disetujui',
+                'body' => "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} telah disetujui Close Loss.",
+                'notifiable_type' => Opportunity::class,
+                'notifiable_id' => $opportunity->id,
+                'data' => ['opportunity_id' => $opportunity->id],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Close Loss disetujui. Opportunity pindah ke stage Closed Lost.',
+        ]);
+    }
+
+    private function isTransitionApprover(): bool
+    {
+        $user = Auth::user();
+
+        if ($user->role === 'Admin') {
+            return true;
+        }
+
+        $module = Module::where('route_name', 'opportunity-management')->first();
+
+        if (! $module) {
+            return false;
+        }
+
+        return UserAccessControl::where('user_id', $user->id)
+            ->where('module_id', $module->id)
+            ->where('can_approve', true)
+            ->exists();
+    }
+
+    private function notifyTransitionApprovers(Opportunity $opportunity, string $type): void
+    {
+        $module = Module::where('route_name', 'opportunity-management')->first();
+
+        if (! $module) {
+            return;
+        }
+
+        $titles = [
+            'negotiation' => 'Approval Negotiation Diperlukan',
+            'close_loss' => 'Approval Close Loss Diperlukan',
+        ];
+
+        $title = $titles[$type] ?? 'Approval Diperlukan';
+
+        $approverIds = UserAccessControl::where('module_id', $module->id)
+            ->where('can_approve', true)
+            ->where('user_id', '!=', Auth::id())
+            ->pluck('user_id');
+
+        $adminIds = User::where('role', 'Admin')->where('id', '!=', Auth::id())->pluck('id');
+
+        $userIds = $approverIds->merge($adminIds)->unique();
+
+        foreach (User::whereIn('id', $userIds)->get() as $approver) {
+            Notification::create([
+                'user_id' => $approver->id,
+                'type' => $type.'_approval_required',
+                'title' => $title,
+                'body' => "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} menunggu approval.",
+                'notifiable_type' => Opportunity::class,
+                'notifiable_id' => $opportunity->id,
+                'data' => ['opportunity_id' => $opportunity->id],
+            ]);
         }
     }
 

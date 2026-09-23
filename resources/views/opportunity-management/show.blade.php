@@ -90,6 +90,184 @@
     }
     .opp-header__meta i { opacity: .6; margin-right: 4px; }
 
+    .opp-pipeline {
+        display: flex;
+        margin-top: 20px;
+        padding-top: 18px;
+        border-top: 1px solid var(--card-border);
+    }
+    .opp-pipeline__step {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        position: relative;
+        text-align: center;
+    }
+    .opp-pipeline__step::after {
+        content: '';
+        position: absolute;
+        top: 14px;
+        left: calc(50% + 17px);
+        width: calc(100% - 34px);
+        height: 2px;
+        background: #e2e8f0;
+        z-index: 0;
+    }
+    .opp-pipeline__step:last-child::after { display: none; }
+    .opp-pipeline__step.done::after { background: var(--accent); }
+    .opp-pipeline__dot {
+        position: relative;
+        z-index: 1;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        background: #fff;
+        border: 2px solid #e2e8f0;
+        color: var(--text-muted);
+    }
+    .opp-pipeline__step.done .opp-pipeline__dot {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+    }
+    .opp-pipeline__step.current .opp-pipeline__dot {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+    .opp-pipeline__step.lost .opp-pipeline__dot {
+        border-color: #dc2626;
+        color: #dc2626;
+        background: rgba(220,38,38,.08);
+        box-shadow: 0 0 0 4px rgba(220,38,38,.12);
+    }
+    .opp-pipeline__label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        line-height: 1.3;
+        max-width: 96px;
+    }
+    .opp-pipeline__step.done .opp-pipeline__label { color: var(--text-secondary); }
+    .opp-pipeline__step.current .opp-pipeline__label { color: var(--text-primary); font-weight: 700; }
+    .opp-pipeline__step.lost .opp-pipeline__label { color: #dc2626; }
+    .opp-pipeline__prob { font-size: 10px; color: var(--text-muted); }
+    .opp-pipeline__step.current .opp-pipeline__prob { color: var(--accent); font-weight: 700; }
+    .opp-pipeline__status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px dashed var(--card-border);
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .opp-header__meta { justify-content: space-between; gap: 24px; }
+    .opp-meta-group { display: flex; flex-direction: column; gap: 6px; }
+    .opp-meta-group--date { text-align: right; }
+    .opp-meta-group__label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        color: var(--text-muted);
+    }
+    .opp-meta-chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .opp-meta-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--text-secondary);
+        background: #f8fafc;
+        border: 1px solid var(--card-border);
+        padding: 5px 12px;
+        border-radius: 20px;
+        white-space: nowrap;
+    }
+    .opp-meta-chip i { opacity: .8; margin-right: 0; }
+
+    .opp-header__actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+    }
+
+    .review-row {
+        display: flex;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 13px;
+    }
+    .review-row:last-child { border-bottom: none; }
+    .review-row__label {
+        width: 150px;
+        flex-shrink: 0;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        padding-top: 1px;
+    }
+    .review-row__value { color: var(--text-primary); word-break: break-word; }
+
+    .opp-header__nextstep {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--card-border);
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+    .opp-header__nextstep i { color: var(--accent); }
+    .opp-header__nextstep span {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+    }
+    .opp-header__nextstep strong { color: var(--text-primary); font-weight: 600; }
+    .opp-header__nextstep .btn-edit {
+        margin-left: auto;
+        flex-shrink: 0;
+        background: none;
+        border: 1px solid var(--card-border);
+        color: var(--text-muted);
+        font-size: 12px;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all .15s;
+    }
+    .opp-header__nextstep .btn-edit:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: var(--accent-soft);
+    }
+
     .modal-opportunity .modal-dialog { max-width: 800px; }
     .opp-form-section {
         border: 1px solid var(--card-border);
@@ -157,6 +335,7 @@
     }
     .form-check-inline:hover { border-color: var(--accent); }
     .form-check-inline input { width: auto; margin: 0; }
+    .form-check-inline.is-invalid { border-color: #dc3545; box-shadow: 0 0 0 3px rgba(220,53,69,.1); }
     .form-group input.is-invalid,
     .form-group select.is-invalid,
     .form-group textarea.is-invalid {
@@ -583,6 +762,10 @@
         .opp-header__name { font-size: 17px; }
         .opp-header__meta { gap: 12px; font-size: 12px; }
 
+        .opp-pipeline { overflow-x: auto; padding-bottom: 4px; }
+        .opp-pipeline__step { min-width: 88px; }
+        .opp-meta-group--date, .opp-header__actions, .opp-pipeline__status { text-align: left; justify-content: flex-start; }
+
         .activity-feed { max-height: 70vh; }
         .activity-post-avatar { width: 30px; height: 30px; font-size: 11px; }
         .activity-post-content { font-size: 12px; }
@@ -624,7 +807,7 @@
         <p class="page-header-sub">Informasi lengkap data opportunity #{{ $opportunity->id }}</p>
     </div>
     <div class="page-header-actions">
-        @if($canUpdate)
+        @if($canUpdate && $canApprove)
         <button type="button" class="btn-accent" onclick="openEditModal({{ $opportunity->id }})">
             <i class="fa fa-pen"></i><span>Edit</span>
         </button>
@@ -660,34 +843,148 @@
                         </div>
                     </div>
                     <div class="opp-header__badges">
-                        <span class="badge badge-soft-primary" style="font-size:13px;padding:6px 14px">
-                            {{ $opportunity->stage?->stage_name ?? '—' }}
-                        </span>
                         <span style="font-size:20px;font-weight:700;color:var(--text-primary)">
                             {{ $opportunity->stage?->probability ?? 0 }}%
                         </span>
                     </div>
                 </div>
 
-                <div class="opp-header__meta">
-                    <span><i class="fa fa-calendar-check"></i><b>Close Date: {{ $opportunity->close_date?->format('d M Y') ?? '—' }}</b></span>
-                    {{-- <span><i class="fa fa-chart-bar"></i>Forecast: {{ $opportunity->forecast?->forecast_name ?? '—' }}</span> --}}
-                    <span>{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Quote Ready</span>
-                    <span>{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Budget</span>
-                    <span>{!! $opportunity->authorize ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Authorize</span>
-                    <span>{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Timeline</span>
+                @php
+                    $currentStageId = (int) $opportunity->stage?->id;
+                    $isLost = $currentStageId === 6;
+                    $isWon = $currentStageId === 5;
+                    $mainStages = $stages->sortBy('id')
+                        ->reject(fn ($s) => (int) $s->id === 6 || ($isLost && (int) $s->id === 5))
+                        ->values();
+                    $effectiveStage = $isLost ? 5 : $currentStageId;
+                    $currentIdx = null;
+                    foreach ($mainStages as $i => $s) {
+                        if ((int) $s->id === $currentStageId) {
+                            $currentIdx = $i + 1;
+                        }
+                    }
+                @endphp
 
-
+                <div class="opp-pipeline">
+                    @foreach($mainStages as $s)
+                        @php $sid = (int) $s->id; @endphp
+                        <div class="opp-pipeline__step {{ $sid < $effectiveStage ? 'done' : ($sid === $effectiveStage ? 'current' : '') }}">
+                            <div class="opp-pipeline__dot">
+                                @if($sid < $effectiveStage)
+                                    <i class="fa fa-check"></i>
+                                @elseif($sid === $effectiveStage)
+                                    <i class="fa fa-circle"></i>
+                                @else
+                                    <i class="fa fa-circle-thin"></i>
+                                @endif
+                            </div>
+                            <div class="opp-pipeline__label">{{ $s->stage_name }}</div>
+                            <div class="opp-pipeline__prob">{{ $s->probability ?? 0 }}%</div>
+                        </div>
+                    @endforeach
+                    @if($isLost)
+                        <div class="opp-pipeline__step current lost">
+                            <div class="opp-pipeline__dot"><i class="fa fa-times"></i></div>
+                            <div class="opp-pipeline__label">Closed Lost</div>
+                            <div class="opp-pipeline__prob">{{ $opportunity->stage?->probability ?? 0 }}%</div>
+                        </div>
+                    @endif
                 </div>
-                <!-- Button mucul jika stage == 2 ('Proposal & Quote') -->
-                    <div class="text-end" style="margin-left:auto">
-                        @if($opportunity->stage?->id == 2)
-                            <button type="button" class="btn btn-sm btn-outline-primary"> In Review</button>
-                        @endif
-                    </div>
 
-                <div class="opp-header__meta" style="color: black; font-weight: 600; font-size: 14px; margin-top: 8px">
-                    <span><i class="fa fa-tasks"></i><b>Next Step: {{ $opportunity->next_step ?? '—' }}</b></span>
+                <div class="opp-pipeline__status">
+                    @if($isLost)
+                        <span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d"><i class="fa fa-times-circle"></i> Closed Lost</span>
+                        @if($opportunity->lossReason?->reason_name)
+                            <span>· {{ $opportunity->lossReason->reason_name }}</span>
+                        @endif
+                        @if($opportunity->close_loss_note)
+                            <span style="color:var(--text-secondary)">· {{ Str::limit($opportunity->close_loss_note, 60) }}</span>
+                        @endif
+                    @elseif($isWon)
+                        <i class="fa fa-trophy" style="color:var(--success)"></i>
+                        <b>Closed Won</b>
+                        <span style="color:var(--text-secondary)">· {{ $opportunity->close_won_date?->format('d M Y') ?? '—' }}</span>
+                    @else
+                        <span>Tahap <b>{{ $currentIdx ?? '—' }}</b> dari {{ $mainStages->count() }}</span>
+                        <span style="color:var(--text-secondary)">· {{ $opportunity->stage?->stage_name ?? '—' }}</span>
+                        <span style="color:var(--text-secondary)">· Probabilitas {{ $opportunity->stage?->probability ?? 0 }}%</span>
+                    @endif
+                </div>
+
+                <div class="opp-header__meta">
+                    <div class="opp-meta-group">
+                        <span class="opp-meta-group__label">Readiness</span>
+                        <div class="opp-meta-chip-row">
+                            <span class="opp-meta-chip">{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Quote Ready</span>
+                            <span class="opp-meta-chip">{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Budget</span>
+                            <span class="opp-meta-chip">{!! $opportunity->authorize ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Authorize</span>
+                            <span class="opp-meta-chip">{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Timeline</span>
+                        </div>
+                    </div>
+                    <div class="opp-meta-group opp-meta-group--date">
+                        <span class="opp-meta-group__label">Close Date</span>
+                        <div class="opp-meta-chip-row">
+                            <span class="opp-meta-chip"><i class="fa fa-calendar-check" style="color:var(--accent)"></i> {{ $opportunity->close_date?->format('d M Y') ?? '—' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="opp-header__actions">
+                    @if($opportunity->close_loss_status === 'pending')
+                        <span class="status-badge" style="background:#fef3c7;color:#92400e"><i class="fa fa-hourglass-half"></i> Menunggu Approval Close Loss</span>
+                        @if($canApprove)
+                            <button type="button" class="btn btn-sm btn-success" onclick="openCloseLossReview()">
+                                <i class="fa fa-eye"></i> Review &amp; Approve
+                            </button>
+                        @endif
+                        @if($canUpdate && !$canApprove)
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="openCloseLossModal()">
+                                <i class="fa fa-pen"></i> Ubah
+                            </button>
+                        @endif
+                    @elseif($opportunity->negotiation_status === 'pending')
+                        <span class="status-badge" style="background:#fef3c7;color:#92400e"><i class="fa fa-hourglass-half"></i> Menunggu Approval Negotiation</span>
+                        @if($canApprove)
+                            <button type="button"class="btn btn-sm btn-accent" style="height: 18px"  onclick="approveTransition('negotiation')">
+                                <i class="fa fa-check"></i> Approve
+                            </button>
+                        @endif
+                    @elseif($canUpdate && !$canApprove)
+
+                        @if($opportunity->stage?->id === 2) <!-- Jika tahap Proposal & Quote -->
+                            <button type="button" class="btn btn-sm btn-accent" style="height: 15px"  onclick="openInReviewModal()">
+                                <i class="fa fa-arrow-right"></i> In Review
+                            </button>
+
+                        <button type="button" class="btn btn-accent-danger" onclick="openCloseLossModal()">
+                            <i class="fa fa-circle-xmark"></i> Close Lost
+                        </button>
+                        @endif
+
+                        @if($opportunity->stage?->id === 3) <!-- Jika tahap In Review -->
+                            <button type="button" class="btn btn-sm btn-accent" style="height: 30px;" onclick="openNegotiationModal()">
+                                <i class="fa fa-handshake"></i> Negotiation
+                            </button>
+
+                        <button type="button" class="btn btn-accent-danger" style="height: 30px;" onclick="openCloseLossModal()">
+                            <i class="fa fa-circle-xmark"></i> Close Lost
+                        </button>
+                        @endif
+
+                    @endif
+                </div>
+
+
+                <div class="opp-header__nextstep">
+                    <i class="fa fa-tasks"></i>
+                    <span>Next Step</span>
+                    <strong>{{ $opportunity->next_step ?? '—' }}</strong>
+                    @if($canUpdate)
+                        <button type="button" class="btn btn-edit" title="Edit Next Step" onclick="openNextStepModal()">
+                            <i class="fa fa-pen"></i>
+                        </button>
+                    @endif
                 </div>
 
 
@@ -863,7 +1160,13 @@
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
                 <table class="table table-sm table-borderless mb-0 info-table">
-                    <tr><td>Stage</td><td><strong>{{ $opportunity->stage?->stage_name ?? '—' }}</strong></td></tr>
+                    <tr><td>Stage</td><td>
+                        <strong>{{ $opportunity->stage?->stage_name ?? '—' }}</strong>
+                        @if($opportunity->close_loss_note && $opportunity->close_loss_status)
+                            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;white-space:normal">{{ $opportunity->close_loss_note }}</div>
+                        @endif
+
+                    </td></tr>
                     <tr><td>Forecast</td><td>{{ $opportunity->forecast?->forecast_name ?? '—' }}</td></tr>
                     <tr><td>Loss Reason</td><td>{{ $opportunity->lossReason?->reason_name ?? '—' }}</td></tr>
                     <tr><td>Probability</td><td><strong>{{ $opportunity->probability ?? '0' }}%</strong></td></tr>
@@ -923,7 +1226,7 @@
                                     </select>
                                     <input type="hidden" name="account_contacts_id" id="opp-contact-id">
                                 </div>
-                                <div class="form-group small">
+                                <div class="form-group small" style="display: none">
                                     <label>Type</label>
                                     <select name="type" id="opp-type">
                                         <option value="">— Select —</option>
@@ -942,11 +1245,22 @@
                                         @endforeach
                                     </select>
                                 </div>
+
                                 <div class="form-group">
+                                    <label>Loss Reason</label>
+                                    <select name="loss_reasons_id" id="opp-loss-reason">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($lossReasons as $lr)
+                                        <option value="{{ $lr->id }}">{{ $lr->reason_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="form-group" style="display: none">
                                     <label>Probability (%)</label>
                                     <input type="number" name="probability" id="opp-probability" value="0" min="0" max="100" required>
                                 </div>
-                                <div class="form-group small">
+                                <div class="form-group small" style="display: none">
                                     <label>Forecast <span class="text-danger">*</span></label>
                                     <select name="forecast_id" id="opp-forecast">
                                         <option value="">— Pilih —</option>
@@ -957,15 +1271,7 @@
                                 </div>
                             </div>
                             <div class="opp-form-row">
-                                <div class="form-group">
-                                    <label>Loss Reason</label>
-                                    <select name="loss_reasons_id" id="opp-loss-reason">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($lossReasons as $lr)
-                                        <option value="{{ $lr->id }}">{{ $lr->reason_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
+
                                 <div class="form-group">
                                     <label>Division</label>
                                     <select name="division_id" id="opp-division">
@@ -986,11 +1292,11 @@
                                 </div>
                             </div>
                             <div class="opp-form-row">
-                                <div class="form-group small">
+                                <div class="form-group">
                                     <label>Close Date</label>
                                     <input type="date" name="close_date" id="opp-close-date">
                                 </div>
-                                <div class="form-group small">
+                                <div class="form-group">
                                     <label>End User</label>
                                     <select name="end_user_id" id="opp-end-user">
                                         <option value="">— Pilih —</option>
@@ -1022,7 +1328,7 @@
                         </div>
                         <div class="opp-form-section-body">
                             <div class="opp-form-row">
-                                <div class="form-group small">
+                                <div class="form-group">
                                     <label>Close Won Date</label>
                                     <input type="date" name="close_won_date" id="opp-close-won-date">
                                 </div>
@@ -1044,7 +1350,7 @@
                         </div>
                     </div>
 
-                    <div class="opp-form-section">
+                    <div class="opp-form-section" style="display: none">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
                             <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -1215,6 +1521,164 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="inReviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Pindah ke In Review</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+                    Konfirmasi bahwa budget tersedia sebelum opportunity pindah ke stage <strong>In Review</strong>.
+                </p>
+                <label class="form-check-inline" style="display:flex;padding:10px 16px;border-radius:var(--radius-sm)">
+                    <input type="checkbox" id="in-review-budget" value="1" {{ $opportunity->budget ? 'checked' : '' }}>
+                    <span style="font-weight:600">Budget tersedia</span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-submit-in-review">
+                    <i class="fa fa-arrow-right me-1"></i> Lanjut ke In Review
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="negotiationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="negotiationModalTitle">Negotiation</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+                    Konfirmasi authorize dan timeline sebelum mengajukan Approval Negotiation.
+                </p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <label class="form-check-inline" style="display:flex;padding:10px 16px;border-radius:var(--radius-sm)">
+                        <input type="checkbox" id="neg-authorize" value="1" {{ $opportunity->authorize ? 'checked' : '' }}>
+                        <span style="font-weight:600">Authorize</span>
+                    </label>
+                    <label class="form-check-inline" style="display:flex;padding:10px 16px;border-radius:var(--radius-sm)">
+                        <input type="checkbox" id="neg-timeline" value="1" {{ $opportunity->timeline ? 'checked' : '' }}>
+                        <span style="font-weight:600">Timeline</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-submit-negotiation">
+                    <i class="fa fa-save me-1"></i> Submit Approval
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="closeLossModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="closeLossModalTitle">Close Loss</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom:16px">
+                    <label>Loss Reason <span class="text-danger">*</span></label>
+                    <select id="cl-loss-reason" style="width:100%">
+                        <option value="">— Pilih Alasan —</option>
+                        @foreach($lossReasons as $lr)
+                        <option value="{{ $lr->id }}">{{ $lr->reason_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Deskripsi Alasan <span class="text-danger">*</span></label>
+                    <textarea id="cl-loss-note" rows="3" placeholder="Jelaskan alasan loss..." style="resize:vertical"></textarea>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:8px">
+                    @if($opportunity->close_loss_status === 'pending')
+                        <i class="fa fa-info-circle"></i> Permintaan akan diperbarui dan tetap menunggu approval.
+                    @else
+                        <i class="fa fa-info-circle"></i> Permintaan Close Loss membutuhkan approval sebelum stage berubah.
+                    @endif
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-submit-close-loss">
+                    <i class="fa fa-save me-1"></i> Submit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="closeLossReviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa fa-circle-exclamation" style="color:var(--danger)"></i> Review Close Loss</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+                    Tinjau alasan permintaan Close Loss sebelum menyetujui.
+                </p>
+                <div class="review-row">
+                    <span class="review-row__label">Loss Reason</span>
+                    <span class="review-row__value" id="cl-review-reason">—</span>
+                </div>
+                <div class="review-row">
+                    <span class="review-row__label">Deskripsi</span>
+                    <span class="review-row__value" id="cl-review-note">—</span>
+                </div>
+                <div class="review-row">
+                    <span class="review-row__label">Diajukan oleh</span>
+                    <span class="review-row__value" id="cl-review-by">—</span>
+                </div>
+                <div class="review-row">
+                    <span class="review-row__label">Tanggal</span>
+                    <span class="review-row__value" id="cl-review-at">—</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-success btn-sm" id="btn-approve-close-loss">
+                    <i class="fa fa-check me-1"></i> Setujui Close Loss
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="nextStepModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa fa-tasks me-1"></i> Edit Next Step</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Next Step</label>
+                    <textarea id="ns-next-step" rows="3" placeholder="Langkah selanjutnya..." style="resize:vertical"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-next-step">
+                    <i class="fa fa-save me-1"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @endpush
 
 @section('scripts')
@@ -1343,11 +1807,11 @@ $(document).on('click', '#btn-save-opportunity', function() {
         toastr.error('Account Company wajib dipilih.');
         return;
     }
-    if (!$('#opp-forecast').val()) {
-        $('#opp-forecast').addClass('is-invalid');
-        toastr.error('Forecast wajib dipilih.');
-        return;
-    }
+    // if (!$('#opp-forecast').val()) {
+    //     $('#opp-forecast').addClass('is-invalid');
+    //     toastr.error('Forecast wajib dipilih.');
+    //     return;
+    // }
 
     const formData = new FormData(document.getElementById('opportunity-form'));
     formData.set('quote_ready', $('#opp-quote-ready').is(':checked') ? '1' : '0');
@@ -2060,6 +2524,213 @@ function selectMention(username) {
 function renderMentions(text) {
     return escapeHtml(text || '').replace(/(^|\s)@([a-zA-Z0-9_\.]+)/g, '$1<span class="mention-tag">@$2</span>');
 }
+
+// ── Stage Transition (In Review / Negotiation / Close Loss) ──
+const oppStageData = {!! json_encode([
+    'stage_id' => (int) $opportunity->stage?->id,
+    'budget' => (bool) $opportunity->budget,
+    'authorize' => (bool) $opportunity->authorize,
+    'timeline' => (bool) $opportunity->timeline,
+    'close_loss_status' => $opportunity->close_loss_status,
+    'negotiation_status' => $opportunity->negotiation_status,
+    'loss_reasons_id' => $opportunity->loss_reasons_id,
+    'close_loss_note' => $opportunity->close_loss_note,
+    'close_loss_reason_name' => $opportunity->lossReason?->reason_name,
+    'close_loss_requested_by' => $opportunity->owner?->username,
+    'close_loss_requested_at' => $opportunity->close_loss_requested_at?->format('d M Y'),
+    'next_step' => $opportunity->next_step,
+]) !!};
+
+const inReviewUrl = '{{ route('opportunity-management.in-review', ['opportunity' => '__ID__']) }}';
+const negotiationUrl = '{{ route('opportunity-management.negotiation', ['opportunity' => '__ID__']) }}';
+const approveNegotiationUrl = '{{ route('opportunity-management.approve-negotiation', ['opportunity' => '__ID__']) }}';
+const closeLossUrl = '{{ route('opportunity-management.close-loss', ['opportunity' => '__ID__']) }}';
+const approveCloseLossUrl = '{{ route('opportunity-management.approve', ['opportunity' => '__ID__']) }}';
+const nextStepUrl = '{{ route('opportunity-management.next-step', ['opportunity' => '__ID__']) }}';
+
+function openInReviewModal() {
+    $('#in-review-budget').prop('checked', oppStageData.budget);
+    $('#in-review-budget').closest('.form-check-inline').removeClass('is-invalid');
+    new bootstrap.Modal('#inReviewModal').show();
+}
+
+function openNegotiationModal() {
+    $('#negotiationModalTitle').text(oppStageData.negotiation_status === 'pending' ? 'Ubah Negotiation' : 'Negotiation');
+    $('#neg-authorize').prop('checked', oppStageData.authorize);
+    $('#neg-timeline').prop('checked', oppStageData.timeline);
+    $('#neg-authorize, #neg-timeline').closest('.form-check-inline').removeClass('is-invalid');
+    new bootstrap.Modal('#negotiationModal').show();
+}
+
+function openCloseLossModal() {
+    $('#closeLossModalTitle').text(oppStageData.close_loss_status === 'pending' ? 'Ubah Close Loss' : 'Close Loss');
+    $('#cl-loss-reason').val(oppStageData.loss_reasons_id || '');
+    $('#cl-loss-note').val(oppStageData.close_loss_note || '');
+    $('#cl-loss-reason, #cl-loss-note').removeClass('is-invalid');
+    new bootstrap.Modal('#closeLossModal').show();
+}
+
+function openCloseLossReview() {
+    $('#cl-review-reason').text(oppStageData.close_loss_reason_name || '—');
+    $('#cl-review-note').text(oppStageData.close_loss_note || '—');
+    $('#cl-review-by').text(oppStageData.close_loss_requested_by || '—');
+    $('#cl-review-at').text(oppStageData.close_loss_requested_at || '—');
+    new bootstrap.Modal('#closeLossReviewModal').show();
+}
+
+function openNextStepModal() {
+    $('#ns-next-step').val(oppStageData.next_step || '');
+    $('#ns-next-step').removeClass('is-invalid');
+    new bootstrap.Modal('#nextStepModal').show();
+}
+
+$(document).on('click', '#btn-save-next-step', function() {
+    const $btn = $(this);
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+    $.ajax({
+        url: nextStepUrl.replace('__ID__', {{ $opportunity->id }}),
+        type: 'POST',
+        data: {
+            _token: '{{ csrf_token() }}',
+            _method: 'PUT',
+            next_step: $('#ns-next-step').val()
+        },
+        success: function(res) {
+            bootstrap.Modal.getInstance('#nextStepModal').hide();
+            toastr.success(res.message);
+            setTimeout(function() { location.reload(); }, 600);
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.errors ? Object.values(xhr.responseJSON.errors)[0][0] : (xhr.responseJSON?.message || 'Gagal menyimpan.'));
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+        }
+    });
+});
+
+$(document).on('click', '#btn-approve-close-loss', function() {
+    approveTransition('close-loss');
+});
+
+function approveTransition(type) {
+    const url = type === 'negotiation' ? approveNegotiationUrl : approveCloseLossUrl;
+    const label = type === 'negotiation' ? 'Negotiation' : 'Close Loss';
+    Swal.fire({
+        title: 'Setujui ' + label + '?',
+        text: 'Opportunity akan pindah ke stage berikutnya. Tindakan ini tidak bisa dibatalkan.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, setujui!',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: type === 'close-loss' ? '#dc2626' : '#2563eb',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: url.replace('__ID__', {{ $opportunity->id }}),
+            type: 'POST',
+            data: { _token: '{{ csrf_token() }}' },
+            success: function(res) {
+                toastr.success(res.message);
+                setTimeout(function() { location.reload(); }, 600);
+            },
+            error: function(xhr) {
+                toastr.error(xhr.responseJSON?.message || 'Gagal approve.');
+            }
+        });
+    });
+}
+
+$(document).on('click', '#btn-submit-in-review', function() {
+    const $btn = $(this);
+    if (!$('#in-review-budget').is(':checked')) {
+        $('#in-review-budget').closest('.form-check-inline').addClass('is-invalid');
+        toastr.error('Budget wajib dicentang untuk lanjut ke In Review.');
+        return;
+    }
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Memproses...');
+    $.ajax({
+        url: inReviewUrl.replace('__ID__', {{ $opportunity->id }}),
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}', budget: 1 },
+        success: function(res) {
+            bootstrap.Modal.getInstance('#inReviewModal').hide();
+            toastr.success(res.message);
+            setTimeout(function() { location.reload(); }, 600);
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.message || 'Gagal memproses.');
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-arrow-right me-1"></i> Lanjut ke In Review');
+        }
+    });
+});
+
+$(document).on('click', '#btn-submit-negotiation', function() {
+    const $btn = $(this);
+    const auth = $('#neg-authorize').is(':checked');
+    const time = $('#neg-timeline').is(':checked');
+    $('#neg-authorize, #neg-timeline').closest('.form-check-inline').removeClass('is-invalid');
+    if (!auth || !time) {
+        if (!auth) $('#neg-authorize').closest('.form-check-inline').addClass('is-invalid');
+        if (!time) $('#neg-timeline').closest('.form-check-inline').addClass('is-invalid');
+        toastr.error('Authorize dan Timeline wajib dicentang.');
+        return;
+    }
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Mengirim...');
+    $.ajax({
+        url: negotiationUrl.replace('__ID__', {{ $opportunity->id }}),
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}', authorize: 1, timeline: 1 },
+        success: function(res) {
+            bootstrap.Modal.getInstance('#negotiationModal').hide();
+            toastr.success(res.message);
+            setTimeout(function() { location.reload(); }, 600);
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.message || 'Gagal mengirim permintaan.');
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Submit Approval');
+        }
+    });
+});
+
+$(document).on('click', '#btn-submit-close-loss', function() {
+    const $btn = $(this);
+    const reason = $('#cl-loss-reason').val();
+    const note = $('#cl-loss-note').val().trim();
+    let firstInvalid = null;
+    $('#cl-loss-reason, #cl-loss-note').removeClass('is-invalid');
+    if (!reason) { $('#cl-loss-reason').addClass('is-invalid'); firstInvalid = firstInvalid || 'Loss Reason wajib dipilih.'; }
+    if (!note) { $('#cl-loss-note').addClass('is-invalid'); firstInvalid = firstInvalid || 'Deskripsi alasan wajib diisi.'; }
+    if (firstInvalid) { toastr.error(firstInvalid); return; }
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Mengirim...');
+    $.ajax({
+        url: closeLossUrl.replace('__ID__', {{ $opportunity->id }}),
+        type: 'POST',
+        data: {
+            _token: '{{ csrf_token() }}',
+            loss_reasons_id: reason,
+            close_loss_note: note
+        },
+        success: function(res) {
+            bootstrap.Modal.getInstance('#closeLossModal').hide();
+            toastr.success(res.message);
+            setTimeout(function() { location.reload(); }, 600);
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.errors ? Object.values(xhr.responseJSON.errors)[0][0] : (xhr.responseJSON?.message || 'Gagal mengirim permintaan.'));
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Submit');
+        }
+    });
+});
 
 loadActivities();
 loadTasks();

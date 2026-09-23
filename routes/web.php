@@ -106,6 +106,12 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::delete('opportunity-management/activities/{activity}', [OpportunityManagementController::class, 'destroyActivity'])->name('opportunity-management.activities.destroy');
     Route::get('opportunity-management/{opportunity}/tasks', [OpportunityManagementController::class, 'fetchTasks'])->name('opportunity-management.tasks.fetch');
     Route::post('opportunity-management/{opportunity}/tasks', [OpportunityManagementController::class, 'storeTask'])->name('opportunity-management.tasks.store');
+    Route::post('opportunity-management/{opportunity}/stage/in-review', [OpportunityManagementController::class, 'moveToInReview'])->name('opportunity-management.in-review');
+    Route::post('opportunity-management/{opportunity}/negotiation', [OpportunityManagementController::class, 'requestNegotiation'])->name('opportunity-management.negotiation');
+    Route::post('opportunity-management/{opportunity}/negotiation/approve', [OpportunityManagementController::class, 'approveNegotiation'])->name('opportunity-management.approve-negotiation');
+    Route::post('opportunity-management/{opportunity}/close-loss', [OpportunityManagementController::class, 'requestCloseLoss'])->name('opportunity-management.close-loss');
+    Route::post('opportunity-management/{opportunity}/next-step', [OpportunityManagementController::class, 'updateNextStep'])->name('opportunity-management.next-step');
+    Route::post('opportunity-management/{opportunity}/approve', [OpportunityManagementController::class, 'approveCloseLoss'])->name('opportunity-management.approve');
     Route::resource('opportunity-management', OpportunityManagementController::class)->except(['edit'])->parameters(['opportunity-management' => 'opportunity']);
 
     Route::get('product-management/data', [ProductManagementController::class, 'data'])->name('product-management.data');
