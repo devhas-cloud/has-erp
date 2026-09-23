@@ -523,12 +523,6 @@ class TaskPlannerController extends Controller
             ? "{$task->title} di-complete"
             : "{$task->title} disetujui";
 
-        //  Jika task kategori quote/proposal selesai, maka update probability opportunity menjadi 50%.
-        if ($isCompleteCategory && $task->opportunity) {
-            $task->opportunity->update(['probability' => 50, 'stage_id' => 2]); // stage_id 2 = Proposal/Quote
-
-        }
-
         Log::record($action, $description, 'MOD_TASK_PLANNER', $task);
         return response()->json([
             'success' => true,

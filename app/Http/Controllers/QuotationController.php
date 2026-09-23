@@ -1181,12 +1181,15 @@ class QuotationController extends Controller
             'profitEstimate',
         ])->findOrFail($id);
 
+        // cek division user jika user division admin
+        $cekAdmin = strtolower(Auth::user()->division->division_name) === 'admin';
+
         $canViewProfitEstimate = ProfitEstimateController::userCanRead();
 
         // Simbol mata uang (IDR -> Rp, USD -> $, ...) untuk kolom Harga tab List Configuration.
         $currencySymbols = collect(Currency::formOptions())->pluck('symbol', 'name')->all();
 
-        return view('quotation.show', compact('quotation', 'canViewProfitEstimate', 'currencySymbols'));
+        return view('quotation.show', compact('quotation', 'canViewProfitEstimate', 'currencySymbols', 'cekAdmin'));
     }
 
     public function destroy($id): JsonResponse

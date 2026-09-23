@@ -632,21 +632,25 @@
                     List Item Quotation
                 </button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-configs" type="button" role="tab">
-                    List Configuration
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-costs" type="button" role="tab">
-                    Biaya
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-notes" type="button" role="tab">
-                    Catatan
-                </button>
-            </li>
+
+            <!-- List Configuration, Biaya, Catatan Tabs  hanya muncul jika user division admin -->
+            @if($cekAdmin)
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-configs" type="button" role="tab">
+                        List Configuration
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-costs" type="button" role="tab">
+                        Biaya
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qt-show-notes" type="button" role="tab">
+                        Catatan
+                    </button>
+                </li>
+            @endif
         </ul>
         <div class="tab-content pt-3">
             <div class="tab-pane fade show active" id="qt-show-items" role="tabpanel">

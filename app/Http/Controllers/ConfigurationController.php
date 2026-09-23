@@ -299,11 +299,21 @@ class ConfigurationController extends Controller
                 'model' => Stage::class,
                 'label' => 'Stage',
                 'slug' => 'stages',
-                'columns' => ['stage_name', 'description', 'status'],
+                'columns' => ['stage_name', 'probability', 'description', 'status'],
                 'rules' => [
                     'stage_name' => 'required|string|max:100',
+                    'probability' => 'required|integer|min:0|max:100',
                     'description' => 'nullable|string',
                     'status' => 'required|in:Active,Inactive',
+                ],
+                'extra_fields' => [
+                    'probability' => [
+                        'label' => 'Probability',
+                        'type' => 'number',
+                        'min' => 0,
+                        'max' => 100,
+                        'default' => 0,
+                    ],
                 ],
             ],
         ];

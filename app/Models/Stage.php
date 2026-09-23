@@ -10,5 +10,10 @@ class Stage extends Model
         'stage_name',
         'description',
         'status',
+        'probability',
+    ];
+
+    protected $casts = [
+        'probability' => 'integer',
     ];
 }

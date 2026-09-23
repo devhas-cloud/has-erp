@@ -804,6 +804,7 @@
                     input.id = fieldId;
                     input.name = key;
                     if (ef.min !== undefined) input.min = ef.min;
+                    if (ef.max !== undefined) input.max = ef.max;
                     if (mode === 'edit' && itemData && itemData[key] !== undefined) {
                         input.value = itemData[key];
                     } else if (ef.default !== undefined) {

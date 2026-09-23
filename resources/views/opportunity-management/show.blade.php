@@ -664,19 +664,27 @@
                             {{ $opportunity->stage?->stage_name ?? '—' }}
                         </span>
                         <span style="font-size:20px;font-weight:700;color:var(--text-primary)">
-                            {{ $opportunity->probability ?? 0 }}%
+                            {{ $opportunity->stage?->probability ?? 0 }}%
                         </span>
                     </div>
                 </div>
 
                 <div class="opp-header__meta">
                     <span><i class="fa fa-calendar-check"></i><b>Close Date: {{ $opportunity->close_date?->format('d M Y') ?? '—' }}</b></span>
-                    <span><i class="fa fa-chart-bar"></i>Forecast: {{ $opportunity->forecast?->forecast_name ?? '—' }}</span>
+                    {{-- <span><i class="fa fa-chart-bar"></i>Forecast: {{ $opportunity->forecast?->forecast_name ?? '—' }}</span> --}}
+                    <span>{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Quote Ready</span>
                     <span>{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Budget</span>
                     <span>{!! $opportunity->authorize ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Authorize</span>
                     <span>{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Timeline</span>
-                    <span>{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Quote Ready</span>
+
+
                 </div>
+                <!-- Button mucul jika stage == 2 ('Proposal & Quote') -->
+                    <div class="text-end" style="margin-left:auto">
+                        @if($opportunity->stage?->id == 2)
+                            <button type="button" class="btn btn-sm btn-outline-primary"> In Review</button>
+                        @endif
+                    </div>
 
                 <div class="opp-header__meta" style="color: black; font-weight: 600; font-size: 14px; margin-top: 8px">
                     <span><i class="fa fa-tasks"></i><b>Next Step: {{ $opportunity->next_step ?? '—' }}</b></span>
@@ -1099,7 +1107,11 @@
                                     <select name="category_id" id="task-category-id">
                                         <option value="">— Select Category —</option>
                                         @foreach($categories as $cat)
-                                            <option value="{{ $cat->id }}">
+                                            @php
+                                                $catNameLower = strtolower($cat->name);
+                                                $dueDays = $catNameLower === 'proposal' ? 5 : ($catNameLower === 'quote' ? 3 : null);
+                                            @endphp
+                                            <option value="{{ $cat->id }}" @if($dueDays) data-due-days="{{ $dueDays }}" @endif>
                                                 {{ $cat->division_id ? '[' . optional($cat->division)->division_name . '] ' : '[Global] ' }}
                                                 {{ $cat->name }}
                                             </option>
@@ -1109,6 +1121,9 @@
                                 <div class="form-group">
                                     <label>Due Date <span class="text-danger">*</span></label>
                                     <input type="date" name="due_date" id="task-due-date">
+                                    <div id="task-due-date-hint" style="display:none;font-size:11px;color:var(--text-muted);margin-top:4px">
+                                        Otomatis sesuai kategori, tidak bisa diubah manual.
+                                    </div>
                                 </div>
                                 <div class="form-group">
                                     <label>Time</label>
@@ -1470,6 +1485,53 @@ $(document).on('change', '#task-category-id', function() {
     }
 });
 
+// Due Date & Time default berdasar kategori: Proposal = 5 hari kerja, Quote =
+// 3 hari kerja dari tanggal dibuat (Sabtu/Minggu dilewati), jam default akhir
+// jam kerja. Untuk 2 kategori ini field dikunci (disabled) — tidak boleh
+// diisi manual, selalu ikut kategori. Kategori lain: field dikosongkan lagi
+// dan bisa diisi manual seperti biasa.
+var TASK_DUE_TIME_DEFAULT = '17:00';
+
+function taskAddBusinessDays(startDate, days) {
+    var date = new Date(startDate.getTime());
+    var added = 0;
+    while (added < days) {
+        date.setDate(date.getDate() + 1);
+        var day = date.getDay();
+        if (day !== 0 && day !== 6) {
+            added++;
+        }
+    }
+    return date;
+}
+
+function taskFormatDateForInput(date) {
+    var y = date.getFullYear();
+    var m = String(date.getMonth() + 1).padStart(2, '0');
+    var d = String(date.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+}
+
+function taskApplyCategoryDueDateDefault() {
+    var days = $('#task-category-id option:selected').attr('data-due-days');
+    var $dueDate = $('#task-due-date');
+    var $time = $('#task-time');
+    var $hint = $('#task-due-date-hint');
+
+    if (days) {
+        var due = taskAddBusinessDays(new Date(), parseInt(days, 10));
+        $dueDate.val(taskFormatDateForInput(due)).prop('disabled', true);
+        $time.val(TASK_DUE_TIME_DEFAULT).prop('disabled', true);
+        $hint.show();
+    } else {
+        $dueDate.val('').prop('disabled', false);
+        $time.val('').prop('disabled', false);
+        $hint.hide();
+    }
+}
+
+$(document).on('change', '#task-category-id', taskApplyCategoryDueDateDefault);
+
 $(document).on('change', '#task-handling-group', function() {
     var groupId = $(this).val();
     if (!groupId) return;
@@ -1829,6 +1891,7 @@ function openCreateTaskModal() {
     $('#task-assignees').val(null).trigger('change');
     $('#task-handling-group-container').hide();
     $('#task-handling-group').val('');
+    taskApplyCategoryDueDateDefault();
     new bootstrap.Modal(document.getElementById('taskModal')).show();
 }
 
