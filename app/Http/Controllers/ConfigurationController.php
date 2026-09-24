@@ -62,17 +62,25 @@ class ConfigurationController extends Controller
                 'model' => HandlingGroup::class,
                 'label' => 'Penanganan',
                 'slug' => 'handling-groups',
-                'columns' => ['name', 'members'],
+                'columns' => ['name', 'division_name', 'members'],
                 'column_labels' => [
                     'name' => 'Nama',
+                    'division_name' => 'Division',
                     'members' => 'Anggota',
                 ],
                 'rules' => [
                     'name' => 'required|string|max:100',
+                    'division_id' => 'nullable|exists:divisions,id',
                     'user_ids' => 'nullable|array',
                     'user_ids.*' => 'exists:users,id',
                 ],
                 'extra_fields' => [
+                    'division_id' => [
+                        'label' => 'Division',
+                        'type' => 'select_fk',
+                        'source' => 'divisions',
+                        'source_key' => 'division_name',
+                    ],
                     'user_ids' => [
                         'label' => 'Anggota',
                         'type' => 'multi_select',
@@ -403,7 +411,10 @@ class ConfigurationController extends Controller
 
         if ($table === 'handling-groups') {
             $validated = $request->validate($cfg['rules']);
-            $group = HandlingGroup::create(['name' => $validated['name']]);
+            $group = HandlingGroup::create([
+                'name' => $validated['name'],
+                'division_id' => $validated['division_id'] ?? null,
+            ]);
             $group->users()->sync($validated['user_ids'] ?? []);
 
             return response()->json([
@@ -434,7 +445,10 @@ class ConfigurationController extends Controller
         if ($table === 'handling-groups') {
             $validated = $request->validate($cfg['rules']);
             $group = HandlingGroup::findOrFail($id);
-            $group->update(['name' => $validated['name']]);
+            $group->update([
+                'name' => $validated['name'],
+                'division_id' => $validated['division_id'] ?? null,
+            ]);
             $group->users()->sync($validated['user_ids'] ?? []);
 
             return response()->json([
@@ -488,7 +502,7 @@ class ConfigurationController extends Controller
     {
         $search = $request->get('search', '');
 
-        $query = HandlingGroup::with('users');
+        $query = HandlingGroup::with(['users', 'division']);
 
         if ($search) {
             $query->where('name', 'like', "%{$search}%");
@@ -498,6 +512,7 @@ class ConfigurationController extends Controller
 
         $data = collect($records->items())->map(function (HandlingGroup $group) {
             $group->members = $group->users->pluck('username')->join(', ');
+            $group->division_name = $group->division?->division_name;
             $group->user_ids = $group->users->pluck('id')->all();
 
             return $group;
@@ -513,7 +528,7 @@ class ConfigurationController extends Controller
                 'from' => $records->firstItem(),
                 'to' => $records->lastItem(),
             ],
-            'columns' => ['name', 'members'],
+            'columns' => ['name', 'division_name', 'members'],
             'label' => 'Penanganan',
             'display_map' => null,
         ]);

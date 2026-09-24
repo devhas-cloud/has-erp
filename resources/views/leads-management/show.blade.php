@@ -795,11 +795,11 @@
                             <i class="fa fa-chart-line me-1"></i> Activity
                         </button>
                     </li>
-                    <li class="nav-item" role="presentation">
+                    {{-- <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-noted" type="button" role="tab">
                             <i class="fa fa-sticky-note me-1"></i> Noted
                         </button>
-                    </li>
+                    </li> --}}
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-logs" type="button" role="tab">
                             <i class="fa fa-history me-1"></i> Logs

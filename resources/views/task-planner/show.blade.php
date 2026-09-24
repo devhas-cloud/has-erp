@@ -1920,7 +1920,9 @@
                 return;
             }
             var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
-            navigator.geolocation.getCurrentPosition(function(pos) {
+            var fallback = false;
+            function attemptPosition() {
+                navigator.geolocation.getCurrentPosition(function(pos) {
                 $btn.prop('disabled', false).html('<i class="fa fa-location-dot"></i> Record');
                 currentLat = pos.coords.latitude;
                 currentLng = pos.coords.longitude;
@@ -1955,12 +1957,19 @@
                 });
                 modal.show();
             }, function(err) {
+                if (err && err.code === 3 && !fallback) {
+                    fallback = true;
+                    attemptPosition();
+                    return;
+                }
                 $btn.prop('disabled', false).html('<i class="fa fa-location-dot"></i> Record');
                 toastr.error('Gagal lokasi: ' + (err.message || 'Izin ditolak.'));
             }, {
-                enableHighAccuracy: true,
-                timeout: 10000
+                enableHighAccuracy: !fallback,
+                timeout: fallback ? 15000 : 20000
             });
+            }
+            attemptPosition();
         });
 
         $(document).on('click', '#btn-save-record-visit', function() {

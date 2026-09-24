@@ -6,13 +6,19 @@ use App\Models\AccountCompany;
 use App\Models\AccountContact;
 use App\Models\ContactMethod;
 use App\Models\Division;
+use App\Models\Forecast;
 use App\Models\JobTitle;
+use App\Models\Lead;
+use App\Models\Log;
+use App\Models\Opportunity;
 use App\Models\RoleInProject;
 use App\Models\Source;
+use App\Models\Stage;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class ContactManagementController extends Controller
 {
@@ -201,12 +207,72 @@ class ContactManagementController extends Controller
 
     public function show($id)
     {
+        $user = Auth::user();
+        $isSales = strtolower($user->division?->division_name) === 'sales' && strtolower($user->hierarchyRole?->role_name) !== 'manager';
         $contact = AccountContact::with([
             'accountCompany', 'contactOwner', 'assignedTo', 'jobTitle',
             'source', 'division', 'contactMethod', 'roleInProject',
+            'leads.leadOwner',
+            'leads.source',
         ])->findOrFail($id);
 
-        return view('contacts-management.show', compact('contact'));
+        $opportunities = Opportunity::where('account_contacts_id', $contact->id)
+            ->with(['stage', 'owner', 'forecast'])
+            ->orderByDesc('created_at')
+            ->get();
+
+$sources = Source::where('status', 'Active')->get();
+        $stages = Stage::where('status', 'Active')->get();
+        $forecasts = Forecast::where('status', 'Active')->get();
+        $users = User::orderBy('username')->get();
+        $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
+
+        $user = Auth::user();
+        $isSales = strtolower($user->division?->division_name ?? '') === 'sales'
+            && strtolower($user->hierarchyRole?->role_name ?? '') !== 'manager';
+
+        return view('contacts-management.show', compact(
+            'contact', 'opportunities',
+            'sources', 'stages', 'forecasts', 'users', 'isSales', 'accountCompanies'
+        ));
+    }
+
+    public function storeLead(Request $request, $id): JsonResponse
+    {
+        $contact = AccountContact::findOrFail($id);
+
+        $isReferralSource = str_contains(strtolower((string) Source::find($request->source_id)?->source_name), 'referral');
+
+        $validated = $request->validate([
+            'lead_title' => 'required|string|max:500',
+            'lead_status' => 'required|in:New,Approach,Qualified,Unqualified',
+            'source_id' => 'required|exists:sources,id',
+            'name_referral' => ['nullable', 'string', 'max:150', Rule::requiredIf($isReferralSource)],
+            'lead_follow_up_date' => 'required|date',
+            'assigned_to' => 'nullable|exists:users,id',
+            'unqualified_reason' => 'nullable|string|max:1000',
+        ]);
+
+        $lead = Lead::create([
+            'lead_status' => $validated['lead_status'],
+            'lead_title' => $validated['lead_title'],
+            'account_companies_id' => $contact->account_companies_id,
+            'account_contacts_id' => $contact->id,
+            'source_id' => $validated['source_id'],
+            'name_referral' => trim((string) ($validated['name_referral'] ?? '')) ?: null,
+            'unqualified_reason' => $validated['unqualified_reason'] ?? null,
+            'lead_follow_up_date' => $validated['lead_follow_up_date'] ?? null,
+            'lead_owner_id' => Auth::id(),
+            'assigned_to' => $validated['assigned_to'] ?? null,
+        ]);
+
+        Log::record('create_lead', "Lead #{$lead->id}: {$lead->lead_title} dibuat dari contact #{$contact->id} ({$contact->full_name})", 'MOD_CONTACT_MANAGEMENT', $lead);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lead berhasil dibuat.',
+            'data' => $lead,
+        ]);
     }
 
     public function destroy($id): JsonResponse

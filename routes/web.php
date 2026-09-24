@@ -67,6 +67,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     // Route::get('leads-management/{lead}/edit', ...)->name('leads-management.edit'); // dikomentari
 
     Route::get('contact-management/data', [ContactManagementController::class, 'data'])->name('contact-management.data');
+    Route::post('contact-management/{contact_management}/leads', [ContactManagementController::class, 'storeLead'])->name('contact-management.leads.store');
     Route::resource('contact-management', ContactManagementController::class);
 
     Route::get('accounts-management/data', [AccountManagementController::class, 'data'])->name('accounts-management.data');

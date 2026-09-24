@@ -29,4 +29,9 @@ class Division extends Model
     {
         return $this->hasOne(WhatsAppGroup::class);
     }
+
+    public function handlingGroups(): HasMany
+    {
+        return $this->hasMany(HandlingGroup::class);
+    }
 }

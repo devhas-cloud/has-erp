@@ -96,4 +96,9 @@ class AccountCompany extends Model
     {
         return $this->hasMany(Lead::class, 'account_companies_id');
     }
+
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class, 'account_companies_id');
+    }
 }

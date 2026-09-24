@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(php artisan tinker --execute=\"echo \\App\\Models\\Quotation::withCount('costItems')->has('costItems')->limit(5)->get(['id','quotation_number','status'])->toJson();\")",
+      "Shell(php artisan tinker --execute=\" \\$q = \\App\\Models\\Quotation::with('costItems')->find(16); \\$all = \\$q->costItems->keyBy('id'); \\$children = \\$all->groupBy(fn(\\$i) => \\$i->parent_id ?: '_root'); \\$walk = function (\\$pid, \\$d) use (&\\$walk, \\$children) { foreach (\\$children[\\$pid] ?? [] as \\$i) { echo str_repeat(' ', \\$d).'['.\\$i->id.'] d'.\\$d.' no='.(\\$i->item_no ?: '-').' title='.(\\$i->title ? substr(\\$i->title,0,40) : '-').' desc='.(\\$i->description ? substr(strip_tags(\\$i->description),0,40) : '-').' qty='.(\\$i->qty ?: '-').' unit='.(\\$i->unit ?: '-').' price='.(\\$i->price ?: '-').PHP_EOL; \\$walk(\\$i->id, \\$d + 1); } }; \\$walk('_root', 0); \")",
+      "Shell(php artisan tinker --execute= $q = \\App\\Models\\Quotation::with(['costItems','creator'])->find(16); $html = view('quotation.pdf-cost', ['quotation' => $q])->render(); echo 'RENDER OK, panjang HTML: '.strlen($html).PHP_EOL;  2 >& 1)",
+      "Shell(php artisan tinker --execute= $q = \\App\\Models\\Quotation::with(['costItems','creator'])->find(16); $html = view('quotation.pdf-cost', ['quotation' => $q])->render(); file_put_contents(storage_path('app/render-test.html'), $html); echo 'saved';  2 >& 1)",
+      "Shell(php artisan tinker --execute= $html = file_get_contents(storage_path('app/render-test.html')); $start = strpos($html, 'Rincian Biaya'); echo substr($html, $start - 200, 3500);  2 >& 1)",
+      "Shell(php artisan tinker --execute= $q = \\App\\Models\\Quotation::with(['items','costItems','creator','configurations.division','quoteConfiguration','opportunity.accountCompany','opportunity.accountContact','task.creator'])->find(16); $pdf = \\Barryvdh\\DomPDF\\Facade\\Pdf::loadView('quotation.pdf-cost', ['quotation' => $q])->setPaper('a4', 'portrait'); file_put_contents(storage_path('app/pdf-cost-test.pdf'), $pdf->output()); echo 'PDF OK: '.strlen($pdf->output()).' bytes';  2 >& 1)",
+      "Shell(command:*)",
+      "Shell(pdftoppm:*)",
+      "Shell(php artisan tinker --execute= $q = \\App\\Models\\Quotation::with(['costItems','creator'])->find(14); $all = $q->costItems->keyBy('id'); $children = $all->groupBy(fn ($i) => $i->parent_id ?: '_root'); foreach ($children['_root'] ?? [] as $i) { echo 'root id='.$i->id.' no='.($i->item_no ?: '-').' title='.($i->title ?: '-').' desc='.substr(strip_tags((string)$i->description),0,40).' kids='.count($children[$i->id] ?? []).PHP_EOL; } $html = view('quotation.pdf-cost', ['quotation' => $q])->render(); echo 'RENDER OK '.strlen($html).PHP_EOL;  2 >& 1)",
+      "Shell(rm:*)",
+      "Shell(php artisan view:cache 2 >& 1)",
+      "Shell(php -l resources/views/quotation/pdf-cost.blade.php)",
+      "Shell(php artisan view:clear > /dev/null 2 >& 1)",
+      "Shell(grep:*)",
+      "Shell(awk:*)",
+      "Shell(php artisan test --filter test_show_page_and_pdf 2 >& 1)",
+      "Shell(cd /var/www/html/has-erp && php artisan tinker --execute=' DB::beginTransaction(); $q = \\App\\Models\\Quotation::firstOrFail(); $t1 = $q->costItems()->create([\"title\"=>\"Biaya Mobilisasi\",\"item_no\"=>\"1\",\"sort_order\"=>1]); $q->costItems()->create([\"parent_id\"=>$t1->id,\"description\"=>\"Transport\",\"qty\"=>1,\"price\"=>500000,\"item_no\"=>\"1.1\",\"sort_order\"=>2]); $q->costItems()->create([\"parent_id\"=>$t1->id,\"description\"=>\"Mobilisasi Alat\",\"qty\"=>1,\"price\"=>200000,\"item_no\"=>\"1.2\",\"sort_order\"=>3]); $t2 = $q->costItems()->create([\"title\"=>\"Biaya Instalasi\",\"item_no\"=>\"2\",\"sort_order\"=>4]); $sub=$q->costItems()->create([\"parent_id\"=>$t2->id,\"title\"=>\"Separator Instalasi\",\"item_no\"=>\"2.1\",\"sort_order\"=>5]); $q->costItems()->create([\"parent_id\"=>$sub->id,\"description\"=>\"Pemasangan\",\"qty\"=>2,\"price\"=>300000,\"item_no\"=>\"2.1.1\",\"sort_order\"=>6]); $html = view(\"quotation.pdf-cost\",[\"quotation\"=>$q->fresh([\"costItems\",\"creator\"])])->render(); DB::rollBack(); // print the rows preg_match_all(\"/<tr class=\\\"(section-title|sub-title)\\\">(.*?)<\\/tr>/s\",$html,$m); foreach($m[1] as $i=>$cls){ echo \"[$cls] \".strip_tags($m[2][$i]).\"\\n\"; } echo \"HAS_TABLE=\".(strpos($html,\"<table class=\\\"parts\\\">\")!==false?\"yes\":\"no\").\"\\n\"; echo \"HAS_TOTAL=\".(strpos($html,\"Total Price Biaya\")!==false?\"yes\":\"no\").\"\\n\"; ' 2>&1 | tail -20)",
+      "Shell(ls -la vendor/bin 2>/dev/null | grep -iE 'pdf|wkhtml' ; which wkhtmltopdf pdftoppm pdftocairo 2>/dev/null; php -v 2>&1 | head -2)",
+      "Shell(php artisan tinker --execute=\" \\App\\Models\\Quotation::withCount('items')->has('items')->orderByDesc('items_count')->limit(10)->get(['id','quotation_number','status'])->each(fn(\\$q) => print(\\$q->id.' | '.\\$q->quotation_number.' | items='.\\$q->items_count.' | '.\\$q->status.PHP_EOL));\" 2>&1)",
+      "Shell(php artisan tinker --execute=\" \\$q = \\App\\Models\\Quotation::with(['items','creator'])->find(1); \\$pdf = \\Barryvdh\\DomPDF\\Facade\\Pdf::loadView('quotation.pdf', ['quotation' => \\$q])->setPaper('a4','portrait'); file_put_contents(storage_path('app/pdf-test.pdf'), \\$pdf->output()); echo 'PDF OK: '.strlen(\\$pdf->output()).' bytes';\" 2>&1)",
+      "Shell(mkdir:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

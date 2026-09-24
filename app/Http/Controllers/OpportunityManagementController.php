@@ -159,6 +159,11 @@ class OpportunityManagementController extends Controller
 
         $validated['owner_id'] = Auth::id();
 
+        // jika stage_id tidak di isi, maka set 1 = new
+         if (empty($validated['stage_id'])){
+            $validated['stage_id'] = 1 ; // new
+         }
+
         // Jika close_date tidak di isi, maka set close_date menjadi 3 bulan tanggal sekarang
         if (empty($validated['close_date'])) {
             $validated['close_date'] = now()->addMonths(3)->format('Y-m-d');

@@ -26,8 +26,13 @@ class AccountManagementController extends Controller
         $interactionLevels = InteractionLevel::where('status', 'Active')->get();
 
         return view('accounts-management.index', compact(
-            'accountCompanies', 'typesAccountsCompanies', 'sources',
-            'segmentations', 'businessEntities', 'businessValues', 'interactionLevels'
+            'accountCompanies',
+            'typesAccountsCompanies',
+            'sources',
+            'segmentations',
+            'businessEntities',
+            'businessValues',
+            'interactionLevels'
         ));
     }
 
@@ -178,9 +183,52 @@ class AccountManagementController extends Controller
     public function show($id)
     {
         $account = AccountCompany::with([
-            'source', 'typesAccountsCompany', 'segmentation',
-            'businessEntity', 'businessValue', 'interactionLevel',
-            'accountOwner', 'parentAccount',
+            'source',
+            'typesAccountsCompany',
+            'segmentation',
+            'businessEntity',
+            'businessValue',
+            'interactionLevel',
+            'accountOwner',
+            'parentAccount',
+
+            'contacts' => function ($q) {
+                $q->where('status', 'Active')
+                    ->orderBy('full_name');
+
+                if(strtolower(Auth::user()->division?->division_name ?? '') === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
+                    $q->where('assigned_to_id', Auth::id());   // jika Sales dan bukan managaer tampilkan sesuai yang ia bisa akses
+                }
+            },
+
+            'contacts.jobTitle',
+            'contacts.contactMethod',
+            'contacts.division',
+            'contacts.contactOwner',
+
+            'leads' => function ($q) {
+
+                if(strtolower(Auth::user()->division?->division_name ?? '') === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
+                    $q->where('assigned_to', Auth::id());   // jika Sales dan bukan managaer tampilkan sesuai yang ia bisa akses
+                }
+                $q->orderByDesc('created_at');
+
+            },
+            'leads.leadOwner',
+            'leads.source',
+            'leads.accountContact',
+
+            'opportunities'  => function ($q) {
+
+                if(strtolower(Auth::user()->division?->division_name ?? '') === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
+                    $q->where('owner_id', Auth::id());   // jika Sales dan bukan managaer tampilkan sesuai yang ia bisa akses
+                }
+                $q->orderByDesc('created_at');
+
+            },
+            'opportunities.stage',
+            'opportunities.owner',
+            'opportunities.forecast',
         ])->findOrFail($id);
 
         return view('accounts-management.show', compact('account'));
