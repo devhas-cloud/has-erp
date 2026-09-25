@@ -48,12 +48,20 @@ class WaterConfigurationController extends Controller
     }
 
     /**
+     * Id divisi WATER. Kembali null bila divisi belum terdaftar.
+     */
+    private function waterDivisionId(): ?int
+    {
+        return Division::where('division_name', 'WATER')->value('id');
+    }
+
+    /**
      * Daftar configuration divisi WATER yang pernah dibuat, dipakai sebagai
      * template isian. Hanya versi terakhir tiap group yang disertakan.
      */
     private function templateList(): array
     {
-        $waterId = Division::where('division_name', 'WATER')->value('id');
+        $waterId = $this->waterDivisionId();
         if (! $waterId) {
             return [];
         }
@@ -86,6 +94,7 @@ class WaterConfigurationController extends Controller
     public function fetchTemplate(Request $request, $id): JsonResponse
     {
         $config = QuoteConfiguration::with(['items'])
+            ->where('division_id', $this->waterDivisionId())
             ->findOrFail($id);
 
         $all = $config->items->keyBy('id');
@@ -211,7 +220,7 @@ class WaterConfigurationController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $divisionId = Division::where('division_name', 'WATER')->value('id');
+        $divisionId = $this->waterDivisionId();
 
         // Hanya tampilkan versi terbaru tiap group milik divisi WATER.
         $latestIds = QuoteConfiguration::query()
@@ -247,7 +256,7 @@ class WaterConfigurationController extends Controller
         $orderDirection = $request->input('order.0.dir', 'asc');
 
         $columnOrderMap = [
-            4 => 'date',
+            3 => 'date',
         ];
 
         if (isset($columnOrderMap[$orderColumnIndex])) {
@@ -372,7 +381,7 @@ class WaterConfigurationController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal menyimpan quote configuration: '.$e->getMessage(),
-            ], 422);
+            ], 500);
         }
     }
 
@@ -428,7 +437,7 @@ class WaterConfigurationController extends Controller
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 100);
 
-        $waterId = Division::where('division_name', 'WATER')->value('id');
+        $waterId = $this->waterDivisionId();
 
         $query = MasterProduct::query()
             ->where('status', 'Active')
@@ -554,7 +563,7 @@ class WaterConfigurationController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengupdate quote configuration: '.$e->getMessage(),
-            ], 422);
+            ], 500);
         }
     }
 
@@ -594,7 +603,8 @@ class WaterConfigurationController extends Controller
             'task.opportunity.accountContact',
             'task.opportunity.owner',
             'task.creator',
-        ])->findOrFail($id);
+        ])->where('division_id', $this->waterDivisionId())
+            ->findOrFail($id);
 
         $isSameDivisionApprover = $this->isSameDivisionApprover($quotation);
 
@@ -939,7 +949,8 @@ class WaterConfigurationController extends Controller
      */
     public function versions($id): JsonResponse
     {
-        $quotation = QuoteConfiguration::findOrFail($id);
+        $quotation = QuoteConfiguration::where('division_id', $this->waterDivisionId())
+            ->findOrFail($id);
         $groupId = $quotation->group_id ?: $quotation->id;
 
         $versions = QuoteConfiguration::with(['creator', 'finalChecker'])
@@ -975,7 +986,8 @@ class WaterConfigurationController extends Controller
             'task.opportunity.accountContact',
             'task.opportunity.owner',
             'task.creator',
-        ])->findOrFail($id);
+        ])->where('division_id', $this->waterDivisionId())
+            ->findOrFail($id);
 
         $pdf = Pdf::loadView('water-configuration.pdf', compact('quotation'))
             ->setPaper('a4', 'portrait');
@@ -1073,7 +1085,10 @@ class WaterConfigurationController extends Controller
             return null;
         }
 
-        $found = MasterProduct::whereIn('id', $ids)->pluck('id');
+        $found = MasterProduct::whereIn('id', $ids)
+            ->where('division_id', $this->waterDivisionId())
+            ->where('status', 'Active')
+            ->pluck('id');
         $missing = $ids->diff($found)->values();
 
         if ($missing->isEmpty()) {
@@ -1082,7 +1097,7 @@ class WaterConfigurationController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Produk tidak ditemukan di master product: #'.$missing->implode(', #').'.',
+            'message' => 'Produk tidak ditemukan di master product divisi WATER: #'.$missing->implode(', #').'.',
         ], 422);
     }
 

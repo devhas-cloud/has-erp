@@ -655,6 +655,7 @@ class WaterConfigurationApprovalTest extends TestCase
             'code' => 'E-532-pro-075',
             'brand' => 's::can',
             'category' => 'Ammonia',
+            'division_id' => $this->water->id,
             'price' => 15000000,
             'status' => 'Active',
         ]);
