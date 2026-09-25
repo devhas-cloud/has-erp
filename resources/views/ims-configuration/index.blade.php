@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">IMS Configuration</h1>
-        <p class="page-header-sub">Kelola konfigurasi quotation (pH, Ammonia, COD, TSS dan Debit) dari task quote</p>
+        <p class="page-header-sub">Kelola konfigurasi quotation dari task quote</p>
     </div>
     @if($canCreate)
     <div class="page-header-actions">
