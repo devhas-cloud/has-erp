@@ -86,7 +86,7 @@ class UserManagementController extends Controller
 
     public function create()
     {
-        $divisions = Division::where('status', 'Active')->get();
+        $divisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
         $taskRoles = TaskRole::all();
         $modules = Module::get()->groupBy('group');
 

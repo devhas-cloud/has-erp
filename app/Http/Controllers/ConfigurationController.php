@@ -346,15 +346,26 @@ class ConfigurationController extends Controller
         }
 
         $search = $request->get('search', '');
-        $nameCol = $cfg['columns'][0];
-
         $query = $cfg['model']::query();
 
-        if ($search) {
-            $query->where($nameCol, 'like', "%{$search}%");
-        }
-
         $displayMap = $cfg['display_map'] ?? [];
+
+        if ($search) {
+            $query->where(function ($q) use ($cfg, $search, $displayMap) {
+                foreach ($cfg['columns'] as $col) {
+                    $q->orWhere($col, 'like', "%{$search}%");
+
+                    if (isset($displayMap[$col])) {
+                        $segments = explode('.', $displayMap[$col]);
+                        $relation = $segments[0];
+                        $relCol = $segments[1] ?? null;
+                        if ($relCol) {
+                            $q->orWhereHas($relation, fn ($rel) => $rel->where($relCol, 'like', "%{$search}%"));
+                        }
+                    }
+                }
+            });
+        }
         $relations = [];
         foreach ($displayMap as $col => $path) {
             $relation = explode('.', $path)[0];
@@ -505,7 +516,11 @@ class ConfigurationController extends Controller
         $query = HandlingGroup::with(['users', 'division']);
 
         if ($search) {
-            $query->where('name', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhereHas('division', fn ($d) => $d->where('division_name', 'like', "%{$search}%"))
+                    ->orWhereHas('users', fn ($u) => $u->where('username', 'like', "%{$search}%"));
+            });
         }
 
         $records = $query->orderBy('id', 'desc')->paginate(15);

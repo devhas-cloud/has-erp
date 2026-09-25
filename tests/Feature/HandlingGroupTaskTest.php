@@ -217,4 +217,50 @@ class HandlingGroupTaskTest extends TestCase
         $destroy->assertOk();
         $this->assertNull(HandlingGroup::find($newGroup->id));
     }
+
+    public function test_configuration_search_matches_any_column(): void
+    {
+        $taskCategory = TaskCategory::create([
+            'name' => 'Water Quote',
+            'description' => 'Special quote handling',
+            'division_id' => $this->water->id,
+            'use_division_handler' => 'Yes',
+        ]);
+
+        $byName = $this->actingAs($this->admin)
+            ->getJson(route('configuration.list', 'task-categories').'?search=Quote');
+
+        $byName->assertOk()
+            ->assertJsonFragment(['name' => 'Water Quote']);
+
+        $byDescription = $this->actingAs($this->admin)
+            ->getJson(route('configuration.list', 'task-categories').'?search=handling');
+
+        $byDescription->assertOk()
+            ->assertJsonFragment(['name' => 'Water Quote']);
+
+        $byRelated = $this->actingAs($this->admin)
+            ->getJson(route('configuration.list', 'task-categories').'?search=WATER');
+
+        $byRelated->assertOk()
+            ->assertJsonFragment(['name' => 'Water Quote']);
+
+        $noMatch = $this->actingAs($this->admin)
+            ->getJson(route('configuration.list', 'task-categories').'?search=zzz-nonexistent');
+
+        $noMatch->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $byMember = $this->actingAs($this->admin)
+            ->getJson(route('configuration.list', 'handling-groups').'?search=maidin');
+
+        $byMember->assertOk()
+            ->assertJsonFragment(['name' => 'WATER']);
+
+        $byDivision = $this->actingAs($this->admin)
+            ->getJson(route('configuration.list', 'handling-groups').'?search=WATER');
+
+        $byDivision->assertOk()
+            ->assertJsonFragment(['name' => 'WATER']);
+    }
 }
