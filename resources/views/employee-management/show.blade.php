@@ -299,6 +299,10 @@
                         <div class="tab-pane fade" id="e-form-job">
                             <div class="row g-3">
                                 <div class="col-md-6">
+                                    <div class="mb-3"><label class="form-label">No. Pegawai <span style="color:var(--danger)">*</span></label>
+                                        <input type="text" id="employee-no" class="form-control" value="{{ $employee->employee_no }}" maxlength="20" required></div>
+                                </div>
+                                <div class="col-md-6">
                                     <div class="mb-3"><label class="form-label">Division</label>
                                         <select id="employee-division-id" class="form-select">
                                             <option value="">— Pilih —</option>
@@ -536,7 +540,12 @@ document.addEventListener('DOMContentLoaded', function() {
             toastr.error('Nama karyawan wajib diisi.');
             return;
         }
+        if (!$('#employee-no').val().trim()) {
+            toastr.error('No. pegawai wajib diisi.');
+            return;
+        }
         var payload = {
+            employee_no: $('#employee-no').val().trim(),
             name: $('#employee-name').val().trim(),
             gender: $('#employee-gender').val() || null,
             birth_date: $('#employee-birth-date').val() || null,

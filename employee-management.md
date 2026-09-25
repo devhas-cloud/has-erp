@@ -34,7 +34,7 @@
 ### Tabel `employees`
 | Kolom | Ket. |
 |---|---|
-| `employee_no` | otomatis `EMP-0001`, unique |
+| `employee_no` | input manual, unique (wajib), format bebas `A-Za-z0-9._-` (mis. `EMP-0001`) |
 | `user_id` | FK users, **nullable** (akun login nanti saja) |
 | `name`, `gender` (L/P), `birth_date`, `birth_place`, `address`, `phone`, `email` | personal |
 | `nik`, `npwp_no`, `ptkp_status` (TK/0 s/d K/3) | data pajak |

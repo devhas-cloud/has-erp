@@ -77,6 +77,10 @@
                     {{-- Step 1: Personal --}}
                     <div class="wizard-step" data-step="1">
                         <div class="mb-3">
+                            <label class="form-label">No. Pegawai <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="employee-no" class="form-control" maxlength="20" placeholder="Contoh: EMP-0001" required>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Nama Lengkap <span style="color:var(--danger)">*</span></label>
                             <input type="text" id="employee-name" class="form-control" maxlength="150" placeholder="Nama lengkap karyawan" required>
                         </div>
@@ -353,6 +357,7 @@ function openEditModal(id) {
     $.get(employeeEditUrl.replace('__ID__', id), function(res) {
         var s = res.data;
         $('#employee-edit-id').val(s.id);
+        $('#employee-no').val(s.employee_no || '');
         $('#employee-name').val(s.name || '');
         $('#employee-gender').val(s.gender || '');
         $('#employee-phone').val(s.phone || '');
@@ -396,6 +401,7 @@ function showEmployeeModal() {
 
 function collectPayload() {
     return {
+        employee_no: $('#employee-no').val().trim(),
         name: $('#employee-name').val().trim(),
         gender: $('#employee-gender').val() || null,
         birth_date: $('#employee-birth-date').val() || null,
@@ -424,6 +430,12 @@ function saveEmployee() {
     var mgr = $('#employee-manager-id').val();
     if (selfId && mgr && String(mgr) === String(selfId)) {
         toastr.error('Karyawan tidak bisa menjadi atasan dirinya sendiri.');
+        return;
+    }
+    if (!$('#employee-no').val().trim()) {
+        toastr.error('No. pegawai wajib diisi.');
+        setWizardStep(1);
+        $('#employee-no').addClass('is-invalid');
         return;
     }
     if (!$('#employee-name').val().trim()) {
@@ -492,6 +504,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     $('#btn-wizard-next').on('click', function() {
+        if (currentStep === 1 && !$('#employee-no').val().trim()) {
+            toastr.error('No. pegawai wajib diisi sebelum lanjut.');
+            $('#employee-no').addClass('is-invalid');
+            return;
+        }
         if (currentStep === 1 && !$('#employee-name').val().trim()) {
             toastr.error('Nama karyawan wajib diisi sebelum lanjut.');
             $('#employee-name').addClass('is-invalid');

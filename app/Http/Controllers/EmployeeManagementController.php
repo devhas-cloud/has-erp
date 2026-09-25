@@ -12,6 +12,7 @@ use App\Models\SalaryComponent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class EmployeeManagementController extends Controller
 {
@@ -82,8 +83,6 @@ class EmployeeManagementController extends Controller
         $validated = $request->validate($this->rules());
 
         $employee = DB::transaction(function () use ($validated) {
-            $validated['employee_no'] = $this->nextEmployeeNo();
-
             return Employee::create($validated);
         });
 
@@ -114,7 +113,7 @@ class EmployeeManagementController extends Controller
     {
         $employee = Employee::findOrFail($id);
 
-        $validated = $request->validate($this->rules());
+        $validated = $request->validate($this->rules($employee->id));
 
         if (!empty($validated['manager_id']) && (int) $validated['manager_id'] === (int) $employee->id) {
             throw \Illuminate\Validation\ValidationException::withMessages([
@@ -413,9 +412,16 @@ class EmployeeManagementController extends Controller
 
     // ---------------- Helper ----------------
 
-    private function rules(): array
+    private function rules(?int $ignoreId = null): array
     {
         return [
+            'employee_no' => [
+                'required',
+                'string',
+                'max:20',
+                'regex:/^[A-Za-z0-9._-]+$/',
+                Rule::unique('employees', 'employee_no')->ignore($ignoreId),
+            ],
             'name' => 'required|string|max:150',
             'gender' => 'nullable|in:male,female',
             'birth_date' => 'nullable|date',
@@ -447,18 +453,5 @@ class EmployeeManagementController extends Controller
             'birth_date' => 'nullable|date',
             'occupation' => 'nullable|string|max:100',
         ];
-    }
-
-    private function nextEmployeeNo(): string
-    {
-        // transact + lock supaya dua store bersamaan tidak dapat nomor sama
-        return DB::transaction(function () {
-            $maxNo = (int) Employee::query()
-                ->lockForUpdate()
-                ->selectRaw("COALESCE(MAX(CAST(SUBSTRING(employee_no, 5) AS UNSIGNED)), 0) as max_no")
-                ->value('max_no');
-
-            return 'EMP-'.str_pad((string) ($maxNo + 1), 4, '0', STR_PAD_LEFT);
-        });
     }
 }
