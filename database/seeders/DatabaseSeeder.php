@@ -32,6 +32,9 @@ class DatabaseSeeder extends Seeder
             AccountContactSeeder::class,
             CurrenciesTableSeeder::class,
             MasterProductSeeder::class,
+            LeaveTypesTableSeeder::class,
+            SalaryComponentsTableSeeder::class,
+            ErDummyDataSeeder::class,
         ]);
     }
 }

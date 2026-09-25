@@ -1,16 +1,22 @@
 <?php
 
 use App\Http\Controllers\AccountManagementController;
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\DashboardTaskPlannerController;
+use App\Http\Controllers\EmployeeManagementController;
 use App\Http\Controllers\GoodsRequestController;
 use App\Http\Controllers\ImsConfigurationController;
 use App\Http\Controllers\LeadsManagementController;
+use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\LoanController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
+use App\Http\Controllers\OvertimeRequestController;
+use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\ProfitEstimateController;
 use App\Http\Controllers\PoSupplierApprovalController;
@@ -197,6 +203,77 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('profit-estimate/{id}/sync', [ProfitEstimateController::class, 'sync'])->name('profit-estimate.sync');
     Route::get('profit-estimate/{id}/pdf', [ProfitEstimateController::class, 'pdf'])->name('profit-estimate.pdf');
     Route::resource('profit-estimate', ProfitEstimateController::class);
+
+    // ============================================================
+    // Employee Relations (ER)
+    // Implementasi penuh mengikuti employee-management.md
+    // ============================================================
+
+    Route::get('employee-management/data', [EmployeeManagementController::class, 'data'])->name('employee-management.data');
+    Route::get('employee-management/search-managers', [EmployeeManagementController::class, 'searchManagers'])->name('employee-management.search-managers');
+    Route::get('employee-management/{employee}/families', [EmployeeManagementController::class, 'families'])->name('employee-management.families');
+    Route::post('employee-management/{employee}/families', [EmployeeManagementController::class, 'storeFamily'])->name('employee-management.families.store');
+    Route::put('employee-management/{employee}/families/{familyId}', [EmployeeManagementController::class, 'updateFamily'])->name('employee-management.families.update');
+    Route::delete('employee-management/{employee}/families/{familyId}', [EmployeeManagementController::class, 'destroyFamily'])->name('employee-management.families.destroy');
+    Route::put('employee-management/{employee}/terminate', [EmployeeManagementController::class, 'terminate'])->name('employee-management.terminate');
+    Route::put('employee-management/{employee}/reactivate', [EmployeeManagementController::class, 'reactivate'])->name('employee-management.reactivate');
+    Route::resource('employee-management', EmployeeManagementController::class)->except(['create']);
+
+    Route::get('attendance/data', [AttendanceController::class, 'data'])->name('attendance.data');
+    Route::get('attendance/office', [AttendanceController::class, 'office'])->name('attendance.office');
+    Route::post('attendance/office', [AttendanceController::class, 'storeOffice'])->name('attendance.office.store');
+    Route::put('attendance/office/{officeId}', [AttendanceController::class, 'updateOffice'])->name('attendance.office.update');
+    Route::delete('attendance/office/{officeId}', [AttendanceController::class, 'destroyOffice'])->name('attendance.office.destroy');
+    Route::post('attendance/shift', [AttendanceController::class, 'storeShift'])->name('attendance.shift.store');
+    Route::put('attendance/shift/{shiftId}', [AttendanceController::class, 'updateShift'])->name('attendance.shift.update');
+    Route::delete('attendance/shift/{shiftId}', [AttendanceController::class, 'destroyShift'])->name('attendance.shift.destroy');
+    Route::post('attendance/manual', [AttendanceController::class, 'manual'])->name('attendance.manual');
+    Route::post('attendance/import-device', [AttendanceController::class, 'importDevice'])->name('attendance.import-device');
+    Route::get('attendance/corrections/data', [AttendanceController::class, 'correctionsData'])->name('attendance.corrections.data');
+    Route::post('attendance/corrections', [AttendanceController::class, 'storeCorrection'])->name('attendance.corrections.store');
+    Route::post('attendance/corrections/{correctionId}/approve', [AttendanceController::class, 'approveCorrection'])->name('attendance.corrections.approve');
+    Route::post('attendance/corrections/{correctionId}/reject', [AttendanceController::class, 'rejectCorrection'])->name('attendance.corrections.reject');
+    Route::post('attendance/{attendance}/approve', [AttendanceController::class, 'approve'])->name('attendance.approve');
+    Route::post('attendance/{attendance}/reject', [AttendanceController::class, 'reject'])->name('attendance.reject');
+    Route::resource('attendance', AttendanceController::class)->except(['create', 'edit', 'store', 'update', 'destroy']);
+
+    Route::get('leave-request/data', [LeaveRequestController::class, 'data'])->name('leave-request.data');
+    Route::get('leave-request/balances', [LeaveRequestController::class, 'balances'])->name('leave-request.balances');
+    Route::post('leave-request/{leave}/approve', [LeaveRequestController::class, 'approve'])->name('leave-request.approve');
+    Route::post('leave-request/{leave}/reject', [LeaveRequestController::class, 'reject'])->name('leave-request.reject');
+    Route::post('leave-request/{leave}/revise', [LeaveRequestController::class, 'revise'])->name('leave-request.revise');
+    Route::post('leave-request/{leave}/cancel', [LeaveRequestController::class, 'cancel'])->name('leave-request.cancel');
+    Route::resource('leave-request', LeaveRequestController::class)->except(['create', 'edit']);
+
+    Route::get('overtime-request/data', [OvertimeRequestController::class, 'data'])->name('overtime-request.data');
+    Route::get('overtime-request/fetch-attendance', [OvertimeRequestController::class, 'fetchAttendance'])->name('overtime-request.fetch-attendance');
+    Route::post('overtime-request/{overtime}/approve', [OvertimeRequestController::class, 'approve'])->name('overtime-request.approve');
+    Route::post('overtime-request/{overtime}/reject', [OvertimeRequestController::class, 'reject'])->name('overtime-request.reject');
+    Route::post('overtime-request/{overtime}/cancel', [OvertimeRequestController::class, 'cancel'])->name('overtime-request.cancel');
+    Route::resource('overtime-request', OvertimeRequestController::class)->except(['create', 'edit']);
+
+    Route::get('loan/data', [LoanController::class, 'data'])->name('loan.data');
+    Route::post('loan/{loan}/approve', [LoanController::class, 'approve'])->name('loan.approve');
+    Route::post('loan/{loan}/reject', [LoanController::class, 'reject'])->name('loan.reject');
+    Route::post('loan/{loan}/settle', [LoanController::class, 'settle'])->name('loan.settle');
+    Route::post('loan/installments/{installmentId}/pay', [LoanController::class, 'pay'])->name('loan.installments.pay');
+    Route::resource('loan', LoanController::class)->except(['create', 'edit']);
+
+    Route::get('payroll/data', [PayrollController::class, 'data'])->name('payroll.data');
+    Route::post('payroll/{payroll}/generate-draft', [PayrollController::class, 'generateDraft'])->name('payroll.generate-draft');
+    Route::post('payroll/{payroll}/finalize', [PayrollController::class, 'finalize'])->name('payroll.finalize');
+    Route::post('payroll/{payroll}/components', [PayrollController::class, 'updateComponent'])->name('payroll.components.store');
+    Route::put('payroll/{payroll}/components/{componentId}', [PayrollController::class, 'updateComponent'])->name('payroll.components.update');
+    Route::delete('payroll/{payroll}/components/{componentId}', [PayrollController::class, 'destroyComponent'])->name('payroll.components.destroy');
+    Route::get('payroll/{payroll}/payslip/{payslipId}/pdf', [PayrollController::class, 'payslipPdf'])->name('payroll.payslip.pdf');
+    Route::get('payroll/{payroll}/excel', [PayrollController::class, 'excel'])->name('payroll.excel');
+    Route::resource('payroll', PayrollController::class)->except(['create', 'edit', 'update', 'destroy']);
+
+    // Employee salary components (Tab Komponen Gaji)
+    Route::get('employee-management/{employee}/salary-components', [EmployeeManagementController::class, 'salaryComponents'])->name('employee-management.salary-components');
+    Route::post('employee-management/{employee}/salary-components', [EmployeeManagementController::class, 'storeSalaryComponent'])->name('employee-management.salary-components.store');
+    Route::put('employee-management/{employee}/salary-components/{employeeSalaryComponentId}', [EmployeeManagementController::class, 'updateSalaryComponent'])->name('employee-management.salary-components.update');
+    Route::delete('employee-management/{employee}/salary-components/{employeeSalaryComponentId}', [EmployeeManagementController::class, 'destroySalaryComponent'])->name('employee-management.salary-components.destroy');
 
     Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
         ->name('dashboard-task-planner.index');
