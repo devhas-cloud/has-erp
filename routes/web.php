@@ -7,6 +7,9 @@ use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\DashboardTaskPlannerController;
 use App\Http\Controllers\GoodsRequestController;
+use App\Http\Controllers\EnviroConfigurationController;
+use App\Http\Controllers\GasConfigurationController;
+use App\Http\Controllers\IhConfigurationController;
 use App\Http\Controllers\ImsConfigurationController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\NotificationController;
@@ -136,6 +139,45 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('water-configuration/fetch-task', [WaterConfigurationController::class, 'fetchTask'])->name('water-configuration.fetch-task');
     Route::get('water-configuration/{id}/template', [WaterConfigurationController::class, 'fetchTemplate'])->name('water-configuration.fetch-template');
     Route::resource('water-configuration', WaterConfigurationController::class);
+
+    Route::get('enviro-configuration/data', [EnviroConfigurationController::class, 'data'])->name('enviro-configuration.data');
+    Route::post('enviro-configuration/{id}/submit', [EnviroConfigurationController::class, 'submit'])->name('enviro-configuration.submit');
+    Route::post('enviro-configuration/{id}/approve', [EnviroConfigurationController::class, 'approve'])->name('enviro-configuration.approve');
+    Route::post('enviro-configuration/{id}/reject', [EnviroConfigurationController::class, 'reject'])->name('enviro-configuration.reject');
+    Route::post('enviro-configuration/{id}/unlock', [EnviroConfigurationController::class, 'unlock'])->name('enviro-configuration.unlock');
+    Route::post('enviro-configuration/{id}/revise', [EnviroConfigurationController::class, 'revise'])->name('enviro-configuration.revise');
+    Route::get('enviro-configuration/{id}/versions', [EnviroConfigurationController::class, 'versions'])->name('enviro-configuration.versions');
+    Route::get('enviro-configuration/{id}/pdf', [EnviroConfigurationController::class, 'pdf'])->name('enviro-configuration.pdf');
+    Route::get('enviro-configuration/search-products', [EnviroConfigurationController::class, 'searchProducts'])->name('enviro-configuration.search-products');
+    Route::get('enviro-configuration/fetch-task', [EnviroConfigurationController::class, 'fetchTask'])->name('enviro-configuration.fetch-task');
+    Route::get('enviro-configuration/{id}/template', [EnviroConfigurationController::class, 'fetchTemplate'])->name('enviro-configuration.fetch-template');
+    Route::resource('enviro-configuration', EnviroConfigurationController::class);
+
+    Route::get('ih-configuration/data', [IhConfigurationController::class, 'data'])->name('ih-configuration.data');
+    Route::post('ih-configuration/{id}/submit', [IhConfigurationController::class, 'submit'])->name('ih-configuration.submit');
+    Route::post('ih-configuration/{id}/approve', [IhConfigurationController::class, 'approve'])->name('ih-configuration.approve');
+    Route::post('ih-configuration/{id}/reject', [IhConfigurationController::class, 'reject'])->name('ih-configuration.reject');
+    Route::post('ih-configuration/{id}/unlock', [IhConfigurationController::class, 'unlock'])->name('ih-configuration.unlock');
+    Route::post('ih-configuration/{id}/revise', [IhConfigurationController::class, 'revise'])->name('ih-configuration.revise');
+    Route::get('ih-configuration/{id}/versions', [IhConfigurationController::class, 'versions'])->name('ih-configuration.versions');
+    Route::get('ih-configuration/{id}/pdf', [IhConfigurationController::class, 'pdf'])->name('ih-configuration.pdf');
+    Route::get('ih-configuration/search-products', [IhConfigurationController::class, 'searchProducts'])->name('ih-configuration.search-products');
+    Route::get('ih-configuration/fetch-task', [IhConfigurationController::class, 'fetchTask'])->name('ih-configuration.fetch-task');
+    Route::get('ih-configuration/{id}/template', [IhConfigurationController::class, 'fetchTemplate'])->name('ih-configuration.fetch-template');
+    Route::resource('ih-configuration', IhConfigurationController::class);
+
+    Route::get('gas-configuration/data', [GasConfigurationController::class, 'data'])->name('gas-configuration.data');
+    Route::post('gas-configuration/{id}/submit', [GasConfigurationController::class, 'submit'])->name('gas-configuration.submit');
+    Route::post('gas-configuration/{id}/approve', [GasConfigurationController::class, 'approve'])->name('gas-configuration.approve');
+    Route::post('gas-configuration/{id}/reject', [GasConfigurationController::class, 'reject'])->name('gas-configuration.reject');
+    Route::post('gas-configuration/{id}/unlock', [GasConfigurationController::class, 'unlock'])->name('gas-configuration.unlock');
+    Route::post('gas-configuration/{id}/revise', [GasConfigurationController::class, 'revise'])->name('gas-configuration.revise');
+    Route::get('gas-configuration/{id}/versions', [GasConfigurationController::class, 'versions'])->name('gas-configuration.versions');
+    Route::get('gas-configuration/{id}/pdf', [GasConfigurationController::class, 'pdf'])->name('gas-configuration.pdf');
+    Route::get('gas-configuration/search-products', [GasConfigurationController::class, 'searchProducts'])->name('gas-configuration.search-products');
+    Route::get('gas-configuration/fetch-task', [GasConfigurationController::class, 'fetchTask'])->name('gas-configuration.fetch-task');
+    Route::get('gas-configuration/{id}/template', [GasConfigurationController::class, 'fetchTemplate'])->name('gas-configuration.fetch-template');
+    Route::resource('gas-configuration', GasConfigurationController::class);
 
     Route::get('ims-configuration/data', [ImsConfigurationController::class, 'data'])->name('ims-configuration.data');
     Route::post('ims-configuration/{id}/submit', [ImsConfigurationController::class, 'submit'])->name('ims-configuration.submit');

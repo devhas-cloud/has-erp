@@ -1,0 +1,1235 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Currency;
+use App\Models\Division;
+use App\Models\Log;
+use App\Models\MasterProduct;
+use App\Models\Module;
+use App\Models\Quotation;
+use App\Models\QuoteConfiguration;
+use App\Models\QuoteConfigurationItem;
+use App\Models\Task;
+use App\Models\User;
+use App\Models\UserAccessControl;
+use App\Support\TaskWorkflowLogger;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class GasConfigurationController extends Controller
+{
+    private const MODULE_CODE = 'MOD_GAS_CONFIGURATION';
+
+    public function index()
+    {
+        return view('gas-configuration.index');
+    }
+
+    /**
+     * Halaman form untuk membuat quote configuration baru.
+     */
+    public function create(Request $request)
+    {
+        $categories = $this->categorySuggestions();
+        $tasks = $this->quoteTasks();
+
+        return view('gas-configuration.form', [
+            'quotation' => null,
+            'items' => [],
+            'categories' => $categories,
+            'tasks' => $tasks,
+            'templates' => $this->templateList(),
+            'preselectedTaskId' => $request->query('task_id'),
+        ]);
+    }
+
+    /**
+     * Id divisi Gas. Kembali null bila divisi belum terdaftar.
+     */
+    private function gasDivisionId(): ?int
+    {
+        return Division::where('division_name', 'Gas')->value('id');
+    }
+
+    /**
+     * Daftar configuration divisi Gas yang pernah dibuat, dipakai sebagai
+     * template isian. Hanya versi terakhir tiap group yang disertakan.
+     */
+    private function templateList(): array
+    {
+        $gasId = $this->gasDivisionId();
+        if (! $gasId) {
+            return [];
+        }
+
+        $latestIds = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('division_id', $gasId)
+            ->groupBy('group_id')
+            ->pluck('id');
+
+        return QuoteConfiguration::with(['items', 'task', 'opportunity.accountCompany'])
+            ->whereIn('id', $latestIds)
+            ->where('division_id', $gasId)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($config) => [
+                'id' => $config->id,
+                'label' => ($config->opportunity?->opportunity_name ?? $config->task?->title ?? 'Configuration #'.$config->id)
+                    .' — '.($config->date?->format('d/m/Y') ?? '—')
+                    .' ('.($config->items->whereNull('parent_id')->count()).' parent)',
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ambil item (parent + children) dari sebuah configuration sebagai template
+     * isian, dalam urutan DFS sehingga parent muncul sebelum children.
+     */
+    public function fetchTemplate(Request $request, $id): JsonResponse
+    {
+        $config = QuoteConfiguration::with(['items'])
+            ->where('division_id', $this->gasDivisionId())
+            ->findOrFail($id);
+
+        $all = $config->items->keyBy('id');
+        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
+
+        $items = [];
+        $walk = function ($parentId) use (&$walk, &$items, $children) {
+            foreach ($children[$parentId] ?? [] as $item) {
+                $items[] = [
+                    '_key' => 'tpl-'.$item->id,
+                    'parent_key' => $item->parent_id ? 'tpl-'.$item->parent_id : null,
+                    'item_no' => $item->item_no,
+                    'product_id' => $item->product_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                ];
+                $walk($item->id);
+            }
+        };
+
+        $walk('_root');
+
+        return response()->json([
+            'success' => true,
+            'items' => $items,
+        ]);
+    }
+
+    /**
+     * Daftar task bertipe Quote (kategori yang mengaktifkan divisi penanganan),
+     * yang memiliki opportunity/lead agar data customer bisa di-derive.
+     */
+    private function quoteTasks()
+    {
+        return Task::with([
+            'opportunity.accountCompany',
+            'opportunity.accountContact',
+            'opportunity.owner',
+            'lead.accountCompany',
+            'lead.accountContact',
+            'creator',
+            'category',
+        ])
+            ->whereHas('category', fn ($q) => $q->where('use_division_handler', true))
+            ->where('status', 'in_progress')
+            ->where(function ($q) {
+                $q->whereNotNull('opportunity_id')->orWhereNotNull('lead_id');
+            })
+            ->whereDoesntHave('quoteConfigurations', function ($q) {
+                $q->where('division_id', Auth::user()->division_id);
+            })
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
+     * Kategori fleksibel: saran diambil dari master_products + item yang sudah pernah dipakai.
+     */
+    private function categorySuggestions(): array
+    {
+        $fromProducts = MasterProduct::query()
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->pluck('category');
+
+        $fromItems = QuoteConfigurationItem::query()
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->pluck('category');
+
+        return $fromProducts
+            ->merge($fromItems)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ambil data derived dari task quote terpilih untuk prefill form.
+     */
+    public function fetchTask(Request $request): JsonResponse
+    {
+        $request->validate([
+            'task_id' => 'required|exists:tasks,id',
+        ]);
+
+        $task = Task::with([
+            'opportunity.accountCompany',
+            'opportunity.accountContact',
+            'opportunity.owner',
+            'lead.accountCompany',
+            'lead.accountContact',
+            'creator',
+            'category',
+        ])->findOrFail($request->input('task_id'));
+
+        $config = new QuoteConfiguration(['task_id' => $task->id]);
+        $config->setRelation('task', $task);
+        $config->setRelation('opportunity', $task->opportunity);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'task_id' => $task->id,
+                'task_title' => $task->title,
+                'opportunity_id' => $task->opportunity_id,
+                'to_name' => $config->to_name,
+                'location' => $config->location,
+                'address' => $config->address,
+                'pic_name' => $config->pic_name,
+                'pic_phone' => $config->pic_phone,
+                'pic_email' => $config->pic_email,
+                'sales_name' => $config->sales_name,
+                'date' => $task->due_date?->format('Y-m-d'),
+            ],
+        ]);
+    }
+
+    public function data(Request $request): JsonResponse
+    {
+        $divisionId = $this->gasDivisionId();
+
+        // Hanya tampilkan versi terbaru tiap group milik divisi Gas.
+        $latestIds = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('division_id', $divisionId)
+            ->groupBy('group_id')
+            ->pluck('id');
+
+        $query = QuoteConfiguration::whereIn('id', $latestIds)
+            ->where('division_id', $divisionId)
+            ->with(['creator', 'task', 'opportunity.accountCompany', 'opportunity.accountContact']);
+
+        $recordsTotal = QuoteConfiguration::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('division_id', $divisionId)
+            ->groupBy('group_id')
+            ->get()
+            ->count();
+
+        $searchValue = $request->input('search.value');
+        if ($searchValue) {
+            $query->where(function ($q) use ($searchValue) {
+                $q->whereHas('opportunity', fn ($o) => $o->where('opportunity_name', 'like', "%{$searchValue}%"))
+                    ->orWhereHas('opportunity.accountCompany', fn ($c) => $c->where('account_name', 'like', "%{$searchValue}%"))
+                    ->orWhereHas('task', fn ($t) => $t->where('title', 'like', "%{$searchValue}%"))
+                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%"));
+            });
+        }
+
+        $recordsFiltered = $query->count();
+
+        $orderColumnIndex = $request->input('order.0.column', 0);
+        $orderDirection = $request->input('order.0.dir', 'asc');
+
+        $columnOrderMap = [
+            3 => 'date',
+        ];
+
+        if (isset($columnOrderMap[$orderColumnIndex])) {
+            $query->orderBy($columnOrderMap[$orderColumnIndex], $orderDirection);
+        }
+        $query->orderBy('id', 'desc');
+
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+
+        $configurations = $query->offset($start)->limit($length)->get();
+
+        $data = [];
+        foreach ($configurations as $i => $quotation) {
+            $data[] = [
+                'DT_RowIndex' => $start + $i + 1,
+                'id' => $quotation->id,
+                'group_id' => $quotation->group_id,
+                'version' => $quotation->version,
+                'opportunity_name' => $quotation->opportunity?->opportunity_name ?? $quotation->task?->title ?? '—',
+                'location' => $quotation->location ?? '—',
+                'to_name' => $quotation->to_name ?? '—',
+                'date' => $quotation->date?->format('d/m/Y') ?? '—',
+                'date_raw' => $quotation->date?->toISOString(),
+                'item_count' => $quotation->items()->count(),
+                'creator_name' => $quotation->creator?->username ?? '—',
+                'status' => $quotation->status,
+                'status_label' => $quotation->status_label,
+                'status_badge' => $quotation->statusBadgeHtml(),
+                'locked' => $quotation->isLocked(),
+            ];
+        }
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'task_id' => 'required|exists:tasks,id',
+            'date' => 'nullable|date',
+            'parameter_note' => 'required|string|max:255',
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*._key' => 'required|string',
+            'items.*.parent_key' => 'nullable|string',
+            'items.*.item_no' => 'nullable|string|max:50',
+            'items.*.product_id' => 'nullable|integer',
+            'items.*.category' => 'nullable|string|max:100',
+            'items.*.part_number' => 'nullable|string|max:100',
+            'items.*.description' => 'required|string',
+            'items.*.qty' => 'nullable|integer',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.unit' => 'nullable|string|max:50',
+        ]);
+
+        if ($error = $this->rejectUnknownProducts($validated['items'])) {
+            return $error;
+        }
+
+        if (QuoteConfiguration::where('task_id', $validated['task_id'])
+            ->where('division_id', Auth::user()->division_id)
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Divisi ini sudah memiliki configuration untuk task tersebut. Tidak bisa membuat configuration ganda.',
+            ], 422);
+        }
+
+        try {
+            $quotation = DB::transaction(function () use ($validated) {
+                $task = Task::findOrFail($validated['task_id']);
+
+                $quotation = QuoteConfiguration::create([
+                    'division_id' => Auth::user()->division_id,
+                    'opportunity_id' => $task->opportunity_id,
+                    'task_id' => $task->id,
+                    'date' => $validated['date'] ?? $task->due_date,
+                    'parameter_note' => $validated['parameter_note'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                    'status' => QuoteConfiguration::STATUS_DRAFT,
+                    'created_by' => Auth::id(),
+                    'group_id' => null,
+                    'version' => 1,
+                    'is_current' => true,
+                ]);
+
+                $quotation->update(['group_id' => $quotation->id]);
+
+                $this->syncItems($quotation, $validated['items']);
+
+                return $quotation;
+            });
+
+            Log::record(
+                'create_gas_configuration',
+                "Quote Configuration  dibuat untuk task {$quotation->task?->title}",
+                self::MODULE_CODE,
+                $quotation
+            );
+
+            if ($quotation->task) {
+                $divisionName = $quotation->division?->division_name ?? 'Gas';
+                TaskWorkflowLogger::forTask(
+                    $quotation->task,
+                    'create_gas_configuration',
+                    "Quote Configuration {$divisionName}  dibuat untuk Task #{$quotation->task_id} (Draft)"
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Quote configuration berhasil dibuat. Silakan submit untuk approval.',
+                'id' => $quotation->id,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan quote configuration: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Halaman form edit. Hanya configuration berstatus Draft yang bisa diedit.
+     * Konfigurasi rejected/approved direvisi lewat "Buat Revisi" (revise).
+     */
+    public function edit($id)
+    {
+        $quotation = QuoteConfiguration::with(['items.product', 'task'])->findOrFail($id);
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
+            return redirect()->route('gas-configuration.index')
+                ->with('error', 'Quote configuration yang bukan Draft tidak bisa diedit langsung. Gunakan Buat Revisi.');
+        }
+
+        $categories = $this->categorySuggestions();
+        $tasks = $this->quoteTasks();
+
+        // Jika task yang direferensikan sudah 'done', tetap tampilkan agar bisa dipertahankan saat edit.
+        if ($quotation->task_id && $tasks->doesntContain('id', $quotation->task_id)) {
+            $current = Task::with([
+                'opportunity.accountCompany',
+                'opportunity.accountContact',
+                'opportunity.owner',
+                'lead.accountCompany',
+                'lead.accountContact',
+                'creator',
+                'category',
+            ])->find($quotation->task_id);
+
+            if ($current) {
+                $tasks->prepend($current);
+            }
+        }
+
+        return view('gas-configuration.form', [
+            'quotation' => $quotation,
+            'items' => $quotation->items,
+            'categories' => $categories,
+            'tasks' => $tasks,
+            'preselectedTaskId' => null,
+        ]);
+    }
+
+    /**
+     * Pencarian produk master_products (hanya aktif milik divisi Gas).
+     * Format DataTables server-side agar bisa dipaginasi 100 baris/halaman.
+     */
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $searchValue = $request->input('search.value', '');
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 100);
+
+        $gasId = $this->gasDivisionId();
+
+        $query = MasterProduct::query()
+            ->where('status', 'Active')
+            ->where('division_id', $gasId)
+            ->orderBy('name');
+
+        $recordsTotal = $query->count();
+
+        if ($searchValue) {
+            $query->where(function ($builder) use ($searchValue) {
+                $builder->where('name', 'like', "%{$searchValue}%")
+                    ->orWhere('code', 'like', "%{$searchValue}%")
+                    ->orWhere('brand', 'like', "%{$searchValue}%")
+                    ->orWhere('category', 'like', "%{$searchValue}%")
+                    ->orWhere('description', 'like', "%{$searchValue}%");
+            });
+        }
+
+        $recordsFiltered = $query->count();
+
+        $products = $query
+            ->skip($start)
+            ->take($length)
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+
+        $data = $products->map(fn ($product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'code' => $product->code,
+            'brand' => $product->brand,
+            'category' => $product->category,
+            'description' => $product->description,
+            'price' => $product->price,
+        ])->all();
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
+    public function update(Request $request, $id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::findOrFail($id);
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya configuration berstatus Draft yang bisa diedit. Gunakan Buat Revisi untuk configuration yang ditolak/approved.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'task_id' => 'required|exists:tasks,id',
+            'date' => 'nullable|date',
+            'parameter_note' => 'required|string|max:255',
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*._key' => 'required|string',
+            'items.*.parent_key' => 'nullable|string',
+            'items.*.item_no' => 'nullable|string|max:50',
+            'items.*.product_id' => 'nullable|integer',
+            'items.*.category' => 'nullable|string|max:100',
+            'items.*.part_number' => 'nullable|string|max:100',
+            'items.*.description' => 'required|string',
+            'items.*.qty' => 'nullable|integer',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.unit' => 'nullable|string|max:50',
+        ]);
+
+        if ($error = $this->rejectUnknownProducts($validated['items'])) {
+            return $error;
+        }
+
+        if (QuoteConfiguration::where('task_id', $validated['task_id'])
+            ->where('division_id', Auth::user()->division_id)
+            ->where('group_id', '!=', $quotation->group_id)
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Divisi ini sudah memiliki configuration untuk task tersebut. Tidak bisa membuat configuration ganda.',
+            ], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($quotation, $validated) {
+                $task = Task::findOrFail($validated['task_id']);
+
+                $quotation->update([
+                    'opportunity_id' => $task->opportunity_id,
+                    'task_id' => $task->id,
+                    'date' => $validated['date'] ?? $task->due_date,
+                    'parameter_note' => $validated['parameter_note'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                ]);
+
+                $this->syncItems($quotation, $validated['items']);
+            });
+
+            Log::record(
+                'update_gas_configuration',
+                "Quote Configuration  diupdate",
+                self::MODULE_CODE,
+                $quotation
+            );
+
+            if ($quotation->task) {
+                $divisionName = $quotation->division?->division_name ?? 'Gas';
+                TaskWorkflowLogger::forTask(
+                    $quotation->task,
+                    'update_gas_configuration',
+                    "Quote Configuration {$divisionName}  diupdate (Draft)"
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Quote configuration berhasil diupdate.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengupdate quote configuration: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function destroy($id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::findOrFail($id);
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya quote configuration berstatus Draft yang bisa dihapus.',
+            ], 422);
+        }
+
+        $quotation->delete();
+
+        Log::record(
+            'delete_gas_configuration',
+            "Quote Configuration  dihapus",
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Quote configuration berhasil dihapus.',
+        ]);
+    }
+
+    public function show($id)
+    {
+        $quotation = QuoteConfiguration::with([
+            'items',
+            'creator',
+            'finalChecker',
+            'task.opportunity.accountCompany',
+            'task.opportunity.accountContact',
+            'task.opportunity.owner',
+            'task.creator',
+        ])->where('division_id', $this->gasDivisionId())
+            ->findOrFail($id);
+
+        $isSameDivisionApprover = $this->isSameDivisionApprover($quotation);
+
+        $back = request('back');
+
+        return view('gas-configuration.show', compact('quotation', 'isSameDivisionApprover', 'back'));
+    }
+
+    /**
+     * Kirim configuration untuk approval (status draft -> waiting_approval).
+     * Notifikasi dikirim ke semua user satu divisi dengan pembuat (selain pembuat)
+     * yang memiliki hak approve pada modul ini.
+     */
+    public function submit($id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::findOrFail($id);
+
+        if ($quotation->created_by !== Auth::id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pembuat configuration yang bisa submit untuk approval.',
+            ], 403);
+        }
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_DRAFT) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Configuration tidak dalam status Draft.',
+            ], 422);
+        }
+
+        if ($quotation->items()->count() === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Configuration harus memiliki minimal 1 item sebelum di-submit.',
+            ], 422);
+        }
+
+        $quotation->update(['status' => QuoteConfiguration::STATUS_WAITING_APPROVAL]);
+
+        $this->notifyApprovers($quotation);
+
+        if ($quotation->task) {
+            $divisionName = $quotation->division?->division_name ?? 'Gas';
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'submit_gas_configuration',
+                "Quote Configuration {$divisionName}  → Waiting Approval"
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Quote configuration dikirim untuk approval.',
+        ]);
+    }
+
+    /**
+     * ATURAN APPROVAL DIVISI (cek UAC can_approve ditangani middleware access.control):
+     * 1. User dengan divisi yang sama dengan pembuat TIDAK BISA approve dokumen yang dia buat sendiri.
+     * 2. Yang bisa approve adalah user LAIN yang SATU DIVISI dengan pembuat.
+     * 3. User dari divisi lain TIDAK BISA approve.
+     * 4. Role Admin selalu bisa approve (override).
+     */
+    public function approve($id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::with('creator')->findOrFail($id);
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_WAITING_APPROVAL) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Configuration tidak dalam status Waiting Approval.',
+            ], 422);
+        }
+
+        if (! $this->isSameDivisionApprover($quotation)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak bisa approve configuration ini. Pembuat tidak bisa approve dokumennya sendiri, dan hanya user satu divisi dengan pembuat yang bisa approve.',
+            ], 403);
+        }
+
+        DB::transaction(function () use ($quotation) {
+            $quotation->update([
+                'status' => QuoteConfiguration::STATUS_APPROVED,
+                'final_checked_by' => Auth::id(),
+                'approved_at' => now(),
+                'is_current' => true,
+            ]);
+
+            // Versi approved lain dalam group menjadi riwayat (bukan current) & diarsipkan.
+            if ($quotation->group_id) {
+                QuoteConfiguration::where('group_id', $quotation->group_id)
+                    ->where('id', '!=', $quotation->id)
+                    ->update(['is_current' => false]);
+
+                QuoteConfiguration::where('group_id', $quotation->group_id)
+                    ->where('id', '!=', $quotation->id)
+                    ->where('status', QuoteConfiguration::STATUS_APPROVED)
+                    ->update(['status' => QuoteConfiguration::STATUS_ARCHIVED]);
+            }
+        });
+
+        $this->notifyCreator(
+            $quotation,
+            'quotation_approved',
+            'Quote Configuration Disetujui',
+            "Quote Configuration {$quotation->name} telah disetujui oleh ".Auth::user()->username.'.'
+        );
+
+        Log::record(
+            'approve_gas_configuration',
+            "Quote Configuration {$quotation->name} disetujui oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        if ($quotation->task) {
+            $divisionName = $quotation->division?->division_name ?? 'Gas';
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'approve_gas_configuration',
+                "Quote Configuration {$divisionName}  disetujui oleh ".Auth::user()->username
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Quote configuration disetujui.',
+        ]);
+    }
+
+    public function reject(Request $request, $id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::with('creator')->findOrFail($id);
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_WAITING_APPROVAL) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Configuration tidak dalam status Waiting Approval.',
+            ], 422);
+        }
+
+        if (! $this->isSameDivisionApprover($quotation)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak bisa menolak configuration ini. Hanya user satu divisi dengan pembuat (bukan pembuatnya) yang bisa reject.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'approval_note' => 'required|string|max:1000',
+        ]);
+
+        $quotation->update([
+            'status' => QuoteConfiguration::STATUS_REJECTED,
+            'final_checked_by' => Auth::id(),
+            'approval_note' => $validated['approval_note'],
+            'rejected_at' => now(),
+        ]);
+
+        $this->notifyCreator(
+            $quotation,
+            'quotation_rejected',
+            'Quote Configuration Ditolak',
+            "Quote Configuration  ditolak oleh ".Auth::user()->username.'. Alasan: '.$validated['approval_note']
+        );
+
+        Log::record(
+            'reject_gas_configuration',
+            "Quote Configuration  ditolak oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        if ($quotation->task) {
+            $divisionName = $quotation->division?->division_name ?? 'Gas';
+            TaskWorkflowLogger::forTask(
+                $quotation->task,
+                'reject_gas_configuration',
+                "Quote Configuration {$divisionName}  ditolak oleh ".Auth::user()->username
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Quote configuration ditolak.',
+        ]);
+    }
+
+    /**
+     * Buka kunci konfigurasi yang sudah approved agar bisa direvisi (hanya approver divisi).
+     */
+    public function unlock($id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::with('creator')->findOrFail($id);
+
+        if ($quotation->status !== QuoteConfiguration::STATUS_APPROVED) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya configuration berstatus Approved yang bisa dibuka kunci.',
+            ], 422);
+        }
+
+        if (! $this->isSameDivisionApprover($quotation)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya approver (user lain satu divisi dengan pembuat) yang bisa membuka kunci.',
+            ], 403);
+        }
+
+        // jika Task yang terikat quote status done maka tidak bisa di buka
+        if ($quotation->task && $quotation->task->status === 'done') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task terkait sudah selesai. Tidak bisa membuka kunci configuration.',
+            ], 422);
+        }
+
+        $quotation->update([
+            'unlocked_by' => Auth::id(),
+            'unlocked_at' => now(),
+        ]);
+
+        Log::record(
+            'unlock_gas_configuration',
+            "Quote Configuration  dibuka kunci oleh ".Auth::user()->username,
+            self::MODULE_CODE,
+            $quotation
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kunci dibuka. Pembuat dapat membuat revisi baru.',
+        ]);
+    }
+
+    /**
+     * Buat versi baru (revisi) dari konfigurasi approved (setelah unlock) atau rejected.
+     * Header + detail disalin ke baris baru; versi lama tetap sebagai riwayat.
+     */
+    public function revise($id): JsonResponse
+    {
+        $source = QuoteConfiguration::with('items')->findOrFail($id);
+
+        $canRevise = $source->status === QuoteConfiguration::STATUS_REJECTED
+            || ($source->status === QuoteConfiguration::STATUS_APPROVED && $source->unlocked_at);
+
+        if (! $canRevise) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Configuration ini belum bisa direvisi. Kunci harus dibuka oleh approver terlebih dahulu.',
+            ], 422);
+        }
+
+        if ($source->created_by !== Auth::id() && Auth::user()->role !== 'Admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pembuat configuration yang bisa membuat revisi.',
+            ], 403);
+        }
+
+        $revision = DB::transaction(function () use ($source) {
+            // Sumber yang sudah approved menjadi riwayat (Archived) saat revisi dibuat.
+            if ($source->status === QuoteConfiguration::STATUS_APPROVED) {
+                $source->update([
+                    'status' => QuoteConfiguration::STATUS_ARCHIVED,
+                    'is_current' => false,
+                ]);
+            }
+
+            $revision = QuoteConfiguration::create([
+                'division_id' => Auth::user()->division_id,
+                'group_id' => $source->group_id ?: $source->id,
+                'version' => $source->nextVersion(),
+                'parent_id' => $source->id,
+                'is_current' => false,
+                'opportunity_id' => $source->opportunity_id,
+                'task_id' => $source->task_id,
+                'date' => $source->date,
+                'parameter_note' => $source->parameter_note,
+                'notes' => $source->notes,
+                'status' => QuoteConfiguration::STATUS_DRAFT,
+                'created_by' => Auth::id(),
+            ]);
+
+            // Salin item dengan remap parent_id (induk selalu muncul sebelum
+            // anak karena urutan sort_order / DFS).
+            $itemIdMap = [];
+            foreach ($source->items as $item) {
+                $new = $revision->items()->create([
+                    'item_no' => $item->item_no,
+                    'parent_id' => $item->parent_id ? ($itemIdMap[$item->parent_id] ?? null) : null,
+                    'product_id' => $item->product_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                    'price' => $item->price,
+                    'price_currency' => $item->price_currency,
+                    'currency' => $item->currency,
+                    'unit' => $item->unit,
+                    'sort_order' => $item->sort_order,
+                ]);
+                $itemIdMap[$item->id] = $new->id;
+            }
+
+            return $revision;
+        });
+
+        Log::record(
+            'revise_gas_configuration',
+            "Revisi dibuat dari Configuration #{$source->id} menjadi #{$revision->id}",
+            self::MODULE_CODE,
+            $revision
+        );
+
+        if ($revision->task) {
+            $divisionName = $revision->division?->division_name ?? 'Gas';
+            TaskWorkflowLogger::forTask(
+                $revision->task,
+                'revise_gas_configuration',
+                "Revisi Quote Configuration {$divisionName} #{$revision->id} dibuat dari #{$source->id}"
+            );
+            Log::record(
+                'revise_gas_configuration_task',
+                "Revisi Quote Configuration #{$revision->id} dibuat dari #{$source->id} untuk Task #{$revision->task_id}",
+                self::MODULE_CODE,
+                $revision
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Revisi (versi '.$revision->version.') berhasil dibuat.',
+            'id' => $revision->id,
+        ]);
+    }
+
+    /**
+     * Daftar versi (riwayat) satu group configuration untuk modal Track.
+     */
+    public function versions($id): JsonResponse
+    {
+        $quotation = QuoteConfiguration::where('division_id', $this->gasDivisionId())
+            ->findOrFail($id);
+        $groupId = $quotation->group_id ?: $quotation->id;
+
+        $versions = QuoteConfiguration::with(['creator', 'finalChecker'])
+            ->where('group_id', $groupId)
+            ->orderBy('version', 'desc')
+            ->get()
+            ->map(fn ($v) => [
+                'id' => $v->id,
+                'version' => $v->version,
+                'status' => $v->status,
+                'status_badge' => $v->statusBadgeHtml(),
+                'date' => $v->created_at?->format('d/m/Y H:i') ?? '—',
+                'creator_name' => $v->creator?->username ?? '—',
+                'item_count' => $v->items()->count(),
+                'is_current' => (bool) $v->is_current,
+                'show_url' => route('gas-configuration.show', $v->id),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'versions' => $versions,
+        ]);
+    }
+
+    public function pdf($id)
+    {
+        $quotation = QuoteConfiguration::with([
+            'items',
+            'creator',
+            'finalChecker',
+            'task.opportunity.accountCompany',
+            'task.opportunity.accountContact',
+            'task.opportunity.owner',
+            'task.creator',
+        ])->where('division_id', $this->gasDivisionId())
+            ->findOrFail($id);
+
+        $pdf = Pdf::loadView('gas-configuration.pdf', compact('quotation'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->stream('Quote-Configuration-'.$quotation->id.'.pdf');
+    }
+
+    /**
+     * Aturan inti approval divisi (dipakai di approve() dan show()).
+     */
+    /**
+     * Aturan bisnis approval divisi (cek UAC can_approve ditangani middleware access.control):
+     * Admin selalu boleh; pembuat tidak boleh approve dokumennya sendiri; hanya user
+     * satu divisi dengan pembuat yang boleh approve.
+     */
+    private function isSameDivisionApprover(QuoteConfiguration $quotation): bool
+    {
+        $user = Auth::user();
+
+        if ($user->role === 'Admin') {
+            return true;
+        }
+
+        // Pembuat tidak bisa approve dokumennya sendiri.
+        if ($quotation->created_by === $user->id) {
+            return false;
+        }
+
+        // Approver harus SATU DIVISI dengan pembuat.
+        return $user->division_id === $quotation->creator?->division_id;
+    }
+
+    /**
+     * Kirim notifikasi ke semua user satu divisi dengan pembuat (selain pembuat)
+     * yang memiliki hak approve modul ini.
+     */
+    private function notifyApprovers(QuoteConfiguration $quotation): void
+    {
+        $module = Module::where('module_code', self::MODULE_CODE)->first();
+        if (! $module) {
+            return;
+        }
+
+        $creator = $quotation->creator;
+        if (! $creator || ! $creator->division_id) {
+            return;
+        }
+
+        $uacUserIds = UserAccessControl::where('module_id', $module->id)
+            ->where('can_approve', true)
+            ->pluck('user_id')
+            ->toArray();
+
+        $approvers = User::where('division_id', $creator->division_id)
+            ->where('id', '!=', $creator->id)
+            ->whereIn('id', $uacUserIds)
+            ->get();
+
+        foreach ($approvers as $approver) {
+            $quotation->notify(
+                $approver,
+                'quotation_approval_required',
+                'Quote Configuration Menunggu Approval',
+                "Quote Configuration  dari {$creator->username} menunggu approval Anda.",
+                [
+                    'quote_configuration_id' => $quotation->id,
+                    'task_id' => $quotation->task_id,
+                ]
+            );
+        }
+    }
+
+    private function notifyCreator(QuoteConfiguration $quotation, string $type, string $title, string $body): void
+    {
+        $creator = $quotation->creator;
+        if (! $creator) {
+            return;
+        }
+
+        $quotation->notify($creator, $type, $title, $body, [
+            'quote_configuration_id' => $quotation->id,
+            'task_id' => $quotation->task_id,
+        ]);
+    }
+
+    /**
+     * Validasi product_id semua item dalam SATU query (pengganti rule
+     * `exists:master_products,id` per item yang menghasilkan N query).
+     */
+    private function rejectUnknownProducts(array $items): ?JsonResponse
+    {
+        $ids = collect($items)->pluck('product_id')->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return null;
+        }
+
+        $found = MasterProduct::whereIn('id', $ids)
+            ->where('division_id', $this->gasDivisionId())
+            ->where('status', 'Active')
+            ->pluck('id');
+        $missing = $ids->diff($found)->values();
+
+        if ($missing->isEmpty()) {
+            return null;
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Produk tidak ditemukan di master product divisi Gas: #'.$missing->implode(', #').'.',
+        ], 422);
+    }
+
+    /**
+     * Simpan item hierarki (parent-child) dengan jumlah query tetap (tidak N+1):
+     *   1. hapus item lama
+     *   2. muat master product + currency untuk semua product_id (1 query)
+     *   3. insert semua baris sekaligus tanpa parent_id
+     *   4. ambil id hasil insert (1 query)
+     *   5. pasang parent_id semua anak dalam 1 UPDATE ... CASE
+     *
+     * Harga seluruhnya dari master product:
+     *   currency       = currencies.name milik produk (base bila produk tanpa currency)
+     *   price_currency = master_products.price (sebelum kurs)
+     *   price          = master_products.price x currencies.rate (IDR sesudah kurs; base -> 1)
+     */
+    private function syncItems(QuoteConfiguration $quotation, array $items): void
+    {
+        $quotation->items()->delete();
+
+        $items = array_values($items);
+
+        $products = MasterProduct::with('currency')
+            ->whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
+            ->get(['id', 'price', 'currency_id'])
+            ->keyBy('id');
+
+        $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
+
+        $now = now();
+        $payload = [];
+
+        foreach ($items as $i => $item) {
+            $qty = (int) ($item['qty'] ?? 0);
+            $productId = $item['product_id'] ?? null;
+            $pricing = $this->pricingFromProduct($productId ? $products->get($productId) : null, $qty, $baseCurrency);
+
+            $payload[] = [
+                'quote_configuration_id' => $quotation->id,
+                'item_no' => $item['item_no'] ?? null,
+                'parent_id' => null,
+                'product_id' => $productId,
+                'category' => $item['category'] ?? null,
+                'part_number' => $item['part_number'] ?? null,
+                'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
+                'qty' => $qty,
+                'price' => $pricing['price'],
+                'price_currency' => $pricing['price_currency'],
+                'currency' => $pricing['currency'],
+                'unit' => $item['unit'] ?? null,
+                'sort_order' => $i + 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        QuoteConfigurationItem::insert($payload);
+
+        // Id hasil insert berurutan sama dengan urutan payload.
+        $ids = QuoteConfigurationItem::where('quote_configuration_id', $quotation->id)
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        $indexByKey = [];
+        foreach ($items as $i => $item) {
+            $indexByKey[$item['_key']] = $i;
+        }
+
+        $parentByChildId = [];
+        foreach ($items as $i => $item) {
+            $parentKey = $item['parent_key'] ?? null;
+            if (! $parentKey || ! isset($indexByKey[$parentKey]) || $indexByKey[$parentKey] === $i) {
+                continue;
+            }
+            if (isset($ids[$i], $ids[$indexByKey[$parentKey]])) {
+                $parentByChildId[$ids[$i]] = $ids[$indexByKey[$parentKey]];
+            }
+        }
+
+        $this->assignParents($parentByChildId);
+    }
+
+    /**
+     * Harga item dari master product. Qty <= 0 atau tanpa produk -> harga 0.00
+     *
+     * @return array{currency: ?string, price_currency: float, price: float}
+     */
+    private function pricingFromProduct(?MasterProduct $product, int $qty, string $baseCurrency): array
+    {
+        if (! $product) {
+            return ['currency' => null, 'price_currency' => 0.00, 'price' => 0.00];
+        }
+
+        $currency = $product->currency;
+        $isForeign = $currency && ! $currency->is_base;
+        $rate = $isForeign ? (float) $currency->rate : 1.0;
+        $priceCurrency = $qty > 0 ? round((float) $product->price, 2) : 0.00;
+
+        return [
+            'currency' => $isForeign ? strtoupper($currency->name) : $baseCurrency,
+            'price_currency' => $priceCurrency,
+            'price' => round($priceCurrency * $rate, 2),
+        ];
+    }
+
+    /**
+     * Pasang parent_id banyak baris dalam satu query:
+     * UPDATE ... SET parent_id = CASE id WHEN ? THEN ? ... END WHERE id IN (...).
+     *
+     * @param  array<int,int>  $parentByChildId  [child_id => parent_id]
+     */
+    private function assignParents(array $parentByChildId): void
+    {
+        if (empty($parentByChildId)) {
+            return;
+        }
+
+        $cases = '';
+        $bindings = [];
+        foreach ($parentByChildId as $childId => $parentId) {
+            $cases .= ' WHEN ? THEN ?';
+            $bindings[] = $childId;
+            $bindings[] = $parentId;
+        }
+
+        $childIds = array_keys($parentByChildId);
+        $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+
+        DB::update(
+            "UPDATE quote_configuration_items SET parent_id = CASE id{$cases} END WHERE id IN ({$placeholders})",
+            array_merge($bindings, $childIds)
+        );
+    }
+}

@@ -19,6 +19,9 @@ class DivisionsTableSeeder extends Seeder
             ['division_name' => 'Finance', 'description' => 'Finance Management', 'type' => 'Internal', 'status' => 'Active'],
             ['division_name' => 'ER', 'description' => 'ER Management', 'type' => 'External', 'status' => 'Active'],
             ['division_name' => 'GA', 'description' => 'GA Management', 'type' => 'External', 'status' => 'Active'],
+            ['division_name' => 'Enviro', 'description' => 'Enviro Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'IH', 'description' => 'IH Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'Gas', 'description' => 'Gas Management', 'type' => 'Internal', 'status' => 'Active'],
         ];
 
 
