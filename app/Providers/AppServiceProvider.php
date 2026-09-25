@@ -24,7 +24,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        if (env('FORCE_HTTPS', false)) {
+        // Force https hanya bila request sudah masuk via https (produksi di
+        // belakang TLS). Di dev (http) scheme dibiarkan sesuai request, agar
+        // seluruh route()/url() — termasuk ajax DataTables & $.get — tidak
+        // menghasilkan URL https yang gagal pada server lokal tanpa TLS.
+        if (env('FORCE_HTTPS', false) && request()->secure()) {
             URL::forceScheme('https');
         }
 

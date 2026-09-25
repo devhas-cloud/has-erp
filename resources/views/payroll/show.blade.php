@@ -35,7 +35,11 @@
 @if(in_array($period->status, [PayrollPeriod::STATUS_OPEN, PayrollPeriod::STATUS_PROCESSING]))
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>Step 1: Compile Data (cutoff 25–24)</span>
+        <span><i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>Step 1: Compile Data (cutoff 25–24)
+            @if($period->status === PayrollPeriod::STATUS_PROCESSING)
+            <span class="badge bg-warning-subtle text-dark ms-1" style="font-size:11px">draft sudah dibuat — generate ulang utk menambah/perbarui karyawan</span>
+            @endif
+        </span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive" style="max-height:44vh;overflow:auto">
@@ -79,7 +83,9 @@
         </div>
     </div>
 </div>
-@else
+@endif
+
+@if($period->status !== PayrollPeriod::STATUS_OPEN)
 <div class="row g-3">
     <div class="col-lg-8">
         <div class="card-custom">

@@ -83,7 +83,7 @@ class PayrollController extends Controller
                 ->where('payroll_period_id', $period->id)
                 ->orderBy('id')
                 ->get(),
-            'compilePreview' => $period->status === PayrollPeriod::STATUS_OPEN
+            'compilePreview' => in_array($period->status, [PayrollPeriod::STATUS_OPEN, PayrollPeriod::STATUS_PROCESSING])
                 ? PayrollService::compilePreview($period)
                 : collect(),
             'logs' => $period->logs()->with('actor')->latest()->get(),

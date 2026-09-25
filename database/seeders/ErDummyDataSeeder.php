@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmployeeFamily;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestLog;
 use App\Models\LeaveType;
 use App\Models\Loan;
 use App\Models\LoanInstallment;
@@ -316,6 +317,9 @@ class ErDummyDataSeeder extends Seeder
 
             $this->applyApprovalToAttendance($leave);
 
+            $this->createTimeline($leave, LeaveRequestLog::ACTION_SUBMIT, 'Pengajuan diajukan (dummy)');
+            $this->createTimeline($leave, LeaveRequestLog::ACTION_APPROVE, 'Dummy data — approved');
+
             // potong saldo tahunan utk jenis cuti berkuota (sama spt alur approve runtime)
             if ($type->quota_days) {
                 LeaveBalance::firstOrCreate(
@@ -340,7 +344,7 @@ class ErDummyDataSeeder extends Seeder
             $start = now()->addDays($offset);
             $end = $start->copy()->addDays($days - 1);
 
-            LeaveRequest::create([
+            $leave = LeaveRequest::create([
                 'request_no' => 'LR-'.now()->format('Y-m').'-'.str_pad((string) ($requestNo++), 4, '0', STR_PAD_LEFT),
                 'employee_id' => $employeeId,
                 'leave_type_id' => $type->id,
@@ -353,9 +357,25 @@ class ErDummyDataSeeder extends Seeder
                 'decision_note' => $note,
             ]);
 
-            $requestNo++;
+            $this->createTimeline($leave, LeaveRequestLog::ACTION_SUBMIT, 'Pengajuan diajukan (dummy)');
+
+            if ($status === LeaveRequest::STATUS_REJECTED) {
+                $this->createTimeline($leave, LeaveRequestLog::ACTION_REJECT, $note);
+            } elseif ($status === LeaveRequest::STATUS_REVISE) {
+                $this->createTimeline($leave, LeaveRequestLog::ACTION_REVISE, $note);
+            }
         }
 
+    }
+
+    private function createTimeline(LeaveRequest $leave, string $action, ?string $note = null): void
+    {
+        \App\Models\LeaveRequestLog::create([
+            'leave_request_id' => $leave->id,
+            'action' => $action,
+            'note' => $note,
+            'actor_id' => 1,
+        ]);
     }
 
     private function createLeaveBalances(array $employees): void

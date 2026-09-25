@@ -145,10 +145,12 @@ const id = {{ $leaveRequest->id }};
 const routeMap = {
     approve: actionUrlTemplate.replace(':id', id),
     reject: rejectActionUrlTemplate.replace(':id', id),
-    revise: reviseActionUrlTemplate.replace(':id', id)
+    revise: reviseActionUrlTemplate.replace(':id', id),
+    cancel: cancelUrl
 };
 
 function decideLeave(action, needsNote) {
+    currentAction = action;
     var title = {'approve': 'Approve Pengajuan?', 'reject': 'Reject Pengajuan?', 'revise': 'Minta Revisi Pengajuan?'}[action];
 
     Swal.fire({
@@ -169,6 +171,21 @@ function decideLeave(action, needsNote) {
         $.post(routeMap[action], { _token: '{{ csrf_token() }}' })
         .done(res => { toastr.success(res.message); setTimeout(() => location.reload(), 500); })
         .fail(err => toastr.error(err.responseJSON?.message || 'Gagal memproses.'));
+    });
+}
+
+function cancelLeave() {
+    Swal.fire({
+        title: 'Batalkan pengajuan?',
+        text: 'Pengajuan cuti/izin ini akan dibatalkan.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Batalkan'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        $.post(cancelUrl, { _token: '{{ csrf_token() }}' })
+        .done(res => { toastr.success(res.message); setTimeout(() => location.reload(), 500); })
+        .fail(err => toastr.error(err.responseJSON?.message || 'Gagal membatalkan.'));
     });
 }
 

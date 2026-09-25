@@ -267,7 +267,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::delete('payroll/{payroll}/components/{componentId}', [PayrollController::class, 'destroyComponent'])->name('payroll.components.destroy');
     Route::get('payroll/{payroll}/payslip/{payslipId}/pdf', [PayrollController::class, 'payslipPdf'])->name('payroll.payslip.pdf');
     Route::get('payroll/{payroll}/excel', [PayrollController::class, 'excel'])->name('payroll.excel');
-    Route::resource('payroll', PayrollController::class)->except(['create', 'edit', 'update', 'destroy']);
+    Route::resource('payroll', PayrollController::class)->except(['create', 'update', 'destroy']);
 
     // Employee salary components (Tab Komponen Gaji)
     Route::get('employee-management/{employee}/salary-components', [EmployeeManagementController::class, 'salaryComponents'])->name('employee-management.salary-components');

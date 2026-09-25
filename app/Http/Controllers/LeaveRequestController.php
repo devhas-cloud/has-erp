@@ -156,7 +156,7 @@ class LeaveRequestController extends Controller
         }
 
         $leave = DB::transaction(function () use ($validated, $days, $attachmentPath) {
-            return LeaveRequest::create([
+            $leave = LeaveRequest::create([
                 'request_no' => $this->nextRequestNo(),
                 'employee_id' => $validated['employee_id'],
                 'leave_type_id' => $validated['leave_type_id'],
@@ -168,6 +168,16 @@ class LeaveRequestController extends Controller
                 'status' => LeaveRequest::STATUS_SUBMITTED,
                 'submitted_by' => auth()->id(),
             ]);
+
+            // timeline approval: langkah submit langsung tercatat
+            LeaveRequestLog::create([
+                'leave_request_id' => $leave->id,
+                'action' => LeaveRequestLog::ACTION_SUBMIT,
+                'note' => 'Pengajuan diajukan',
+                'actor_id' => auth()->id(),
+            ]);
+
+            return $leave;
         });
 
         Log::record(
