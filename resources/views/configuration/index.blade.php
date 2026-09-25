@@ -827,7 +827,15 @@
                         var sel = document.getElementById(fieldId);
                         if (!sel) return;
                         var nameCol = res.columns[0];
-                        res.data.forEach(function(item) {
+                        var items = res.data;
+                        if (ef.filter) {
+                            items = items.filter(function(item) {
+                                return Object.keys(ef.filter).every(function(k) {
+                                    return item[k] === ef.filter[k];
+                                });
+                            });
+                        }
+                        items.forEach(function(item) {
                             var opt = document.createElement('option');
                             opt.value = item.id;
                             opt.textContent = item[nameCol];
