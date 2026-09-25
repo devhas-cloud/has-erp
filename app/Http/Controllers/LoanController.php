@@ -14,9 +14,7 @@ class LoanController extends Controller
 {
     public function index()
     {
-        return view('loan.index', [
-            'divisor' => null,
-        ]);
+        return view('loan.index');
     }
 
     public function data(Request $request): JsonResponse
@@ -67,6 +65,9 @@ class LoanController extends Controller
                 'amount' => number_format((float) $loan->amount, 2),
                 'tenor' => $loan->tenor_months,
                 'installment_amount' => number_format((float) $loan->installment_amount, 2),
+                'fee_amount' => number_format((float) $loan->fee_amount, 2),
+                'disburse_date' => $loan->disburse_date?->toDateString(),
+                'purpose' => $loan->purpose,
                 'progress' => $installments->count() ? "{$paidCount}/{$installments->count()}" : null,
                 'status' => $loan->status,
             ];
@@ -98,7 +99,7 @@ class LoanController extends Controller
             'employee_id' => 'required|integer|exists:employees,id',
             'amount' => 'required|numeric|min:1',
             'tenor_months' => 'required|integer|min:1|max:36',
-            'installment_amount' => 'nullable|numeric|min:1',
+            'installment_amount' => 'nullable|numeric|min:1|max:'.($request->input('amount', 0) ?: 0),
             'fee_amount' => 'nullable|numeric|min:0',
             'disburse_date' => 'nullable|date',
             'purpose' => 'nullable|string|max:500',
@@ -106,7 +107,7 @@ class LoanController extends Controller
 
         $hasActiveInstallment = LoanInstallment::whereHas('loan', fn ($q) => $q
             ->where('employee_id', $validated['employee_id'])
-            ->whereIn('status', [Loan::STATUS_ACTIVE, Loan::STATUS_APPROVED]))
+            ->where('status', Loan::STATUS_ACTIVE))
             ->where('status', LoanInstallment::STATUS_UNPAID)
             ->exists();
 
@@ -193,13 +194,17 @@ class LoanController extends Controller
         }
 
         DB::transaction(function () use ($loan, $request) {
-            $base = $loan->disburse_date?->copy()->addMonthNoOverflow() ?? now()->startOfMonth()->addMonthNoOverflow();
-            if ($base->isPast()) {
-                $base = now()->startOfMonth()->addMonthNoOverflow();
-            }
+            // lock row utk cegah approve ganda/klik dua kali → jadwal angsuran duplikat
+            Loan::whereKey($loan->id)->lockForUpdate()->firstOrFail();
+
             $disburseBase = $loan->disburse_date
                 ? $loan->disburse_date->copy()->addMonthNoOverflow()
-                : $base;
+                : now()->startOfMonth()->addMonthNoOverflow();
+
+            // jangan biarkan jatuh tempo di masa lalu (disburse sudah lewat)
+            if ($disburseBase->isPast()) {
+                $disburseBase = now()->startOfMonth()->addMonthNoOverflow();
+            }
 
             foreach (range(1, $loan->tenor_months) as $no) {
                 LoanInstallment::create([

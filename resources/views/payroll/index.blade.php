@@ -103,7 +103,9 @@ function initPayrollTable() {
         serverSide: true,
         ajax: {
             url: '{{ route("payroll.data") }}',
-            data: d => ({ status: $('#filter-status').val() })
+            data: function(d) {
+                d.status = $('#filter-status').val();
+            }
         },
         order: [],
         columns: [

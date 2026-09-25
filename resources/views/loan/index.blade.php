@@ -64,11 +64,12 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">Pengajuan Pinjaman</h6>
+                <h6 class="modal-title" id="loanModalTitle">Pengajuan Pinjaman</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="loan-form" autocomplete="off">
+                    <input type="hidden" id="loan-edit-id" value="">
                     <div class="mb-3">
                         <label class="form-label">Karyawan <span style="color:var(--danger)">*</span></label>
                         <select id="lo-employee" class="form-select" required></select>
@@ -127,6 +128,8 @@
 let loanTable = null;
 let createModalInstance = null;
 
+const loanUpdateUrl = '{{ route("loan.update", ":id") }}';
+
 const statusBadges = {
     pending: '<span class="status-badge" style="background:rgba(245,158,11,.15);color:#b45309;">Pending</span>',
     approved: '<span class="status-badge" style="background:rgba(59,130,246,.12);color:#1d4ed8;">Approved</span>',
@@ -147,7 +150,9 @@ function initLoanTable() {
         serverSide: true,
         ajax: {
             url: '{{ route("loan.data") }}',
-            data: d => ({ status: $('#filter-status').val() })
+            data: function(d) {
+                d.status = $('#filter-status').val();
+            }
         },
         order: [],
         columns: [
@@ -165,15 +170,54 @@ function initLoanTable() {
             { data: 'status', orderable: false, searchable: false,
                 render: d => statusBadges[d] || d },
             { data: 'id', orderable: false, searchable: false, className: 'text-center',
-                render: d => '<a class="btn-icon" title="Detail" href="{{ url("loan") }}/' + d + '"><i class="fa-solid fa-eye"></i></a>' }
+                render: function(data, t, row) {
+                    var btn = '<div class="d-flex justify-content-center gap-1">';
+                    btn += '<a class="btn-icon" title="Detail" href="{{ url("loan") }}/' + data + '"><i class="fa-solid fa-eye"></i></a>';
+                    @if($canUpdate)
+                    if (row.status === 'pending') {
+                        btn += '<button class="btn-icon" title="Edit" onclick="openEditModal(' + data + ')"><i class="fa-solid fa-pen"></i></button>';
+                    }
+                    @endif
+                    btn += '</div>';
+                    return btn;
+                }
+            }
         ]
     });
 }
 
 function openCreateModal() {
     document.getElementById('loan-form').reset();
-    $('#lo-employee').val(null).trigger('change');
+    $('#loan-edit-id').val('');
+    $('#lo-employee').val(null).trigger('change').prop('disabled', false);
     $('#lo-fee').val(0);
+    $('#loanModalTitle').text('Pengajuan Pinjaman');
+
+    if (!createModalInstance) {
+        createModalInstance = new bootstrap.Modal(document.getElementById('createModal'));
+    }
+    createModalInstance.show();
+}
+
+function openEditModal(id) {
+    var row = loanTable.rows().data().toArray().find(r => r.id === id);
+    if (!row) { toastr.error('Data pinjaman tidak ditemukan.'); return; }
+
+    document.getElementById('loan-form').reset();
+    $('#loan-edit-id').val(row.id);
+    $('#loanModalTitle').text('Edit Pinjaman — ' + row.loan_no);
+
+    // isi karyawan (inject option agar select2 menampilkan)
+    $('#lo-employee').val(null).trigger('change');
+    $('#lo-employee').append(new Option(row.employee_no + ' — ' + row.employee, row.employee_id, true, true)).trigger('change');
+    $('#lo-employee').prop('disabled', true);
+
+    $('#lo-amount').val(row.amount ? parseFloat(row.amount.replace(/,/g, '')) : '');
+    $('#lo-tenor').val(row.tenor);
+    $('#lo-installment').val(row.installment_amount ? parseFloat(row.installment_amount.replace(/,/g, '')) : '');
+    $('#lo-fee').val(row.fee_amount ? parseFloat(row.fee_amount.replace(/,/g, '')) : 0);
+    $('#lo-disburse').val(row.disburse_date || '');
+    $('#lo-purpose').val(row.purpose || '');
 
     if (!createModalInstance) {
         createModalInstance = new bootstrap.Modal(document.getElementById('createModal'));
@@ -182,13 +226,13 @@ function openCreateModal() {
 }
 
 $('#btn-save-loan').on('click', function() {
-    var emp = ($('#lo-employee').val() || [null])[0];
+    var editId = $('#loan-edit-id').val();
+    var emp = $('#lo-employee').val();
     if (!emp) { toastr.error('Karyawan wajib dipilih.'); return; }
     if (!$('#lo-amount').val() || $('#lo-amount').val() <= 0) { toastr.error('Nominal pinjaman tidak valid.'); return; }
     if (!$('#lo-tenor').val()) { toastr.error('Tenor wajib diisi.'); return; }
 
     var payload = {
-        employee_id: emp,
         amount: $('#lo-amount').val(),
         tenor_months: $('#lo-tenor').val(),
         installment_amount: $('#lo-installment').val() || null,
@@ -196,11 +240,14 @@ $('#btn-save-loan').on('click', function() {
         disburse_date: $('#lo-disburse').val() || null,
         purpose: $('#lo-purpose').val().trim() || null
     };
+    if (!editId) {
+        payload.employee_id = emp;
+    }
 
     $('#btn-save-loan').prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Menyimpan...');
     $.ajax({
-        url: '{{ route("loan.store") }}',
-        method: 'POST',
+        url: editId ? loanUpdateUrl.replace(':id', editId) : '{{ route("loan.store") }}',
+        method: editId ? 'PUT' : 'POST',
         data: payload,
         dataType: 'json',
         headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
@@ -240,6 +287,11 @@ document.addEventListener('DOMContentLoaded', function() {
         var amount = parseFloat($('#lo-amount').val()) || 0;
         var tenor = parseInt($('#lo-tenor').val()) || 1;
         $('#lo-installment').attr('placeholder', 'amount ÷ tenor = ' + (amount / tenor).toLocaleString('id-ID', { maximumFractionDigits: 0 }));
+    });
+
+    // reset mode edit saat modal ditutup
+    $('#createModal').on('hidden.bs.modal', function() {
+        $('#lo-employee').prop('disabled', false);
     });
 });
 </script>

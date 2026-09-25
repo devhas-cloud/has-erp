@@ -167,10 +167,10 @@ function initOvertimeTable() {
         serverSide: true,
         ajax: {
             url: '{{ route("overtime-request.data") }}',
-            data: d => ({
-                month: $('#filter-month').val(),
-                status: $('#filter-status').val()
-            })
+            data: function(d) {
+                d.month = $('#filter-month').val();
+                d.status = $('#filter-status').val();
+            }
         },
         order: [],
         columns: [
@@ -218,7 +218,7 @@ function recalcEstimate() {
 }
 
 function loadAttendance() {
-    var emp = ($('#ot-employee').val() || [null])[0];
+    var emp = $('#ot-employee').val();
     var date = $('#ot-date').val();
 
     if (!emp || !date) return;
@@ -264,7 +264,7 @@ function openCreateModal() {
 }
 
 $('#btn-save-ot').on('click', function() {
-    var emp = ($('#ot-employee').val() || [null])[0];
+    var emp = $('#ot-employee').val();
     if (!emp) { toastr.error('Karyawan wajib dipilih.'); return; }
 
     var payload = {

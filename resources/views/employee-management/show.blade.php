@@ -546,7 +546,7 @@ document.addEventListener('DOMContentLoaded', function() {
             email: $('#employee-email').val().trim(),
             division_id: $('#employee-division-id').val() || null,
             job_title_id: $('#employee-job-title-id').val() || null,
-            manager_id: ($('#employee-manager-id').val() || [null])[0] || null,
+            manager_id: $('#employee-manager-id').val() || null,
             join_date: $('#employee-join-date').val() || null,
             nik: $('#employee-nik').val().trim(),
             npwp_no: $('#employee-npwp-no').val().trim(),

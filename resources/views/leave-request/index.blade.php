@@ -158,10 +158,10 @@ function initLeaveTable() {
         serverSide: true,
         ajax: {
             url: '{{ route("leave-request.data") }}',
-            data: d => ({
-                month: $('#filter-month').val(),
-                status: $('#filter-status').val()
-            })
+            data: function(d) {
+                d.month = $('#filter-month').val();
+                d.status = $('#filter-status').val();
+            }
         },
         order: [],
         columns: [
@@ -193,7 +193,7 @@ function workingDaysBetween(start, end) {
 }
 
 function loadSaldo() {
-    var emp = ($('#lr-employee').val() || [null])[0];
+    var emp = $('#lr-employee').val();
     if (!emp) return;
 
     $.get('{{ route("leave-request.balances") }}', { employee_id: emp }, function(res) {
@@ -219,7 +219,7 @@ function openCreateModal() {
 }
 
 $('#btn-save-lr').on('click', function() {
-    var emp = ($('#lr-employee').val() || [null])[0];
+    var emp = $('#lr-employee').val();
     if (!emp) { toastr.error('Karyawan wajib dipilih.'); return; }
     var reason = $('#lr-reason').val().trim();
     if (!reason) { toastr.error('Alasan wajib diisi.'); return; }

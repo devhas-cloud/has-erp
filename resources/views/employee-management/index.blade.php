@@ -405,7 +405,7 @@ function collectPayload() {
         email: $('#employee-email').val().trim(),
         division_id: $('#employee-division-id').val() || null,
         job_title_id: $('#employee-job-title-id').val() || null,
-        manager_id: ($('#employee-manager-id').val() || [null])[0] || null,
+        manager_id: $('#employee-manager-id').val() || null,
         join_date: $('#employee-join-date').val() || null,
         nik: $('#employee-nik').val().trim(),
         npwp_no: $('#employee-npwp-no').val().trim(),
@@ -421,7 +421,7 @@ function collectPayload() {
 
 function saveEmployee() {
     var selfId = $('#employee-edit-id').val();
-    var mgr = ($('#employee-manager-id').val() || [null])[0];
+    var mgr = $('#employee-manager-id').val();
     if (selfId && mgr && String(mgr) === String(selfId)) {
         toastr.error('Karyawan tidak bisa menjadi atasan dirinya sendiri.');
         return;

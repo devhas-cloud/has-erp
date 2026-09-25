@@ -308,11 +308,11 @@ function initAttendanceTable() {
         serverSide: true,
         ajax: {
             url: '{{ route("attendance.data") }}',
-            data: d => ({
-                month: $('#filter-month').val(),
-                status: $('#filter-status').val(),
-                method: $('#filter-method').val()
-            })
+            data: function(d) {
+                d.month = $('#filter-month').val();
+                d.status = $('#filter-status').val();
+                d.method = $('#filter-method').val();
+            }
         },
         order: [],
         columns: [
@@ -348,7 +348,9 @@ document.addEventListener('DOMContentLoaded', function() {
         serverSide: true,
         ajax: {
             url: '{{ route("attendance.corrections.data") }}',
-            data: d => ({ status: $('#correction-status').val() })
+            data: function(d) {
+                d.status = $('#correction-status').val();
+            }
         },
         order: [],
         columns: [
@@ -407,7 +409,7 @@ function openCorrectionModal() {
 }
 
 $('#btn-save-corr').on('click', function() {
-    var emp = ($('#corr-employee').val() || [null])[0];
+    var emp = $('#corr-employee').val();
     if (!emp) { toastr.error('Karyawan wajib dipilih.'); return; }
 
     var payload = {
@@ -496,7 +498,6 @@ $('#btn-confirm-corr-reject').on('click', function() {
             processResults: d => d
         }
     });
-});
 
 function openManualModal() {
     document.getElementById('manual-form').reset();
@@ -511,7 +512,7 @@ function openManualModal() {
 }
 
 $('#btn-save-manual').on('click', function() {
-    var emp = ($('#manual-employee').val() || [null])[0];
+    var emp = $('#manual-employee').val();
     if (!emp) { toastr.error('Karyawan wajib dipilih.'); return; }
 
     var payload = {
