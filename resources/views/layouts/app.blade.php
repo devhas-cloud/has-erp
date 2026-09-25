@@ -2582,8 +2582,8 @@
             });
         });
     </script>
-    @yield('scripts')
     @stack('modals')
+    @yield('scripts')
 
 </body>
 

@@ -46,8 +46,16 @@ class CheckAccessControl
         }
 
         $method = $request->method();
+        // Verb approval-tier — cek SEGMEN TERAKHIR nama route (setelah titik terakhir),
+        // sehingga route bertingkat seperti 'attendance.corrections.approve',
+        // 'loan.installments.pay', atau 'leave-request.cancel' tetap dikenali.
+        $lastDot = strrpos($action, '.');
+        $lastSegment = $lastDot !== false ? substr($action, $lastDot + 1) : $action;
+
+        $approveVerb = in_array($lastSegment, ['approve', 'reject', 'unlock', 'settle', 'pay', 'revise', 'finalize'], true);
+
         $permissionField = match (true) {
-            $action === 'approve', $action === 'reject', $action === 'unlock' => 'can_approve',
+            $approveVerb => 'can_approve',
             $action === 'upload-po' => 'can_update',
             $method === 'POST' => 'can_create',
             $method === 'PUT', $method === 'PATCH' => 'can_update',

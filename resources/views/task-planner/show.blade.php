@@ -1017,7 +1017,16 @@
                             @if(strtolower(auth()->user()->division->division_name ?? '') === 'ims')
                             <li><a class="dropdown-item" href="{{ route('ims-configuration.create', ['task_id' => $task->id]) }}">IMS Config</a></li>
                             @endif
-                            @if ($hasApprovedConfig)
+                            @if(strtolower(auth()->user()->division->division_name ?? '') === 'enviro')
+                            <li><a class="dropdown-item" href="{{ route('enviro-configuration.create', ['task_id' => $task->id]) }}">Enviro Config</a></li>
+                            @endif
+                            @if(strtolower(auth()->user()->division->division_name ?? '') === 'ih')
+                            <li><a class="dropdown-item" href="{{ route('ih-configuration.create', ['task_id' => $task->id]) }}">IH Config</a></li>
+                            @endif
+                            @if(strtolower(auth()->user()->division->division_name ?? '') === 'gas')
+                            <li><a class="dropdown-item" href="{{ route('gas-configuration.create', ['task_id' => $task->id]) }}">Gas Config</a></li>
+                            @endif
+                            @if ($hasApprovedConfig && strtolower(auth()->user()->division->division_name ?? '') === 'admin')
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="{{ route('quotation.create') }}">
