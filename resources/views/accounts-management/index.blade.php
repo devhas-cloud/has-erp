@@ -129,12 +129,22 @@
         <h1 class="page-header-title">Account Management</h1>
         <p class="page-header-sub">Kelola data akun perusahaan</p>
     </div>
-    @if($canCreate)
+    @if($canRead)
     <div class="page-header-actions">
+        <a href="{{ route('accounts-management.export') }}" class="btn btn-outline-secondary btn-sm me-2">
+            <i class="fa fa-download"></i>
+            <span>Export</span>
+        </a>
+        @if($canCreate)
+        <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="openImportModal()">
+            <i class="fa fa-upload"></i>
+            <span>Import</span>
+        </button>
         <button type="button" class="btn-accent" onclick="openCreateModal()">
             <i class="fa fa-plus"></i>
             <span>Add Account</span>
         </button>
+        @endif
     </div>
     @endif
 </div>
@@ -162,6 +172,43 @@
 @endsection
 
 @push('modals')
+<div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Import Accounts</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="fa fa-file-excel" style="font-size:40px;color:#217346"></i>
+                    <p class="mt-2 mb-0" style="font-size:13px;color:var(--text-muted)">
+                        Download template, isi data, lalu upload file CSV.
+                    </p>
+                    <a href="{{ route('accounts-management.template') }}" class="btn btn-sm btn-outline-success mt-2">
+                        <i class="fa fa-download me-1"></i> Download Template (.xlsx)
+                    </a>
+                </div>
+                <hr>
+                <form id="import-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:12px;font-weight:600">Pilih File CSV</label>
+                        <input type="file" name="file" id="import-file" class="form-control" accept=".csv,.txt" required>
+                        <small class="text-muted">Maksimal 5MB. Format: CSV (Save As dari Excel).</small>
+                    </div>
+                    <div id="import-result" style="display:none;font-size:13px;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-import">
+                    <i class="fa fa-upload me-1"></i> Upload & Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade modal-account" id="accountModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -958,6 +1005,64 @@ $(document).on('click', '.btn-delete-account', function() {
                     toastr.error('Failed to delete data.');
                 }
             });
+        }
+    });
+});
+
+let importModalInstance = null;
+
+function openImportModal() {
+    document.getElementById('import-form').reset();
+    document.getElementById('import-result').style.display = 'none';
+    document.getElementById('import-result').innerHTML = '';
+    if (!importModalInstance) {
+        importModalInstance = new bootstrap.Modal(document.getElementById('importModal'));
+    }
+    importModalInstance.show();
+}
+
+$(document).on('click', '#btn-import', function() {
+    const $btn = $(this);
+    const fileInput = document.getElementById('import-file');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        toastr.error('Pilih file CSV terlebih dahulu.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('_token', '{{ csrf_token() }}');
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Importing...');
+
+    $.ajax({
+        url: '{{ route("accounts-management.import") }}',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
+
+            const resultDiv = document.getElementById('import-result');
+            resultDiv.style.display = 'block';
+
+            let html = '<div class="alert alert-success py-2 mb-2">' + res.message + '</div>';
+            if (res.result && res.result.errors && res.result.errors.length > 0) {
+                html += '<div class="alert alert-warning py-2"><strong>Detail error:</strong><br>' +
+                    res.result.errors.map(function(e) { return '&bull; ' + e; }).join('<br>') +
+                    '</div>';
+            }
+            resultDiv.innerHTML = html;
+
+            if (accountsTable) accountsTable.ajax.reload(null, false);
+        },
+        error: function(xhr) {
+            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
+            var msg = xhr.responseJSON?.message || 'Gagal import file.';
+            toastr.error(msg);
         }
     });
 });

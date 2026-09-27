@@ -82,6 +82,11 @@ class AccountCompany extends Model
         return $this->belongsTo(AccountCompany::class, 'parent_account_id');
     }
 
+    public function endUserAccount(): BelongsTo
+    {
+        return $this->belongsTo(AccountCompany::class, 'end_user');
+    }
+
     public function childAccounts(): HasMany
     {
         return $this->hasMany(AccountCompany::class, 'parent_account_id');

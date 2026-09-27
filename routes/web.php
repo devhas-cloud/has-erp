@@ -80,6 +80,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::resource('contact-management', ContactManagementController::class);
 
     Route::get('accounts-management/data', [AccountManagementController::class, 'data'])->name('accounts-management.data');
+    Route::get('accounts-management/template', [AccountManagementController::class, 'downloadTemplate'])->name('accounts-management.template');
+    Route::post('accounts-management/import', [AccountManagementController::class, 'import'])->name('accounts-management.import');
+    Route::get('accounts-management/export', [AccountManagementController::class, 'export'])->name('accounts-management.export');
     Route::resource('accounts-management', AccountManagementController::class);
 
     Route::get('task-planner/data', [TaskPlannerController::class, 'data'])->name('task-planner.data');

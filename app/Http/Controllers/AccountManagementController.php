@@ -9,9 +9,13 @@ use App\Models\InteractionLevel;
 use App\Models\Segmentation;
 use App\Models\Source;
 use App\Models\TypesAccountsCompany;
+use App\Services\AccountExportService;
+use App\Services\AccountImportService;
+use App\Services\AccountXlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class AccountManagementController extends Controller
 {
@@ -244,5 +248,91 @@ class AccountManagementController extends Controller
             'success' => true,
             'message' => 'Account berhasil dihapus.',
         ]);
+    }
+
+    public function downloadTemplate()
+    {
+        $path = storage_path('app/private/templates/account_import_template.xlsx');
+
+        $dir = dirname($path);
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $references = AccountImportService::getReferenceData();
+
+        $generator = new AccountXlsxTemplateGenerator;
+        $generator->generate($references, $path);
+
+        return response()->download($path, 'Account_Import_Template.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:5120',
+        ]);
+
+        $file = $request->file('file');
+        $ext = $file->getClientOriginalExtension();
+        $filePath = $file->storeAs('imports', 'account-import-'.uniqid().'.'.$ext);
+
+        $fullPath = Storage::path($filePath);
+
+        try {
+            $service = new AccountImportService;
+            $result = $service->import($fullPath, Auth::id());
+
+            return response()->json([
+                'success' => $result['failed'] === 0,
+                'message' => "Import selesai: {$result['success']} berhasil, {$result['failed']} gagal dari ".($result['success'] + $result['failed']).' data.',
+                'result' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal import: '.$e->getMessage(),
+            ], 500);
+        } finally {
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
+        }
+    }
+
+    public function export()
+    {
+        $accounts = AccountCompany::with([
+            'typesAccountsCompany',
+            'source',
+            'segmentation',
+            'businessEntity',
+            'businessValue',
+            'interactionLevel',
+            'parentAccount',
+            'endUserAccount',
+            'accountOwner',
+        ])->where('status', 'Active')
+            ->orderBy('account_name')
+            ->get();
+
+        $headers = [
+            'Account Name', 'Field Type', 'Account Source', 'Segmentation', 'Business Entity',
+            'Business Value', 'Interaction Level', 'Website', 'Phone', 'Description',
+            'Parent Account', 'End User',
+            'Billing Street', 'Billing City', 'Billing Province',
+            'Billing Postal Code', 'Billing Country',
+            'Shipping Street', 'Shipping City', 'Shipping Province',
+            'Shipping Postal Code', 'Shipping Country',
+            'Account Owner', 'Status', 'Created At',
+        ];
+
+        $service = new AccountExportService;
+        $filePath = $service->export($accounts, $headers);
+
+        return response()->download($filePath, 'accounts-export-'.date('Y-m-d').'.xlsx')
+            ->deleteFileAfterSend(true);
     }
 }
