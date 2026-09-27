@@ -2192,10 +2192,10 @@
         <div class="sidebar-footer">
             <div class="sidebar-footer-info">
                 <div class="sidebar-avatar">
-                    {{ strtoupper(substr(Auth::user()->username, 0, 2)) }}
+                    {{ strtoupper(substr(Auth::user()->display_name, 0, 2)) }}
                 </div>
                 <div class="sidebar-footer-text">
-                    <div class="sidebar-footer-name">{{ Auth::user()->username }}</div>
+                    <div class="sidebar-footer-name">{{ Auth::user()->display_name }}</div>
                     <div class="sidebar-footer-role">{{ Auth::user()->role }}</div>
                 </div>
             </div>
@@ -2246,10 +2246,10 @@
             <div class="topbar-divider"></div>
             <div class="topbar-user">
                 <div class="topbar-user-avatar">
-                    {{ strtoupper(substr(Auth::user()->username, 0, 2)) }}
+                    {{ strtoupper(substr(Auth::user()->display_name, 0, 2)) }}
                 </div>
                 <div class="topbar-user-info">
-                    <div class="topbar-user-name">{{ Auth::user()->username }}</div>
+                    <div class="topbar-user-name">{{ Auth::user()->display_name }}</div>
                     <div class="topbar-user-role">{{ Auth::user()->role }}</div>
                 </div>
             </div>

@@ -402,7 +402,7 @@
     <div>
         <div style="font-weight:600;font-size:13px;color:#166534">Dokumen PO</div>
         <div style="font-size:12px;color:var(--text-muted)">
-            {{ $quotation->po_document_name }} — diupload oleh {{ $quotation->poUploader?->username ?? '—' }}
+            {{ $quotation->po_document_name }} — diupload oleh {{ $quotation->poUploader?->display_name ?? '—' }}
             pada {{ $quotation->po_uploaded_at?->format('d/m/Y H:i') }}
         </div>
     </div>
@@ -565,7 +565,7 @@
             <div class="info-item">
                 <div class="info-label">Dibuat Oleh</div>
                 <div class="info-value">
-                    {{ $quotation->creator?->username ?? '—' }}
+                    {{ $quotation->creator?->display_name ?? '—' }}
                 </div>
             </div>
 
@@ -581,7 +581,7 @@
             <div class="info-item">
                 <div class="info-label">Final Checked By</div>
                 <div class="info-value">
-                    {{ $quotation->finalChecker?->username ?? '—' }}
+                    {{ $quotation->finalChecker?->display_name ?? '—' }}
                 </div>
             </div>
 

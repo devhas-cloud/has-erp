@@ -38,7 +38,7 @@ class ProfitEstimateController extends Controller
                 $q->where('project_name', 'like', "%{$searchValue}%")
                     ->orWhereHas('quotation', fn ($x) => $x->where('quotation_number', 'like', "%{$searchValue}%")
                         ->orWhere('to_name', 'like', "%{$searchValue}%"))
-                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%"));
+                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%")->orWhere('full_name', 'like', "%{$searchValue}%"));
             });
         }
 
@@ -79,7 +79,7 @@ class ProfitEstimateController extends Controller
                 'status_badge' => $pl->is_outdated
                     ? '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Outdated</span>'
                     : '<span class="status-badge status-active">Up to date</span>',
-                'creator_name' => $pl->creator?->username ?? '—',
+                'creator_name' => $pl->creator?->display_name ?? '—',
             ];
         }
 
@@ -669,7 +669,7 @@ class ProfitEstimateController extends Controller
             'pm_fee_percent' => $previous?->pm_fee_percent ?? ProfitEstimate::DEFAULT_PM_FEE_PERCENT,
             'notes' => $previous?->notes,
             'sales_person_name' => $previous?->sales_person_name
-                ?: ($quotation->from_name ?: $quotation->task?->creator?->username),
+                ?: ($quotation->from_name ?: $quotation->task?->creator?->display_name),
             'finance_name' => $previous?->finance_name,
             'accounting_name' => $previous?->accounting_name,
             'lines' => ProfitEstimate::deriveHppLines(array_merge($products, $hppOverrides, $costSpent, $costPlanned)),

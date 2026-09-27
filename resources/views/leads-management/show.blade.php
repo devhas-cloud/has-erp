@@ -713,7 +713,7 @@
                 </div>
 
                 <div class="lead-header__meta">
-                    <span><i class="fa fa-user"></i>{{ $lead->leadOwner?->username ?? '—' }}</span>
+                    <span><i class="fa fa-user"></i>{{ $lead->leadOwner?->display_name ?? '—' }}</span>
                     <span><i class="fa fa-bullseye"></i>{{ $lead->source?->source_name ?? '—' }}</span>
                     <span><i class="fa fa-calendar"></i>Follow Up: {{ $lead->lead_follow_up_date?->format('d M Y') ?? '—' }}</span>
                     @if($lead->closed_date)
@@ -857,10 +857,10 @@
                             <div style="padding:4px 0">
                                 @foreach ($leadLogs as $log)
                                     <div class="activity-post" style="padding:16px 22px">
-                                        <div class="activity-post-avatar">{{ strtoupper(substr($log->user?->username ?? 'S', 0, 2)) }}</div>
+                                        <div class="activity-post-avatar">{{ strtoupper(substr($log->user?->display_name ?? 'S', 0, 2)) }}</div>
                                         <div class="activity-post-body">
                                             <div class="activity-post-header">
-                                                <span class="activity-post-author">{{ $log->user?->username ?? 'System' }}</span>
+                                                <span class="activity-post-author">{{ $log->user?->display_name ?? 'System' }}</span>
                                                 <span class="activity-post-time">{{ $log->created_at->diffForHumans() }}</span>
                                             </div>
                                             <div class="activity-post-content">{{ $log->description }}</div>
@@ -967,8 +967,8 @@
                     <tr><td>All Fields Done</td><td>{!! $lead->all_filed_completed ? '<i class="fa fa-check-circle" style="color:var(--success)"></i> Ya' : '<i class="fa fa-minus-circle" style="color:var(--text-muted)"></i> Tidak' !!}</td></tr>
                     <tr><td>Close Date</td><td>{{ $lead->closed_date?->format('d M Y') ?? '—' }}</td></tr>
                     <tr><td>Unqualified Reason</td><td>{{ $lead->unqualified_reason ?? '—' }}</td></tr>
-                    <tr><td>Lead Owner</td><td><strong>{{ $lead->leadOwner?->username ?? '—' }}</strong></td></tr>
-                    <tr><td>Assigned To</td><td>{{ $lead->assignedTo?->username ?? '—' }}</td></tr>
+                    <tr><td>Lead Owner</td><td><strong>{{ $lead->leadOwner?->display_name ?? '—' }}</strong></td></tr>
+                    <tr><td>Assigned To</td><td>{{ $lead->assignedTo?->display_name ?? '—' }}</td></tr>
                 </table>
             </div>
         </div>
@@ -1238,7 +1238,7 @@
                                     <select name="assigned_to" id="lead-assigned">
                                         <option value="">— Pilih —</option>
                                         @foreach($users as $u)
-                                        <option value="{{ $u->id }}">{{ $u->username }}</option>
+                                        <option value="{{ $u->id }}">{{ $u->display_name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -1916,7 +1916,7 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
                 dataType: 'json',
                 delay: 300,
                 data: function(params) { return { q: params.term }; },
-                processResults: function(res) { return { results: res.results.map(function(u) { return { id: u.id, text: u.username }; }) }; }
+                processResults: function(res) { return { results: res.results.map(function(u) { return { id: u.id, text: u.display_name }; }) }; }
             },
             minimumInputLength: 1
         });
@@ -1948,7 +1948,7 @@ function loadActivities() {
 }
 
 function renderActivity(a) {
-    var avatar = a.user ? (a.user.username || '?').substring(0, 2).toUpperCase() : '??';
+    var avatar = a.user ? (a.user.display_name || '?').substring(0, 2).toUpperCase() : '??';
     var time = a.created_at ? moment(a.created_at).fromNow() : '—';
     var attachmentsHtml = '';
     if (a.attachments && a.attachments.length > 0) {
@@ -1977,7 +1977,7 @@ function renderActivity(a) {
         var displayStyle = replyCount > 2 ? 'style="display:none"' : '';
         repliesHtml = '<div class="activity-replies" id="' + repliesSectionId + '" ' + displayStyle + '>';
         a.replies.forEach(function(r) {
-            var rAvatar = r.user ? (r.user.username || '?').substring(0, 2).toUpperCase() : '??';
+            var rAvatar = r.user ? (r.user.display_name || '?').substring(0, 2).toUpperCase() : '??';
             var rTime = r.created_at ? moment(r.created_at).fromNow() : '—';
             var rAttach = '';
             if (r.attachments && r.attachments.length > 0) {
@@ -1995,7 +1995,7 @@ function renderActivity(a) {
             repliesHtml += '<div class="activity-reply" id="activity-' + r.id + '">' +
                 '<div class="activity-reply-avatar">' + rAvatar + '</div>' +
                 '<div class="activity-reply-body">' +
-                '<div class="activity-reply-header"><span class="activity-reply-author">' + (r.user ? r.user.username : '—') + '</span><span class="activity-reply-time">' + rTime + '</span></div>' +
+                '<div class="activity-reply-header"><span class="activity-reply-author">' + (r.user ? r.user.display_name : '—') + '</span><span class="activity-reply-time">' + rTime + '</span></div>' +
                 '<div class="activity-reply-content">' + renderMentions(r.content || '') + '</div>' + rAttach +
                 '</div></div>';
         });
@@ -2023,7 +2023,7 @@ function renderActivity(a) {
         '<div class="activity-post-avatar">' + avatar + '</div>' +
         '<div class="activity-post-body">' +
         '<div class="activity-post-header">' +
-        '<span class="activity-post-author">' + (a.user ? a.user.username : '—') + '</span>' +
+        '<span class="activity-post-author">' + (a.user ? a.user.display_name : '—') + '</span>' +
         '<span class="activity-post-time">' + time + '</span>' +
         taskBadge +
         '</div>' +
@@ -2324,8 +2324,8 @@ function loadTasks() {
                 var iconBg = t.status === 'done' ? 'background:#d1fae5;color:#059669' : t.status === 'in_progress' ? 'background:#dbeafe;color:#2563eb' : 'background:#f1f5f9;color:var(--text-muted)';
                 var statusClass = t.status === 'done' ? 'status-active' : t.status === 'in_progress' ? 'status-pending' : 'status-inactive';
                 var statusLabel = t.status === 'todo' ? 'To Do' : t.status === 'in_progress' ? 'In Progress' : t.status === 'waiting_approval' ? 'Waiting' : 'Done';
-                var assigneeName = (t.assignees && t.assignees.length > 0) ? t.assignees.map(function(a) { return a.username; }).join(', ') : '—';
-                var creatorName = t.creator ? t.creator.username : '—';
+                var assigneeName = (t.assignees && t.assignees.length > 0) ? t.assignees.map(function(a) { return a.display_name; }).join(', ') : '—';
+                var creatorName = t.creator ? t.creator.display_name : '—';
                 var categoryName = t.category ? t.category.name : '—';
                 var dueLabel = t.due_date? new Date(t.due_date).toISOString().split('T')[0] : '—';
                 var dueStyle = (t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString())) ? 'color:#dc3545;font-weight:600' : '';
@@ -2400,7 +2400,7 @@ function searchMentions(query, input) {
                 var initials = user.initials || '?';
                 html += '<div class="mention-suggestion-item" onclick="selectMention(\'' + user.username + '\')" onmouseenter="mentionIndex=' + i + ';updateMentionActive()">' +
                     '<div class="mention-suggestion-avatar">' + initials + '</div>' +
-                    '<span class="mention-suggestion-name">' + user.username + '</span></div>';
+                    '<span class="mention-suggestion-name">' + user.display_name + '</span></div>';
             });
             var dropdownId = $(input).attr('id') === 'activity-input' ? '#mention-suggestions' : '#mention-suggestions-reply-' + $(input).attr('id').replace('reply-input-', '');
             $(dropdownId).html(html).show();

@@ -211,9 +211,9 @@
         <div class="card-custom fade-in stagger-1">
             <div class="profile-banner">
                 <div class="profile-avatar">
-                    {{ strtoupper(substr($user->username, 0, 2)) }}
+                    {{ strtoupper(substr($user->display_name, 0, 2)) }}
                 </div>
-                <div class="profile-name">{{ $user->username }}</div>
+                <div class="profile-name">{{ $user->display_name }}</div>
                 <div class="profile-email">{{ $user->email }}</div>
                 <div style="margin-top:10px;">
                     @if ($user->role === 'Admin')
@@ -232,6 +232,16 @@
                 </div>
             </div>
             <div class="detail-rows">
+                <div class="detail-row">
+                    <div class="detail-icon"><i class="fa-solid fa-id-badge"></i></div>
+                    <div class="detail-label">Nama Lengkap</div>
+                    <div class="detail-value">{{ $user->full_name ?: '—' }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon"><i class="fa-solid fa-user"></i></div>
+                    <div class="detail-label">Username</div>
+                    <div class="detail-value">{{ $user->username }}</div>
+                </div>
                 <div class="detail-row">
                     <div class="detail-icon"><i class="fa-solid fa-at"></i></div>
                     <div class="detail-label">Email</div>

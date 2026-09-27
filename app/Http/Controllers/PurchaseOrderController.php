@@ -47,7 +47,7 @@ class PurchaseOrderController extends Controller
             $query->where(function ($q) use ($searchValue) {
                 $q->where('supplier_name', 'like', "%{$searchValue}%")
                     ->orWhere('po_number', 'like', "%{$searchValue}%")
-                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%"));
+                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%")->orWhere('full_name', 'like', "%{$searchValue}%"));
             });
         }
 
@@ -70,7 +70,7 @@ class PurchaseOrderController extends Controller
                 'date' => $po->date?->format('d/m/Y') ?? '—',
                 'item_count' => $po->items_count,
                 'grand_total_label' => number_format($po->grandTotal(), 0, '.', ','),
-                'creator_name' => $po->creator?->username ?? '—',
+                'creator_name' => $po->creator?->display_name ?? '—',
                 'status' => $po->status,
                 'status_label' => $po->status_label,
                 'status_badge' => $po->statusBadgeHtml(),

@@ -750,7 +750,7 @@ class QuotationController extends Controller
                 $q->where('quotation_number', 'like', "%{$searchValue}%")
                     ->orWhere('to_name', 'like', "%{$searchValue}%")
                     ->orWhere('from_name', 'like', "%{$searchValue}%")
-                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%"))
+                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%")->orWhere('full_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('task.opportunity', fn ($o) => $o->where('opportunity_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('task', fn ($t) => $t->where('title', 'like', "%{$searchValue}%"));
             });
@@ -794,7 +794,7 @@ class QuotationController extends Controller
                 'item_count' => $quotation->items()->count(),
                 'grand_total' => $quotation->grand_total,
                 'grand_total_label' => Quotation::formatMoney($quotation->grand_total),
-                'creator_name' => $quotation->creator?->username ?? '—',
+                'creator_name' => $quotation->creator?->display_name ?? '—',
                 'status' => $quotation->status,
                 'status_label' => $quotation->status_label,
                 'status_badge' => $quotation->statusBadgeHtml(),
@@ -1237,7 +1237,7 @@ class QuotationController extends Controller
 
         Log::record(
             'update_quotation_notes',
-            "Catatan Quotation #{$quotation->id} ({$quotation->quotation_number}) diperbarui oleh ".Auth::user()->username,
+            "Catatan Quotation #{$quotation->id} ({$quotation->quotation_number}) diperbarui oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -1343,7 +1343,7 @@ class QuotationController extends Controller
 
         Log::record(
             'approve_quotation',
-            "Quotation #{$quotation->id} ({$quotation->quotation_number}) disetujui oleh ".Auth::user()->username,
+            "Quotation #{$quotation->id} ({$quotation->quotation_number}) disetujui oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -1352,7 +1352,7 @@ class QuotationController extends Controller
             TaskWorkflowLogger::forTask(
                 $quotation->task,
                 'approve_quotation',
-                "Quotation #{$quotation->id} ({$quotation->quotation_number}) disetujui oleh ".Auth::user()->username
+                "Quotation #{$quotation->id} ({$quotation->quotation_number}) disetujui oleh ".Auth::user()->display_name
             );
         }
 
@@ -1386,7 +1386,7 @@ class QuotationController extends Controller
 
         Log::record(
             'reject_quotation',
-            "Quotation #{$quotation->id} ({$quotation->quotation_number}) ditolak oleh ".Auth::user()->username,
+            "Quotation #{$quotation->id} ({$quotation->quotation_number}) ditolak oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -1395,7 +1395,7 @@ class QuotationController extends Controller
             TaskWorkflowLogger::forTask(
                 $quotation->task,
                 'reject_quotation',
-                "Quotation #{$quotation->id} ({$quotation->quotation_number}) ditolak oleh ".Auth::user()->username
+                "Quotation #{$quotation->id} ({$quotation->quotation_number}) ditolak oleh ".Auth::user()->display_name
             );
         }
 
@@ -1434,7 +1434,7 @@ class QuotationController extends Controller
 
         Log::record(
             'unlock_quotation',
-            "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuka kunci oleh ".Auth::user()->username,
+            "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuka kunci oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -1443,7 +1443,7 @@ class QuotationController extends Controller
             TaskWorkflowLogger::forTask(
                 $quotation->task,
                 'unlock_quotation',
-                "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuka kunci oleh ".Auth::user()->username
+                "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuka kunci oleh ".Auth::user()->display_name
             );
         }
 
@@ -1648,7 +1648,7 @@ class QuotationController extends Controller
 
         Log::record(
             'upload_po_quotation',
-            "PO untuk Quotation #{$quotation->id} ({$quotation->quotation_number}) diupload oleh ".Auth::user()->username,
+            "PO untuk Quotation #{$quotation->id} ({$quotation->quotation_number}) diupload oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -1701,7 +1701,7 @@ class QuotationController extends Controller
                 'status' => $v->status,
                 'status_badge' => $v->statusBadgeHtml(),
                 'date' => $v->created_at?->format('d/m/Y H:i') ?? '—',
-                'creator_name' => $v->creator?->username ?? '—',
+                'creator_name' => $v->creator?->display_name ?? '—',
                 'item_count' => $v->items()->count(),
                 'is_current' => (bool) $v->is_current,
                 'show_url' => route('quotation.show', $v->id),

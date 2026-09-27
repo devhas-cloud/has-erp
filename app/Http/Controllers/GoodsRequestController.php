@@ -48,7 +48,7 @@ class GoodsRequestController extends Controller
                     ->orWhere('to_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('opportunity', fn ($o) => $o->where('opportunity_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('division', fn ($d) => $d->where('division_name', 'like', "%{$searchValue}%"))
-                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%"));
+                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%")->orWhere('full_name', 'like', "%{$searchValue}%"));
             });
         }
 
@@ -71,7 +71,7 @@ class GoodsRequestController extends Controller
                 'opportunity_name' => $gr->opportunity?->opportunity_name ?? '—',
                 'division_name' => $gr->division?->division_name ?? '—',
                 'item_count' => $gr->items()->count(),
-                'creator_name' => $gr->creator?->username ?? '—',
+                'creator_name' => $gr->creator?->display_name ?? '—',
                 'status' => $gr->status,
                 'status_label' => $gr->status_label,
                 'status_badge' => $gr->statusBadgeHtml(),

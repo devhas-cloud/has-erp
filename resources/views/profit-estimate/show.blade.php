@@ -74,8 +74,8 @@
     <span>{!! $estimate->is_outdated
         ? '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Outdated</span>'
         : '<span class="status-badge status-active">Up to date</span>' !!}</span>
-    <span style="font-size:12px;color:var(--text-muted)">Dibuat {{ $estimate->creator?->username ?? '—' }} &middot; {{ $estimate->created_at?->format('d/m/Y H:i') }}
-        @if($estimate->updater) &middot; Diupdate {{ $estimate->updater->username }} {{ $estimate->updated_at?->format('d/m/Y H:i') }} @endif
+    <span style="font-size:12px;color:var(--text-muted)">Dibuat {{ $estimate->creator?->display_name ?? '—' }} &middot; {{ $estimate->created_at?->format('d/m/Y H:i') }}
+        @if($estimate->updater) &middot; Diupdate {{ $estimate->updater->display_name }} {{ $estimate->updated_at?->format('d/m/Y H:i') }} @endif
     </span>
     <div class="spacer"></div>
     @if($estimate->is_outdated && $canCreate && (! $currentQuotation || $currentQuotation->id === $estimate->quotation_id))

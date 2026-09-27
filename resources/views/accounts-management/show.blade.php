@@ -622,7 +622,7 @@
                                         </tr>
                                         <tr>
                                             <td>Owner</td>
-                                            <td><strong>{{ $account->accountOwner?->username ?? '—' }}</strong></td>
+                                            <td><strong>{{ $account->accountOwner?->display_name ?? '—' }}</strong></td>
                                         </tr>
                                         <tr>
                                             <td>Status</td>
@@ -748,16 +748,16 @@
                                                     <a href="tel:{{ $c->mobile }}">{{ $c->mobile }}</a>
                                                 </div>
                                             @endif
-                                            @if ($c->contactMethod?->method_name || $c->contactOwner?->username)
+                                            @if ($c->contactMethod?->method_name || $c->contactOwner?->display_name)
                                                 <div class="contact-card__row">
                                                     <i class="fa fa-address-book"></i>
                                                     <span>
                                                         @if ($c->contactMethod?->method_name)
                                                             {{ $c->contactMethod->method_name }}
                                                         @endif
-                                                        @if ($c->contactOwner?->username)
+                                                        @if ($c->contactOwner?->display_name)
                                                             <span style="color:var(--text-muted)">&middot;
-                                                                {{ $c->contactOwner->username }}</span>
+                                                                {{ $c->contactOwner->display_name }}</span>
                                                         @endif
                                                     </span>
                                                 </div>
@@ -807,8 +807,8 @@
                                             @endif
                                         </div>
                                         <div class="contact-item__meta">
-                                            @if ($lead->leadOwner?->username)
-                                                <span><i class="fa fa-user"></i> {{ $lead->leadOwner->username }}</span>
+                                            @if ($lead->leadOwner?->display_name)
+                                                <span><i class="fa fa-user"></i> {{ $lead->leadOwner->display_name }}</span>
                                             @endif
                                             @if ($lead->closed_date)
                                                 <span><i class="fa fa-calendar"></i>
@@ -851,8 +851,8 @@
                                             @endif
                                         </div>
                                         <div class="contact-item__meta">
-                                            @if ($opp->owner?->username)
-                                                <span><i class="fa fa-user"></i> {{ $opp->owner->username }}</span>
+                                            @if ($opp->owner?->display_name)
+                                                <span><i class="fa fa-user"></i> {{ $opp->owner->display_name }}</span>
                                             @endif
                                             @if ($opp->close_date)
                                                 <span><i class="fa fa-calendar"></i>

@@ -281,12 +281,12 @@
             <tr>
                 <td>
                     <div class="name">
-                        ({{ $quotation->creator?->username ?? '________' }})
+                        ({{ $quotation->creator?->display_name ?? '________' }})
                     </div>
                 </td>
                 <td>
                     <div class="name">
-                        ({{ $quotation->finalChecker?->username ?? '________' }})
+                        ({{ $quotation->finalChecker?->display_name ?? '________' }})
                     </div>
                 </td>
             </tr>

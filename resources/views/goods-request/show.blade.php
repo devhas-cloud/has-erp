@@ -104,12 +104,12 @@
             </tr>
             <tr>
                 <td>Dibuat Oleh</td>
-                <td>{{ $goodsRequest->creator?->username ?? '—' }} &middot; {{ $goodsRequest->created_at?->format('d/m/Y H:i') }}</td>
+                <td>{{ $goodsRequest->creator?->display_name ?? '—' }} &middot; {{ $goodsRequest->created_at?->format('d/m/Y H:i') }}</td>
             </tr>
             @if($goodsRequest->final_checked_by)
             <tr>
                 <td>{{ $goodsRequest->status === 'approved' ? 'Disetujui Oleh' : 'Ditolak Oleh' }}</td>
-                <td>{{ $goodsRequest->finalChecker?->username ?? '—' }} &middot; {{ ($goodsRequest->approved_at ?? $goodsRequest->rejected_at)?->format('d/m/Y H:i') }}</td>
+                <td>{{ $goodsRequest->finalChecker?->display_name ?? '—' }} &middot; {{ ($goodsRequest->approved_at ?? $goodsRequest->rejected_at)?->format('d/m/Y H:i') }}</td>
             </tr>
             @endif
             <tr>

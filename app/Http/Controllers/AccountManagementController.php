@@ -48,7 +48,8 @@ class AccountManagementController extends Controller
                 $q->where('account_name', 'like', "%{$searchValue}%")
                     ->orWhere('phone', 'like', "%{$searchValue}%")
                     ->orWhereHas('accountOwner', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%");
+                        $q->where('username', 'like', "%{$searchValue}%")
+                            ->orWhere('full_name', 'like', "%{$searchValue}%");
                     });
             });
         }
@@ -83,7 +84,7 @@ class AccountManagementController extends Controller
                 'icon' => $account->icon,
                 'name_display' => $account->account_name ?? '—',
                 'phone' => $account->phone ?? '—',
-                'owner_name' => $account->accountOwner?->username ?? '—',
+                'owner_name' => $account->accountOwner?->display_name ?? '—',
             ];
         }
 

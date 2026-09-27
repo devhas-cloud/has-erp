@@ -179,10 +179,10 @@
             <!-- User identity banner -->
             <div class="user-identity">
                 <div class="user-identity-avatar">
-                    {{ strtoupper(substr($user->username, 0, 2)) }}
+                    {{ strtoupper(substr($user->display_name, 0, 2)) }}
                 </div>
                 <div class="user-identity-info">
-                    <div class="user-identity-name">{{ $user->username }}</div>
+                    <div class="user-identity-name">{{ $user->display_name }}</div>
                     <div class="user-identity-meta">{{ $user->email }} {{ $user->division ? '· ' . $user->division->division_name : '' }}</div>
                 </div>
                 @if ($user->role === 'Admin')
@@ -201,6 +201,11 @@
             </div>
 
             <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nama Lengkap<span class="field-required">*</span></label>
+                    <input type="text" name="full_name" class="form-control @error('full_name') is-invalid @enderror" value="{{ old('full_name', $user->full_name) }}" placeholder="Nama lengkap pengguna" required>
+                    @error('full_name') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
                 <div class="col-md-6">
                     <label class="form-label">Username<span class="field-required">*</span></label>
                     <input type="text" name="username" class="form-control @error('username') is-invalid @enderror" value="{{ old('username', $user->username) }}" placeholder="Masukkan username" required>

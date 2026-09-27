@@ -171,8 +171,13 @@
 
             <div class="row g-3">
                 <div class="col-md-6">
+                    <label class="form-label">Nama Lengkap<span class="field-required">*</span></label>
+                    <input type="text" name="full_name" class="form-control @error('full_name') is-invalid @enderror" value="{{ old('full_name') }}" placeholder="Nama lengkap pengguna" required autofocus>
+                    @error('full_name') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
+                <div class="col-md-6">
                     <label class="form-label">Username<span class="field-required">*</span></label>
-                    <input type="text" name="username" class="form-control @error('username') is-invalid @enderror" value="{{ old('username') }}" placeholder="Masukkan username" required autofocus>
+                    <input type="text" name="username" class="form-control @error('username') is-invalid @enderror" value="{{ old('username') }}" placeholder="Masukkan username" required>
                     @error('username') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
                 <div class="col-md-6">

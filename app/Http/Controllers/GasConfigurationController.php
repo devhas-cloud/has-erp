@@ -246,7 +246,7 @@ class GasConfigurationController extends Controller
                 $q->whereHas('opportunity', fn ($o) => $o->where('opportunity_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('opportunity.accountCompany', fn ($c) => $c->where('account_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('task', fn ($t) => $t->where('title', 'like', "%{$searchValue}%"))
-                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%"));
+                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%")->orWhere('full_name', 'like', "%{$searchValue}%"));
             });
         }
 
@@ -282,7 +282,7 @@ class GasConfigurationController extends Controller
                 'date' => $quotation->date?->format('d/m/Y') ?? '—',
                 'date_raw' => $quotation->date?->toISOString(),
                 'item_count' => $quotation->items()->count(),
-                'creator_name' => $quotation->creator?->username ?? '—',
+                'creator_name' => $quotation->creator?->display_name ?? '—',
                 'status' => $quotation->status,
                 'status_label' => $quotation->status_label,
                 'status_badge' => $quotation->statusBadgeHtml(),
@@ -712,12 +712,12 @@ class GasConfigurationController extends Controller
             $quotation,
             'quotation_approved',
             'Quote Configuration Disetujui',
-            "Quote Configuration {$quotation->name} telah disetujui oleh ".Auth::user()->username.'.'
+            "Quote Configuration {$quotation->name} telah disetujui oleh ".Auth::user()->display_name.'.'
         );
 
         Log::record(
             'approve_gas_configuration',
-            "Quote Configuration {$quotation->name} disetujui oleh ".Auth::user()->username,
+            "Quote Configuration {$quotation->name} disetujui oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -727,7 +727,7 @@ class GasConfigurationController extends Controller
             TaskWorkflowLogger::forTask(
                 $quotation->task,
                 'approve_gas_configuration',
-                "Quote Configuration {$divisionName}  disetujui oleh ".Auth::user()->username
+                "Quote Configuration {$divisionName}  disetujui oleh ".Auth::user()->display_name
             );
         }
 
@@ -770,12 +770,12 @@ class GasConfigurationController extends Controller
             $quotation,
             'quotation_rejected',
             'Quote Configuration Ditolak',
-            "Quote Configuration  ditolak oleh ".Auth::user()->username.'. Alasan: '.$validated['approval_note']
+            "Quote Configuration  ditolak oleh ".Auth::user()->display_name.'. Alasan: '.$validated['approval_note']
         );
 
         Log::record(
             'reject_gas_configuration',
-            "Quote Configuration  ditolak oleh ".Auth::user()->username,
+            "Quote Configuration  ditolak oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -785,7 +785,7 @@ class GasConfigurationController extends Controller
             TaskWorkflowLogger::forTask(
                 $quotation->task,
                 'reject_gas_configuration',
-                "Quote Configuration {$divisionName}  ditolak oleh ".Auth::user()->username
+                "Quote Configuration {$divisionName}  ditolak oleh ".Auth::user()->display_name
             );
         }
 
@@ -831,7 +831,7 @@ class GasConfigurationController extends Controller
 
         Log::record(
             'unlock_gas_configuration',
-            "Quote Configuration  dibuka kunci oleh ".Auth::user()->username,
+            "Quote Configuration  dibuka kunci oleh ".Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -963,7 +963,7 @@ class GasConfigurationController extends Controller
                 'status' => $v->status,
                 'status_badge' => $v->statusBadgeHtml(),
                 'date' => $v->created_at?->format('d/m/Y H:i') ?? '—',
-                'creator_name' => $v->creator?->username ?? '—',
+                'creator_name' => $v->creator?->display_name ?? '—',
                 'item_count' => $v->items()->count(),
                 'is_current' => (bool) $v->is_current,
                 'show_url' => route('gas-configuration.show', $v->id),
@@ -1051,7 +1051,7 @@ class GasConfigurationController extends Controller
                 $approver,
                 'quotation_approval_required',
                 'Quote Configuration Menunggu Approval',
-                "Quote Configuration  dari {$creator->username} menunggu approval Anda.",
+                "Quote Configuration  dari {$creator->display_name} menunggu approval Anda.",
                 [
                     'quote_configuration_id' => $quotation->id,
                     'task_id' => $quotation->task_id,

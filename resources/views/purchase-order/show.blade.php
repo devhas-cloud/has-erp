@@ -124,12 +124,12 @@
             </tr>
             <tr>
                 <td>Dibuat Oleh</td>
-                <td>{{ $purchaseOrder->creator?->username ?? '—' }} &middot; {{ $purchaseOrder->created_at?->format('d/m/Y H:i') }}</td>
+                <td>{{ $purchaseOrder->creator?->display_name ?? '—' }} &middot; {{ $purchaseOrder->created_at?->format('d/m/Y H:i') }}</td>
             </tr>
             @if($purchaseOrder->final_checked_by)
             <tr>
                 <td>{{ $purchaseOrder->status === 'approved' ? 'Disetujui Oleh' : 'Ditolak Oleh' }}</td>
-                <td>{{ $purchaseOrder->finalChecker?->username ?? '—' }} &middot; {{ ($purchaseOrder->approved_at ?? $purchaseOrder->rejected_at)?->format('d/m/Y H:i') }}</td>
+                <td>{{ $purchaseOrder->finalChecker?->display_name ?? '—' }} &middot; {{ ($purchaseOrder->approved_at ?? $purchaseOrder->rejected_at)?->format('d/m/Y H:i') }}</td>
             </tr>
             @endif
             <tr>

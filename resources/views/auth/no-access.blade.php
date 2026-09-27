@@ -96,7 +96,7 @@
         <div class="icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
         <h1>Belum Ada Akses Modul</h1>
         <p>
-            Akun <strong>{{ auth()->user()->username ?? '' }}</strong> belum memiliki akses baca (can_read)
+            Akun <strong>{{ auth()->user()->display_name ?? '' }}</strong> belum memiliki akses baca (can_read)
             ke modul manapun. Hubungi administrator untuk mengaktifkan akses modul pada akun ini.
         </p>
         <form method="POST" action="{{ route('logout') }}">

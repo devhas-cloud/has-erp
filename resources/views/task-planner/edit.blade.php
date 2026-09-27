@@ -142,7 +142,7 @@
                 <div class="task-identity-info">
                     <div class="task-identity-name">{{ $task->title }}</div>
                     <div class="task-identity-meta">
-                        #{{ $task->id }} · Dibuat oleh <strong>{{ $task->creator?->username ?? '—' }}</strong>
+                        #{{ $task->id }} · Dibuat oleh <strong>{{ $task->creator?->display_name ?? '—' }}</strong>
                         · {{ $task->category?->name ?? 'Tanpa Kategori' }}
                     </div>
                 </div>
@@ -238,7 +238,7 @@
                             <label class="form-label">Assign To</label>
                             <select name="assignees[]" id="edit_assignees" multiple class="form-select" style="width:100%">
                                 @foreach ($task->assignees as $a)
-                                    <option value="{{ $a->id }}" selected>{{ $a->username }}
+                                    <option value="{{ $a->id }}" selected>{{ $a->display_name }}
                                         ({{ optional($a->hierarchyRole)->role_name ?? 'N/A' }})</option>
                                 @endforeach
                             </select>

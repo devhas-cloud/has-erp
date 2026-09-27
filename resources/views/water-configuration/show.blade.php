@@ -213,8 +213,8 @@
             <div class="card-body-custom">
                 <table class="info-table">
                     <tr><td>Status</td><td>{!! $quotation->statusBadgeHtml() !!}</td></tr>
-                    <tr><td>Created By</td><td>{{ $quotation->creator?->username ?? '—' }} ({{ $quotation->creator?->division?->division_name ?? '-' }})</td></tr>
-                    <tr><td>Final Checked By</td><td>{{ $quotation->finalChecker?->username ?? '—' }}</td></tr>
+                    <tr><td>Created By</td><td>{{ $quotation->creator?->display_name ?? '—' }} ({{ $quotation->creator?->division?->division_name ?? '-' }})</td></tr>
+                    <tr><td>Final Checked By</td><td>{{ $quotation->finalChecker?->display_name ?? '—' }}</td></tr>
                     <tr><td>Approved At</td><td>{{ $quotation->approved_at?->format('d M Y H:i') ?? '—' }}</td></tr>
                     <tr><td>Rejected At</td><td>{{ $quotation->rejected_at?->format('d M Y H:i') ?? '—' }}</td></tr>
                 </table>

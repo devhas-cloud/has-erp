@@ -55,7 +55,7 @@ class ConfigurationController extends Controller
                 'model' => User::class,
                 'label' => 'User',
                 'slug' => 'users',
-                'columns' => ['username'],
+                'columns' => ['display_name'],
                 'hidden' => true,
             ],
             'handling-groups' => [
@@ -85,7 +85,7 @@ class ConfigurationController extends Controller
                         'label' => 'Anggota',
                         'type' => 'multi_select',
                         'source' => 'users',
-                        'source_key' => 'username',
+                        'source_key' => 'display_name',
                     ],
                 ],
             ],
@@ -519,14 +519,15 @@ class ConfigurationController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhereHas('division', fn ($d) => $d->where('division_name', 'like', "%{$search}%"))
-                    ->orWhereHas('users', fn ($u) => $u->where('username', 'like', "%{$search}%"));
+                    ->orWhereHas('users', fn ($u) => $u->where('username', 'like', "%{$search}%")
+                    ->orWhere('full_name', 'like', "%{$search}%"));
             });
         }
 
         $records = $query->orderBy('id', 'desc')->paginate(15);
 
         $data = collect($records->items())->map(function (HandlingGroup $group) {
-            $group->members = $group->users->pluck('username')->join(', ');
+            $group->members = $group->users->pluck('display_name')->join(', ');
             $group->division_name = $group->division?->division_name;
             $group->user_ids = $group->users->pluck('id')->all();
 

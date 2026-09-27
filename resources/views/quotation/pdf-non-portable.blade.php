@@ -392,7 +392,7 @@
                 <td>
                     <div class="name">
                         Computer generated<br>
-                        {{ ucfirst($quotation->creator?->username ?? '________') }}
+                        {{ ucfirst($quotation->creator?->display_name ?? '________') }}
                     </div>
                 </td>
                 <td>

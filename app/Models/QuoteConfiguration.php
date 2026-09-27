@@ -166,7 +166,7 @@ class QuoteConfiguration extends Model
 
     public function getSalesNameAttribute(): ?string
     {
-        return $this->task?->creator?->username;
+        return $this->task?->creator?->display_name;
     }
 
     private function company(): ?AccountCompany

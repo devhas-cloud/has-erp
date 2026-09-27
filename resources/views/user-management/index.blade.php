@@ -29,7 +29,7 @@
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
-                        <th>Username</th>
+                        <th>Nama Lengkap</th>
                         <th>Email</th>
                         <th>Divisi</th>
                         <th>Role</th>
@@ -73,14 +73,14 @@ function initUsersTable() {
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
             {
-                data: 'username', orderable: true, searchable: true,
+                data: 'name_display', orderable: true, searchable: true,
                 render: function(data, type, row) {
                     var avatar = row.icon
                         ? '<img src="' + row.icon + '" class="avatar-circle" alt="" style="background:transparent">'
                         : '<div class="avatar-circle">' + row.initials + '</div>';
                     return '<div style="display:flex;align-items:center;gap:10px">' +
                         avatar +
-                        '<strong style="color:var(--text-primary);font-weight:600">' + row.username + '</strong>' +
+                        '<strong style="color:var(--text-primary);font-weight:600">' + row.name_display + '</strong>' +
                         '</div>';
                 }
             },

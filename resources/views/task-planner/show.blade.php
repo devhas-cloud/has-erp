@@ -649,7 +649,7 @@
                             <h5 style="margin:0;font-weight:700;font-size:18px;letter-spacing:-0.3px">{{ $task->title }}
                             </h5>
                             <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">
-                                Created by <strong>{{ $task->creator?->username ?? '—' }}</strong>
+                                Created by <strong>{{ $task->creator?->display_name ?? '—' }}</strong>
                             </div>
                         </div>
                         <span
@@ -757,11 +757,11 @@
                                     @foreach ($taskLogs as $log)
                                         <div class="activity-post">
                                             <div class="activity-post-avatar">
-                                                {{ strtoupper(substr($log->user?->username ?? 'S', 0, 2)) }}</div>
+                                                {{ strtoupper(substr($log->user?->display_name ?? 'S', 0, 2)) }}</div>
                                             <div class="activity-post-body">
                                                 <div class="activity-post-header">
                                                     <span
-                                                        class="activity-post-author">{{ $log->user?->username ?? 'System' }}</span>
+                                                        class="activity-post-author">{{ $log->user?->display_name ?? 'System' }}</span>
                                                     <span
                                                         class="activity-post-time">{{ $log->created_at->diffForHumans() }}</span>
                                                 </div>
@@ -857,8 +857,8 @@
                     @else
                         @foreach ($task->assignees as $assignee)
                             <div class="assignee-badge" style="margin-bottom:6px">
-                                <span>{{ strtoupper(substr($assignee->username, 0, 2)) }}</span>
-                                <span>{{ $assignee->username }}</span>
+                                <span>{{ strtoupper(substr($assignee->display_name, 0, 2)) }}</span>
+                                <span>{{ $assignee->display_name }}</span>
                                 <small
                                     style="opacity:0.7">({{ optional($assignee->hierarchyRole)->role_name ?? 'N/A' }})</small>
                             </div>
@@ -947,7 +947,7 @@
                                     </tr>
                                     <tr>
                                         <td style="color:var(--text-muted)">Created By</td>
-                                        <td>{{ $finalQuotation->creator?->username ?? '—' }}
+                                        <td>{{ $finalQuotation->creator?->display_name ?? '—' }}
                                             @if ($finalQuotation->creator?->division)
                                             <span style="color:var(--text-muted)">({{ $finalQuotation->creator->division->division_name }})</span>
                                             @endif
@@ -959,7 +959,7 @@
                                     </tr>
                                     <tr>
                                         <td style="color:var(--text-muted)">Approved By</td>
-                                        <td>{{ $finalQuotation->finalChecker?->username ?? '—' }}</td>
+                                        <td>{{ $finalQuotation->finalChecker?->display_name ?? '—' }}</td>
                                     </tr>
                                     <tr>
                                         <td style="color:var(--text-muted)">Approved At</td>
@@ -1196,7 +1196,7 @@
                         </tr> --}}
                         <tr>
                             <td>Created By</td>
-                            <td><strong>{{ $task->creator?->username ?? '—' }}</strong></td>
+                            <td><strong>{{ $task->creator?->display_name ?? '—' }}</strong></td>
                         </tr>
                         <tr>
                             <td>Approval Required</td>
@@ -2086,7 +2086,7 @@
                             .username + '\')" onmouseenter="mentionIndex=' + i +
                             ';updateMentionActive()">' +
                             '<div class="mention-suggestion-avatar">' + initials + '</div>' +
-                            '<span class="mention-suggestion-name">' + user.username + '</span></div>';
+                            '<span class="mention-suggestion-name">' + user.display_name + '</span></div>';
                     });
                     var dropdownId = $(input).attr('id') === 'activity-input' ? '#mention-suggestions' :
                         '#mention-suggestions-reply-' + $(input).attr('id').replace('reply-input-', '');

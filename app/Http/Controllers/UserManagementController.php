@@ -27,6 +27,7 @@ class UserManagementController extends Controller
         if ($searchValue) {
             $query->where(function ($q) use ($searchValue) {
                 $q->where('username', 'like', "%{$searchValue}%")
+                    ->orWhere('full_name', 'like', "%{$searchValue}%")
                     ->orWhere('email', 'like', "%{$searchValue}%")
                     ->orWhere('role', 'like', "%{$searchValue}%")
                     ->orWhereHas('division', function ($q) use ($searchValue) {
@@ -44,7 +45,7 @@ class UserManagementController extends Controller
         $orderDirection = $request->input('order.0.dir', 'asc');
 
         $columnOrderMap = [
-            1 => 'username',
+            1 => 'full_name',
             2 => 'email',
             6 => 'created_at',
         ];
@@ -65,7 +66,8 @@ class UserManagementController extends Controller
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $user->id,
                 'username' => $user->username,
-                'initials' => strtoupper(substr($user->username, 0, 2)),
+                'name_display' => $user->display_name,
+                'initials' => strtoupper(substr($user->display_name, 0, 2)),
                 'icon' => $user->icon,
                 'email' => $user->email,
                 'division_name' => $user->division?->division_name,
@@ -97,6 +99,7 @@ class UserManagementController extends Controller
     {
         $validated = $request->validate([
             'username' => 'required|string|max:50|unique:users',
+            'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:255|unique:users',
             'password' => 'required|string|min:6',
             'phone_number' => 'nullable|string|max:20',
@@ -154,6 +157,7 @@ class UserManagementController extends Controller
 
         $validated = $request->validate([
             'username' => 'required|string|max:50|unique:users,username,'.$user->id,
+            'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:255|unique:users,email,'.$user->id,
             'phone_number' => 'nullable|string|max:20',
             'division_id' => 'nullable|exists:divisions,id',

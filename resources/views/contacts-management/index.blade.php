@@ -229,7 +229,7 @@
                                     <select name="assigned_to_id" id="contact-assigned-to">
                                         <option value="">— Pilih —</option>
                                         @foreach($assignableUsers as $au)
-                                        <option value="{{ $au->id }}">{{ $au->username }}</option>
+                                        <option value="{{ $au->id }}">{{ $au->display_name }}</option>
                                         @endforeach
                                     </select>
                                 </div>

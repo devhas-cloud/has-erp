@@ -293,11 +293,11 @@
 
     <div class="account-header__actions">
         <span class="status-badge" style="background:#f1f5f9;color:var(--text-muted)">
-            <i class="fa fa-user"></i> Owner: {{ $contact->contactOwner?->username ?? '—' }}
+            <i class="fa fa-user"></i> Owner: {{ $contact->contactOwner?->display_name ?? '—' }}
         </span>
-        @if($contact->assignedTo?->username)
+        @if($contact->assignedTo?->display_name)
             <span class="status-badge" style="background:#f1f5f9;color:var(--text-muted)">
-                <i class="fa fa-user-check"></i> Assigned: {{ $contact->assignedTo->username }}
+                <i class="fa fa-user-check"></i> Assigned: {{ $contact->assignedTo->display_name }}
             </span>
         @endif
         <span style="margin-left:auto"></span>
@@ -360,8 +360,8 @@
                                     <tr><td>Preferred Contact Method</td><td>{{ $contact->contactMethod?->method_name ?? '—' }}</td></tr>
                                     <tr><td>Role in Project</td><td>{{ $contact->roleInProject?->role_name ?? '—' }}</td></tr>
                                     <tr class="info-table-group"><td colspan="2">Ownership</td></tr>
-                                    <tr><td>Owner</td><td><strong>{{ $contact->contactOwner?->username ?? '—' }}</strong></td></tr>
-                                    <tr><td>Assigned To</td><td>{{ $contact->assignedTo?->username ?? '—' }}</td></tr>
+                                    <tr><td>Owner</td><td><strong>{{ $contact->contactOwner?->display_name ?? '—' }}</strong></td></tr>
+                                    <tr><td>Assigned To</td><td>{{ $contact->assignedTo?->display_name ?? '—' }}</td></tr>
                                     <tr><td>Status</td><td>{!! $statusBadge !!}</td></tr>
                                 </table>
                             </div>
@@ -434,8 +434,8 @@
                                         @endif
                                     </div>
                                     <div class="contact-item__meta">
-                                        @if($lead->leadOwner?->username)
-                                            <span><i class="fa fa-user"></i> {{ $lead->leadOwner->username }}</span>
+                                        @if($lead->leadOwner?->display_name)
+                                            <span><i class="fa fa-user"></i> {{ $lead->leadOwner->display_name }}</span>
                                         @endif
                                         @if($lead->lead_follow_up_date)
                                             <span><i class="fa fa-calendar"></i> Follow up: {{ $lead->lead_follow_up_date->format('d M Y') }}</span>
@@ -474,8 +474,8 @@
                                         @endif
                                     </div>
                                     <div class="contact-item__meta">
-                                        @if($opp->owner?->username)
-                                            <span><i class="fa fa-user"></i> {{ $opp->owner->username }}</span>
+                                        @if($opp->owner?->display_name)
+                                            <span><i class="fa fa-user"></i> {{ $opp->owner->display_name }}</span>
                                         @endif
                                         @if($opp->close_date)
                                             <span><i class="fa fa-calendar"></i> {{ $opp->close_date->format('d M Y') }}</span>
@@ -547,7 +547,7 @@
                     <select id="nl-assigned">
                         <option value="">— Pilih —</option>
                         @foreach($users as $u)
-                        <option value="{{ $u->id }}">{{ $u->username }}</option>
+                        <option value="{{ $u->id }}">{{ $u->display_name }}</option>
                         @endforeach
                     </select>
                 </div>

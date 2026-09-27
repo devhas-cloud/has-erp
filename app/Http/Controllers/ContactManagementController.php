@@ -34,7 +34,7 @@ class ContactManagementController extends Controller
         // Pilihan "Assigned To" hanya user divisi Sales — kontak pada
         // akhirnya harus dikerjakan oleh sales, siapa pun yang membuatnya.
         $assignableUsers = User::whereHas('division', fn ($q) => $q->whereRaw('LOWER(division_name) = ?', ['sales']))
-            ->orderBy('username')
+            ->orderBy('full_name')
             ->get();
 
         return view('contacts-management.index', compact(
@@ -70,7 +70,8 @@ class ContactManagementController extends Controller
                         $q->where('account_name', 'like', "%{$searchValue}%");
                     })
                     ->orWhereHas('contactOwner', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%");
+                        $q->where('username', 'like', "%{$searchValue}%")
+                            ->orWhere('full_name', 'like', "%{$searchValue}%");
                     })
                     ->orWhereHas('jobTitle', function ($q) use ($searchValue) {
                         $q->where('title_name', 'like', "%{$searchValue}%");
@@ -113,8 +114,8 @@ class ContactManagementController extends Controller
                 'account_name' => $contact->accountCompany?->account_name ?? '—',
                 'phone' => $contact->phone ?? '—',
                 'email' => $contact->email ?? '—',
-                'owner_name' => $contact->contactOwner?->username ?? '—',
-                'assigned_to_name' => $contact->assignedTo?->username ?? '—',
+                'owner_name' => $contact->contactOwner?->display_name ?? '—',
+                'assigned_to_name' => $contact->assignedTo?->display_name ?? '—',
             ];
         }
 
@@ -224,7 +225,7 @@ class ContactManagementController extends Controller
 $sources = Source::where('status', 'Active')->get();
         $stages = Stage::where('status', 'Active')->get();
         $forecasts = Forecast::where('status', 'Active')->get();
-        $users = User::orderBy('username')->get();
+        $users = User::orderBy('full_name')->get();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
 
         $user = Auth::user();

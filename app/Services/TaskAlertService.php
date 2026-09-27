@@ -133,7 +133,7 @@ class TaskAlertService
             $lines[] = '*Waktu:* '.$task->time;
         }
 
-        $lines[] = '*Dari:* '.($task->creator?->username ?? 'Sistem');
+        $lines[] = '*Dari:* '.($task->creator?->display_name ?? 'Sistem');
 
         return implode("\n", $lines);
     }

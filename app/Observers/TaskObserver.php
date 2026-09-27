@@ -61,8 +61,8 @@ class TaskObserver
                     $assignee,
                     'task_approved',
                     "Tugas disetujui: {$task->title}",
-                    "{$creator->username} telah menyetujui tugas.",
-                    ['task_id' => $task->id, 'approver' => $creator->username]
+                    "{$creator->display_name} telah menyetujui tugas.",
+                    ['task_id' => $task->id, 'approver' => $creator->display_name]
                 );
             }
 

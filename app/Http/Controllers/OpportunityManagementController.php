@@ -71,7 +71,8 @@ class OpportunityManagementController extends Controller
                         $q->where('stage_name', 'like', "%{$searchValue}%");
                     })
                     ->orWhereHas('owner', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%");
+                        $q->where('username', 'like', "%{$searchValue}%")
+                            ->orWhere('full_name', 'like', "%{$searchValue}%");
                     });
             });
         }
@@ -119,7 +120,7 @@ class OpportunityManagementController extends Controller
                 'company_initials' => strtoupper(substr($opp->accountCompany?->account_name ?? '?', 0, 2)),
                 'stage_name' => $opp->stage?->stage_name ?? '—',
                 'close_won_date' => $opp->close_won_date?->format('d M Y') ?? '—',
-                'owner_name' => $opp->owner?->username ?? '—',
+                'owner_name' => $opp->owner?->display_name ?? '—',
                 'next_step' => $opp->next_step ?? '—',
             ];
         }
@@ -412,7 +413,7 @@ class OpportunityManagementController extends Controller
             'negotiation_approved_at' => now(),
         ]);
 
-        Log::record('approve_negotiation', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} Negotiation disetujui oleh ".Auth::user()->username, 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+        Log::record('approve_negotiation', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} Negotiation disetujui oleh ".Auth::user()->display_name, 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
 
         if ($opportunity->owner && $opportunity->owner_id !== Auth::id()) {
             Notification::create([
@@ -480,7 +481,7 @@ class OpportunityManagementController extends Controller
             'close_loss_approved_at' => now(),
         ]);
 
-        Log::record('approve_close_loss', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} Close Loss disetujui oleh ".Auth::user()->username, 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+        Log::record('approve_close_loss', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name} Close Loss disetujui oleh ".Auth::user()->display_name, 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
 
         if ($opportunity->owner && $opportunity->owner_id !== Auth::id()) {
             Notification::create([
@@ -685,7 +686,7 @@ class OpportunityManagementController extends Controller
                 Notification::create([
                     'user_id' => $uid,
                     'type' => 'mention',
-                    'title' => 'You were mentioned by '.Auth::user()->username,
+                    'title' => 'You were mentioned by '.Auth::user()->display_name,
                     'body' => Str::limit($activity->content, 120),
                     'notifiable_type' => Activity::class,
                     'notifiable_id' => $activity->id,
@@ -702,7 +703,7 @@ class OpportunityManagementController extends Controller
                     'user_id' => $parent->user_id,
                     'type' => 'mention',
                     'title' => 'Balasan pada aktivitas Anda',
-                    'body' => Auth::user()->username.' membalas: '.Str::limit($activity->content, 80),
+                    'body' => Auth::user()->display_name.' membalas: '.Str::limit($activity->content, 80),
                     'notifiable_type' => Activity::class,
                     'notifiable_id' => $parent->id,
                     'data' => ['activity_id' => $activity->id, 'opportunity_id' => $activity->opportunity_id, 'mentioned_by' => Auth::id()],
@@ -817,10 +818,10 @@ class OpportunityManagementController extends Controller
                         'user_id' => $assignee->id,
                         'type' => 'task_assigned',
                         'title' => "Tugas baru: {$task->title}",
-                        'body' => "{$task->creator->username} menugaskan Anda",
+                        'body' => "{$task->creator->display_name} menugaskan Anda",
                         'notifiable_type' => Task::class,
                         'notifiable_id' => $task->id,
-                        'data' => ['task_id' => $task->id, 'creator' => $task->creator->username],
+                        'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
                     ]);
                     $notifiedAssignees[] = $assignee;
                 }
@@ -896,7 +897,7 @@ class OpportunityManagementController extends Controller
             '*Judul:* '.$task->title,
             '*Kategori:* '.($task->category?->name ?? '—'),
             '*Tenggal:* '.$task->due_date->format('d M Y'),
-            '*Dari:* '.($task->creator?->username ?? 'Sistem'),
+            '*Dari:* '.($task->creator?->display_name ?? 'Sistem'),
         ];
 
         return implode("\n", $lines);
@@ -906,13 +907,15 @@ class OpportunityManagementController extends Controller
     {
         $q = $request->get('q', '');
         $users = User::where('username', 'like', "%{$q}%")
+            ->orWhere('full_name', 'like', "%{$q}%")
             ->orWhere('email', 'like', "%{$q}%")
             ->limit(10)
             ->get()
             ->map(fn ($u) => [
                 'id' => $u->id,
                 'username' => $u->username,
-                'initials' => strtoupper(substr($u->username, 0, 2)),
+                'display_name' => $u->display_name,
+                'initials' => strtoupper(substr($u->display_name, 0, 2)),
             ]);
 
         return response()->json(['results' => $users->toArray()]);

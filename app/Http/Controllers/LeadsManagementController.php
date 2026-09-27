@@ -105,7 +105,8 @@ class LeadsManagementController extends Controller
                         $q->where('account_name', 'like', "%{$searchValue}%");
                     })
                     ->orWhereHas('leadOwner', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%");
+                        $q->where('username', 'like', "%{$searchValue}%")
+                            ->orWhere('full_name', 'like', "%{$searchValue}%");
                     });
             });
         }
@@ -148,8 +149,8 @@ class LeadsManagementController extends Controller
                 'mobile' => $lead->accountContact?->mobile ?? '—',
                 'status_badge' => $this->renderStatusBadge($lead->lead_status),
                 'lead_status' => $lead->lead_status,
-                'owner_name' => $lead->leadOwner?->username ?? '—',
-                'assigned_to_name' => $lead->assignedTo?->username ?? '—',
+                'owner_name' => $lead->leadOwner?->display_name ?? '—',
+                'assigned_to_name' => $lead->assignedTo?->display_name ?? '—',
             ];
         }
 
@@ -888,7 +889,7 @@ class LeadsManagementController extends Controller
                 Notification::create([
                     'user_id' => $uid,
                     'type' => 'mention',
-                    'title' => 'You were mentioned by '.Auth::user()->username,
+                    'title' => 'You were mentioned by '.Auth::user()->display_name,
                     'body' => Str::limit($activity->content, 120),
                     'notifiable_type' => Activity::class,
                     'notifiable_id' => $activity->id,
@@ -905,7 +906,7 @@ class LeadsManagementController extends Controller
                     'user_id' => $parent->user_id,
                     'type' => 'mention',
                     'title' => 'Balasan pada aktivitas Anda',
-                    'body' => Auth::user()->username.' membalas: '.Str::limit($activity->content, 80),
+                    'body' => Auth::user()->display_name.' membalas: '.Str::limit($activity->content, 80),
                     'notifiable_type' => Activity::class,
                     'notifiable_id' => $parent->id,
                     'data' => ['activity_id' => $activity->id, 'lead_id' => $activity->lead_id, 'mentioned_by' => Auth::id()],
@@ -1012,10 +1013,10 @@ class LeadsManagementController extends Controller
                         'user_id' => $assignee->id,
                         'type' => 'task_assigned',
                         'title' => "Tugas baru: {$task->title}",
-                        'body' => "{$task->creator->username} menugaskan Anda",
+                        'body' => "{$task->creator->display_name} menugaskan Anda",
                         'notifiable_type' => Task::class,
                         'notifiable_id' => $task->id,
-                        'data' => ['task_id' => $task->id, 'creator' => $task->creator->username],
+                        'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
                     ]);
                 }
             }
@@ -1050,13 +1051,15 @@ class LeadsManagementController extends Controller
     {
         $q = $request->get('q', '');
         $users = User::where('username', 'like', "%{$q}%")
+            ->orWhere('full_name', 'like', "%{$q}%")
             ->orWhere('email', 'like', "%{$q}%")
             ->limit(10)
             ->get()
             ->map(fn ($u) => [
                 'id' => $u->id,
                 'username' => $u->username,
-                'initials' => strtoupper(substr($u->username, 0, 2)),
+                'display_name' => $u->display_name,
+                'initials' => strtoupper(substr($u->display_name, 0, 2)),
             ]);
 
         return response()->json(['results' => $users->toArray()]);

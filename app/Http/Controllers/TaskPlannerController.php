@@ -79,13 +79,15 @@ class TaskPlannerController extends Controller
                 $q->where('title', 'like', "%{$searchValue}%")
                     ->orWhere('description', 'like', "%{$searchValue}%")
                     ->orWhereHas('creator', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%");
+                        $q->where('username', 'like', "%{$searchValue}%")
+                            ->orWhere('full_name', 'like', "%{$searchValue}%");
                     })
                     ->orWhereHas('category', function ($q) use ($searchValue) {
                         $q->where('name', 'like', "%{$searchValue}%");
                     })
                     ->orWhereHas('assignees', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%");
+                        $q->where('username', 'like', "%{$searchValue}%")
+                            ->orWhere('full_name', 'like', "%{$searchValue}%");
                     });
             });
         }
@@ -134,7 +136,7 @@ class TaskPlannerController extends Controller
 
         $data = [];
         foreach ($tasks as $i => $task) {
-            $assigneeNames = $task->assignees->pluck('username')->join(', ');
+            $assigneeNames = $task->assignees->pluck('display_name')->join(', ');
 
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
@@ -143,7 +145,7 @@ class TaskPlannerController extends Controller
                 'title' => $task->title,
                 'category_name' => $task->category?->name ?? '—',
                 'status_label' => $this->renderStatusBadge($task->status),
-                'creator_name' => $task->creator?->username ?? '—',
+                'creator_name' => $task->creator?->display_name ?? '—',
                 'assignees' => $assigneeNames ?: '—',
                 'time' => $task->time ?? '',
                 'due_date' => $task->due_date?->format('d M Y') ?? '—',
@@ -211,6 +213,7 @@ class TaskPlannerController extends Controller
         if ($q = $request->get('q')) {
             $query->where(function ($qry) use ($q) {
                 $qry->where('username', 'like', "%{$q}%")
+                    ->orWhere('full_name', 'like', "%{$q}%")
                     ->orWhere('email', 'like', "%{$q}%");
             });
         }
@@ -218,7 +221,7 @@ class TaskPlannerController extends Controller
         $results = $query->with('hierarchyRole')->limit(30)->get()
             ->map(fn ($u) => [
                 'id' => $u->id,
-                'text' => $u->username.($u->hierarchyRole ? ' ('.$u->hierarchyRole->role_name.')' : ''),
+                'text' => $u->display_name.($u->hierarchyRole ? ' ('.$u->hierarchyRole->role_name.')' : ''),
             ]);
 
         return response()->json(['results' => $results]);
@@ -234,7 +237,7 @@ class TaskPlannerController extends Controller
 
         $users = $group->users->map(fn ($user) => [
             'id' => $user->id,
-            'text' => $user->username.($user->hierarchyRole ? ' ('.$user->hierarchyRole->role_name.')' : ''),
+            'text' => $user->display_name.($user->hierarchyRole ? ' ('.$user->hierarchyRole->role_name.')' : ''),
         ]);
 
         return response()->json(['results' => $users]);
@@ -334,10 +337,10 @@ class TaskPlannerController extends Controller
                     'user_id' => $assignee->id,
                     'type' => 'task_assigned',
                     'title' => "Tugas baru: {$task->title}",
-                    'body' => "{$task->creator->username} menugaskan Anda",
+                    'body' => "{$task->creator->display_name} menugaskan Anda",
                     'notifiable_type' => Task::class,
                     'notifiable_id' => $task->id,
-                    'data' => ['task_id' => $task->id, 'creator' => $task->creator->username],
+                    'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
                 ]);
             }
         }
@@ -741,8 +744,8 @@ class TaskPlannerController extends Controller
             ->map(fn ($a) => [
                 'id' => $a->id,
                 'user_id' => $a->user_id,
-                'username' => $a->user->username,
-                'initials' => strtoupper(substr($a->user->username, 0, 2)),
+                'username' => $a->user->display_name,
+                'initials' => strtoupper(substr($a->user->display_name, 0, 2)),
                 'content' => $a->content,
                 'attachments' => $a->attachments->map(fn ($att) => [
                     'url' => $att->attachment_url,
@@ -751,13 +754,13 @@ class TaskPlannerController extends Controller
                 ])->toArray(),
                 'reply_to' => $a->reply_to_id ? [
                     'id' => $a->replyTo->id,
-                    'username' => $a->replyTo->user?->username,
+                    'username' => $a->replyTo->user?->display_name,
                     'content' => Str::limit($a->replyTo->content ?? '', 120),
                 ] : null,
                 'replies' => $a->replies->map(fn ($r) => [
                     'id' => $r->id,
                     'user_id' => $r->user_id,
-                    'username' => $r->user->username,
+                    'username' => $r->user->display_name,
                     'content' => $r->content,
                     'created_at' => $r->created_at->toIso8601String(),
                     'attachments' => $r->attachments->map(fn ($att) => [
@@ -824,7 +827,7 @@ class TaskPlannerController extends Controller
                 Notification::create([
                     'user_id' => $uid,
                     'type' => 'mention',
-                    'title' => 'You were mentioned by '.Auth::user()->username,
+                    'title' => 'You were mentioned by '.Auth::user()->display_name,
                     'body' => Str::limit($activity->content ?? '', 120),
                     'notifiable_type' => TaskActivity::class,
                     'notifiable_id' => $activity->id,
@@ -841,7 +844,7 @@ class TaskPlannerController extends Controller
                     'user_id' => $parent->user_id,
                     'type' => 'mention',
                     'title' => 'Balasan pada aktivitas Anda',
-                    'body' => Auth::user()->username.' membalas: '.Str::limit($activity->content ?? '', 80),
+                    'body' => Auth::user()->display_name.' membalas: '.Str::limit($activity->content ?? '', 80),
                     'notifiable_type' => TaskActivity::class,
                     'notifiable_id' => $parent->id,
                     'data' => ['activity_id' => $activity->id, 'task_id' => $activity->task_id, 'mentioned_by' => Auth::id()],
@@ -1013,7 +1016,7 @@ class TaskPlannerController extends Controller
                 'user_id' => $task->creator_id,
                 'type' => 'visit_recorded',
                 'title' => "Kunjungan: {$task->title}",
-                'body' => Auth::user()->username.' merekam kunjungan',
+                'body' => Auth::user()->display_name.' merekam kunjungan',
                 'notifiable_type' => Task::class,
                 'notifiable_id' => $task->id,
                 'data' => ['task_id' => $task->id, 'visitor_id' => $visitorId],
@@ -1029,7 +1032,7 @@ class TaskPlannerController extends Controller
                 'user_id' => $assignee->id,
                 'type' => 'visit_recorded',
                 'title' => "Kunjungan: {$task->title}",
-                'body' => Auth::user()->username.' merekam kunjungan',
+                'body' => Auth::user()->display_name.' merekam kunjungan',
                 'notifiable_type' => Task::class,
                 'notifiable_id' => $task->id,
                 'data' => ['task_id' => $task->id, 'visitor_id' => $visitorId],
@@ -1048,8 +1051,8 @@ class TaskPlannerController extends Controller
             ->map(fn ($v) => [
                 'id' => $v->id,
                 'user_id' => $v->user_id,
-                'username' => $v->user->username,
-                'initials' => strtoupper(substr($v->user->username, 0, 2)),
+                'username' => $v->user->display_name,
+                'initials' => strtoupper(substr($v->user->display_name, 0, 2)),
                 'latitude' => (float) $v->latitude,
                 'longitude' => (float) $v->longitude,
                 'address' => $v->address,
@@ -1073,7 +1076,7 @@ class TaskPlannerController extends Controller
                 'notes' => $p->notes,
                 'file_url' => route('task-planner.proposal-view', ['id' => $id, 'proposal' => $p->id], false),
                 'file_size' => $p->file_size_formatted,
-                'uploader_name' => $p->uploader?->username ?? '—',
+                'uploader_name' => $p->uploader?->display_name ?? '—',
                 'created_at' => $p->created_at->toIso8601String(),
                 'time' => $p->created_at->diffForHumans(),
                 'exists' => $p->file_path && Storage::disk('public')->exists($p->file_path),
@@ -1156,7 +1159,7 @@ class TaskPlannerController extends Controller
                 'notes' => $proposal->notes,
                 'file_url' => route('task-planner.proposal-view', ['id' => $id, 'proposal' => $proposal->id], false),
                 'file_size' => $proposal->file_size_formatted,
-                'uploader_name' => $proposal->uploader?->username ?? '—',
+                'uploader_name' => $proposal->uploader?->display_name ?? '—',
                 'created_at' => $proposal->created_at->toIso8601String(),
                 'time' => $proposal->created_at->diffForHumans(),
             ],

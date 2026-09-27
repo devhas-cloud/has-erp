@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -17,6 +18,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'username',
+        'full_name',
         'email',
         'password',
         'phone_number',
@@ -31,11 +33,22 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = [
+        'display_name',
+    ];
+
     protected function casts(): array
     {
         return [
             'password' => 'hashed',
         ];
+    }
+
+    protected function displayName(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->full_name ?: $this->username,
+        );
     }
 
     public function division(): BelongsTo

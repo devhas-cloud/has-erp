@@ -38,7 +38,7 @@ class PoSupplierApprovalController extends Controller
             $query->where(function ($q) use ($searchValue) {
                 $q->where('quotation_number', 'like', "%{$searchValue}%")
                     ->orWhere('to_name', 'like', "%{$searchValue}%")
-                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%"));
+                    ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%")->orWhere('full_name', 'like', "%{$searchValue}%"));
             });
         }
 
@@ -62,12 +62,12 @@ class PoSupplierApprovalController extends Controller
                 'quotation_number' => $quotation->quotation_number ?? '—',
                 'to_name' => $quotation->to_name ?? '—',
                 'grand_total_label' => Quotation::formatMoney($quotation->grand_total),
-                'creator_name' => $quotation->creator?->username ?? '—',
+                'creator_name' => $quotation->creator?->display_name ?? '—',
                 'approval_count' => $approvals->count(),
                 'ready_for_supplier_po' => $quotation->isReadyForSupplierPo(),
                 'requires_dp' => $quotation->requires_dp ? 'Ya' : 'Tidak',
                 'approvers' => $approvals->map(fn ($a) => [
-                    'name' => $a->user?->username ?? '—',
+                    'name' => $a->user?->display_name ?? '—',
                     'approved_at' => $a->approved_at?->format('d/m/Y H:i'),
                 ])->values(),
                 'already_approved_by_me' => $approvals->contains('user_id', $userId),
