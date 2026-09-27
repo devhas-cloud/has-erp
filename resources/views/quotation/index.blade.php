@@ -31,6 +31,7 @@
                         <th style="width:50px">#</th>
                         <th>Nomor Quotation</th>
                         <th>To (Company)</th>
+                        <th>Division</th>
                         <th>Tanggal</th>
                         <th>Sales</th>
                         <th class="text-end">Total</th>
@@ -138,6 +139,9 @@ function initQuotationTable() {
                 }
             },
             { data: 'to_name', orderable: false, searchable: true,
+                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
+            },
+            { data: 'division_name', orderable: false, searchable: true,
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'date', orderable: true, searchable: false },

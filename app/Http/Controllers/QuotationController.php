@@ -787,6 +787,7 @@ class QuotationController extends Controller
                 'version' => $quotation->version,
                 'quotation_number' => $quotation->quotation_number ?? '—',
                 'to_name' => $quotation->to_name ?? '—',
+                'division_name' => $quotation->task?->dievision?->division_name ?? '—',
                 'date' => $quotation->date?->format('d/m/Y') ?? '—',
                 'date_raw' => $quotation->date?->toISOString(),
                 'sales_name' => $quotation->from_name ?? '—',
