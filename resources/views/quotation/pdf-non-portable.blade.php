@@ -337,7 +337,7 @@
                 </tr>
             @endforelse
         </tbody>
-        <tfoot>
+        <tfoot style="font-weight:bold;">
             <tr>
                 <td colspan="3"></td>
                 <td class="l">Subtotal</td>

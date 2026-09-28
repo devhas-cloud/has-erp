@@ -139,6 +139,29 @@
         white-space: pre-wrap;
         word-break: break-word;
     }
+    .qt-picker-div-toggle {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #e2e8f0;
+        border: none;
+        border-radius: .35rem;
+        padding: .45rem .65rem;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        cursor: pointer;
+        margin-bottom: .4rem;
+    }
+    .qt-picker-div-toggle:hover { background: #d5deeb; }
+    .qt-picker-div-toggle .chevron {
+        transition: transform .15s ease;
+        color: var(--text-muted);
+    }
+    .qt-picker-div-toggle.collapsed .chevron { transform: rotate(-90deg); }
 </style>
 @endsection
 
@@ -2631,28 +2654,44 @@ function qtBuildConfigPicker(container, $legend, clickable) {
         if (!it || !it.currency || it.currency === 'IDR' || it.price_currency == null) return '';
         return '<span class="qt-picker-fx">' + $('<div>').text(qtCurrencySymbol(it.currency) + ' ' + qtFmtPrice(it.price_currency)).html() + '</span>';
     };
+    var theadHtml = '<thead><tr>' +
+        '<th style="width:170px">Part Number</th>' +
+        '<th>Deskripsi</th>' +
+        '<th style="width:70px" class="text-center">Qty</th>' +
+        '<th style="width:190px" class="text-end">Harga</th>' +
+        '</tr></thead>';
+
+    // >1 config divisi -> tiap divisi jadi tabel sendiri dengan header yang bisa
+    // di-hide/show (collapse) agar modal tidak terlalu panjang.
+    var splitDivisions = configOrder.length > 1;
+    var rowBuffer = '';
+    var renderedAny = false;
+
     var addPoolRow = function(partNumber, desc, qty, price, indent, it) {
         var idx = pool.length;
         pool.push({ part_number: partNumber, description: desc, qty: qty, price: price });
         var removed = it && it.change_status === 'dihapus';
-        html += '<tr class="' + (clickable ? 'qt-item-picker-row' : '') + (removed ? ' qt-picker-removed' : '') + '" style="' + rowStyle + '" data-idx="' + idx + '">';
-        html += '<td style="padding-left:' + (8 + indent * 18) + 'px"><code>' + $('<div>').text(partNumber).html() + '</code></td>';
-        html += '<td>' + changeBadge(it) + (it && it.change_status && it.change_status !== 'sama' ? ' ' : '') + qtRenderDesc(desc) + prevLine(it) + '</td>';
-        html += '<td class="text-center">' + $('<div>').text(qty == null ? '' : qty).html() + '</td>';
-        html += '<td class="text-end" style="white-space:nowrap">' + (price ? 'Rp ' + qtFmtPrice(price) : '') + fxLine(it) + '</td>';
-        html += '</tr>';
+        rowBuffer += '<tr class="' + (clickable ? 'qt-item-picker-row' : '') + (removed ? ' qt-picker-removed' : '') + '" style="' + rowStyle + '" data-idx="' + idx + '">';
+        rowBuffer += '<td style="padding-left:' + (8 + indent * 18) + 'px"><code>' + $('<div>').text(partNumber).html() + '</code></td>';
+        rowBuffer += '<td>' + changeBadge(it) + (it && it.change_status && it.change_status !== 'sama' ? ' ' : '') + qtRenderDesc(desc) + prevLine(it) + '</td>';
+        rowBuffer += '<td class="text-center">' + $('<div>').text(qty == null ? '' : qty).html() + '</td>';
+        rowBuffer += '<td class="text-end" style="white-space:nowrap">' + (price ? 'Rp ' + qtFmtPrice(price) : '') + fxLine(it) + '</td>';
+        rowBuffer += '</tr>';
+    };
+
+    var wrapTable = function() {
+        return '<div class="table-responsive"><table class="table table-custom align-middle mb-0 qt-picker-table">' +
+            theadHtml + '<tbody>' + rowBuffer + '</tbody></table></div>';
     };
 
     var html = '';
-    var renderedAny = false;
 
     configOrder.forEach(function(cid) {
         var tree = treeByConfig[cid];
         if (!tree.roots.length && Object.keys(tree.byParent).length <= 1) return;
 
+        rowBuffer = '';
         var divName = configDivision[cid] || 'Lainnya';
-        html += '<tr style="background:#e2e8f0;font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px">' +
-            '<td colspan="4"><i class="fa-solid fa-database me-1"></i>Configuration Divisi : ' + $('<div>').text(divName).html() + '</td></tr>';
 
         // Pisahkan roots: punya children (dikelompokkan per kategori) vs tanpa children (Lain-lain).
         var catOrder = [], catMap = {}, lainLain = [];
@@ -2670,7 +2709,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
         });
 
         catOrder.forEach(function(cat) {
-            html += '<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)">' +
+            rowBuffer += '<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)">' +
                 '<td colspan="4"><i class="fa fa-tag me-1"></i>Category : ' + $('<div>').text(cat).html() + '</td></tr>';
             (catMap[cat] || []).forEach(function(root) {
                 renderedAny = true;
@@ -2703,7 +2742,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
             lainLain.sort(function(a, b) {
                 return (a.change_status === 'dihapus' ? 1 : 0) - (b.change_status === 'dihapus' ? 1 : 0);
             });
-            html += '<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)">' +
+            rowBuffer += '<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)">' +
                 '<td colspan="4"><i class="fa fa-tag me-1"></i>Category : Lain-lain</td></tr>';
             lainLain.forEach(function(root) {
                 renderedAny = true;
@@ -2724,15 +2763,29 @@ function qtBuildConfigPicker(container, $legend, clickable) {
             renderedAny = true;
             var idx = pool.length;
             pool.push({ part_number: '', description: configNotes[cid], qty: '', price: '' });
-            html += '<tr' + rowClass + ' style="' + rowStyle + '" data-idx="' + idx + '">' +
+            rowBuffer += '<tr' + rowClass + ' style="' + rowStyle + '" data-idx="' + idx + '">' +
                 '<td colspan="4" class="text-start" style="padding:6px 8px;font-style:italic;color:var(--text-muted);font-size:12px">' +
                 '<i class="fa-solid fa-note-sticky me-1"></i><strong>Catatan :</strong> ' + qtRenderDesc(configNotes[cid]) +
                 '</td></tr>';
         }
+
+        var tableHtml = wrapTable();
+        if (splitDivisions) {
+            var toggleId = 'qt-picker-div-' + cid;
+            html += '<div class="qt-picker-div mb-2">' +
+                '<button type="button" class="qt-picker-div-toggle" data-bs-toggle="collapse" data-bs-target="#' + toggleId + '" aria-expanded="true">' +
+                '<span><i class="fa-solid fa-database me-1"></i>Configuration Divisi : ' + $('<div>').text(divName).html() + '</span>' +
+                '<i class="fa fa-chevron-down chevron"></i>' +
+                '</button>' +
+                '<div id="' + toggleId + '" class="collapse show">' + tableHtml + '</div>' +
+                '</div>';
+        } else {
+            html += tableHtml;
+        }
     });
 
     if (!renderedAny) {
-        html = '<tr><td colspan="4" class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item config.</td></tr>';
+        html = '<div class="text-center" style="color:var(--text-muted);padding:16px">Tidak ada item config.</div>';
     }
     container.html(html);
 
@@ -2800,19 +2853,7 @@ function openQtItemPicker(btn) {
             </div>
             <div class="modal-body">
                 <div id="qt-config-diff-legend" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:12px"></div>
-                <div class="table-responsive">
-                    <table class="table table-custom align-middle mb-0 qt-picker-table">
-                        <thead>
-                            <tr>
-                                <th style="width:170px">Part Number</th>
-                                <th>Deskripsi</th>
-                                <th style="width:70px" class="text-center">Qty</th>
-                                <th style="width:190px" class="text-end">Harga</th>
-                            </tr>
-                        </thead>
-                        <tbody id="qt-config-diff-body"></tbody>
-                    </table>
-                </div>
+                <div id="qt-config-diff-body"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
@@ -2830,19 +2871,7 @@ function openQtItemPicker(btn) {
             </div>
             <div class="modal-body">
                 <div id="qt-item-picker-legend" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:12px"></div>
-                <div class="table-responsive">
-                    <table class="table table-custom align-middle mb-0 qt-picker-table">
-                        <thead>
-                            <tr>
-                                <th style="width:170px">Part Number</th>
-                                <th>Deskripsi</th>
-                                <th style="width:70px" class="text-center">Qty</th>
-                                <th style="width:190px" class="text-end">Harga</th>
-                            </tr>
-                        </thead>
-                        <tbody id="qt-item-picker-body"></tbody>
-                    </table>
-                </div>
+                <div id="qt-item-picker-body"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
