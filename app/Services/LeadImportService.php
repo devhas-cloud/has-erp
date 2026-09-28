@@ -52,39 +52,58 @@ class LeadImportService
     {
         $this->resolveLookups();
 
-        $handle = fopen($filePath, 'r');
-        if (! $handle) {
-            return ['success' => 0, 'failed' => 0, 'errors' => ['Cannot open file.'], 'created' => 0];
-        }
+        // File CSV dari Excel kadang ber-encoding UTF-16 ("CSV Unicode") → transkode ke UTF-8.
+        $utf8Path = $this->transcodeToUtf8($filePath);
 
         $success = 0;
         $failed = 0;
         $errors = [];
         $rowNum = 0;
 
-        while (($row = fgetcsv($handle)) !== false) {
-            $rowNum++;
-
-            // Skip header row
-            if ($rowNum === 1) {
-                continue;
+        try {
+            $handle = fopen($utf8Path, 'r');
+            if (! $handle) {
+                return ['success' => 0, 'failed' => 0, 'errors' => ['Cannot open file.'], 'created' => 0];
             }
 
-            // Skip empty rows
-            if (count(array_filter($row, fn ($v) => trim((string) $v) !== '')) === 0) {
-                continue;
+            // Baca baris pertama untuk deteksi delimiter (koma, titik-koma, tab, pipe)
+            $firstLine = fgets($handle);
+            if ($firstLine === false || trim($firstLine) === '') {
+                return ['success' => 0, 'failed' => 0, 'errors' => ['File is empty or invalid. CSV harus memiliki baris header.'], 'created' => 0];
             }
 
-            $result = $this->processRow($row, $rowNum, $userId);
-            if ($result === null) {
-                $success++;
-            } else {
-                $failed++;
-                $errors[] = "Baris {$rowNum}: {$result}";
+            $delimiter = $this->detectDelimiter($firstLine);
+            rewind($handle);
+
+            while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+                $rowNum++;
+
+                // Skip header row
+                if ($rowNum === 1) {
+                    continue;
+                }
+
+                // Skip empty rows
+                if (count(array_filter($row, fn ($v) => trim((string) $v) !== '')) === 0) {
+                    continue;
+                }
+
+                $result = $this->processRow($row, $rowNum, $userId);
+                if ($result === null) {
+                    $success++;
+                } else {
+                    $failed++;
+                    $errors[] = "Baris {$rowNum}: {$result}";
+                }
             }
+
+            fclose($handle);
+        } finally {
+            if (isset($handle) && is_resource($handle)) {
+                fclose($handle);
+            }
+            @unlink($utf8Path);
         }
-
-        fclose($handle);
 
         return [
             'success' => $success,
@@ -92,6 +111,57 @@ class LeadImportService
             'errors' => $errors,
             'created' => $success,
         ];
+    }
+
+    /**
+     * Baca file dan transkode ke UTF-8 jika bukan UTF-8 (mis. UTF-16 dari Excel).
+     * Menulis hasilnya ke file temp UTF-8 dan mengembalikan path-nya.
+     */
+    private function transcodeToUtf8(string $filePath): string
+    {
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            return $filePath;
+        }
+
+        $encoding = null;
+        if (str_starts_with($content, "\xFF\xFE")) {
+            $encoding = 'UTF-16LE';
+        } elseif (str_starts_with($content, "\xFE\xFF")) {
+            $encoding = 'UTF-16BE';
+        } elseif (str_contains($content, "\x00")) {
+            // UTF-16 tanpa BOM: deteksi lewat posisi byte NUL (LE → ganjil, BE → genap)
+            $sample = substr($content, 0, 256);
+            $len = strlen($sample);
+            $nulOdd = 0;
+            $nulEven = 0;
+            for ($i = 0; $i < $len; $i++) {
+                if ($sample[$i] === "\x00") {
+                    if ($i % 2 === 0) {
+                        $nulEven++;
+                    } else {
+                        $nulOdd++;
+                    }
+                }
+            }
+            if ($nulOdd > $nulEven) {
+                $encoding = 'UTF-16LE';
+            } elseif ($nulEven > $nulOdd) {
+                $encoding = 'UTF-16BE';
+            }
+        }
+
+        if ($encoding !== null) {
+            $content = mb_convert_encoding($content, 'UTF-8', $encoding);
+        }
+
+        // Strip BOM yang tersisa (UTF-16 hasil konversi atau UTF-8 ber-BOM)
+        $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'lead_import_').'.csv';
+        file_put_contents($tmp, $content);
+
+        return $tmp;
     }
 
     /**
@@ -252,6 +322,30 @@ class LeadImportService
 
             return 'Gagal menyimpan: '.$e->getMessage();
         }
+    }
+
+    /**
+     * Detect CSV delimiter by scanning the first line.
+     * Counts occurrences of comma, semicolon, tab, pipe — the one with the most wins.
+     * Falls back to comma.
+     */
+    private function detectDelimiter(string $firstLine): string
+    {
+        $candidates = [
+            ',' => substr_count($firstLine, ','),
+            ';' => substr_count($firstLine, ';'),
+            "\t" => substr_count($firstLine, "\t"),
+            '|' => substr_count($firstLine, '|'),
+        ];
+
+        $valid = array_filter($candidates, fn ($count) => $count > 0);
+        if (empty($valid)) {
+            return ',';
+        }
+
+        arsort($valid);
+
+        return key($valid);
     }
 
     /**

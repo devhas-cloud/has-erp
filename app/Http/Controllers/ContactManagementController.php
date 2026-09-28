@@ -15,9 +15,13 @@ use App\Models\RoleInProject;
 use App\Models\Source;
 use App\Models\Stage;
 use App\Models\User;
+use App\Services\ContactExportService;
+use App\Services\ContactImportService;
+use App\Services\ContactXlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ContactManagementController extends Controller
@@ -285,5 +289,92 @@ $sources = Source::where('status', 'Active')->get();
             'success' => true,
             'message' => 'Contact berhasil dihapus.',
         ]);
+    }
+
+    public function downloadTemplate()
+    {
+        $path = storage_path('app/private/templates/contact_import_template.xlsx');
+
+        $dir = dirname($path);
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $references = ContactImportService::getReferenceData();
+
+        $generator = new ContactXlsxTemplateGenerator;
+        $generator->generate($references, $path);
+
+        return response()->download($path, 'Contact_Import_Template.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:5120',
+        ]);
+
+        $file = $request->file('file');
+        $ext = $file->getClientOriginalExtension();
+        $filePath = $file->storeAs('imports', 'contact-import-'.uniqid().'.'.$ext);
+
+        $fullPath = Storage::path($filePath);
+
+        try {
+            $service = new ContactImportService;
+            $result = $service->import($fullPath, Auth::id());
+
+            return response()->json([
+                'success' => $result['failed'] === 0,
+                'message' => "Import selesai: {$result['success']} berhasil, {$result['failed']} gagal dari ".($result['success'] + $result['failed']).' data.',
+                'result' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal import: '.$e->getMessage(),
+            ], 500);
+        } finally {
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
+        }
+    }
+
+    public function export()
+    {
+        $query = AccountContact::with([
+            'accountCompany',
+            'contactOwner',
+            'assignedTo',
+            'jobTitle',
+            'source',
+            'division',
+            'contactMethod',
+            'roleInProject',
+        ])->where('status', 'Active');
+
+        // Sama seperti data(): user Sales non-Manager hanya melihat kontak yang ditugaskan padanya
+        if (strtolower(Auth::user()->division?->division_name) === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
+            $query->where('assigned_to_id', Auth::id());
+        }
+
+        $contacts = $query->orderBy('full_name')->get();
+
+        $headers = [
+            'Salutation', 'Full Name', 'Account', 'Email', 'Phone', 'Mobile',
+            'Job Title', 'Contact Source', 'Department', 'Contact Method', 'Role in Project',
+            'Assigned To', 'Contact Owner',
+            'Address Street', 'Address City', 'Address Province', 'Address Postal Code', 'Address Country',
+            'Status', 'Created At',
+        ];
+
+        $service = new ContactExportService;
+        $filePath = $service->export($contacts, $headers);
+
+        return response()->download($filePath, 'contacts-export-'.date('Y-m-d').'.xlsx')
+            ->deleteFileAfterSend(true);
     }
 }

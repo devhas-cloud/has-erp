@@ -3,18 +3,17 @@
 namespace App\Services;
 
 use App\Models\AccountCompany;
-use App\Models\BusinessEntity;
-use App\Models\BusinessValue;
-use App\Models\InteractionLevel;
-use App\Models\Segmentation;
+use App\Models\AccountContact;
+use App\Models\ContactMethod;
+use App\Models\Division;
+use App\Models\JobTitle;
+use App\Models\RoleInProject;
 use App\Models\Source;
-use App\Models\TypesAccountsCompany;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 
-class AccountImportService
+class ContactImportService
 {
-    private const COLUMN_COUNT = 23;
+    private const COLUMN_COUNT = 18;
 
     private array $lookups = [];
 
@@ -24,20 +23,19 @@ class AccountImportService
     private function resolveLookups(): void
     {
         $this->lookups = [
-            'field_type' => TypesAccountsCompany::where('status', 'Active')->pluck('id', 'type_name')->toArray(),
-            'account_source' => Source::where('status', 'Active')->pluck('id', 'source_name')->toArray(),
-            'segmentation' => Segmentation::where('status', 'Active')->pluck('id', 'segmentation_name')->toArray(),
-            'business_entity' => BusinessEntity::where('status', 'Active')->pluck('id', 'entity_name')->toArray(),
-            'business_value' => BusinessValue::where('status', 'Active')->pluck('id', 'value_name')->toArray(),
-            'interaction_level' => InteractionLevel::where('status', 'Active')->pluck('id', 'level_name')->toArray(),
-            'parent_account' => AccountCompany::pluck('id', 'account_name')->toArray(),
-            'end_user' => AccountCompany::pluck('id', 'account_name')->toArray(),
-            'account_owner' => User::pluck('id', 'username')->toArray(),
+            'account' => AccountCompany::where('status', 'Active')->pluck('id', 'account_name')->toArray(),
+            'job_title' => JobTitle::where('status', 'Active')->pluck('id', 'title_name')->toArray(),
+            'contact_source' => Source::where('status', 'Active')->pluck('id', 'source_name')->toArray(),
+            'department' => Division::where('type', 'External')->where('status', 'Active')->pluck('id', 'division_name')->toArray(),
+            'contact_method' => ContactMethod::where('status', 'Active')->pluck('id', 'method_name')->toArray(),
+            'role_in_project' => RoleInProject::where('status', 'Active')->pluck('id', 'role_name')->toArray(),
+            'assigned_to' => User::pluck('id', 'username')->toArray(),
+            'contact_owner' => User::pluck('id', 'username')->toArray(),
         ];
     }
 
     /**
-     * Import accounts from CSV file.
+     * Import contacts from CSV file.
      * Returns ['success' => N, 'failed' => N, 'errors' => [...], 'created' => N]
      */
     public function import(string $filePath, int $userId): array
@@ -150,7 +148,7 @@ class AccountImportService
         // Strip BOM yang tersisa (UTF-16 hasil konversi atau UTF-8 ber-BOM)
         $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
 
-        $tmp = tempnam(sys_get_temp_dir(), 'account_import_').'.csv';
+        $tmp = tempnam(sys_get_temp_dir(), 'contact_import_').'.csv';
         file_put_contents($tmp, $content);
 
         return $tmp;
@@ -166,23 +164,25 @@ class AccountImportService
         $row = array_map(fn ($v) => trim((string) $v), $row);
 
         [
-            $accountName, $fieldTypeName, $sourceName, $segmentationName, $businessEntityName,
-            $businessValueName, $interactionLevelName, $website, $phone, $description,
-            $parentAccountName, $endUserName,
-            $billStreet, $billCity, $billProvince, $billZip, $billCountry,
-            $shipStreet, $shipCity, $shipProvince, $shipZip, $shipCountry,
-            $ownerName,
+            $salutation, $fullName, $accountName, $email, $phone, $mobile,
+            $jobTitleName, $sourceName, $departmentName, $contactMethodName, $roleInProjectName,
+            $assignedToName, $ownerName,
+            $addressStreet, $addressCity, $addressProvince, $addressPostalCode, $addressCountry,
         ] = $row;
 
         // --- Validation ---
 
         $required = [
-            ['account_name', $accountName],
-            ['field_type', $fieldTypeName],
-            // ['account_source', $sourceName],
-            // ['segmentation', $segmentationName],
-            // ['business_entity', $businessEntityName],
-            // ['business_value', $businessValueName],
+            ['salutation', $salutation],
+            ['full_name', $fullName],
+            ['account', $accountName],
+            ['email', $email],
+            ['mobile', $mobile],
+            ['job_title', $jobTitleName],
+            ['contact_source', $sourceName],
+            ['department', $departmentName],
+            ['contact_method', $contactMethodName],
+            ['role_in_project', $roleInProjectName],
         ];
 
         foreach ($required as [$field, $value]) {
@@ -191,24 +191,34 @@ class AccountImportService
             }
         }
 
-        // Check account_name uniqueness
-        if (AccountCompany::where('account_name', $accountName)->exists()) {
-            return "account_name sudah digunakan: '{$accountName}'";
+        if (! in_array($salutation, ['Ibu', 'Bapak'])) {
+            return "salutation tidak valid: '{$salutation}'. Gunakan: Ibu, Bapak";
+        }
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return "email tidak valid: '{$email}'";
+        }
+
+        if (AccountContact::where('email', $email)->exists()) {
+            return "email sudah digunakan: '{$email}'";
+        }
+
+        if (AccountContact::where('mobile', $mobile)->exists()) {
+            return "mobile sudah digunakan: '{$mobile}'";
         }
 
         // --- Resolve lookups ---
         $lookupErrors = [];
 
-        $fieldTypeId = $this->resolve('field_type', $fieldTypeName, $lookupErrors, 'field_type');
-        $sourceId = $sourceName !== '' ? $this->resolve('account_source', $sourceName, $lookupErrors, 'account_source') : null;
-        $segmentationId = $segmentationName !== '' ? $this->resolve('segmentation', $segmentationName, $lookupErrors, 'segmentation') : null;
-        $businessEntityId = $businessEntityName !== '' ? $this->resolve('business_entity', $businessEntityName, $lookupErrors, 'business_entity') : null;
-        $businessValueId = $businessValueName !== '' ? $this->resolve('business_value', $businessValueName, $lookupErrors, 'business_value') : null;
+        $accountId = $this->resolve('account', $accountName, $lookupErrors, 'account');
+        $jobTitleId = $this->resolve('job_title', $jobTitleName, $lookupErrors, 'job_title');
+        $sourceId = $this->resolve('contact_source', $sourceName, $lookupErrors, 'contact_source');
+        $departmentId = $this->resolve('department', $departmentName, $lookupErrors, 'department');
+        $contactMethodId = $this->resolve('contact_method', $contactMethodName, $lookupErrors, 'contact_method');
+        $roleInProjectId = $this->resolve('role_in_project', $roleInProjectName, $lookupErrors, 'role_in_project');
 
-        $interactionLevelId = $interactionLevelName !== '' ? $this->resolve('interaction_level', $interactionLevelName, $lookupErrors, 'interaction_level') : null;
-        $parentAccountId = $parentAccountName !== '' ? $this->resolve('parent_account', $parentAccountName, $lookupErrors, 'parent_account') : null;
-        $endUserId = $endUserName !== '' ? $this->resolve('end_user', $endUserName, $lookupErrors, 'end_user') : null;
-        $ownerId = $ownerName !== '' ? $this->resolve('account_owner', $ownerName, $lookupErrors, 'account_owner') : $userId;
+        $assignedToId = $assignedToName !== '' ? $this->resolve('assigned_to', $assignedToName, $lookupErrors, 'assigned_to') : $userId;
+        $ownerId = $ownerName !== '' ? $this->resolve('contact_owner', $ownerName, $lookupErrors, 'contact_owner') : $userId;
 
         if (! empty($lookupErrors)) {
             return implode('; ', $lookupErrors);
@@ -216,30 +226,25 @@ class AccountImportService
 
         // --- Insert ---
         try {
-            AccountCompany::create([
-                'account_name' => $accountName,
-                'types_accounts_companies_id' => $fieldTypeId,
-                'sources_id' => $sourceId,
-                'segmentation_id' => $segmentationId,
-                'business_entities_id' => $businessEntityId,
-                'business_values_id' => $businessValueId,
-                'interaction_levels_id' => $interactionLevelId,
-                'website' => $website !== '' ? $website : null,
+            AccountContact::create([
+                'account_companies_id' => $accountId,
+                'full_name' => $fullName,
+                'salutation' => $salutation,
+                'email' => $email,
                 'phone' => $phone !== '' ? $phone : null,
-                'description' => $description !== '' ? $description : null,
-                'parent_account_id' => $parentAccountId,
-                'end_user' => $endUserId,
-                'address_billing_street' => $billStreet !== '' ? $billStreet : null,
-                'address_billing_city' => $billCity !== '' ? $billCity : null,
-                'address_billing_province' => $billProvince !== '' ? $billProvince : null,
-                'address_billing_postal_code' => $billZip !== '' ? $billZip : null,
-                'address_billing_country' => $billCountry !== '' ? $billCountry : null,
-                'address_shipping_street' => $shipStreet !== '' ? $shipStreet : null,
-                'address_shipping_city' => $shipCity !== '' ? $shipCity : null,
-                'address_shipping_province' => $shipProvince !== '' ? $shipProvince : null,
-                'address_shipping_postal_code' => $shipZip !== '' ? $shipZip : null,
-                'address_shipping_country' => $shipCountry !== '' ? $shipCountry : null,
-                'account_owner_id' => $ownerId,
+                'mobile' => $mobile,
+                'job_titles_id' => $jobTitleId,
+                'sources_id' => $sourceId,
+                'divisions_id' => $departmentId,
+                'contact_methods_id' => $contactMethodId,
+                'role_in_projects_id' => $roleInProjectId,
+                'contact_owner_id' => $ownerId,
+                'assigned_to_id' => $assignedToId,
+                'address_street' => $addressStreet !== '' ? $addressStreet : null,
+                'address_city' => $addressCity !== '' ? $addressCity : null,
+                'address_province' => $addressProvince !== '' ? $addressProvince : null,
+                'address_postal_code' => $addressPostalCode !== '' ? $addressPostalCode : null,
+                'address_country' => $addressCountry !== '' ? $addressCountry : null,
                 'status' => 'Active',
             ]);
 
@@ -279,15 +284,16 @@ class AccountImportService
     public static function getReferenceData(): array
     {
         return [
-            'Field Type' => TypesAccountsCompany::where('status', 'Active')->pluck('type_name')->toArray(),
-            'Account Source' => Source::where('status', 'Active')->pluck('source_name')->toArray(),
-            'Segmentation' => Segmentation::where('status', 'Active')->pluck('segmentation_name')->toArray(),
-            'Business Entity' => BusinessEntity::where('status', 'Active')->pluck('entity_name')->toArray(),
-            'Business Value' => BusinessValue::where('status', 'Active')->pluck('value_name')->toArray(),
-            'Interaction Level' => InteractionLevel::where('status', 'Active')->pluck('level_name')->toArray(),
-            'Parent Account (account_name)' => AccountCompany::pluck('account_name')->toArray(),
-            'End User (account_name)' => AccountCompany::pluck('account_name')->toArray(),
-            'Account Owner (username)' => User::pluck('username')->toArray(),
+            'Salutation' => ['Ibu', 'Bapak'],
+            'Account (account_name)' => AccountCompany::where('status', 'Active')->pluck('account_name')->toArray(),
+            'Job Title' => JobTitle::where('status', 'Active')->pluck('title_name')->toArray(),
+            'Contact Source' => Source::where('status', 'Active')->pluck('source_name')->toArray(),
+            'Department' => Division::where('type', 'External')->where('status', 'Active')->pluck('division_name')->toArray(),
+            'Contact Method' => ContactMethod::where('status', 'Active')->pluck('method_name')->toArray(),
+            'Role in Project' => RoleInProject::where('status', 'Active')->pluck('role_name')->toArray(),
+            'Assigned To (username)' => User::pluck('username')->toArray(),
+            'Contact Owner (username)' => User::pluck('username')->toArray(),
+            'Tanggal/No HP' => 'Mobile disimpan lengkap dengan kode negara (contoh: 628123456789).',
         ];
     }
 

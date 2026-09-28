@@ -76,6 +76,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     // Route::get('leads-management/{lead}/edit', ...)->name('leads-management.edit'); // dikomentari
 
     Route::get('contact-management/data', [ContactManagementController::class, 'data'])->name('contact-management.data');
+    Route::get('contact-management/template', [ContactManagementController::class, 'downloadTemplate'])->name('contact-management.template');
+    Route::post('contact-management/import', [ContactManagementController::class, 'import'])->name('contact-management.import');
+    Route::get('contact-management/export', [ContactManagementController::class, 'export'])->name('contact-management.export');
     Route::post('contact-management/{contact_management}/leads', [ContactManagementController::class, 'storeLead'])->name('contact-management.leads.store');
     Route::resource('contact-management', ContactManagementController::class);
 
