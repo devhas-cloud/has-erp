@@ -117,6 +117,15 @@ class PoSupplierApprovalController extends Controller
 
         $quotation->refresh();
 
+        // jika sudah 2 approver maka update oppertunity yang terhubung dengan quotation menjadi status "Close Won"
+        if ($quotation->isReadyForSupplierPo() && $quotation->opportunity) {
+            $opportunity = $quotation->opportunity;
+            $opportunity->stage_id = 5; // Assuming stage_id 5 is the "Close Won" stage
+            $opportunity->close_won_date = now()->format('Y-m-d');
+            $opportunity->close_date = now()->format('Y-m-d');
+            $opportunity->save();
+        }
+
         return response()->json([
             'success' => true,
             'message' => $quotation->isReadyForSupplierPo()
