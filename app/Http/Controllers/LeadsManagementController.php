@@ -277,7 +277,7 @@ class LeadsManagementController extends Controller
                         'end_user' => $request->end_user,
                         'phone' => $request->phone,
                         'account_owner_id' => Auth::id(),
-                        'status' => 'Active',
+                        'status' => 'Inactive',
                     ]);
                 } else {
                     $company = null;
@@ -553,13 +553,12 @@ class LeadsManagementController extends Controller
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $typesAccountsCompanies = TypesAccountsCompany::where('status', 'Active')->get();
         $categories = TaskCategory::with('division')->get();
-        $forecasts = Forecast::where('status', 'Active')->get();
 
         return view('leads-management.show', compact(
             'lead', 'jobTitles', 'divisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
             'businessValues', 'interactionLevels', 'users', 'accountCompanies',
-            'typesAccountsCompanies', 'categories', 'forecasts'
+            'typesAccountsCompanies', 'categories'
         ));
     }
 
@@ -644,6 +643,14 @@ class LeadsManagementController extends Controller
 
             $lead->lead_status = 'Qualified';
             $lead->save();
+
+            // ketika status Qualified maka AccountCompany dan Contact Person akan otomatis menjadi Active ( diakui oleh sistem )
+            if ($company->status !== 'Active') {
+                $company->status = 'Active';
+                $company->save();
+            }
+
+
 
             if ($lead->wasChanged('lead_status')) {
                 Log::record('qualified_lead', "Lead #{$lead->id}: {$lead->lead_title} menjadi Qualified", 'MOD_LEADS_MANAGEMENT', $lead);
@@ -732,6 +739,12 @@ class LeadsManagementController extends Controller
                 'owner_id' => Auth::id(),
                 'stage_id' => 1, // Assuming stage_id 1 is the initial stage for new opportunities
             ]);
+
+            // ketika status Qualified maka Contact Person akan otomatis menjadi Active ( diakui oleh sistem )
+            if ($lead->accountContact->status !== 'Active') {
+                $lead->accountContact->status = 'Active';
+                $lead->accountContact->save();
+            }
 
             // 4. Log
             if ($oldStatus !== 'Converted') {

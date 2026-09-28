@@ -730,7 +730,7 @@
                         <i class="fa fa-check-circle"></i><span> Qualified</span>
                     </button>
                     @elseif($lead->lead_status === 'Qualified')
-                    <button type="button" class="btn-accent" onclick="openConvertedModal()">
+                    <button type="button" class="btn-accent" onclick="confirmConverted()">
                         <i class="fa fa-check-double"></i><span> Converted</span>
                     </button>
                     @endif
@@ -1396,149 +1396,7 @@
 </div>
 @endpush
 
-@push('modals')
-<!-- ── Converted Modal ── -->
-<div class="modal fade" id="convertedModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title">Convert Lead</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="converted-form">
-                    @csrf
 
-                    <!-- ── Account Information ── -->
-                    <div class="lead-form-section close" style="display: none">
-                        <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
-                            <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Information</span>
-                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
-                        </div>
-                        <div class="lead-form-section-body">
-                            <div class="lead-form-row">
-                                <div class="form-group">
-                                    <label>Company</label>
-                                    <select id="conv-company" style="width:100%"></select>
-                                    <input type="hidden" id="conv-company-id" value="{{ $lead->account_companies_id }}" data-name="{{ $lead->accountCompany?->account_name }}">
-                                </div>
-                            </div>
-                            <div class="lead-form-row">
-                                <div class="form-group">
-                                    <label>Field Type</label>
-                                    <select id="conv-field-type">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($typesAccountsCompanies as $tac)
-                                        <option value="{{ $tac->id }}" {{ $lead->accountCompany?->types_accounts_companies_id == $tac->id ? 'selected' : '' }}>{{ $tac->type_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Segmentation</label>
-                                    <select id="conv-segmentation">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($segmentations as $seg)
-                                        <option value="{{ $seg->id }}" {{ $lead->accountCompany?->segmentation_id == $seg->id ? 'selected' : '' }}>{{ $seg->segmentation_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="lead-form-row">
-                                <div class="form-group">
-                                    <label>Business Entity</label>
-                                    <select id="conv-biz-entity">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($businessEntities as $be)
-                                        <option value="{{ $be->id }}" {{ $lead->accountCompany?->business_entities_id == $be->id ? 'selected' : '' }}>{{ $be->entity_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Business Value</label>
-                                    <select id="conv-biz-value">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($businessValues as $bv)
-                                        <option value="{{ $bv->id }}" {{ $lead->accountCompany?->business_values_id == $bv->id ? 'selected' : '' }}>{{ $bv->value_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Interaction Level</label>
-                                    <select id="conv-interaction">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($interactionLevels as $il)
-                                        <option value="{{ $il->id }}" {{ $lead->accountCompany?->interaction_levels_id == $il->id ? 'selected' : '' }}>{{ $il->level_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="lead-form-row">
-                                <div class="form-group">
-                                    <label>Address Street</label>
-                                    <input type="text" id="conv-addr-street" value="{{ $lead->accountCompany?->address_billing_street }}">
-                                </div>
-                            </div>
-                            <div class="lead-form-row">
-                                <div class="form-group"><label>City</label><input type="text" id="conv-addr-city" value="{{ $lead->accountCompany?->address_billing_city }}"></div>
-                                <div class="form-group"><label>Province</label><input type="text" id="conv-addr-province" value="{{ $lead->accountCompany?->address_billing_province }}"></div>
-                                <div class="form-group small"><label>Zip</label><input type="text" id="conv-addr-zip" value="{{ $lead->accountCompany?->address_billing_postal_code }}"></div>
-                                <div class="form-group"><label>Country</label><input type="text" id="conv-addr-country" value="{{ $lead->accountCompany?->address_billing_country }}"></div>
-                            </div>
-                            <div class="lead-form-row">
-                                <div class="form-group">
-                                    <label>End User</label>
-                                    <select id="conv-end-user">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($accountCompanies as $ac)
-                                        <option value="{{ $ac->id }}" {{ $lead->accountCompany?->end_user == $ac->id ? 'selected' : '' }}>{{ $ac->account_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ── BAT Information ── -->
-                    <div class="lead-form-section open">
-                        <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
-                            <span><i class="fa fa-check-circle me-2" style="color:var(--accent)"></i>BAT Information</span>
-                            <span class="chevron"><i class="fa fa-chevron-down"></i></span>
-                        </div>
-                        <div class="lead-form-section-body">
-                            <div class="lead-form-row">
-                                <div class="form-group">
-                                    <label>Probability (%)</label>
-                                    <input type="number" id="conv-probability" value="0" min="0" max="100" style="width:100%;padding:8px 12px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit">
-                                </div>
-                                <div class="form-group">
-                                    <label>Forecast <span class="text-danger">*</span></label>
-                                    <select id="conv-forecast" style="width:100%;padding:8px 12px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit">
-                                        <option value="">— Pilih —</option>
-                                        @foreach($forecasts as $f)
-                                        <option value="{{ $f->id }}">{{ $f->forecast_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="lead-form-row">
-                                <label class="form-check-inline"><input type="checkbox" id="conv-budget" value="1"> Budget</label>
-                                <label class="form-check-inline"><input type="checkbox" id="conv-authorize" value="1"> Authorize</label>
-                                <label class="form-check-inline"><input type="checkbox" id="conv-timeline" value="1"> Timeline</label>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-ghost" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-sm btn-accent" id="btn-confirm-converted">
-                    <i class="fa fa-check-double"></i> Confirm Converted
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-@endpush
 
 @push('modals')
 <!-- ── Qualified Modal ── -->
@@ -2700,145 +2558,48 @@ $(document).on('click', '#btn-confirm-qualified', function() {
     });
 });
 
-// ── Converted Modal ──
-function openConvertedModal() {
-    initConvCompanySelect2();
-    new bootstrap.Modal(document.getElementById('convertedModal')).show();
-}
+// ── Konversi Lead → Opportunity (konfirmasi Swal) ──
+function confirmConverted() {
+    Swal.fire({
+        title: 'Yakin ingin Converted?',
+        text: 'Lead "' + '{{ $lead->lead_title }}' + '" akan dikonversi menjadi Opportunity.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Converted',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#2563eb',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
 
-function initConvCompanySelect2() {
-    if (!$('#conv-company').hasClass('select2-hidden-accessible')) {
-        const $convCompany = $('#conv-company');
-        const $convCompanyId = $('#conv-company-id');
-
-        $convCompany.select2({
-            theme: 'bootstrap-5',
-            placeholder: 'Ketik nama perusahaan...',
-            allowClear: true,
-            width: '100%',
-            tags: true,
-            createTag: function(params) {
-                return { id: params.term, text: params.term + ' (new)', newTag: true };
-            },
-            dropdownParent: $('#convertedModal'),
-            ajax: {
-                url: '{{ route("leads-management.search-companies") }}',
-                dataType: 'json',
-                delay: 250,
-                data: function(params) { return { q: params.term }; },
-                processResults: function(res) { return { results: res.results }; }
+        Swal.fire({
+            title: 'Processing...',
+            text: 'Mengonversi lead menjadi opportunity.',
+            allowOutsideClick: false,
+            didOpen: function() {
+                Swal.showLoading();
+                $.ajax({
+                    url: '{{ route("leads-management.converted", $lead->id) }}',
+                    type: 'POST',
+                    data: { _token: '{{ csrf_token() }}' },
+                    success: function(res) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: res.message || 'Lead successfully converted to Opportunity.',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        setTimeout(function() { location.reload(); }, 1200);
+                    },
+                    error: function(xhr) {
+                        Swal.close();
+                        toastr.error(xhr.responseJSON?.message || 'Failed to convert lead.');
+                    }
+                });
             }
-        }).on('select2:select', function(e) {
-            var c = e.params.data;
-            if (c.newTag) {
-                $convCompanyId.val('');
-            } else {
-                $convCompanyId.val(c.id);
-                if (c.segmentation_id) $('#conv-segmentation').val(c.segmentation_id);
-                if (c.account_types_id) $('#conv-account-type').val(c.account_types_id);
-                if (c.types_accounts_companies_id) $('#conv-field-type').val(c.types_accounts_companies_id);
-                if (c.business_entities_id) $('#conv-biz-entity').val(c.business_entities_id);
-                if (c.business_values_id) $('#conv-biz-value').val(c.business_values_id);
-                if (c.interaction_levels_id) $('#conv-interaction').val(c.interaction_levels_id);
-                if (c.address_billing_street) $('#conv-addr-street').val(c.address_billing_street);
-                if (c.address_billing_city) $('#conv-addr-city').val(c.address_billing_city);
-                if (c.address_billing_province) $('#conv-addr-province').val(c.address_billing_province);
-                if (c.address_billing_postal_code) $('#conv-addr-zip').val(c.address_billing_postal_code);
-                if (c.address_billing_country) $('#conv-addr-country').val(c.address_billing_country);
-            }
-        }).on('select2:clear', function() {
-            $convCompanyId.val('');
         });
-
-        var existingId = $convCompanyId.val();
-        var existingName = $convCompanyId.data('name');
-        if (existingId && existingName) {
-            var option = new Option(existingName, existingId, true, true);
-            $convCompany.append(option).trigger('change');
-        }
-    }
-
-    if (!$('#conv-end-user').hasClass('select2-hidden-accessible')) {
-        $('#conv-end-user').select2({
-            theme: 'bootstrap-5',
-            placeholder: '— Pilih —',
-            allowClear: true,
-            width: '100%',
-            dropdownParent: $('#convertedModal')
-        });
-    }
-}
-
-$(document).on('click', '#btn-confirm-converted', function() {
-    const $btn = $(this);
-
-    $('#converted-form .is-invalid').removeClass('is-invalid');
-
-    if (!$('#conv-forecast').val()) {
-        $('#conv-forecast').addClass('is-invalid');
-        toastr.error('Forecast wajib dipilih.');
-        $('#conv-forecast').focus();
-        return;
-    }
-
-    if (!$('#conv-budget').is(':checked')) {
-        toastr.error('Budget harus dipilih.');
-        return;
-    }
-
-    if (!$('#conv-authorize').is(':checked')) {
-        toastr.error('Authorize harus dipilih.');
-        return;
-    }
-
-    if (!$('#conv-timeline').is(':checked')) {
-        toastr.error('Timeline harus dipilih.');
-        return;
-    }
-
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Processing...');
-
-    var companyId = $('#conv-company-id').val();
-    var data = {
-        _token: '{{ csrf_token() }}',
-        types_accounts_companies_id: $('#conv-field-type').val(),
-        segmentation_id: $('#conv-segmentation').val(),
-        account_types_id: $('#conv-account-type').val(),
-        business_entities_id: $('#conv-biz-entity').val(),
-        business_values_id: $('#conv-biz-value').val(),
-        interaction_levels_id: $('#conv-interaction').val(),
-        address_street: $('#conv-addr-street').val(),
-        address_city: $('#conv-addr-city').val(),
-        address_province: $('#conv-addr-province').val(),
-        address_zip: $('#conv-addr-zip').val(),
-        address_country: $('#conv-addr-country').val(),
-        end_user: $('#conv-end-user').val(),
-        budget: $('#conv-budget').is(':checked') ? '1' : '0',
-        authorize: $('#conv-authorize').is(':checked') ? '1' : '0',
-        timeline: $('#conv-timeline').is(':checked') ? '1' : '0',
-        close_won_date: $('#conv-close-won-date').val(),
-        probability: $('#conv-probability').val(),
-        forecast_id: $('#conv-forecast').val(),
-    };
-
-    if (companyId) {
-        data.account_companies_id = companyId;
-    }
-
-    $.ajax({
-        url: '{{ route("leads-management.converted", $lead->id) }}',
-        type: 'POST',
-        data: data,
-        success: function(res) {
-            toastr.success(res.message);
-            bootstrap.Modal.getInstance(document.getElementById('convertedModal')).hide();
-            location.reload();
-        },
-        error: function(xhr) {
-            $btn.prop('disabled', false).html('<i class="fa fa-check-double"></i> Confirm Converted');
-            toastr.error(xhr.responseJSON?.message || 'Failed to convert lead.');
-        }
     });
-});
+}
 </script>
 @endsection
