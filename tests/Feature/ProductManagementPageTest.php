@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Division;
 use App\Models\MasterProduct;
 use App\Models\User;
+use App\Services\ProductImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -44,6 +45,8 @@ class ProductManagementPageTest extends TestCase
             'code' => 'E-514-4-075',
             'brand' => 's::can',
             'category' => 'Sensor',
+            'type' => 'Main',
+            'parameter' => 's::can / 0.01pH',
             'division_id' => $this->createDivision()->id,
             'description' => 'Sensor pH untuk water monitoring',
             'price' => 12500000.00,
@@ -82,6 +85,8 @@ class ProductManagementPageTest extends TestCase
         $this->assertSame('E-514-4-075', $response->json('data.0.code'));
         $this->assertSame('WATER', $response->json('data.0.division_name'));
         $this->assertSame('12,500,000', $response->json('data.0.price_formatted'));
+        $this->assertSame('Main', $response->json('data.0.type'));
+        $this->assertSame('s::can / 0.01pH', $response->json('data.0.parameter'));
     }
 
     public function test_store_creates_product(): void
@@ -94,6 +99,8 @@ class ProductManagementPageTest extends TestCase
                 'code' => 'E-532-pro-075',
                 'brand' => 's::can',
                 'category' => 'Sensor',
+                'type' => 'Main',
+                'parameter' => 's::can / 0.05ppm',
                 'division_id' => $division->id,
                 'description' => 'Sensor ammonia',
                 'price' => 15000000.00,
@@ -102,7 +109,26 @@ class ProductManagementPageTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true);
 
-        $this->assertDatabaseHas('master_products', ['code' => 'E-532-pro-075']);
+        $this->assertDatabaseHas('master_products', [
+            'code' => 'E-532-pro-075',
+            'type' => 'Main',
+            'parameter' => 's::can / 0.05ppm',
+        ]);
+    }
+
+    public function test_store_rejects_invalid_type(): void
+    {
+        $this->actingAs($this->admin)
+            ->postJson(route('product-management.store'), [
+                'code' => 'INV-001',
+                'price' => 1000,
+                'status' => 'Active',
+                'type' => 'Spare',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('type');
+
+        $this->assertDatabaseMissing('master_products', ['code' => 'INV-001']);
     }
 
     public function test_store_rejects_duplicate_code(): void
@@ -331,6 +357,8 @@ class ProductManagementPageTest extends TestCase
                 'code' => 'E-514-4-075',
                 'brand' => 's::can',
                 'category' => 'Sensor',
+                'type' => 'Service',
+                'parameter' => 'kalibrasi tahunan',
                 'division_id' => $division->id,
                 'description' => 'Deskripsi baru',
                 'price' => 13000000.00,
@@ -342,8 +370,195 @@ class ProductManagementPageTest extends TestCase
         $fresh = $product->fresh();
         $this->assertSame('pH::lyser pro V2', $fresh->name);
         $this->assertSame('Sensor', $fresh->category);
+        $this->assertSame('Service', $fresh->type);
+        $this->assertSame('kalibrasi tahunan', $fresh->parameter);
         $this->assertSame('Deskripsi baru', $fresh->description);
         $this->assertSame('Inactive', $fresh->status);
         $this->assertSame($division->id, $fresh->division_id);
+    }
+
+    public function test_import_parses_type_parameter(): void
+    {
+        $csv = "Name,Code,Type,Parameter,Price,Status\n"
+            ."Servis Kalibrasi,SVC-001,Service,Kalibrasi 1 tahun,250000,Active\n"
+            ."Sparepart X,SPR-001,Acc,s::can,50000,Active\n"
+            ."Tanpa Klasifikasi,EMP-001,,,5000,Active\n";
+
+        $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
+
+        $this->actingAs($this->admin)
+            ->post(route('product-management.import'), ['file' => $file])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('result.success', 3);
+
+        $this->assertDatabaseHas('master_products', [
+            'code' => 'SVC-001',
+            'type' => 'Service',
+            'parameter' => 'Kalibrasi 1 tahun',
+        ]);
+        $this->assertDatabaseHas('master_products', [
+            'code' => 'SPR-001',
+            'type' => 'Acc',
+            'parameter' => 's::can',
+        ]);
+        $this->assertDatabaseHas('master_products', [
+            'code' => 'EMP-001',
+            'type' => null,
+            'parameter' => null,
+        ]);
+    }
+
+    public function test_import_rejects_invalid_type(): void
+    {
+        $csv = "Code,Type,Price,Status\n"
+            ."BAD-1,Spare,1000,Active\n"
+            ."OK-1,Acc,1000,Active\n";
+
+        $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
+
+        $this->actingAs($this->admin)
+            ->post(route('product-management.import'), ['file' => $file])
+            ->assertOk()
+            ->assertJsonPath('result.success', 1)
+            ->assertJsonPath('result.failed', 1);
+
+        $this->assertDatabaseHas('master_products', [
+            'code' => 'OK-1',
+            'type' => 'Acc',
+        ]);
+        $this->assertDatabaseMissing('master_products', ['code' => 'BAD-1']);
+    }
+
+    public function test_import_rejects_external_division(): void
+    {
+        Division::create([
+            'division_name' => 'VENDOR-EXT',
+            'description' => 'Eksternal',
+            'type' => 'External',
+            'status' => 'Active',
+        ]);
+        $internal = $this->createDivision(); // WATER, tipe Internal
+
+        $csv = "Code,Division,Price,Status\n"
+            ."EXT-1,VENDOR-EXT,1000,Active\n"
+            ."INT-1,WATER,1000,Active\n";
+
+        $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
+
+        $this->actingAs($this->admin)
+            ->post(route('product-management.import'), ['file' => $file])
+            ->assertOk()
+            ->assertJsonPath('result.success', 1)
+            ->assertJsonPath('result.failed', 1)
+            ->assertJsonPath('result.errors.0', fn ($e) => str_contains($e, 'VENDOR-EXT'));
+
+        $this->assertDatabaseMissing('master_products', ['code' => 'EXT-1']);
+        $this->assertDatabaseHas('master_products', [
+            'code' => 'INT-1',
+            'division_id' => $internal->id,
+        ]);
+    }
+
+    public function test_get_reference_data_only_lists_internal_divisions(): void
+    {
+        Division::create([
+            'division_name' => 'VENDOR-EXT',
+            'description' => 'Eksternal',
+            'type' => 'External',
+            'status' => 'Active',
+        ]);
+        $this->createDivision(); // WATER, tipe Internal
+
+        $references = ProductImportService::getReferenceData();
+
+        $this->assertContains('WATER', $references['division']);
+        $this->assertNotContains('VENDOR-EXT', $references['division']);
+    }
+
+    public function test_data_endpoint_applies_filters(): void
+    {
+        $division = $this->createDivision();
+
+        $this->createProduct(['name' => 'Produk 1', 'code' => 'P-1', 'status' => 'Active', 'type' => 'Acc']);
+        $this->createProduct(['name' => 'Produk 2', 'code' => 'P-2', 'status' => 'Inactive', 'type' => 'Service', 'category' => 'Aksesoris']);
+        $this->createProduct(['name' => 'Produk 3', 'code' => 'P-3', 'status' => 'Active', 'type' => 'Main', 'division_id' => $division->id]);
+
+        $response = $this->actingAs($this->admin)
+            ->getJson(route('product-management.data').'?status=Active')
+            ->assertOk();
+
+        $this->assertSame(2, $response->json('recordsFiltered'));
+
+        $response = $this->actingAs($this->admin)
+            ->getJson(route('product-management.data').'?type=Main')
+            ->assertOk();
+
+        $this->assertSame(1, $response->json('recordsFiltered'));
+
+        $response = $this->actingAs($this->admin)
+            ->getJson(route('product-management.data').'?category=Aksesoris')
+            ->assertOk();
+
+        $this->assertSame(1, $response->json('recordsFiltered'));
+
+        $response = $this->actingAs($this->admin)
+            ->getJson(route('product-management.data').'?division_id='.$division->id)
+            ->assertOk();
+
+        $this->assertSame(1, $response->json('recordsFiltered'));
+    }
+
+    public function test_export_applies_filters(): void
+    {
+        $this->createProduct(['name' => 'Produk A', 'code' => 'P-1', 'status' => 'Active']);
+        $this->createProduct(['name' => 'Produk B', 'code' => 'P-2', 'status' => 'Inactive']);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('product-management.export', ['status' => 'Inactive']))
+            ->assertOk();
+
+        $this->assertStringContainsString('products-export-', $response->headers->get('content-disposition'));
+    }
+
+    public function test_data_endpoint_accepts_full_datatables_payload(): void
+    {
+        $this->createProduct(['name' => 'Produk Filter', 'code' => 'P-1', 'status' => 'Active']);
+
+        $params = [
+            'draw' => 1,
+            'columns[0][data]' => 'DT_RowIndex',
+            'columns[0][name]' => '',
+            'columns[0][searchable]' => 'false',
+            'columns[0][orderable]' => 'false',
+            'columns[1][data]' => 'name_display',
+            'columns[1][name]' => '',
+            'columns[1][searchable]' => 'true',
+            'columns[1][orderable]' => 'true',
+            'columns[1][search][value]' => '',
+            'columns[1][search][regex]' => 'false',
+            'order[0][column]' => '1',
+            'order[0][dir]' => 'asc',
+            'start' => '0',
+            'length' => '10',
+            'search[value]' => '',
+            'search[regex]' => 'false',
+            'category' => '',
+            'type' => '',
+            'division_id' => '',
+            'status' => '',
+        ];
+
+        $this->actingAs($this->admin)
+            ->getJson(route('product-management.data').'?'.http_build_query($params))
+            ->assertOk()
+            ->assertJsonPath('recordsTotal', 1)
+            ->assertJsonPath('recordsFiltered', 1);
+
+        $params['search[value]'] = 'Filter';
+        $this->actingAs($this->admin)
+            ->getJson(route('product-management.data').'?'.http_build_query($params))
+            ->assertOk()
+            ->assertJsonPath('recordsFiltered', 1);
     }
 }

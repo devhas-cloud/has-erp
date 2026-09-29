@@ -20,6 +20,26 @@
         word-break: break-word;
     }
     .info-table tr + tr td { border-top: 1px solid var(--card-border); }
+    .filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .filter-bar select {
+        padding: 5px 8px;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        background: var(--card-bg, #fff);
+        color: var(--text-primary);
+    }
+    .filter-bar .select2-container .select2-selection--single {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        font-size: 12px;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm);
+    }
+    .filter-bar .select2-container .select2-selection--single .select2-selection__arrow {
+        height: 28px;
+    }
 </style>
 @endsection
 
@@ -31,14 +51,6 @@
     </div>
     @if($canCreate)
     <div class="page-header-actions">
-        <a href="{{ route('product-management.export') }}" class="btn btn-outline-secondary btn-sm me-2" title="Export Data">
-            <i class="fa fa-download"></i>
-            <span>Export</span>
-        </a>
-        <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="openImportModal()">
-            <i class="fa fa-upload"></i>
-            <span>Import</span>
-        </button>
         <button type="button" class="btn-accent" onclick="openCreateModal()">
             <i class="fa fa-plus"></i>
             <span>Tambah Product</span>
@@ -49,7 +61,42 @@
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-box me-2" style="color:var(--accent)"></i>Daftar Produk</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px">
+            <span><i class="fa-solid fa-box me-2" style="color:var(--accent)"></i>Daftar Produk</span>
+            <div class="filter-bar">
+                <select id="filter-category" onchange="productTable.ajax.reload()">
+                    <option value="">All Categories</option>
+                    @foreach($categories as $cat)
+                        <option value="{{ $cat }}">{{ $cat }}</option>
+                    @endforeach
+                </select>
+                <select id="filter-type" onchange="productTable.ajax.reload()">
+                    <option value="">All Type</option>
+                    <option value="Acc">Acc</option>
+                    <option value="Main">Main</option>
+                    <option value="Service">Service</option>
+                </select>
+                <select id="filter-division" onchange="productTable.ajax.reload()">
+                    <option value="">All Divisions</option>
+                    @foreach($divisions as $division)
+                        <option value="{{ $division->id }}">{{ $division->division_name }}</option>
+                    @endforeach
+                </select>
+                <select id="filter-status" onchange="productTable.ajax.reload()">
+                    <option value="">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                </select>
+                <a href="javascript:void(0)" class="btn btn-outline-secondary btn-sm me-2" title="Export Data" onclick="exportProducts()">
+                    <i class="fa fa-download"></i>
+                    <span>Export</span>
+                </a>
+                <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="openImportModal()">
+                    <i class="fa fa-upload"></i>
+                    <span>Import</span>
+                </button>
+            </div>
+        </div>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -58,9 +105,9 @@
                     <tr>
                         <th style="width:50px">#</th>
                         <th>Nama Produk</th>
-                        <th>Code</th>
                         <th>Brand</th>
                         <th>Kategori</th>
+                        <th>Tipe</th>
                         <th>Divisi</th>
                         <th>Harga</th>
                         <th>Status</th>
@@ -108,6 +155,23 @@
                             <div class="mb-3">
                                 <label class="form-label">Kategori</label>
                                 <input type="text" id="product-category" class="form-control" placeholder="Kategori produk">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Type</label>
+                                <select id="product-type" class="form-select">
+                                    <option value="">— Pilih —</option>
+                                    <option value="Acc">Acc</option>
+                                    <option value="Main">Main</option>
+                                    <option value="Service">Service</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Parameter</label>
+                                <input type="text" id="product-parameter" class="form-control" placeholder="Parameter / spesifikasi">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -247,6 +311,14 @@
                                 <td id="pd-category">—</td>
                             </tr>
                             <tr>
+                                <td>Type</td>
+                                <td id="pd-type">—</td>
+                            </tr>
+                            <tr>
+                                <td>Parameter</td>
+                                <td id="pd-parameter">—</td>
+                            </tr>
+                            <tr>
                                 <td>Divisi</td>
                                 <td id="pd-division">—</td>
                             </tr>
@@ -296,6 +368,29 @@ let productTable = null;
 const productEditUrl = '{{ route("product-management.edit", "__ID__") }}';
 const productUpdateUrl = '{{ route("product-management.update", "__ID__") }}';
 const productDeleteUrl = '{{ route("product-management.destroy", "__ID__") }}';
+const productExportUrl = '{{ route("product-management.export") }}';
+
+function exportProducts() {
+    var params = new URLSearchParams();
+
+    if (productTable) {
+        var search = productTable.search();
+        if (search) params.set('search', search);
+    }
+
+    var category = $('#filter-category').val();
+    var type = $('#filter-type').val();
+    var division = $('#filter-division').val();
+    var status = $('#filter-status').val();
+
+    if (category) params.set('category', category);
+    if (type) params.set('type', type);
+    if (division) params.set('division_id', division);
+    if (status) params.set('status', status);
+
+    var qs = params.toString();
+    window.open(productExportUrl + (qs ? '?' + qs : ''), '_blank');
+}
 
 function initProductTable() {
     if (productTable) {
@@ -305,7 +400,15 @@ function initProductTable() {
     productTable = $('#product-table').DataTable({
         processing: true,
         serverSide: true,
-        ajax: '{{ route("product-management.data") }}',
+        ajax: {
+            url: '{{ route("product-management.data") }}',
+            data: function(d) {
+                d.category = $('#filter-category').val();
+                d.type = $('#filter-type').val();
+                d.division_id = $('#filter-division').val();
+                d.status = $('#filter-status').val();
+            }
+        },
         order: [[1, 'asc']],
         autoWidth: true,
         columnDefs: [
@@ -314,26 +417,27 @@ function initProductTable() {
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center', width: '48px' },
             {
-                data: 'name_display', orderable: true, searchable: true, width: '24%',
+                data: 'name_display', orderable: true, searchable: true, width: '26%',
                 render: function(data, type, row) {
                     var img = row.image_url
                         ? '<img src="' + row.image_url + '" class="avatar-circle" alt="" style="background:transparent">'
                         : '<div class="avatar-circle">' + row.initials + '</div>';
                     return '<div style="display:flex;align-items:center;gap:10px;min-width:0">' +
                         img +
-                        '<strong style="color:var(--text-primary);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + data + '</strong>' +
+                        '<div style="min-width:0">' +
+                        '<strong style="color:var(--text-primary);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">' + data + '</strong>' +
+                        '<code style="color:var(--accent);font-size:11px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (row.code || '—') + '</code>' +
+                        '</div>' +
                         '</div>';
                 }
             },
-            { data: 'code', orderable: true, searchable: true, width: '10%',
-                render: function(data) {
-                    return '<code style="color:var(--accent)">' + data + '</code>';
-                }
-            },
-            { data: 'brand', orderable: true, searchable: true, width: '11%',
+            { data: 'brand', orderable: true, searchable: true, width: '12%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'category', orderable: true, searchable: true, width: '12%',
+                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
+            },
+            { data: 'type', orderable: true, searchable: true, width: '8%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'division_name', orderable: false, searchable: true, width: '9%',
@@ -417,6 +521,8 @@ function openEditModal(id) {
         $('#product-code').val(p.code || '');
         $('#product-brand').val(p.brand || '');
         $('#product-category').val(p.category || '');
+        $('#product-type').val(p.type || '');
+        $('#product-parameter').val(p.parameter || '');
         $('#product-division').val(p.division_id || '');
         $('#product-price').val(p.price || '');
         $('#product-currency').val(p.currency_id || '');
@@ -443,6 +549,8 @@ function openDetailModal(id) {
         $('#pd-code').text(p.code || '—');
         $('#pd-brand').text(p.brand || '—');
         $('#pd-category').text(p.category || '—');
+        $('#pd-type').text(p.type || '—');
+        $('#pd-parameter').text(p.parameter || '—');
         $('#pd-division').text(p.division_name || '—');
         $('#pd-price').text((p.currency_symbol || p.currency_name || 'Rp') + ' ' + Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
 
@@ -515,6 +623,8 @@ $(document).on('click', '#btn-save-product', function() {
     fd.append('code', code);
     fd.append('brand', $('#product-brand').val().trim());
     fd.append('category', $('#product-category').val().trim());
+    fd.append('type', $('#product-type').val());
+    fd.append('parameter', $('#product-parameter').val().trim());
     fd.append('division_id', $('#product-division').val());
     fd.append('description', $('#product-description').val().trim());
     fd.append('price', price);
@@ -559,6 +669,8 @@ $(document).on('click', '#btn-save-product', function() {
                     name: 'product-name',
                     brand: 'product-brand',
                     category: 'product-category',
+                    type: 'product-type',
+                    parameter: 'product-parameter',
                     division_id: 'product-division',
                     image: 'product-image',
                     description: 'product-description'
@@ -661,6 +773,14 @@ $(document).on('click', '#btn-import', function() {
 
 $(document).ready(function() {
     initProductTable();
+
+    if ($('#filter-category').length && window.jQuery.fn.select2) {
+        $('#filter-category').select2({
+            width: '250px',
+            placeholder: 'All Categories',
+            allowClear: true
+        });
+    }
 
     // Auto open edit modal ketika datang dari halaman detail (?edit=ID)
     var editParam = new URLSearchParams(window.location.search).get('edit');

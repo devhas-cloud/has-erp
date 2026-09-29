@@ -295,8 +295,9 @@
                                 <th style="width:40px"></th>
                                 <th>Part Number</th>
                                 <th>Brand</th>
-                                <th>Category</th>
                                 <th>Deskripsi</th>
+                                <th>Category</th>
+                                <th>Type</th>
                             </tr>
                         </thead>
                     </table>
@@ -701,15 +702,18 @@ $(document).ready(function() {
             { data: 'brand', orderable: false, searchable: true,
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
-            { data: 'category', orderable: false, searchable: true,
-                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
-            },
             { data: 'description', orderable: false, searchable: true,
                 render: function(data) {
                     if (!data) return '<span style="color:var(--text-muted)">—</span>';
                     var escaped = $('<div>').text(data).html();
                     return escaped.replace(/\n/g, '<br>');
                 }
+            },
+            { data: 'category', orderable: false, searchable: true,
+                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
+            },
+            { data: 'type', orderable: false, searchable: true,
+                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             }
         ]
     });

@@ -15,6 +15,8 @@ class MasterProduct extends Model
         'code',
         'brand',
         'category',
+        'type',
+        'parameter',
         'division_id',
         'description',
         'image',

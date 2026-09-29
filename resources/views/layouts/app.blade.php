@@ -336,14 +336,229 @@
         }
 
         .sidebar-group {
-            padding: 22px 18px 7px;
-            font-size: 9.5px;
+            font-size: 10.5px;
             text-transform: uppercase;
-            letter-spacing: 2.5px;
-            /* Slightly tinted with accent for freshness */
-            color: #1c2c46;
+            letter-spacing: 1.8px;
+            color: #6d86a8;
             font-weight: 800;
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+            border-radius: var(--radius-sm);
+            margin: 12px 10px 4px;
+            padding: 9px 12px;
+            transition: all 0.25s var(--ease);
+        }
+
+        .sidebar-group:not(:first-child)::before {
+            content: '';
+            position: absolute;
+            left: 14px;
+            right: 14px;
+            top: -9px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07) 25%, rgba(255, 255, 255, 0.07) 75%, transparent);
+        }
+
+        .sidebar-group:hover {
+            color: #9db4d3;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .sidebar-group.active {
+            color: #c3d5ec;
+            background: linear-gradient(90deg, var(--sidebar-active-start), rgba(16, 185, 129, 0.015));
+        }
+
+        .sidebar-group-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-group-count {
+            font-size: 9px;
+            font-weight: 800;
+            color: #4a6284;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 1px 7px;
+            min-width: 18px;
+            text-align: center;
+            letter-spacing: 0;
+            line-height: 1.5;
+        }
+
+        .sidebar-group.active .sidebar-group-count {
+            color: #34d399;
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.18);
+        }
+
+        .sidebar-group-chevron {
+            font-size: 9px;
+            opacity: 0.5;
+            flex-shrink: 0;
+            transition: transform 0.3s var(--ease), opacity 0.3s var(--ease);
+        }
+
+        .sidebar-group.open .sidebar-group-chevron,
+        .sidebar-group-chevron.open {
+            transform: rotate(180deg);
+            opacity: 0.9;
+        }
+
+        .sidebar-group-body {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.35s var(--ease);
+        }
+
+        .sidebar-group-body.open {
+            grid-template-rows: 1fr;
+        }
+
+        .sidebar-group-body-inner {
+            position: relative;
+            overflow: hidden;
+            min-height: 0;
+            padding-bottom: 8px;
+        }
+
+        .sidebar-group-body.is-long .sidebar-group-body-inner {
+            max-height: 252px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(16, 185, 129, 0.15) transparent;
+        }
+
+        .sidebar-group-body.is-long .sidebar-group-body-inner::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sidebar-group-body.is-long .sidebar-group-body-inner::-webkit-scrollbar-thumb {
+            background: rgba(16, 185, 129, 0.15);
+            border-radius: 4px;
+        }
+
+        /* ===== SIDEBAR TOOLS (search + expand/collapse) ===== */
+        .sidebar-tools {
+            padding: 14px 16px 8px;
+            position: relative;
+            z-index: 1;
+            border-bottom: 1px solid var(--sidebar-divider);
+        }
+
+        .sidebar-search {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar-search-icon {
+            position: absolute;
+            left: 12px;
+            font-size: 12px;
+            color: #4a6284;
+            pointer-events: none;
+            transition: color 0.2s ease;
+        }
+
+        .sidebar-search-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: var(--radius-sm);
+            padding: 9px 34px 9px 34px;
+            color: #dbe6f3;
+            font-size: 12.5px;
+            font-family: inherit;
+            font-weight: 600;
+            outline: none;
+            transition: all 0.25s var(--ease);
+        }
+
+        .sidebar-search-input::placeholder {
+            color: #3c5270;
+            font-weight: 500;
+        }
+
+        .sidebar-search-input:focus {
+            border-color: rgba(16, 185, 129, 0.35);
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
+        }
+
+        .sidebar-search:focus-within .sidebar-search-icon {
+            color: #34d399;
+        }
+
+        .sidebar-search-clear {
+            position: absolute;
+            right: 8px;
+            width: 22px;
+            height: 22px;
+            border: none;
+            background: transparent;
+            color: #4a6284;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 11px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-search-clear.show {
+            display: flex;
+        }
+
+        .sidebar-search-clear:hover {
+            color: #eaf0f9;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .sidebar-tools-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .sidebar-tool-btn {
+            flex: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 6px 8px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.03);
+            color: #5a7090;
+            font-size: 10.5px;
+            font-weight: 700;
+            font-family: inherit;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-tool-btn:hover {
+            color: #dbe6f3;
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .sidebar-group.search-hidden,
+        .sidebar-link.search-hidden {
+            display: none;
         }
 
         /* ===== SIDEBAR LINKS ===== */
@@ -573,6 +788,7 @@
             display: flex;
             justify-content: center;
             padding: 14px 0 4px;
+            margin: 8px 0 2px;
             font-size: 0;
             color: transparent;
             position: relative;
@@ -584,6 +800,31 @@
             width: 20px;
             height: 1px;
             background: rgba(16, 185, 129, 0.08);
+            position: static;
+            top: auto;
+            left: auto;
+            right: auto;
+        }
+
+        .sidebar.collapsed .sidebar-group-meta {
+            display: none;
+        }
+
+        .sidebar.collapsed .sidebar-group.active,
+        .sidebar.collapsed .sidebar-group:hover {
+            background: transparent;
+        }
+
+        .sidebar.collapsed .sidebar-group-chevron {
+            display: none;
+        }
+
+        .sidebar.collapsed .sidebar-group-body {
+            grid-template-rows: 1fr;
+        }
+
+        .sidebar.collapsed .sidebar-tools {
+            display: none;
         }
 
         .sidebar.collapsed .sidebar-footer-text {
@@ -2160,6 +2401,23 @@
         </div>
 
         <div class="sidebar-scroll">
+            <div class="sidebar-tools">
+                <div class="sidebar-search">
+                    <i class="fa-solid fa-magnifying-glass sidebar-search-icon"></i>
+                    <input type="text" id="sidebarSearchInput" class="sidebar-search-input" placeholder="Cari modul..." autocomplete="off">
+                    <button type="button" class="sidebar-search-clear" id="sidebarSearchClear" aria-label="Bersihkan pencarian">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="sidebar-tools-row">
+                    <button type="button" class="sidebar-tool-btn" id="sidebarExpandAll" title="Buka semua group">
+                        <i class="fa-solid fa-chevron-down"></i> Buka
+                    </button>
+                    <button type="button" class="sidebar-tool-btn" id="sidebarCollapseAll" title="Tutup semua group (group aktif tetap terbuka)">
+                        <i class="fa-solid fa-chevron-up"></i> Tutup
+                    </button>
+                </div>
+            </div>
             <nav class="sidebar-nav">
                 @php
                     $user = Auth::user();
@@ -2173,18 +2431,35 @@
                         ->filter(fn($m) => in_array($m->id, $accessibleModuleIds) || $user->role === 'Admin');
                 @endphp
 
-                @php $currentGroup = ''; @endphp
-                @foreach ($modules as $module)
-                    @if ($module->group !== $currentGroup)
-                        @php $currentGroup = $module->group; @endphp
-                        <div class="sidebar-group" data-title="{{ $currentGroup }}">{{ $currentGroup }}</div>
-                    @endif
-                    <a href="{{ $module->route_name ? route($module->route_name . '.index') : '#' }}"
-                        class="sidebar-link {{ str_starts_with(request()->route()->getName(), $module->route_name) ? 'active' : '' }}"
-                        data-title="{{ $module->module_name }}">
-                        <i class="sidebar-icon {{ $module->icon ?? 'fa-solid fa-circle' }}"></i>
-                        <span>{{ $module->module_name }}</span>
-                    </a>
+                @php
+                    $activeRouteName = request()->route() ? request()->route()->getName() : '';
+                    $groupedModules = $modules->groupBy('group');
+                @endphp
+                @foreach ($groupedModules as $groupName => $groupModules)
+                    @php
+                        $groupActive = $groupModules->contains(fn($m) => $m->route_name && $activeRouteName && str_starts_with($activeRouteName, $m->route_name));
+                        $groupCount = $groupModules->count();
+                    @endphp
+                    <div class="sidebar-group {{ $groupActive ? 'open active' : '' }}" data-title="{{ $groupName }}" data-search="{{ strtolower($groupName) }}">
+                        <span class="sidebar-group-label">{{ $groupName }}</span>
+                        <span class="sidebar-group-meta">
+                            {{-- <span class="sidebar-group-count">{{ $groupCount }}</span> --}}
+                            <i class="fa-solid fa-chevron-down sidebar-group-chevron {{ $groupActive ? 'open' : '' }}"></i>
+                        </span>
+                    </div>
+                    <div class="sidebar-group-body {{ $groupActive ? 'open' : '' }} {{ $groupCount > 6 ? 'is-long' : '' }}">
+                        <div class="sidebar-group-body-inner">
+                            @foreach ($groupModules as $module)
+                                <a href="{{ $module->route_name ? route($module->route_name . '.index') : '#' }}"
+                                    class="sidebar-link {{ $module->route_name && $activeRouteName && str_starts_with($activeRouteName, $module->route_name) ? 'active' : '' }}"
+                                    data-title="{{ $module->module_name }}"
+                                    data-search="{{ strtolower($module->module_name) }}">
+                                    <i class="sidebar-icon {{ $module->icon ?? 'fa-solid fa-circle' }}"></i>
+                                    <span>{{ $module->module_name }}</span>
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
                 @endforeach
             </nav>
         </div>
@@ -2358,6 +2633,140 @@
             clearTimeout(window._resizeTimer);
             window._resizeTimer = setTimeout(handleResize, 150);
         });
+
+        // --- Sidebar group show/hide + search + persistence ---
+        const sidebarScroll = document.querySelector('.sidebar-scroll');
+        const OPENKEY = 'erp_sidebar_open_groups';
+        const $sidebarNav = $('.sidebar-nav');
+        const $searchInput = $('#sidebarSearchInput');
+        const $searchClear = $('#sidebarSearchClear');
+
+        function setGroupOpen(group, body, open, scroll) {
+            body.classList.toggle('open', open);
+            group.classList.toggle('open', open);
+            const chevron = group.querySelector('.sidebar-group-chevron');
+            if (chevron) chevron.classList.toggle('open', open);
+            if (open && scroll && sidebarScroll) {
+                const groupTop = group.offsetTop;
+                const st = sidebarScroll.scrollTop;
+                const sb = st + sidebarScroll.clientHeight;
+                if (groupTop < st || groupTop > sb) {
+                    sidebarScroll.scrollTo({ top: Math.max(0, groupTop - 8), behavior: 'smooth' });
+                }
+            }
+        }
+
+        function persistOpenGroups() {
+            const open = [];
+            document.querySelectorAll('.sidebar-group-body.open').forEach(function(body) {
+                const g = body.previousElementSibling;
+                if (g && g.classList.contains('sidebar-group')) open.push(g.dataset.title);
+            });
+            try { localStorage.setItem(OPENKEY, JSON.stringify(open)); } catch (e) {}
+        }
+
+        function applySavedGroups() {
+            let saved = [];
+            try { saved = JSON.parse(localStorage.getItem(OPENKEY)) || []; } catch (e) {}
+            const active = document.querySelector('.sidebar-group.active');
+            const toOpen = new Set(saved);
+            if (active) toOpen.add(active.dataset.title);
+            document.querySelectorAll('.sidebar-group').forEach(function(g) {
+                const body = g.nextElementSibling;
+                if (body && body.classList.contains('sidebar-group-body')) {
+                    setGroupOpen(g, body, toOpen.has(g.dataset.title), false);
+                }
+            });
+        }
+
+        document.querySelectorAll('.sidebar-group').forEach(function(group) {
+            group.addEventListener('click', function() {
+                if (sidebar.classList.contains('collapsed')) return;
+                if ($sidebarNav.hasClass('search-mode')) return;
+                const body = group.nextElementSibling;
+                if (!body || !body.classList.contains('sidebar-group-body')) return;
+                setGroupOpen(group, body, !body.classList.contains('open'), true);
+                persistOpenGroups();
+            });
+        });
+
+        function applySearch() {
+            const q = $searchInput.val().trim().toLowerCase();
+            if (!q) {
+                $sidebarNav.removeClass('search-mode');
+                $('.sidebar-group, .sidebar-link').removeClass('search-hidden');
+                applySavedGroups();
+                return;
+            }
+            $sidebarNav.addClass('search-mode');
+            $('.sidebar-group').each(function() {
+                const $g = $(this);
+                const $body = $g.next('.sidebar-group-body');
+                const $links = $body.find('.sidebar-link');
+                const $shown = $links.filter(function() {
+                    const s = $(this).data('search') || '';
+                    return s.indexOf(q) !== -1;
+                });
+                $links.removeClass('search-hidden').not($shown).addClass('search-hidden');
+                const hasVisible = $shown.length > 0;
+                $g.toggleClass('search-hidden', !hasVisible);
+                if (hasVisible) setGroupOpen($g[0], $body[0], true, false);
+            });
+        }
+
+        $searchInput.on('input', function() {
+            const q = $(this).val().trim();
+            $searchClear.toggleClass('show', q.length > 0);
+            applySearch();
+        });
+
+        $searchClear.on('click', function() {
+            $searchInput.val('').trigger('input');
+            $searchInput.focus();
+        });
+
+        $('#sidebarExpandAll').on('click', function() {
+            if ($sidebarNav.hasClass('search-mode')) return;
+            document.querySelectorAll('.sidebar-group').forEach(function(g) {
+                const body = g.nextElementSibling;
+                if (body && body.classList.contains('sidebar-group-body')) setGroupOpen(g, body, true, false);
+            });
+            persistOpenGroups();
+        });
+
+        $('#sidebarCollapseAll').on('click', function() {
+            if ($sidebarNav.hasClass('search-mode')) return;
+            const active = document.querySelector('.sidebar-group.active');
+            document.querySelectorAll('.sidebar-group').forEach(function(g) {
+                if (g === active) return;
+                const body = g.nextElementSibling;
+                if (body && body.classList.contains('sidebar-group-body')) setGroupOpen(g, body, false, false);
+            });
+            persistOpenGroups();
+        });
+
+        // Keep active menu group visible on load
+        (function ensureActiveGroupVisible() {
+            applySavedGroups();
+            const activeGroup = document.querySelector('.sidebar-group.active');
+            if (!activeGroup || !sidebarScroll) return;
+            const body = activeGroup.nextElementSibling;
+            if (body && body.classList.contains('sidebar-group-body') && body.classList.contains('is-long')) {
+                const inner = body.querySelector('.sidebar-group-body-inner');
+                const activeLink = body.querySelector('.sidebar-link.active');
+                if (inner && activeLink) {
+                    const at = activeLink.offsetTop;
+                    const visible = inner.clientHeight;
+                    if (at > visible) inner.scrollTop = at - visible;
+                }
+            }
+            const groupTop = activeGroup.offsetTop;
+            const st = sidebarScroll.scrollTop;
+            const sb = st + sidebarScroll.clientHeight;
+            if (groupTop < st || groupTop > sb) {
+                sidebarScroll.scrollTop = Math.max(0, groupTop - 8);
+            }
+        })();
 
         // --- Notification bell ---
         var notifPollTimer;

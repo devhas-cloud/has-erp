@@ -18,7 +18,9 @@ class ProductImportService
     private function resolveLookups(): void
     {
         // Build lowercase-keyed lookup for case-insensitive matching
-        $divisions = Division::where('status', 'Active')
+        // Hanya divisi tipe Internal yang valid untuk produk.
+        $divisions = Division::where('type', 'Internal')
+            ->where('status', 'Active')
             ->select('id', 'division_name')
             ->get();
 
@@ -67,7 +69,7 @@ class ProductImportService
         }
 
         $lastComma = strrpos($s, ',');
-        $lastDot   = strrpos($s, '.');
+        $lastDot = strrpos($s, '.');
 
         // Both separators present → the LAST one is the decimal marker
         if ($lastComma !== false && $lastDot !== false) {
@@ -110,7 +112,7 @@ class ProductImportService
     /**
      * Normalise a string to null if empty.
      */
-    private function nullIfEmpty(?string $value, int $maxLength = null): ?string
+    private function nullIfEmpty(?string $value, ?int $maxLength = null): ?string
     {
         $v = trim($value ?? '');
         if ($v === '') {
@@ -135,13 +137,14 @@ class ProductImportService
         ];
 
         // Filter to candidates that actually appear
-        $valid = array_filter($candidates, fn($count) => $count > 0);
+        $valid = array_filter($candidates, fn ($count) => $count > 0);
         if (empty($valid)) {
             return ','; // fallback
         }
 
         // The delimiter with the most occurrences wins
         arsort($valid);
+
         return key($valid);
     }
 
@@ -176,6 +179,7 @@ class ProductImportService
         $firstLine = fgets($handle);
         if ($firstLine === false || trim($firstLine) === '') {
             fclose($handle);
+
             return ['success' => 0, 'failed' => 0, 'errors' => ['File is empty or invalid. CSV must have at least a code column.']];
         }
 
@@ -193,15 +197,16 @@ class ProductImportService
             fclose($handle);
             $display = $firstLine;
             if (mb_strlen($display) > 120) {
-                $display = mb_substr($display, 0, 120) . '…';
+                $display = mb_substr($display, 0, 120).'…';
             }
+
             return [
                 'success' => 0,
                 'failed' => 0,
                 'errors' => [
                     "File is empty or invalid. CSV must have at least a 'code' column. "
-                    . "First line read: \"{$display}\" (detected delimiter: '{$delimiter}'). "
-                    . "If using Excel, try re-saving your CSV with comma (,) as delimiter instead of semicolon (;).",
+                    ."First line read: \"{$display}\" (detected delimiter: '{$delimiter}'). "
+                    .'If using Excel, try re-saving your CSV with comma (,) as delimiter instead of semicolon (;).',
                 ],
             ];
         }
@@ -209,8 +214,8 @@ class ProductImportService
         // Strip BOM from first header (already stripped from firstLine, but fgetcsv may re-include it)
         $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headers[0]);
 
-        // Normalise headers (trim, lowercase)
-        $headers = array_map(fn($h) => mb_strtolower(trim($h)), $headers);
+        // Normalise headers (trim, lowercase, snake_case untuk label multi-kata)
+        $headers = array_map(fn ($h) => str_replace([' ', '-'], '_', mb_strtolower(trim($h))), $headers);
 
         // Validate that required headers exist
         $requiredFields = ['code'];
@@ -222,13 +227,14 @@ class ProductImportService
         }
         if (! empty($missingHeaders)) {
             fclose($handle);
+
             return [
                 'success' => 0,
                 'failed' => 0,
                 'errors' => [
-                    "CSV header is missing required column(s): ".implode(', ', $missingHeaders)
-                    . ". Headers found: ".implode(', ', $headers)
-                    . " (detected delimiter: '{$delimiter}').",
+                    'CSV header is missing required column(s): '.implode(', ', $missingHeaders)
+                    .'. Headers found: '.implode(', ', $headers)
+                    ." (detected delimiter: '{$delimiter}').",
                 ],
             ];
         }
@@ -250,12 +256,13 @@ class ProductImportService
 
             if (! $data) {
                 $failed++;
-                $errors[] = "Line {$lineNumber}: Column count mismatch (expected ".count($headers).", got ".count($row).").";
+                $errors[] = "Line {$lineNumber}: Column count mismatch (expected ".count($headers).', got '.count($row).').';
+
                 continue;
             }
 
             // Trim values
-            $data = array_map(fn($v) => trim($v ?? ''), $data);
+            $data = array_map(fn ($v) => trim($v ?? ''), $data);
 
             // Validate required
             $missing = [];
@@ -268,6 +275,7 @@ class ProductImportService
             if (! empty($missing)) {
                 $failed++;
                 $errors[] = "Line {$lineNumber}: Missing required field(s): ".implode(', ', $missing);
+
                 continue;
             }
 
@@ -282,14 +290,19 @@ class ProductImportService
                     $status = 'Inactive';
                 }
 
-                // Resolve division name → id (case-insensitive)
+                // Resolve division name → id (case-insensitive).
+                // Hanya divisi tipe Internal yang valid; nama tak dikenal (termasuk External) → baris gagal.
                 $divisionId = null;
                 $divisionInput = trim($data['division'] ?? '');
                 if ($divisionInput !== '') {
                     $divisionKey = mb_strtolower($divisionInput);
-                    if (isset($this->divisionLookup[$divisionKey])) {
-                        $divisionId = $this->divisionLookup[$divisionKey];
+                    if (! isset($this->divisionLookup[$divisionKey])) {
+                        $failed++;
+                        $errors[] = "Line {$lineNumber}: Divisi '{$divisionInput}' tidak dikenal atau bukan tipe Internal. Gunakan salah satu dari: ".implode(', ', array_keys($this->divisionLookup)).'.';
+
+                        continue;
                     }
+                    $divisionId = $this->divisionLookup[$divisionKey];
                 }
 
                 // Resolve currency code → id (case-insensitive).
@@ -303,6 +316,7 @@ class ProductImportService
                     if (! isset($this->currencyLookup[$currencyKey])) {
                         $failed++;
                         $errors[] = "Line {$lineNumber}: Kode currency '{$currencyInput}' tidak dikenal. Gunakan salah satu dari: ".implode(', ', array_keys($this->currencyLookup)).'.';
+
                         continue;
                     }
                     $currencyId = $this->currencyLookup[$currencyKey];
@@ -315,15 +329,38 @@ class ProductImportService
                     if (isset($this->nameMap[$nameKey]) && $this->nameMap[$nameKey] !== $data['code']) {
                         $failed++;
                         $errors[] = "Line {$lineNumber}: Nama produk '{$name}' sudah dipakai oleh produk dengan code {$this->nameMap[$nameKey]}.";
+
                         continue;
                     }
                 }
+
+                // Parse type (Acc/Main/Service) — case-insensitive
+                $type = null;
+                $typeInput = trim($data['type'] ?? '');
+                if ($typeInput !== '') {
+                    $typeKey = mb_strtolower($typeInput);
+                    if (! in_array($typeKey, ['acc', 'main', 'service'], true)) {
+                        $failed++;
+                        $errors[] = "Line {$lineNumber}: Nilai type '{$typeInput}' tidak valid. Gunakan salah satu dari: Acc, Main, Service.";
+
+                        continue;
+                    }
+                    $type = match ($typeKey) {
+                        'acc' => 'Acc',
+                        'main' => 'Main',
+                        default => 'Service',
+                    };
+                }
+
+                $parameter = $this->nullIfEmpty($data['parameter'] ?? '', 255);
 
                 $record = [
                     'name' => $name,
                     'code' => mb_substr($data['code'], 0, 50),
                     'brand' => $this->nullIfEmpty($data['brand'] ?? '', 100),
                     'category' => $this->nullIfEmpty($data['category'] ?? '', 100),
+                    'type' => $type,
+                    'parameter' => $parameter,
                     'description' => $this->nullIfEmpty($data['description'] ?? ''),
                     'price' => $price,
                     'currency_id' => $currencyId,
@@ -371,7 +408,9 @@ class ProductImportService
 
     public static function getReferenceData(): array
     {
-        $divisions = Division::where('status', 'Active')
+        // Hanya divisi tipe Internal yang tampil di referensi template.
+        $divisions = Division::where('type', 'Internal')
+            ->where('status', 'Active')
             ->pluck('division_name')
             ->toArray();
 
@@ -384,6 +423,7 @@ class ProductImportService
         return [
             'division' => $divisions,
             'currency' => $currencies,
+            'type' => ['Acc', 'Main', 'Service'],
             'status' => ['Active', 'Inactive'],
         ];
     }

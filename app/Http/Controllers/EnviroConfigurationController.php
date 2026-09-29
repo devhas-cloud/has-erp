@@ -452,6 +452,7 @@ class EnviroConfigurationController extends Controller
                     ->orWhere('code', 'like', "%{$searchValue}%")
                     ->orWhere('brand', 'like', "%{$searchValue}%")
                     ->orWhere('category', 'like', "%{$searchValue}%")
+                    ->orWhere('type', 'like', "%{$searchValue}%")
                     ->orWhere('description', 'like', "%{$searchValue}%");
             });
         }
@@ -461,7 +462,7 @@ class EnviroConfigurationController extends Controller
         $products = $query
             ->skip($start)
             ->take($length)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'type', 'description', 'price']);
 
         $data = $products->map(fn ($product) => [
             'id' => $product->id,
@@ -469,6 +470,7 @@ class EnviroConfigurationController extends Controller
             'code' => $product->code,
             'brand' => $product->brand,
             'category' => $product->category,
+            'type' => $product->type,
             'description' => $product->description,
             'price' => $product->price,
         ])->all();

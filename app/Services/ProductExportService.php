@@ -170,6 +170,8 @@ class ProductExportService
             $product->code ?? '',
             $product->brand ?? '',
             $product->category ?? '',
+            $product->type ?? '',
+            $product->parameter ?? '',
             $product->division?->division_name ?? '',
             $product->description ?? '',
             $product->price ?? 0,

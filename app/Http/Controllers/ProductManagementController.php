@@ -16,10 +16,15 @@ class ProductManagementController extends Controller
 {
     public function index()
     {
-        $divisions = Division::where('status', 'Active')->orderBy('division_name')->get();
+        $divisions = Division::where('status', 'Active')->where('type', 'Internal')->orderBy('division_name')->get();
         $currencies = Currency::where('status', 'Active')->orderBy('is_base', 'desc')->orderBy('name')->get();
+        $categories = MasterProduct::whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category');
 
-        return view('product-management.index', compact('divisions', 'currencies'));
+        return view('product-management.index', compact('divisions', 'currencies', 'categories'));
     }
 
     public function data(Request $request): JsonResponse
@@ -28,18 +33,7 @@ class ProductManagementController extends Controller
 
         $recordsTotal = MasterProduct::count();
 
-        $searchValue = $request->input('search.value');
-        if ($searchValue) {
-            $query->where(function ($q) use ($searchValue) {
-                $q->where('name', 'like', "%{$searchValue}%")
-                    ->orWhere('code', 'like', "%{$searchValue}%")
-                    ->orWhere('brand', 'like', "%{$searchValue}%")
-                    ->orWhere('category', 'like', "%{$searchValue}%")
-                    ->orWhereHas('division', function ($q) use ($searchValue) {
-                        $q->where('division_name', 'like', "%{$searchValue}%");
-                    });
-            });
-        }
+        $this->applyProductFilters($query, $request);
 
         $recordsFiltered = $query->count();
 
@@ -48,9 +42,9 @@ class ProductManagementController extends Controller
 
         $columnOrderMap = [
             1 => 'name',
-            2 => 'code',
-            3 => 'brand',
-            4 => 'category',
+            2 => 'brand',
+            3 => 'category',
+            4 => 'type',
             6 => 'price',
             7 => 'status',
         ];
@@ -77,6 +71,8 @@ class ProductManagementController extends Controller
                 'code' => $product->code ?? '—',
                 'brand' => $product->brand ?? '—',
                 'category' => $product->category ?? '—',
+                'type' => $product->type ?? '—',
+                'parameter' => $product->parameter ?? '—',
                 'division_name' => $product->division?->division_name ?? '—',
                 'price' => $product->price,
                 'price_formatted' => number_format((float) $product->price, 2, '.', ','),
@@ -103,6 +99,8 @@ class ProductManagementController extends Controller
             'code' => 'required|string|max:50|unique:master_products,code',
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
+            'type' => 'nullable|in:Acc,Main,Service',
+            'parameter' => 'nullable|string|max:255',
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
@@ -165,6 +163,8 @@ class ProductManagementController extends Controller
             'code' => 'required|string|max:50|unique:master_products,code,'.$product->id,
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
+            'type' => 'nullable|in:Acc,Main,Service',
+            'parameter' => 'nullable|string|max:255',
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
@@ -206,14 +206,16 @@ class ProductManagementController extends Controller
         ]);
     }
 
-    public function export()
+    public function export(Request $request)
     {
-        $products = MasterProduct::with(['division', 'currency'])
-            ->orderBy('id', 'desc')
-            ->get();
+        $query = MasterProduct::with(['division', 'currency']);
+
+        $this->applyProductFilters($query, $request);
+
+        $products = $query->orderBy('id', 'desc')->get();
 
         $headers = [
-            'Name', 'Code', 'Brand', 'Category', 'Division',
+            'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
             'Description', 'Price', 'Currency', 'Status',
         ];
 
@@ -274,6 +276,54 @@ class ProductManagementController extends Controller
                 unlink($fullPath);
             }
         }
+    }
+
+    /**
+     * Terapkan filter pencarian (search.value dari DataTables / search flat dari export)
+     * dan filter dropdown (category, type, division_id, status).
+     */
+    private function applyProductFilters($query, Request $request)
+    {
+        // DataTables mengirim search.value (bisa null/''), export mengirim 'search' flat string.
+        $searchValue = $request->input('search.value');
+        if (! $searchValue) {
+            $flatSearch = $request->input('search');
+            if (is_string($flatSearch)) {
+                $searchValue = $flatSearch;
+            }
+        }
+
+        if ($searchValue) {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('name', 'like', "%{$searchValue}%")
+                    ->orWhere('code', 'like', "%{$searchValue}%")
+                    ->orWhere('brand', 'like', "%{$searchValue}%")
+                    ->orWhere('category', 'like', "%{$searchValue}%")
+                    ->orWhere('type', 'like', "%{$searchValue}%")
+                    ->orWhere('parameter', 'like', "%{$searchValue}%")
+                    ->orWhereHas('division', function ($q) use ($searchValue) {
+                        $q->where('division_name', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->input('category'));
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->input('type'));
+        }
+
+        if ($request->filled('division_id')) {
+            $query->where('division_id', $request->input('division_id'));
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        return $query;
     }
 
     /**
