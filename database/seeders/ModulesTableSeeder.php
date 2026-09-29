@@ -76,6 +76,14 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Dashboard',
             ],
             [
+                'module_code' => 'MOD_DASHBOARD_ACHIEVEMENT',
+                'module_name' => 'Dashboard Achievement',
+                'description' => 'Dashboard total achievement & brand terjual per divisi (quotation Closed Won / Finish)',
+                'route_name' => 'dashboard-achievement',
+                'icon' => 'fa fa-trophy',
+                'group' => 'Dashboard',
+            ],
+            [
                 'module_code' => 'MOD_PRODUCT_MANAGEMENT',
                 'module_name' => 'Product Management',
                 'description' => 'Menu untuk mengelola data master produk',
