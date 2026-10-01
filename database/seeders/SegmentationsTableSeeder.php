@@ -9,31 +9,67 @@ class SegmentationsTableSeeder extends Seeder
 {
     public function run(): void
     {
+        // Referensi dari export Salesforce (Account.Segmentation__c) — 53 nilai.
+        Segmentation::query()->delete();
+
         $segments = [
-            ['segmentation_name' => 'Chemical', 'description' => 'Segmentation for chemical industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Consultant', 'description' => 'Segmentation for consulting industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Distributor/Partner', 'description' => 'Segmentation for distributor and partner industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Pharmaceutical', 'description' => 'Segmentation for pharmaceutical industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Electronics', 'description' => 'Segmentation for electronics industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Textile', 'description' => 'Segmentation for textile industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Construction', 'description' => 'Segmentation for construction industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Healthcare', 'description' => 'Segmentation for healthcare industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Energy & Utilities', 'description' => 'Segmentation for energy and utilities industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Food & Beverage', 'description' => 'Segmentation for food and beverage industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Automotive', 'description' => 'Segmentation for automotive industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Aerospace & Defense', 'description' => 'Segmentation for aerospace and defense industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Telecommunications', 'description' => 'Segmentation for telecommunications industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Retail & E-commerce', 'description' => 'Segmentation for retail and e-commerce industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Logistics & Transportation', 'description' => 'Segmentation for logistics and transportation industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Media & Entertainment', 'description' => 'Segmentation for media and entertainment industry', 'status' => 'Active'],
-            ['segmentation_name' => 'Real Estate & Property Management', 'description' => 'Segmentation for real estate and property management industry', 'status' => 'Active'],
-            ];
+            ['segmentation_name' => 'Agriculture'],
+            ['segmentation_name' => 'Aquaculture'],
+            ['segmentation_name' => 'Balai Pemerintah'],
+            ['segmentation_name' => 'Cement'],
+            ['segmentation_name' => 'Certification'],
+            ['segmentation_name' => 'Chemical'],
+            ['segmentation_name' => 'Coal Mining'],
+            ['segmentation_name' => 'Construction'],
+            ['segmentation_name' => 'Consultant'],
+            ['segmentation_name' => 'Copper Mining'],
+            ['segmentation_name' => 'Dinas Pemerintah'],
+            ['segmentation_name' => 'Distributor/Partner'],
+            ['segmentation_name' => 'Drilling'],
+            ['segmentation_name' => 'Education'],
+            ['segmentation_name' => 'Energy'],
+            ['segmentation_name' => 'EPC Contractor / Engineering'],
+            ['segmentation_name' => 'Explosive'],
+            ['segmentation_name' => 'Fertilizer'],
+            ['segmentation_name' => 'Food and Beverage'],
+            ['segmentation_name' => 'Gas'],
+            ['segmentation_name' => 'Gas Exploration and production'],
+            ['segmentation_name' => 'Gold Mining'],
+            ['segmentation_name' => 'Government'],
+            ['segmentation_name' => 'Health Clinic/Medical'],
+            ['segmentation_name' => 'Hospital'],
+            ['segmentation_name' => 'Industrial Estate'],
+            ['segmentation_name' => 'IOT / System Integrator'],
+            ['segmentation_name' => 'Kementrian'],
+            ['segmentation_name' => 'Lab Services'],
+            ['segmentation_name' => 'Logistic & Shipping'],
+            ['segmentation_name' => 'Manufacture'],
+            ['segmentation_name' => 'Mining Contractor'],
+            ['segmentation_name' => 'Mining Others'],
+            ['segmentation_name' => 'Mining Services'],
+            ['segmentation_name' => 'Mining Smelter'],
+            ['segmentation_name' => 'Nickel Mining'],
+            ['segmentation_name' => 'Oil and Gas'],
+            ['segmentation_name' => 'Oleochemical'],
+            ['segmentation_name' => 'Palm Oil / Plantation'],
+            ['segmentation_name' => 'Personal'],
+            ['segmentation_name' => 'Petrochemical'],
+            ['segmentation_name' => 'Pharmaceutical'],
+            ['segmentation_name' => 'Power Plant'],
+            ['segmentation_name' => 'Pulp and Paper'],
+            ['segmentation_name' => 'Research'],
+            ['segmentation_name' => 'Steel'],
+            ['segmentation_name' => 'Supplier'],
+            ['segmentation_name' => 'Textile/Rayon'],
+            ['segmentation_name' => 'Training Center'],
+            ['segmentation_name' => 'Transportation'],
+            ['segmentation_name' => 'University'],
+            ['segmentation_name' => 'Water Service and Supply'],
+            ['segmentation_name' => 'WTP/WWTP Enginerring'],
+        ];
 
         foreach ($segments as $segment) {
-            Segmentation::firstOrCreate(
-                ['segmentation_name' => $segment['segmentation_name']],
-                $segment
-            );
+            Segmentation::create($segment + ['description' => $segment['segmentation_name'], 'status' => 'Active']);
         }
     }
 }

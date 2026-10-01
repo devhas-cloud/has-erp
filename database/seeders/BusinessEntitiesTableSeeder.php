@@ -9,22 +9,27 @@ class BusinessEntitiesTableSeeder extends Seeder
 {
     public function run(): void
     {
+        // Referensi dari export Salesforce (Account.Business_Entity__c) — 13 nilai.
+        BusinessEntity::query()->delete();
+
         $entities = [
-            ['entity_name' => 'BUMN', 'description' => 'Badan Usaha Milik Negara', 'status' => 'Active'],
-            ['entity_name' => 'Perguruan Tinggi Negri', 'description' => 'Perguruan Tinggi Negeri', 'status' => 'Active'],
-            ['entity_name' => 'Perguruan Tinggi Swasta', 'description' => 'Perguruan Tinggi Swasta', 'status' => 'Active'],
-            ['entity_name' => 'Government', 'description' => 'Pemerintah', 'status' => 'Active'],
-            ['entity_name' => 'Personal', 'description' => 'Personal', 'status' => 'Active'],
-            ['entity_name' => 'Yayasan', 'description' => 'Yayasan', 'status' => 'Active'],
-            ['entity_name' => 'Perusahaan Swasta Nasional', 'description' => 'Perusahaan Swasta Nasional', 'status' => 'Active'],
-            ['entity_name' => 'Perusahaan Swasta Multinasional', 'description' => 'Perusahaan Swasta Multinasional', 'status' => 'Active'],
+            ['entity_name' => 'BUMN'],
+            ['entity_name' => 'CV'],
+            ['entity_name' => 'Dinas'],
+            ['entity_name' => 'Government'],
+            ['entity_name' => 'Ltd'],
+            ['entity_name' => 'Others'],
+            ['entity_name' => 'Perguruan Tinggi Negeri'],
+            ['entity_name' => 'Perguruan Tinggi Swasta'],
+            ['entity_name' => 'Personal'],
+            ['entity_name' => 'Private Sector'],
+            ['entity_name' => 'PT'],
+            ['entity_name' => 'University'],
+            ['entity_name' => 'Vocational Education'],
         ];
 
         foreach ($entities as $entity) {
-            BusinessEntity::firstOrCreate(
-                ['entity_name' => $entity['entity_name']],
-                $entity
-            );
+            BusinessEntity::create($entity + ['description' => $entity['entity_name'], 'status' => 'Active']);
         }
     }
 }

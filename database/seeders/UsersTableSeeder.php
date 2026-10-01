@@ -112,12 +112,12 @@ class UsersTableSeeder extends Seeder
 
 
         User::firstOrCreate(
-            ['username' => 'riki'],
+            ['username' => 'Water'],
             [
-                'full_name' => 'Riki',
-                'email' => 'riki@erp.local',
+                'full_name' => 'HAS Admin PM Water',
+                'email' => 'riki@has-environmental.com',
                 'password' => Hash::make('password'),
-                'division_id' => 2,
+                'division_id' => 6,
                 'role' => 'User',
                 'task_role_id' => 4,
             ]
@@ -198,6 +198,35 @@ class UsersTableSeeder extends Seeder
                 'task_role_id' => 7,
             ]
         );
+
+        // ===== Owner CRM (import dari Salesforce) — divisi Sales =====
+        // Username = Owner Alias, Email = Owner Email, Full Name = Owner Name.
+        $crmOwners = [
+            ['username' => 'Enviro', 'full_name' => 'HAS Admin PM Enviro', 'email' => 'wisnu@has-environmental.com'],
+            ['username' => 'IH', 'full_name' => 'HAS Admin PM IH', 'email' => 'ihdivision@has-environmental.com'],
+            ['username' => 'Rima', 'full_name' => 'Rima Lubis', 'email' => 'rimalubis@has-environmental.com'],
+            ['username' => 'Marketing', 'full_name' => 'HAS Marketing', 'email' => 'marketing@has-environmental.com'],
+            ['username' => 'Devi', 'full_name' => 'Devi Wahyuningsih', 'email' => 'devi@has-environmental.com'],
+            ['username' => 'Nisa', 'full_name' => 'Anasiah Khaairunnisa', 'email' => 'nisa@has-environmental.com'],
+            ['username' => 'Nina', 'full_name' => 'Nina Parlina', 'email' => 'nina@has-environmental.com'],
+            ['username' => 'Nabila', 'full_name' => 'Nabila Agustin', 'email' => 'nabila@has-environmental.com'],
+            ['username' => 'Ardi', 'full_name' => 'Primadian Ardiyasa', 'email' => 'ardi@has-environmental.com'],
+            ['username' => 'Tania', 'full_name' => 'Tania Varera', 'email' => 'tania@has-environmental.com'],
+        ];
+
+        foreach ($crmOwners as $owner) {
+            User::firstOrCreate(
+                ['username' => $owner['username']],
+                [
+                    'full_name' => $owner['full_name'],
+                    'email' => $owner['email'],
+                    'password' => Hash::make('password'),
+                    'division_id' => 6,
+                    'role' => 'User',
+                    'task_role_id' => 7,
+                ]
+            );
+        }
 
 
 

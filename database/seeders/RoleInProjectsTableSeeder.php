@@ -9,18 +9,20 @@ class RoleInProjectsTableSeeder extends Seeder
 {
     public function run(): void
     {
+        // Nilai dari export Salesforce (Contact.Role_in_Project__c).
         $roles = [
-            ['role_name' => 'Project Owner', 'description' => 'Pemilik proyek', 'status' => 'Active'],
-            ['role_name' => 'Decision Maker', 'description' => 'Pengambil keputusan', 'status' => 'Active'],
-            ['role_name' => 'Influencer', 'description' => 'Pemberi pengaruh', 'status' => 'Active'],
-            ['role_name' => 'Champion', 'description' => 'Pendukung utama', 'status' => 'Active'],
-            ['role_name' => 'End User', 'description' => 'Pengguna akhir', 'status' => 'Active'],
+            ['role_name' => 'Project Owner', 'status' => 'Active'],
+            ['role_name' => 'Decision Maker', 'status' => 'Active'],
+            ['role_name' => 'Influencer', 'status' => 'Active'],
+            ['role_name' => 'Champion', 'status' => 'Active'],
+            ['role_name' => 'End User', 'status' => 'Active'],
+            ['role_name' => 'Procurement', 'status' => 'Active'],
         ];
 
         foreach ($roles as $role) {
             RoleInProject::firstOrCreate(
                 ['role_name' => $role['role_name']],
-                $role
+                $role + ['description' => $role['role_name']]
             );
         }
     }

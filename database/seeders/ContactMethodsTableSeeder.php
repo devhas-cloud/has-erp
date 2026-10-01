@@ -9,18 +9,21 @@ class ContactMethodsTableSeeder extends Seeder
 {
     public function run(): void
     {
+        // Nilai dari export Salesforce (Contact.Preferred_Contact_Method__c).
         $methods = [
-            ['method_name' => 'Phone', 'description' => 'Kontak melalui telepon', 'status' => 'Active'],
-            ['method_name' => 'Email', 'description' => 'Kontak melalui email', 'status' => 'Active'],
-            ['method_name' => 'WhatsApp', 'description' => 'Kontak melalui WhatsApp', 'status' => 'Active'],
-            ['method_name' => 'Meeting', 'description' => 'Kontak melalui pertemuan langsung', 'status' => 'Active'],
-            ['method_name' => 'Video Call', 'description' => 'Kontak melalui panggilan video', 'status' => 'Active'],
+            ['method_name' => 'Phone', 'status' => 'Active'],
+            ['method_name' => 'Email', 'status' => 'Active'],
+            ['method_name' => 'WhatsApp', 'status' => 'Active'],
+            ['method_name' => 'Meeting', 'status' => 'Active'],
+            ['method_name' => 'Video Call', 'status' => 'Active'],
+            ['method_name' => 'Other', 'status' => 'Active'],
+            ['method_name' => 'Zoom/Conference', 'status' => 'Active'],
         ];
 
         foreach ($methods as $method) {
             ContactMethod::firstOrCreate(
                 ['method_name' => $method['method_name']],
-                $method
+                $method + ['description' => $method['method_name']]
             );
         }
     }

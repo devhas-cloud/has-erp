@@ -9,22 +9,31 @@ class SourcesTableSeeder extends Seeder
 {
     public function run(): void
     {
+        // Union unik dari Account.AccountSource + Contact.Contact_Source__c
+        // + Contact.Contact_Account_Source__c (export Salesforce) — 16 nilai.
+        Source::query()->delete();
+
         $sources = [
-            ['source_name' => 'WhatsApp', 'description' => 'Melalui WhatsApp', 'status' => 'Active'],
-            ['source_name' => 'Phone Call', 'description' => 'Melalui panggilan telepon', 'status' => 'Active'],
-            ['source_name' => 'Walk-in', 'description' => 'Datang langsung ke kantor', 'status' => 'Active'],
-            ['source_name' => 'Website', 'description' => 'Melalui website perusahaan', 'status' => 'Active'],
-            ['source_name' => 'Referral', 'description' => 'Referensi dari relasi', 'status' => 'Active'],
-            ['source_name' => 'Advertisement', 'description' => 'Melalui iklan', 'status' => 'Active'],
-            ['source_name' => 'Social Media', 'description' => 'Melalui media sosial', 'status' => 'Active'],
-            ['source_name' => 'Event', 'description' => 'Melalui pameran/event', 'status' => 'Active'],
+            ['source_name' => 'Customer Event'],
+            ['source_name' => 'Database App'],
+            ['source_name' => 'Email HAS'],
+            ['source_name' => 'Email Principal'],
+            ['source_name' => 'Employee Referral'],
+            ['source_name' => 'External Referral'],
+            ['source_name' => 'LinkedIn Ad'],
+            ['source_name' => 'Marketing'],
+            ['source_name' => 'Organic Search'],
+            ['source_name' => 'Organic Social Media'],
+            ['source_name' => 'Other'],
+            ['source_name' => 'Partner'],
+            ['source_name' => 'Trade Show'],
+            ['source_name' => 'Webinar'],
+            ['source_name' => 'Website'],
+            ['source_name' => 'Whatsapp'],
         ];
 
         foreach ($sources as $source) {
-            Source::firstOrCreate(
-                ['source_name' => $source['source_name']],
-                $source
-            );
+            Source::create($source + ['description' => $source['source_name'], 'status' => 'Active']);
         }
     }
 }
