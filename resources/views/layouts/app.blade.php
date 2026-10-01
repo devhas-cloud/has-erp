@@ -672,11 +672,17 @@
             background: var(--sidebar-footer-bg);
             border: 1px solid var(--sidebar-divider);
             transition: all 0.3s ease;
+            text-decoration: none;
         }
 
         .sidebar-footer-info:hover {
             border-color: rgba(16, 185, 129, 0.12);
             background: rgba(16, 185, 129, 0.03);
+        }
+
+        .sidebar-footer-info.active {
+            border-color: rgba(16, 185, 129, 0.22);
+            background: linear-gradient(90deg, var(--sidebar-active-start), var(--sidebar-active-end));
         }
 
         .sidebar-avatar {
@@ -696,10 +702,40 @@
             flex-shrink: 0;
             letter-spacing: 0.5px;
             box-shadow: 0 2px 12px rgba(16, 185, 129, 0.35);
+            overflow: hidden;
+        }
+
+        .sidebar-avatar img,
+        .topbar-user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .sidebar-footer-text {
             line-height: 1.3;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .sidebar-footer-name,
+        .sidebar-footer-role {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-footer-chevron {
+            font-size: 10px;
+            color: #3a4e6a;
+            flex-shrink: 0;
+            transition: all 0.25s var(--ease);
+        }
+
+        .sidebar-footer-info:hover .sidebar-footer-chevron,
+        .sidebar-footer-info.active .sidebar-footer-chevron {
+            color: #34d399;
+            transform: translateX(2px);
         }
 
         .sidebar-footer-name {
@@ -827,7 +863,8 @@
             display: none;
         }
 
-        .sidebar.collapsed .sidebar-footer-text {
+        .sidebar.collapsed .sidebar-footer-text,
+        .sidebar.collapsed .sidebar-footer-chevron {
             display: none;
         }
 
@@ -991,6 +1028,7 @@
             justify-content: center;
             transition: all 0.25s var(--ease);
             position: relative;
+            text-decoration: none;
         }
 
         .topbar-btn:hover {
@@ -1037,7 +1075,8 @@
             gap: 10px;
             padding: 5px 14px 5px 5px;
             border-radius: var(--radius);
-            cursor: default;
+            cursor: pointer;
+            text-decoration: none;
             transition: all 0.25s var(--ease);
             border: 1px solid transparent;
         }
@@ -1060,6 +1099,7 @@
             font-weight: 800;
             letter-spacing: 0.3px;
             box-shadow: 0 2px 8px var(--accent-glow);
+            overflow: hidden;
         }
 
         .topbar-user-info {
@@ -2465,15 +2505,20 @@
         </div>
 
         <div class="sidebar-footer">
-            <div class="sidebar-footer-info">
+            <a href="{{ route('profile.edit') }}" class="sidebar-footer-info {{ request()->routeIs('profile.*') ? 'active' : '' }}" title="Profil Saya">
                 <div class="sidebar-avatar">
-                    {{ strtoupper(substr(Auth::user()->display_name, 0, 2)) }}
+                    @if (Auth::user()->avatar_url)
+                        <img src="{{ Auth::user()->avatar_url }}" alt="">
+                    @else
+                        {{ strtoupper(substr(Auth::user()->display_name, 0, 2)) }}
+                    @endif
                 </div>
                 <div class="sidebar-footer-text">
                     <div class="sidebar-footer-name">{{ Auth::user()->display_name }}</div>
                     <div class="sidebar-footer-role">{{ Auth::user()->role }}</div>
                 </div>
-            </div>
+                <i class="fa-solid fa-chevron-right sidebar-footer-chevron"></i>
+            </a>
         </div>
     </aside>
 
@@ -2515,19 +2560,23 @@
                     </div>
                 </div>
             </div>
-            <button class="topbar-btn" title="Pengaturan" aria-label="Settings">
+            <a href="{{ route('profile.edit') }}" class="topbar-btn" title="Pengaturan Profil" aria-label="Settings">
                 <i class="fa-solid fa-gear"></i>
-            </button>
+            </a>
             <div class="topbar-divider"></div>
-            <div class="topbar-user">
+            <a href="{{ route('profile.edit') }}" class="topbar-user" title="Profil Saya">
                 <div class="topbar-user-avatar">
-                    {{ strtoupper(substr(Auth::user()->display_name, 0, 2)) }}
+                    @if (Auth::user()->avatar_url)
+                        <img src="{{ Auth::user()->avatar_url }}" alt="">
+                    @else
+                        {{ strtoupper(substr(Auth::user()->display_name, 0, 2)) }}
+                    @endif
                 </div>
                 <div class="topbar-user-info">
                     <div class="topbar-user-name">{{ Auth::user()->display_name }}</div>
                     <div class="topbar-user-role">{{ Auth::user()->role }}</div>
                 </div>
-            </div>
+            </a>
             <div class="topbar-divider"></div>
             <form method="POST" action="{{ route('logout') }}" class="d-inline" id="logout-form">
                 @csrf

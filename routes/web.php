@@ -22,6 +22,7 @@ use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\OvertimeRequestController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductManagementController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfitEstimateController;
 use App\Http\Controllers\PoSupplierApprovalController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -50,6 +51,14 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('/no-access', [AuthController::class, 'noAccess'])->name('no-access');
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    // Profil akun sendiri — bukan modul (tidak ada di tabel modules), jadi
+    // access.control meloloskannya untuk semua user yang login.
+    Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+    Route::delete('profile/photo', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
+
     Route::get('user-management/data', [UserManagementController::class, 'data'])->name('user-management.data');
     Route::resource('user-management', UserManagementController::class);
 

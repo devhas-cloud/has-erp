@@ -51,14 +51,14 @@ class OpportunityManagementController extends Controller
     {
         $query = Opportunity::with(['accountCompany', 'stage', 'owner']);
         $user = Auth::user();
-        $isSales = $user->division && $user->division->division_name === 'Sales';
+        $isSales = strtolower($user->division?->division_name) === 'sales' && strtolower($user->hierarchyRole?->role_name) !== 'manager';
 
-        // jika user adalah sales, filter hanya untuk opportunity yang dimiliki oleh user tersebut
+        // Sama seperti Leads: divisi Sales non-Manager hanya melihat opportunity miliknya sendiri
         if ($isSales) {
-            $query->where('owner_id', $user->id);
+            $query->where('opportunities.owner_id', $user->id);
         }
 
-        $recordsTotal = Opportunity::count();
+        $recordsTotal = (clone $query)->count();
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {
@@ -85,8 +85,8 @@ class OpportunityManagementController extends Controller
         $columnOrderMap = [
             1 => 'opportunity_name',
             2 => 'account_companies.account_name',
-            4 => 'close_won_date',
-            5 => 'users.username',
+            4 => 'next_step',
+            5 => 'users.full_name',
         ];
 
         if (isset($columnOrderMap[$orderColumnIndex])) {
@@ -95,15 +95,17 @@ class OpportunityManagementController extends Controller
                 $query->leftJoin('account_companies', 'opportunities.account_companies_id', '=', 'account_companies.id')
                     ->select('opportunities.*')
                     ->orderBy('account_companies.account_name', $orderDirection);
-            } elseif ($sortField === 'users.username') {
+            } elseif ($sortField === 'users.full_name') {
+                // Kolom Owner menampilkan display_name (full_name, fallback username)
                 $query->leftJoin('users', 'opportunities.owner_id', '=', 'users.id')
                     ->select('opportunities.*')
+                    ->orderBy('users.full_name', $orderDirection)
                     ->orderBy('users.username', $orderDirection);
             } else {
                 $query->orderBy($sortField, $orderDirection);
             }
         }
-        $query->orderBy('id', $orderDirection === 'desc' ? 'desc' : 'asc');
+        $query->orderBy('opportunities.id', $orderDirection === 'desc' ? 'desc' : 'asc');
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);

@@ -89,7 +89,7 @@ class LeadsManagementController extends Controller
             });
         }
 
-        $recordsTotal = Lead::count();
+        $recordsTotal = (clone $query)->count();
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {

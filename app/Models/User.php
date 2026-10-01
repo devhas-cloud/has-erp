@@ -51,6 +51,25 @@ class User extends Authenticatable
         );
     }
 
+    /**
+     * URL foto profil. Kolom icon menyimpan path relatif di disk public
+     * (hasil upload dari halaman profil); nilai yang sudah berupa URL dipakai apa adanya.
+     */
+    protected function avatarUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if (! $this->icon) {
+                    return null;
+                }
+
+                return preg_match('#^(https?:)?/#i', $this->icon)
+                    ? $this->icon
+                    : asset('storage/'.$this->icon);
+            },
+        );
+    }
+
     public function division(): BelongsTo
     {
         return $this->belongsTo(Division::class);

@@ -68,7 +68,7 @@ class UserManagementController extends Controller
                 'username' => $user->username,
                 'name_display' => $user->display_name,
                 'initials' => strtoupper(substr($user->display_name, 0, 2)),
-                'icon' => $user->icon,
+                'icon' => $user->avatar_url,
                 'email' => $user->email,
                 'division_name' => $user->division?->division_name,
                 'role' => $user->role,

@@ -59,9 +59,14 @@ class ContactManagementController extends Controller
 
         // Jika divisi sales dan bukan manager, filter hanya kontak yang dimiliki oleh user saat ini
         if (strtolower(Auth::user()->division?->division_name) === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
-            $query->where('assigned_to_id', Auth::id());
+            $query->where(function ($q) {
+                $q->where('assigned_to_id', Auth::id())
+                    ->orWhere('contact_owner_id', Auth::id());
+            });
         }
-        $recordsTotal = AccountContact::count();
+
+        $query->where('status', 'Active');
+        $recordsTotal = (clone $query)->count();
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {
@@ -83,7 +88,6 @@ class ContactManagementController extends Controller
             });
         }
 
-        $query->where('status', 'Active');
         $recordsFiltered = $query->count();
 
         $orderColumnIndex = $request->input('order.0.column', 1);
@@ -358,7 +362,10 @@ $sources = Source::where('status', 'Active')->get();
 
         // Sama seperti data(): user Sales non-Manager hanya melihat kontak yang ditugaskan padanya
         if (strtolower(Auth::user()->division?->division_name) === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
-            $query->where('assigned_to_id', Auth::id());
+            $query->where(function ($q) {
+                $q->where('assigned_to_id', Auth::id())
+                    ->orWhere('contact_owner_id', Auth::id());
+            });
         }
 
         $contacts = $query->orderBy('full_name')->get();
