@@ -656,6 +656,7 @@ function initOpportunityTable() {
         stateDuration: -1,
         stateSaveParams: function(settings, data) {
             data.oppClose = {
+                v: OPP_FILTER_VERSION,
                 preset: oppActivePreset,
                 year: $('#opp-year').val(),
                 from: $('#filter-close-from').val(),
@@ -665,7 +666,8 @@ function initOpportunityTable() {
         },
         stateLoadParams: function(settings, data) {
             var saved = data.oppClose;
-            if (!saved) return;
+            // Filter tersimpan dari versi lama (bawaan kuartal berjalan) diabaikan
+            if (!saved || saved.v !== OPP_FILTER_VERSION) return;
             setSelectedStages(saved.stages || []);
             if (isClosePreset(saved.preset)) {
                 if (saved.year && $('#opp-year option[value="' + saved.year + '"]').length) {
@@ -681,8 +683,11 @@ function initOpportunityTable() {
 
 // --- Filter Close Date (preset + rentang kustom) ---
 const OPP_DATE_FMT = 'YYYY-MM-DD';
-// Filter bawaan saat halaman pertama dibuka: kuartal berjalan. Ganti ke 'all' untuk tanpa filter.
-const OPP_DEFAULT_PRESET = 'q' + moment().quarter();
+// Filter bawaan saat halaman pertama dibuka: semua tanggal, supaya seluruh opportunity langsung tampil.
+// Ganti ke 'q' + moment().quarter() bila ingin bawaan kuartal berjalan.
+const OPP_DEFAULT_PRESET = 'all';
+// Naikkan angka ini bila bawaan filter berubah, agar filter tersimpan versi lama tidak dipakai lagi.
+const OPP_FILTER_VERSION = 2;
 let oppActivePreset = 'all';
 
 function isClosePreset(preset) {

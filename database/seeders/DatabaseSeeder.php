@@ -34,7 +34,7 @@ class DatabaseSeeder extends Seeder
             MasterProductSeeder::class,
             LeaveTypesTableSeeder::class,
             SalaryComponentsTableSeeder::class,
-            //ErDummyDataSeeder::class,
+            ErDummyDataSeeder::class,
         ]);
     }
 }
