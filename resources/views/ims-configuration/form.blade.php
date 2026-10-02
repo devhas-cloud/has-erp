@@ -178,14 +178,14 @@
         <div class="card-header-custom d-flex justify-content-between align-items-center">
             <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>List Part Instrument</span>
             <div class="d-flex gap-2 align-items-center">
-                {{-- @if(! $quotation)
+                @if(! $quotation)
                 <select id="wc-template" class="form-select form-select-sm" style="width:auto">
                     <option value="">— Pilih Template (Configuration) —</option>
                     @foreach($templates as $tpl)
                         <option value="{{ $tpl['id'] }}">{{ $tpl['label'] }}</option>
                     @endforeach
                 </select>
-                @endif --}}
+                @endif
                 <button type="button" class="btn btn-primary btn-sm" onclick="openProductPickerAsParent()">
                     <i class="fa fa-plus me-1"></i> Tambah Item
                 </button>
