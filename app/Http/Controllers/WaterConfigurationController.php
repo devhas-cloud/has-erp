@@ -55,6 +55,12 @@ class WaterConfigurationController extends Controller
         return Division::where('division_name', 'WATER')->value('id');
     }
 
+    // Id divisi PD. Kembali null bila divisi belum terdaftar.
+    private function PdId(): ?int
+    {
+        return Division::where('division_name', 'PD')->value('id');
+    }
+
     /**
      * Daftar configuration divisi WATER yang pernah dibuat, dipakai sebagai
      * template isian. Hanya versi terakhir tiap group yang disertakan.
@@ -438,10 +444,11 @@ class WaterConfigurationController extends Controller
         $length = (int) $request->input('length', 100);
 
         $waterId = $this->waterDivisionId();
+        $PdId = $this->PdId();
 
         $query = MasterProduct::query()
             ->where('status', 'Active')
-            ->where('division_id', $waterId)
+            ->whereIn('division_id', [$waterId, $PdId])
             ->orderBy('name');
 
         $recordsTotal = $query->count();
