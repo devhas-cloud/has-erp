@@ -823,7 +823,7 @@
                     div.appendChild(input);
                     container.appendChild(div);
 
-                    $.get('{{ route("configuration.list", ["table" => "__FK__"]) }}'.replace('__FK__', ef.source), { per_page: 100 }, function(res) {
+                    $.get('{{ route("configuration.list", ["table" => "__FK__"]) }}'.replace('__FK__', ef.source), { per_page: 500 }, function(res) {
                         var sel = document.getElementById(fieldId);
                         if (!sel) return;
                         var nameCol = res.columns[0];
@@ -857,7 +857,7 @@
                     div.appendChild(input);
                     container.appendChild(div);
 
-                    $.get('{{ route("configuration.list", ["table" => "__FK__"]) }}'.replace('__FK__', ef.source), { per_page: 100 }, function(res) {
+                    $.get('{{ route("configuration.list", ["table" => "__FK__"]) }}'.replace('__FK__', ef.source), { per_page: 500 }, function(res) {
                         var sel = document.getElementById(fieldId);
                         if (!sel) return;
                         var nameCol = res.columns[0];

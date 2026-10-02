@@ -377,7 +377,7 @@ class ConfigurationController extends Controller
             $query->with($relations);
         }
 
-        $records = $query->orderBy('id', 'desc')->paginate(15);
+        $records = $query->orderBy('id', 'desc')->paginate((int) $request->get('per_page', 15));
 
         $data = $records->items();
 
@@ -524,7 +524,7 @@ class ConfigurationController extends Controller
             });
         }
 
-        $records = $query->orderBy('id', 'desc')->paginate(15);
+        $records = $query->orderBy('id', 'desc')->paginate((int) $request->get('per_page', 15));
 
         $data = collect($records->items())->map(function (HandlingGroup $group) {
             $group->members = $group->users->pluck('display_name')->join(', ');
