@@ -91,6 +91,21 @@ class LeadsManagementController extends Controller
 
         $recordsTotal = (clone $query)->count();
 
+        $filters = $request->validate([
+            'created_from' => 'nullable|date_format:Y-m-d',
+            'created_to' => 'nullable|date_format:Y-m-d',
+            'lead_status' => 'nullable|string|max:50',
+        ]);
+        if (! empty($filters['created_from'])) {
+            $query->whereDate('created_at', '>=', $filters['created_from']);
+        }
+        if (! empty($filters['created_to'])) {
+            $query->whereDate('created_at', '<=', $filters['created_to']);
+        }
+        if (! empty($filters['lead_status'])) {
+            $query->where('lead_status', $filters['lead_status']);
+        }
+
         $searchValue = $request->input('search.value');
         if ($searchValue) {
             $query->where(function ($q) use ($searchValue) {
@@ -119,6 +134,7 @@ class LeadsManagementController extends Controller
         $columnOrderMap = [
             2 => 'lead_title',
             6 => 'lead_status',
+            9 => 'created_at',
         ];
 
         if (isset($columnOrderMap[$orderColumnIndex])) {
@@ -151,6 +167,8 @@ class LeadsManagementController extends Controller
                 'lead_status' => $lead->lead_status,
                 'owner_name' => $lead->leadOwner?->display_name ?? '—',
                 'assigned_to_name' => $lead->assignedTo?->display_name ?? '—',
+                'created_at' => $lead->created_at?->format('d M Y') ?? '—',
+                'created_at_raw' => $lead->created_at?->format('Y-m-d'),
             ];
         }
 

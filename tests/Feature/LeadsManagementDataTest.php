@@ -119,4 +119,85 @@ class LeadsManagementDataTest extends TestCase
         $response->assertSee('Assigned To');
     }
 
+    /**
+     * Tiga lead dengan tanggal dibuat & status berbeda untuk menguji filter/urutan.
+     */
+    private function seedDatedLeads(): void
+    {
+        $base = $this->createLead();
+
+        foreach ([
+            ['Lead Jan', 'New', '2026-01-15 09:00:00'],
+            ['Lead Mar', 'Qualified', '2026-03-31 23:30:00'],
+            ['Lead Jul', 'New', '2026-07-01 00:10:00'],
+        ] as [$title, $status, $createdAt]) {
+            $lead = Lead::create([
+                'lead_status' => $status,
+                'lead_title' => $title,
+                'account_contacts_id' => $base->account_contacts_id,
+                'source_id' => $base->source_id,
+                'lead_owner_id' => $this->manager->id,
+                'lead_follow_up_date' => $base->lead_follow_up_date,
+            ]);
+            Lead::whereKey($lead->id)->update(['created_at' => $createdAt]);
+        }
+
+        $base->delete();
+    }
+
+    private function leadTitles(array $query = []): array
+    {
+        return $this->actingAs($this->manager)
+            ->getJson(route('leads-management.data', $query))
+            ->assertOk()
+            ->json('data.*.lead_title');
+    }
+
+    public function test_created_date_range_filter_is_inclusive(): void
+    {
+        $this->seedDatedLeads();
+
+        $response = $this->actingAs($this->manager)->getJson(route('leads-management.data', [
+            'created_from' => '2026-01-01',
+            'created_to' => '2026-03-31',
+        ]))->assertOk();
+
+        $this->assertEqualsCanonicalizing(['Lead Jan', 'Lead Mar'], $response->json('data.*.lead_title'));
+        $this->assertSame(3, $response->json('recordsTotal'));
+        $this->assertSame(2, $response->json('recordsFiltered'));
+
+        $this->assertSame(['Lead Jul'], $this->leadTitles(['created_from' => '2026-07-01']));
+        $this->assertEqualsCanonicalizing(['Lead Jan'], $this->leadTitles(['created_to' => '2026-01-15']));
+    }
+
+    public function test_lead_status_filter_combines_with_created_date(): void
+    {
+        $this->seedDatedLeads();
+
+        $this->assertEqualsCanonicalizing(['Lead Jan', 'Lead Jul'], $this->leadTitles(['lead_status' => 'New']));
+        $this->assertSame(['Lead Mar'], $this->leadTitles(['lead_status' => 'Qualified']));
+        $this->assertSame(['Lead Jan'], $this->leadTitles(['lead_status' => 'New', 'created_to' => '2026-06-30']));
+        $this->assertCount(3, $this->leadTitles(['lead_status' => '']));
+    }
+
+    public function test_created_column_sorts_by_created_at(): void
+    {
+        $this->seedDatedLeads();
+
+        $this->assertSame(
+            ['Lead Jul', 'Lead Mar', 'Lead Jan'],
+            $this->leadTitles(['order' => [['column' => 9, 'dir' => 'desc']]])
+        );
+        $this->assertSame(
+            ['Lead Jan', 'Lead Mar', 'Lead Jul'],
+            $this->leadTitles(['order' => [['column' => 9, 'dir' => 'asc']]])
+        );
+    }
+
+    public function test_invalid_created_date_filter_is_rejected(): void
+    {
+        $this->actingAs($this->manager)
+            ->getJson(route('leads-management.data', ['created_from' => 'bukan-tanggal']))
+            ->assertStatus(422);
+    }
 }

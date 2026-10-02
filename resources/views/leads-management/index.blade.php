@@ -75,6 +75,108 @@
     .mobile-picker { display: flex; gap: 8px; align-items: stretch; }
     .mobile-picker select { width: 92px; flex: 0 0 92px; }
     .mobile-picker input { flex: 1; }
+
+    /* ===== Toolbar: filter Created Date + Lead Status ===== */
+    .lead-toolbar {
+        margin: 6px 6px 14px;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    }
+    .lead-toolbar-main {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px 24px;
+        padding: 14px 16px;
+    }
+    .lead-toolbar-group { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+    /* Grup filter mengisi sisa lebar; rentang kustom turun ke baris kedua bila tidak muat, dropdown Lead Status tetap di kanan */
+    .lead-toolbar-filters { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+    .lead-status-filter { flex: 0 0 auto; }
+    .lead-toolbar-label {
+        font-size: 10.5px;
+        font-weight: 800;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .lead-toolbar-label i { color: var(--accent); margin-right: 5px; }
+    .lead-toolbar-controls { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+
+    .lead-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .lead-chip {
+        padding: 7px 13px;
+        border-radius: 20px;
+        border: 1px solid var(--card-border);
+        background: var(--card);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 700;
+        font-family: inherit;
+        line-height: 1.2;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s var(--ease);
+    }
+    .lead-chip:hover {
+        border-color: rgba(16, 185, 129, 0.3);
+        color: var(--accent);
+        background: var(--accent-soft);
+    }
+    .lead-chip.active {
+        background: linear-gradient(135deg, var(--accent), #059669);
+        border-color: transparent;
+        color: #fff;
+        box-shadow: 0 2px 8px var(--accent-glow);
+    }
+    .lead-chip:focus-visible, .lead-summary-reset:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .lead-range { display: flex; align-items: center; gap: 6px; }
+    .lead-range .form-control { width: 148px; padding: 6px 10px; font-size: 12.5px; }
+    .lead-range-sep { color: var(--text-muted); font-size: 12px; font-weight: 700; }
+    .lead-range.is-custom .form-control { border-color: var(--accent); }
+
+    .lead-status-filter .form-select { min-width: 210px; padding: 7px 34px 7px 12px; font-size: 12.5px; font-weight: 600; }
+
+    .lead-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 9px 16px;
+        border-top: 1px solid var(--card-border);
+        font-size: 12.5px;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+    .lead-summary strong { color: var(--text-primary); font-weight: 800; }
+    .lead-summary-reset {
+        border: none;
+        background: none;
+        padding: 2px 4px;
+        color: var(--danger);
+        font-size: 12px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        border-radius: 6px;
+    }
+    .lead-summary-reset:hover { text-decoration: underline; }
+
+    .lead-date { color: var(--text-primary); font-weight: 600; white-space: nowrap; }
+    .lead-date-rel { font-size: 11px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+
+    @media (max-width: 768px) {
+        .lead-toolbar-main { align-items: stretch; flex-direction: column; }
+        .lead-range { width: 100%; }
+        .lead-range .form-control { flex: 1; width: auto; min-width: 0; }
+        .lead-status-filter .form-select { width: 100%; min-width: 0; }
+    }
 </style>
 @endsection
 
@@ -107,6 +209,45 @@
         <span><i class="fa fa-bullhorn me-2" style="color:var(--accent)"></i>Leads List</span>
     </div>
     <div class="card-body-custom p-2">
+        <div class="lead-toolbar">
+            <div class="lead-toolbar-main">
+                <div class="lead-toolbar-filters">
+                    <div class="lead-toolbar-group">
+                        <span class="lead-toolbar-label"><i class="fa fa-calendar-days"></i>Created Date</span>
+                        <div class="lead-toolbar-controls">
+                            <div class="lead-chips" role="group" aria-label="Rentang tanggal dibuat">
+                                <button type="button" class="lead-chip" data-preset="q1" title="Januari – Maret">Kuartal 1</button>
+                                <button type="button" class="lead-chip" data-preset="q2" title="April – Juni">Kuartal 2</button>
+                                <button type="button" class="lead-chip" data-preset="q3" title="Juli – September">Kuartal 3</button>
+                                <button type="button" class="lead-chip" data-preset="q4" title="Oktober – Desember">Kuartal 4</button>
+                                <button type="button" class="lead-chip" data-preset="year" title="Januari – Desember">Setahun</button>
+                                <button type="button" class="lead-chip" data-preset="all" title="Tanpa filter tanggal">Semua</button>
+                            </div>
+                            <div class="lead-range" id="lead-range">
+                                <input type="date" id="filter-created-from" class="form-control" aria-label="Dibuat dari tanggal" title="Dari tanggal">
+                                <span class="lead-range-sep">–</span>
+                                <input type="date" id="filter-created-to" class="form-control" aria-label="Dibuat sampai tanggal" title="Sampai tanggal">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="lead-toolbar-group lead-status-filter">
+                    <label class="lead-toolbar-label" for="filter-lead-status"><i class="fa fa-layer-group"></i>Lead Status</label>
+                    <select id="filter-lead-status" class="form-select">
+                        <option value="">Semua Status</option>
+                        @foreach(['New', 'Approach', 'Qualified', 'Unqualified', 'Converted'] as $status)
+                        <option value="{{ $status }}">{{ $status }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="lead-summary" aria-live="polite">
+                <span id="lead-summary-text">Memuat…</span>
+                <button type="button" class="lead-summary-reset" id="btn-reset-lead-filter" style="display:none">
+                    <i class="fa fa-xmark me-1"></i>Hapus filter
+                </button>
+            </div>
+        </div>
         <div class="table-responsive">
             <table id="leads-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
@@ -120,6 +261,7 @@
                         <th>Lead Status</th>
                         <th>Owner</th>
                         <th>Assigned To</th>
+                        <th>Created</th>
                         <th class="text-center" style="width:120px">Action</th>
                     </tr>
                 </thead>
@@ -684,7 +826,14 @@ function initLeadsTable() {
     leadsTable = $('#leads-table').DataTable({
         processing: true,
         serverSide: true,
-        ajax: '{{ route("leads-management.data") }}',
+        ajax: {
+            url: '{{ route("leads-management.data") }}',
+            data: function(d) {
+                d.created_from = $('#filter-created-from').val();
+                d.created_to = $('#filter-created-to').val();
+                d.lead_status = $('#filter-lead-status').val();
+            }
+        },
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
             {
@@ -718,6 +867,15 @@ function initLeadsTable() {
             { data: 'owner_name' },
             { data: 'assigned_to_name' },
             {
+                data: 'created_at', orderable: true, searchable: false,
+                render: function(data, type, row) {
+                    if (!row.created_at_raw) return '—';
+                    var days = moment().startOf('day').diff(moment(row.created_at_raw).startOf('day'), 'days');
+                    var rel = days <= 0 ? 'Hari ini' : (days === 1 ? 'Kemarin' : days + ' hari lalu');
+                    return '<div class="lead-date">' + data + '</div><div class="lead-date-rel">' + rel + '</div>';
+                }
+            },
+            {
                 data: null,
                 orderable: false,
                 searchable: false,
@@ -742,9 +900,30 @@ function initLeadsTable() {
                 }
             }
         ],
-        order: [[0, 'asc']],
+        order: [[9, 'desc']],
         pageLength: 10,
         lengthMenu: [10, 15, 25, 50, 100],
+        // Filter, urutan, pencarian & halaman tetap saat kembali dari halaman detail (per tab browser)
+        stateSave: true,
+        stateDuration: -1,
+        stateSaveParams: function(settings, data) {
+            data.leadFilter = {
+                preset: leadActivePreset,
+                from: $('#filter-created-from').val(),
+                to: $('#filter-created-to').val(),
+                status: $('#filter-lead-status').val(),
+            };
+        },
+        stateLoadParams: function(settings, data) {
+            var saved = data.leadFilter;
+            if (!saved) return;
+            setLeadStatusFilter(saved.status);
+            if (isCreatedPreset(saved.preset)) {
+                applyCreatedPreset(saved.preset);
+            } else {
+                setCreatedRange(saved.from, saved.to);
+            }
+        },
         // language: {
         //     processing: '<i class="fa fa-spinner fa-spin"></i> Loading...',
         //     search: '',
@@ -766,6 +945,115 @@ function initLeadsTable() {
         // }
     });
 }
+
+// --- Filter Created Date (kuartal + rentang kustom) ---
+const LEAD_DATE_FMT = 'YYYY-MM-DD';
+// Filter bawaan saat halaman pertama dibuka: semua tanggal, urut terbaru. Ganti ke 'q' + moment().quarter() untuk kuartal berjalan.
+const LEAD_DEFAULT_PRESET = 'all';
+let leadActivePreset = 'all';
+
+function isCreatedPreset(preset) {
+    return /^(q[1-4]|year|all)$/.test(preset || '');
+}
+
+// Rentang tanggal sebuah preset pada tahun berjalan
+function createdPresetRange(preset) {
+    var year = moment().year();
+    if (preset === 'year') {
+        return [moment({ year: year }).startOf('year'), moment({ year: year }).endOf('year')];
+    }
+    var q = /^q([1-4])$/.exec(preset);
+    if (!q) return null;
+    var start = moment({ year: year, month: (parseInt(q[1], 10) - 1) * 3, day: 1 });
+    return [start, start.clone().add(2, 'months').endOf('month')];
+}
+
+function setCreatedRange(from, to, preset) {
+    from = from || '';
+    to = to || '';
+    $('#filter-created-from').val(from);
+    $('#filter-created-to').val(to);
+
+    leadActivePreset = preset || ((from || to) ? 'custom' : 'all');
+    $('.lead-chip[data-preset]').each(function() {
+        var active = $(this).data('preset') === leadActivePreset;
+        $(this).toggleClass('active', active).attr('aria-pressed', active ? 'true' : 'false');
+    });
+    $('#lead-range').toggleClass('is-custom', leadActivePreset === 'custom');
+}
+
+function applyCreatedPreset(preset) {
+    var range = createdPresetRange(preset);
+    if (range) {
+        setCreatedRange(range[0].format(LEAD_DATE_FMT), range[1].format(LEAD_DATE_FMT), preset);
+    } else {
+        setCreatedRange('', '', 'all');
+    }
+}
+
+function createdRangeLabel() {
+    var from = $('#filter-created-from').val();
+    var to = $('#filter-created-to').val();
+    var fmt = function(d) { return moment(d).format('DD MMM YYYY'); };
+
+    var q = /^q([1-4])$/.exec(leadActivePreset);
+    if (q) return 'Kuartal ' + q[1] + ' ' + moment().year() + ' (' + moment(from).format('DD MMM') + ' – ' + fmt(to) + ')';
+    if (leadActivePreset === 'year') return 'Tahun ' + moment().year();
+
+    if (from && to) return from === to ? fmt(from) : fmt(from) + ' – ' + fmt(to);
+    if (from) return 'mulai ' + fmt(from);
+    if (to) return 'sampai ' + fmt(to);
+    return '';
+}
+
+$(document).on('click', '.lead-chip[data-preset]', function() {
+    applyCreatedPreset($(this).data('preset'));
+    if (leadsTable) leadsTable.ajax.reload();
+});
+
+$('#filter-created-from, #filter-created-to').on('change', function() {
+    var from = $('#filter-created-from').val();
+    var to = $('#filter-created-to').val();
+
+    // Rentang terbalik → tukar otomatis, jangan dibuang
+    if (from && to && from > to) {
+        var tmp = from; from = to; to = tmp;
+    }
+    setCreatedRange(from, to);
+    if (leadsTable) leadsTable.ajax.reload();
+});
+
+// --- Filter Lead Status (dropdown; kosong = semua status) ---
+function setLeadStatusFilter(status) {
+    status = status || '';
+    // Status tersimpan yang sudah tidak ada di pilihan → kembali ke "Semua Status"
+    $('#filter-lead-status').val($('#filter-lead-status option[value="' + status + '"]').length ? status : '');
+}
+
+$('#filter-lead-status').on('change', function() {
+    if (leadsTable) leadsTable.ajax.reload();
+});
+
+$('#btn-reset-lead-filter').on('click', function() {
+    applyCreatedPreset('all');
+    setLeadStatusFilter('');
+    if (leadsTable) leadsTable.ajax.reload();
+});
+
+// Ringkasan hasil di bawah toolbar
+$('#leads-table').on('draw.dt', function(e, settings) {
+    var api = new $.fn.dataTable.Api(settings);
+    var info = api.page.info();
+    var label = createdRangeLabel();
+    var status = $('#filter-lead-status').val();
+
+    $('#lead-summary-text').html(
+        '<strong>' + info.recordsDisplay.toLocaleString('id-ID') + '</strong> lead' +
+        (label ? ' · Created Date <strong>' + label + '</strong>' : ' · semua tanggal') +
+        (status ? ' · Status <strong>' + $('<span>').text(status).html() + '</strong>' : ' · semua status')
+    );
+    $('#btn-reset-lead-filter').toggle(!!(label || status));
+});
 
 $(document).on('click', '#btn-save-lead', function() {
     const $btn = $(this);
@@ -1081,6 +1369,7 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
     }
 });
 
+applyCreatedPreset(LEAD_DEFAULT_PRESET); // ditimpa oleh filter tersimpan (stateLoadParams) bila ada
 initLeadsTable();
 </script>
 @endsection

@@ -41,9 +41,15 @@ class OpportunityManagementController extends Controller
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
 
+        // Pilihan tahun untuk filter kuartal: dari close_date terlama s/d terbaru, selalu memuat tahun berjalan
+        $currentYear = now()->year;
+        $minYear = (int) substr((string) Opportunity::min('close_date'), 0, 4) ?: $currentYear;
+        $maxYear = (int) substr((string) Opportunity::max('close_date'), 0, 4) ?: $currentYear;
+        $closeDateYears = range(min($minYear, $currentYear), max($maxYear, $currentYear));
+
         return view('opportunity-management.index', compact(
             'stages', 'forecasts', 'lossReasons', 'divisions',
-            'sources', 'users', 'accountCompanies'
+            'sources', 'users', 'accountCompanies', 'closeDateYears'
         ));
     }
 
@@ -59,6 +65,22 @@ class OpportunityManagementController extends Controller
         }
 
         $recordsTotal = (clone $query)->count();
+
+        $filters = $request->validate([
+            'close_date_from' => 'nullable|date_format:Y-m-d',
+            'close_date_to' => 'nullable|date_format:Y-m-d',
+            'stage_ids' => 'nullable|array',
+            'stage_ids.*' => 'integer',
+        ]);
+        if (! empty($filters['close_date_from'])) {
+            $query->whereDate('opportunities.close_date', '>=', $filters['close_date_from']);
+        }
+        if (! empty($filters['close_date_to'])) {
+            $query->whereDate('opportunities.close_date', '<=', $filters['close_date_to']);
+        }
+        if (! empty($filters['stage_ids'])) {
+            $query->whereIn('opportunities.stage_id', $filters['stage_ids']);
+        }
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {
@@ -86,7 +108,8 @@ class OpportunityManagementController extends Controller
             1 => 'opportunity_name',
             2 => 'account_companies.account_name',
             4 => 'next_step',
-            5 => 'users.full_name',
+            5 => 'close_date',
+            6 => 'users.full_name',
         ];
 
         if (isset($columnOrderMap[$orderColumnIndex])) {
@@ -121,6 +144,8 @@ class OpportunityManagementController extends Controller
                 'account_name' => $opp->accountCompany?->account_name ?? '—',
                 'company_initials' => strtoupper(substr($opp->accountCompany?->account_name ?? '?', 0, 2)),
                 'stage_name' => $opp->stage?->stage_name ?? '—',
+                'close_date' => $opp->close_date?->format('d M Y') ?? '—',
+                'close_date_raw' => $opp->close_date?->format('Y-m-d'),
                 'close_won_date' => $opp->close_won_date?->format('d M Y') ?? '—',
                 'owner_name' => $opp->owner?->display_name ?? '—',
                 'next_step' => $opp->next_step ?? '—',
