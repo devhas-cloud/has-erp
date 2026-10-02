@@ -1093,7 +1093,7 @@ class WaterConfigurationController extends Controller
         }
 
         $found = MasterProduct::whereIn('id', $ids)
-            ->where('division_id', $this->waterDivisionId())
+            ->whereIn('division_id', [$this->waterDivisionId(), $this->PdId()])
             ->where('status', 'Active')
             ->pluck('id');
         $missing = $ids->diff($found)->values();
