@@ -57,6 +57,7 @@
     }
     .wc-desc-toolbar button:hover { background: var(--bg); opacity: 1; }
     .wc-desc-wrap:hover .wc-desc-toolbar { opacity: 1; }
+    .wc-notes-editor { min-height: 70px; }
     .wc-cat[contenteditable="true"] {
         border: 1px solid var(--card-border, #ced4da);
         border-radius: .25rem;
@@ -278,7 +279,14 @@
             <span><i class="fa-solid fa-note-sticky me-2" style="color:var(--accent)"></i>Catatan</span>
         </div>
         <div class="card-body-custom">
-            <textarea id="wc-notes" name="notes" class="form-control" rows="3" placeholder="Catatan (opsional)">{{ $quotation?->notes }}</textarea>
+            <div class="wc-desc-wrap">
+                <div class="form-control form-control-sm wc-desc wc-notes-editor" contenteditable="true" id="wc-notes" data-placeholder="Catatan (opsional)">{!! \App\Models\Quotation::renderDescription($quotation?->notes) !!}</div>
+                <div class="wc-desc-toolbar">
+                    <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+                    <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+                    <button type="button" data-cmd="underline" title="Underline"><u>U</u></button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -623,6 +631,13 @@ function collectItems() {
     return valid ? items : null;
 }
 
+function getNotes() {
+    var html = $('#wc-notes').html() || '';
+    if (!html) return '';
+    var text = $('<div>').html(html).text().trim();
+    return text === '' ? '' : html;
+}
+
 $('#btn-save-wc').on('click', function() {
     var taskId = $('#wc-task-id').val();
     if (!taskId) {
@@ -639,7 +654,7 @@ $('#btn-save-wc').on('click', function() {
     var payload = {
         task_id: taskId,
         date: $('#wc-date').val(),
-        notes: $('#wc-notes').val(),
+        notes: getNotes(),
         items: items
     };
 
@@ -688,6 +703,7 @@ $(document).ready(function() {
             items.forEach(function(p) {
                 addItemRow(p, p.parent_key || null);
             });
+            $('#wc-notes').html(res.notes || '');
             toastr.success(items.length + ' item (parent & children) dimuat dari template.');
             $('#wc-template').val('');
         }).fail(function(xhr) {

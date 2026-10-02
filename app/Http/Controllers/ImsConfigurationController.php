@@ -114,6 +114,7 @@ class ImsConfigurationController extends Controller
         return response()->json([
             'success' => true,
             'items' => $items,
+            'notes' => \App\Models\Quotation::renderDescription($config->notes),
         ]);
     }
 

@@ -265,7 +265,7 @@
     </table>
 
     @if($quotation->notes)
-        <div class="note">Catatan :<br>{!! nl2br(e($quotation->notes)) !!}</div>
+        <div class="note">Catatan :<br>{!! \App\Models\Quotation::renderDescription($quotation->notes) !!}</div>
     @endif
 
     <div class="sign">

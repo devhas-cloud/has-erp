@@ -353,7 +353,7 @@
                 <span><i class="fa-solid fa-note-sticky me-2" style="color:var(--accent)"></i>Catatan</span>
             </div>
             <div class="card-body-custom">
-                <p class="mb-0" style="white-space:pre-line;font-size:13px">{!! nl2br(e($quotation->notes)) !!}</p>
+                <p class="mb-0" style="font-size:13px">{!! \App\Models\Quotation::renderDescription($quotation->notes) !!}</p>
             </div>
         </div>
         @endif
