@@ -12,6 +12,7 @@ use App\Models\QuoteConfigurationItem;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use App\Support\ConfigurationTemplateHandling;
 use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,24 @@ use Illuminate\Support\Facades\DB;
 
 class ImsConfigurationController extends Controller
 {
+    use ConfigurationTemplateHandling;
+
     private const MODULE_CODE = 'MOD_IMS_CONFIGURATION';
+
+    protected function templateViewRoot(): string
+    {
+        return 'ims-configuration';
+    }
+
+    protected function templateDivisionId(): ?int
+    {
+        return Division::where('division_name', 'IMS')->value('id');
+    }
+
+    protected function templateEditorView(): string
+    {
+        return 'configuration.partials._item-editor-ims';
+    }
 
     public function index()
     {
@@ -43,78 +61,6 @@ class ImsConfigurationController extends Controller
             'categories' => $categories,
             'templates' => $this->templateList(),
             'preselectedTaskId' => $request->query('task_id'),
-        ]);
-    }
-
-    /**
-     * Daftar configuration divisi IMS yang pernah dibuat, dipakai sebagai template
-     * isian. Hanya versi terakhir tiap group yang disertakan.
-     */
-    private function templateList(): array
-    {
-        $imsId = Division::where('division_name', 'IMS')->value('id');
-        if (! $imsId) {
-            return [];
-        }
-
-        $latestIds = QuoteConfiguration::query()
-            ->selectRaw('MAX(id) as id')
-            ->where('division_id', $imsId)
-            ->groupBy('group_id')
-            ->pluck('id');
-
-        return QuoteConfiguration::with(['items', 'task', 'opportunity.accountCompany'])
-            ->whereIn('id', $latestIds)
-            ->where('division_id', $imsId)
-            ->orderByDesc('id')
-            ->get()
-            ->map(fn ($config) => [
-                'id' => $config->id,
-                'label' => ($config->opportunity?->opportunity_name ?? $config->task?->title ?? 'Configuration #'.$config->id)
-                    .' — '.($config->date?->format('d/m/Y') ?? '—')
-                    .' ('.$config->items->count().' item)',
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Ambil item (parent + children) dari configuration IMS sebagai template
-     * isian, dalam urutan DFS.
-     */
-    public function fetchTemplate(Request $request, $id): JsonResponse
-    {
-        $config = QuoteConfiguration::with(['items'])
-            ->findOrFail($id);
-
-        $all = $config->items->keyBy('id');
-        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
-
-        $items = [];
-        $walk = function ($parentId) use (&$walk, &$items, $children) {
-            foreach ($children[$parentId] ?? [] as $item) {
-                $items[] = [
-                    '_key' => 'tpl-'.$item->id,
-                    'parent_key' => $item->parent_id ? 'tpl-'.$item->parent_id : null,
-                    'item_no' => $item->item_no,
-                    'product_id' => $item->product_id,
-                    'category' => $item->category,
-                    'part_number' => $item->part_number,
-                    'description' => $item->description,
-                    'qty' => $item->qty,
-                    'price' => $item->price,
-                    'unit' => $item->unit,
-                ];
-                $walk($item->id);
-            }
-        };
-
-        $walk('_root');
-
-        return response()->json([
-            'success' => true,
-            'items' => $items,
-            'notes' => \App\Models\Quotation::renderDescription($config->notes),
         ]);
     }
 
@@ -1120,5 +1066,84 @@ class ImsConfigurationController extends Controller
         foreach ($updates as $update) {
             QuoteConfigurationItem::where('id', $update['id'])->update(['parent_id' => $update['parent_id']]);
         }
+    }
+
+    /**
+     * Pasang parent_id banyak baris dalam satu query:
+     * UPDATE ... SET parent_id = CASE id WHEN ? THEN ? ... END WHERE id IN (...).
+     *
+     * @param  array<int,int>  $parentByChildId  [child_id => parent_id]
+     */
+    private function assignParents(array $parentByChildId, string $table = 'quote_configuration_items'): void
+    {
+        if (empty($parentByChildId)) {
+            return;
+        }
+
+        $cases = '';
+        $bindings = [];
+        foreach ($parentByChildId as $childId => $parentId) {
+            $cases .= ' WHEN ? THEN ?';
+            $bindings[] = $childId;
+            $bindings[] = $parentId;
+        }
+
+        $childIds = array_keys($parentByChildId);
+        $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+
+        DB::update(
+            "UPDATE {$table} SET parent_id = CASE id{$cases} END WHERE id IN ({$placeholders})",
+            array_merge($bindings, $childIds)
+        );
+    }
+
+    /**
+     * Validasi product_id semua item dalam SATU query (untuk keperluan template).
+     */
+    private function rejectUnknownProducts(array $items): ?JsonResponse
+    {
+        $ids = collect($items)->pluck('product_id')->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return null;
+        }
+
+        $found = MasterProduct::whereIn('id', $ids)
+            ->where('division_id', $this->templateDivisionId())
+            ->where('status', 'Active')
+            ->pluck('id');
+        $missing = $ids->diff($found)->values();
+
+        if ($missing->isEmpty()) {
+            return null;
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Produk tidak ditemukan di master product divisi IMS: #'.$missing->implode(', #').'.',
+        ], 422);
+    }
+
+    /**
+     * Harga item dari master product. Qty <= 0 atau tanpa produk -> harga 0.00
+     *
+     * @return array{currency: ?string, price_currency: float, price: float}
+     */
+    private function pricingFromProduct(?MasterProduct $product, int $qty, string $baseCurrency): array
+    {
+        if (! $product) {
+            return ['currency' => null, 'price_currency' => 0.00, 'price' => 0.00];
+        }
+
+        $currency = $product->currency;
+        $isForeign = $currency && ! $currency->is_base;
+        $rate = $isForeign ? (float) $currency->rate : 1.0;
+        $priceCurrency = $qty > 0 ? round((float) $product->price, 2) : 0.00;
+
+        return [
+            'currency' => $isForeign ? strtoupper($currency->name) : $baseCurrency,
+            'price_currency' => $priceCurrency,
+            'price' => round($priceCurrency * $rate, 2),
+        ];
     }
 }

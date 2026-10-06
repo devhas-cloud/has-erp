@@ -240,6 +240,13 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('ims-configuration/search-products', [ImsConfigurationController::class, 'searchProducts'])->name('ims-configuration.search-products');
     Route::get('ims-configuration/fetch-task', [ImsConfigurationController::class, 'fetchTask'])->name('ims-configuration.fetch-task');
     Route::get('ims-configuration/{id}/template', [ImsConfigurationController::class, 'fetchTemplate'])->name('ims-configuration.fetch-template');
+    Route::get('ims-configuration/template/data', [ImsConfigurationController::class, 'templateData'])->name('ims-configuration.template-data');
+    Route::get('ims-configuration/template/create', [ImsConfigurationController::class, 'templateCreate'])->name('ims-configuration.template-create');
+    Route::get('ims-configuration/template/{id}/edit', [ImsConfigurationController::class, 'templateEdit'])->name('ims-configuration.template-edit');
+    Route::get('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateShow'])->name('ims-configuration.template-show');
+    Route::post('ims-configuration/template', [ImsConfigurationController::class, 'templateStore'])->name('ims-configuration.template-store');
+    Route::put('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateUpdate'])->name('ims-configuration.template-update');
+    Route::delete('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateDestroy'])->name('ims-configuration.template-destroy');
     Route::resource('ims-configuration', ImsConfigurationController::class);
 
     Route::get('quotation/data', [QuotationController::class, 'data'])->name('quotation.data');

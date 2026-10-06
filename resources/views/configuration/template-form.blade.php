@@ -50,7 +50,7 @@
             </div>
         </div>
         <div class="card-body-custom p-2">
-            @include('configuration.partials._item-editor', [
+            @include($editorView, [
                 'items' => $items,
                 'searchUrl' => $searchUrl,
             ])

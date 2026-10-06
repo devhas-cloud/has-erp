@@ -25,6 +25,15 @@ trait ConfigurationTemplateHandling
     abstract protected function templateViewRoot(): string;
 
     /**
+     * Partial editor item yang dipakai form template. Modul dengan pola item
+     * berbeda (mis. IMS dengan kolom Unit & Harga) bisa override.
+     */
+    protected function templateEditorView(): string
+    {
+        return 'configuration.partials._item-editor';
+    }
+
+    /**
      * Daftar template milik divisi, dipakai sebagai pilihan isian saat membuat configuration.
      */
     public function templateList(): array
@@ -66,6 +75,8 @@ trait ConfigurationTemplateHandling
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
+                    'price' => $item->price,
+                    'unit' => $item->unit,
                 ];
                 $walk($item->id);
             }
@@ -143,6 +154,7 @@ trait ConfigurationTemplateHandling
         return view('configuration.template-form', [
             'template' => null,
             'items' => [],
+            'editorView' => $this->templateEditorView(),
             'storeUrl' => route($this->templateViewRoot().'.template-store'),
             'updateUrl' => route($this->templateViewRoot().'.template-update', '__ID__'),
             'indexUrl' => route($this->templateViewRoot().'.index'),
@@ -159,6 +171,7 @@ trait ConfigurationTemplateHandling
         return view('configuration.template-form', [
             'template' => $template,
             'items' => $template->items,
+            'editorView' => $this->templateEditorView(),
             'storeUrl' => route($this->templateViewRoot().'.template-store'),
             'updateUrl' => route($this->templateViewRoot().'.template-update', '__ID__'),
             'indexUrl' => route($this->templateViewRoot().'.index'),
@@ -283,6 +296,8 @@ trait ConfigurationTemplateHandling
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'nullable|integer',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.unit' => 'nullable|string|max:50',
         ];
     }
 
@@ -309,7 +324,21 @@ trait ConfigurationTemplateHandling
         foreach ($items as $i => $item) {
             $qty = (int) ($item['qty'] ?? 0);
             $productId = $item['product_id'] ?? null;
-            $pricing = $this->pricingFromProduct($productId ? $products->get($productId) : null, $qty, $baseCurrency);
+            $unit = $item['unit'] ?? null;
+
+            // Modul dengan pola harga client (mis. IMS) kirim 'price' eksplisit;
+            // simpan apa adanya. Modul lain tanpa 'price' -> recompute dari master product.
+            $explicitPrice = $item['price'] ?? null;
+            if ($explicitPrice !== null && $explicitPrice !== '') {
+                $clientPrice = round((float) $explicitPrice, 2);
+                $pricing = [
+                    'currency' => 'IDR',
+                    'price_currency' => $clientPrice,
+                    'price' => $clientPrice,
+                ];
+            } else {
+                $pricing = $this->pricingFromProduct($productId ? $products->get($productId) : null, $qty, $baseCurrency);
+            }
 
             $payload[] = [
                 'template_id' => $template->id,
@@ -323,7 +352,7 @@ trait ConfigurationTemplateHandling
                 'price' => $pricing['price'],
                 'price_currency' => $pricing['price_currency'],
                 'currency' => $pricing['currency'],
-                'unit' => $item['unit'] ?? null,
+                'unit' => $unit,
                 'sort_order' => $i + 1,
                 'created_at' => $now,
                 'updated_at' => $now,
