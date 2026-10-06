@@ -1259,6 +1259,45 @@
 @endpush
 
 @push('modals')
+<div class="modal fade modal-lead" id="convertLeadModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa-solid fa-bullseye me-2" style="color:var(--accent)"></i>Convert To Opportunity</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Leads</label>
+                    <input type="text" value="{{ $lead->lead_title ?? '—' }}" readonly>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Lead akan dikonversi menjadi Opportunity.</div>
+                </div>
+                <br>
+                <div class="form-group">
+                    <label>Division <span class="text-danger">*</span></label>
+                    <select id="cl-division">
+                        <option value="">— Pilih —</option>
+                        @foreach($opportunityDivisions as $div)
+                        <option value="{{ $div->id }}" @if(($lead->accountContact?->divisions_id ?? '') == $div->id) selected @endif>
+                            {{ $div->division_name }}
+                        </option>
+                        @endforeach
+                    </select>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Wajib dipilih — divisi pemilik opportunity.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-convert">
+                    <i class="fa fa-check-double me-1"></i> Convert
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+
+@push('modals')
 <div class="modal fade modal-task" id="taskModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -2558,48 +2597,40 @@ $(document).on('click', '#btn-confirm-qualified', function() {
     });
 });
 
-// ── Konversi Lead → Opportunity (konfirmasi Swal) ──
+// ── Konversi Lead → Opportunity (modal pilih Division) ──
 function confirmConverted() {
-    Swal.fire({
-        title: 'Yakin ingin Converted?',
-        text: 'Lead "' + '{{ $lead->lead_title }}' + '" akan dikonversi menjadi Opportunity.',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Ya, Converted',
-        cancelButtonText: 'Batal',
-        confirmButtonColor: '#2563eb',
-        cancelButtonColor: '#64748b',
-        reverseButtons: true
-    }).then(function(result) {
-        if (!result.isConfirmed) return;
-
-        Swal.fire({
-            title: 'Processing...',
-            text: 'Mengonversi lead menjadi opportunity.',
-            allowOutsideClick: false,
-            didOpen: function() {
-                Swal.showLoading();
-                $.ajax({
-                    url: '{{ route("leads-management.converted", $lead->id) }}',
-                    type: 'POST',
-                    data: { _token: '{{ csrf_token() }}' },
-                    success: function(res) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: res.message || 'Lead successfully converted to Opportunity.',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
-                        setTimeout(function() { location.reload(); }, 1200);
-                    },
-                    error: function(xhr) {
-                        Swal.close();
-                        toastr.error(xhr.responseJSON?.message || 'Failed to convert lead.');
-                    }
-                });
-            }
-        });
-    });
+    $('#cl-division').removeClass('is-invalid');
+    new bootstrap.Modal('#convertLeadModal').show();
 }
+
+$(document).on('click', '#btn-save-convert', function() {
+    const $btn = $(this);
+    $('#cl-division').removeClass('is-invalid');
+
+    const divisionId = $('#cl-division').val();
+    if (!divisionId) {
+        $('#cl-division').addClass('is-invalid');
+        toastr.error('Division wajib dipilih.');
+        return;
+    }
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Converting...');
+    $.ajax({
+        url: '{{ route("leads-management.converted", $lead->id) }}',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}', division_id: divisionId },
+        success: function(res) {
+            bootstrap.Modal.getInstance('#convertLeadModal').hide();
+            toastr.success(res.message || 'Lead successfully converted to Opportunity.');
+            setTimeout(function() { location.reload(); }, 1200);
+        },
+        error: function(xhr) {
+            toastr.error(xhr.responseJSON?.message || 'Failed to convert lead.');
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-check-double me-1"></i> Convert');
+        }
+    });
+});
 </script>
 @endsection

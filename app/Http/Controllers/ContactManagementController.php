@@ -235,6 +235,7 @@ $sources = Source::where('status', 'Active')->get();
         $forecasts = Forecast::where('status', 'Active')->get();
         $users = User::orderBy('full_name')->get();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
+        $divisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
 
         $user = Auth::user();
         $isSales = strtolower($user->division?->division_name ?? '') === 'sales'
@@ -242,7 +243,7 @@ $sources = Source::where('status', 'Active')->get();
 
         return view('contacts-management.show', compact(
             'contact', 'opportunities',
-            'sources', 'stages', 'forecasts', 'users', 'isSales', 'accountCompanies'
+            'sources', 'stages', 'forecasts', 'users', 'isSales', 'accountCompanies', 'divisions'
         ));
     }
 

@@ -36,6 +36,7 @@ class ConfigurationTemplateTest extends TestCase
             'enviro' => ['enviro-configuration', 'Enviro'],
             'ih' => ['ih-configuration', 'IH'],
             'gas' => ['gas-configuration', 'Gas'],
+            'ims' => ['ims-configuration', 'IMS'],
         ];
     }
 
@@ -311,5 +312,48 @@ class ConfigurationTemplateTest extends TestCase
 
         $this->assertSame(1, $response->json('recordsTotal'));
         $this->assertSame('Data Template', $response->json('data.0.name'));
+    }
+
+    public function test_ims_template_store_keeps_client_price_and_unit(): void
+    {
+        $this->createDivision('IMS');
+
+        $templateId = $this->actingAs($this->admin)
+            ->postJson(route('ims-configuration.template-store'), [
+                'name' => 'IMS Template Harga',
+                'items' => [
+                    ['_key' => 'new-1', 'category' => 'pH', 'description' => 'Parent', 'qty' => 1],
+                    ['_key' => 'new-2', 'parent_key' => 'new-1', 'description' => 'Child sensor', 'qty' => 2, 'price' => 50000, 'unit' => 'pcs'],
+                ],
+            ])->assertOk()
+            ->json('id');
+
+        $template = ConfigurationTemplate::findOrFail($templateId);
+        $child = $template->items()->whereNotNull('parent_id')->firstOrFail();
+        $this->assertEquals(50000, $child->price);
+        $this->assertEquals(50000, $child->price_currency);
+        $this->assertSame('IDR', $child->currency);
+        $this->assertSame('pcs', $child->unit);
+
+        // fetch-template mengembalikan price + unit agar editor bisa prefill.
+        $items = $this->actingAs($this->admin)
+            ->getJson(route('ims-configuration.fetch-template', $templateId))
+            ->assertOk()
+            ->json('items');
+
+        $childPayload = collect($items)->firstWhere('parent_key', $items[0]['_key']);
+        $this->assertEquals(50000, $childPayload['price']);
+        $this->assertSame('pcs', $childPayload['unit']);
+    }
+
+    public function test_ims_template_form_shows_unit_and_price_columns(): void
+    {
+        $this->createDivision('IMS');
+
+        $this->actingAs($this->admin)
+            ->get(route('ims-configuration.template-create'))
+            ->assertOk()
+            ->assertSee('Unit')
+            ->assertSee('Harga');
     }
 }

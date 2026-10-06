@@ -415,6 +415,35 @@ class QuotationTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_data_shows_division_from_opportunity(): void
+    {
+        $water = $this->createApprovedConfiguration($this->division);
+        $ims = $this->createApprovedConfiguration($this->imsDivision);
+        $taskId = $water->task_id;
+        $ims->update(['task_id' => $taskId]);
+
+        // Division quotation diambil dari opportunity (opportunity kini punya division).
+        $this->opportunity->update(['division_id' => $this->division->id]);
+
+        $quotation = Quotation::create([
+            'task_id' => $taskId,
+            'opportunity_id' => $this->opportunity->id,
+            'quotation_number' => '001/HAS/QT-X/I/2026',
+            'to_name' => 'PT Maju Bersama',
+            'status' => Quotation::STATUS_DRAFT,
+            'created_by' => $this->admin->id,
+        ]);
+        $quotation->update(['group_id' => $quotation->id]);
+        $quotation->configurations()->sync([$water->id, $ims->id]);
+
+        $response = $this->actingAs($this->admin)
+            ->getJson(route('quotation.data', ['draw' => 1]))
+            ->assertOk();
+
+        $this->assertSame(1, $response->json('recordsTotal'));
+        $this->assertSame('WATER', $response->json('data.0.division_name'));
+    }
+
     public function test_search_products_filters_by_division(): void
     {
         MasterProduct::create([

@@ -735,7 +735,7 @@ class QuotationController extends Controller
             ->groupBy('group_id')
             ->pluck('id');
 
-        $query = Quotation::with(['creator', 'task', 'configurations'])
+        $query = Quotation::with(['creator', 'task', 'opportunity.division', 'configurations.division'])
             ->whereIn('id', $latestIds);
 
         $recordsTotal = Quotation::query()
@@ -787,7 +787,7 @@ class QuotationController extends Controller
                 'version' => $quotation->version,
                 'quotation_number' => $quotation->quotation_number ?? '—',
                 'to_name' => $quotation->to_name ?? '—',
-                'division_name' => $quotation->task?->dievision?->division_name ?? '—',
+                'division_name' => $quotation->opportunity?->division?->division_name ?? '—',
                 'date' => $quotation->date?->format('d/m/Y') ?? '—',
                 'date_raw' => $quotation->date?->toISOString(),
                 'sales_name' => $quotation->from_name ?? '—',

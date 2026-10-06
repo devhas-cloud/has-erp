@@ -36,7 +36,7 @@ class OpportunityManagementController extends Controller
         $stages = Stage::where('status', 'Active')->get();
         $forecasts = Forecast::where('status', 'Active')->get();
         $lossReasons = LossReason::where('status', 'Active')->get();
-        $divisions = Division::where('type', 'External')->where('status', 'Active')->get();
+        $divisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
         $sources = Source::where('status', 'Active')->get();
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
@@ -55,7 +55,7 @@ class OpportunityManagementController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = Opportunity::with(['accountCompany', 'stage', 'owner']);
+        $query = Opportunity::with(['accountCompany', 'stage', 'owner', 'division']);
         $user = Auth::user();
         $isSales = strtolower($user->division?->division_name) === 'sales' && strtolower($user->hierarchyRole?->role_name) !== 'manager';
 
@@ -89,6 +89,9 @@ class OpportunityManagementController extends Controller
                     ->orWhereHas('accountCompany', function ($q) use ($searchValue) {
                         $q->where('account_name', 'like', "%{$searchValue}%");
                     })
+                    ->orWhereHas('division', function ($q) use ($searchValue) {
+                        $q->where('division_name', 'like', "%{$searchValue}%");
+                    })
                     ->orWhereHas('stage', function ($q) use ($searchValue) {
                         $q->where('stage_name', 'like', "%{$searchValue}%");
                     })
@@ -107,9 +110,10 @@ class OpportunityManagementController extends Controller
         $columnOrderMap = [
             1 => 'opportunity_name',
             2 => 'account_companies.account_name',
-            4 => 'next_step',
-            5 => 'close_date',
-            6 => 'users.full_name',
+            4 => 'divisions.division_name',
+            5 => 'next_step',
+            6 => 'close_date',
+            7 => 'users.full_name',
         ];
 
         if (isset($columnOrderMap[$orderColumnIndex])) {
@@ -118,6 +122,10 @@ class OpportunityManagementController extends Controller
                 $query->leftJoin('account_companies', 'opportunities.account_companies_id', '=', 'account_companies.id')
                     ->select('opportunities.*')
                     ->orderBy('account_companies.account_name', $orderDirection);
+            } elseif ($sortField === 'divisions.division_name') {
+                $query->leftJoin('divisions', 'opportunities.division_id', '=', 'divisions.id')
+                    ->select('opportunities.*')
+                    ->orderBy('divisions.division_name', $orderDirection);
             } elseif ($sortField === 'users.full_name') {
                 // Kolom Owner menampilkan display_name (full_name, fallback username)
                 $query->leftJoin('users', 'opportunities.owner_id', '=', 'users.id')
@@ -144,6 +152,7 @@ class OpportunityManagementController extends Controller
                 'account_name' => $opp->accountCompany?->account_name ?? '—',
                 'company_initials' => strtoupper(substr($opp->accountCompany?->account_name ?? '?', 0, 2)),
                 'stage_name' => $opp->stage?->stage_name ?? '—',
+                'division_name' => $opp->division?->division_name ?? '—',
                 'close_date' => $opp->close_date?->format('d M Y') ?? '—',
                 'close_date_raw' => $opp->close_date?->format('Y-m-d'),
                 'close_won_date' => $opp->close_won_date?->format('d M Y') ?? '—',

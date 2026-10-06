@@ -248,6 +248,7 @@
                         <th>Opportunity Name</th>
                         <th>Account Company</th>
                         <th>Stage</th>
+                        <th>Division</th>
                         <th>Next Step</th>
                         <th>Close Date</th>
                         <th>Owner</th>
@@ -355,7 +356,7 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display: none">
                                     <label>Lead Source</label>
                                     <select name="source_id" id="opp-source">
                                         <option value="">— Pilih —</option>
@@ -617,6 +618,10 @@ function initOpportunityTable() {
                 render: function(data, type, row) {
                     return '<span class="status-badge badge-success" style="background:var(--success-soft);color:var(--success)">' + (data || '—') + '</span>';
                 }
+            },
+            {
+                data: 'division_name', orderable: true, searchable: true,
+                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             { data: 'next_step', orderable: true, searchable: false },
             {

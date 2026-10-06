@@ -116,7 +116,7 @@ class OpportunityManagementDataTest extends TestCase
 
         $this->assertSame(
             ['Opp B1', 'Opp A1', 'Opp A2'],
-            $this->names($user, ['order' => [['column' => 4, 'dir' => 'asc']]])
+            $this->names($user, ['order' => [['column' => 5, 'dir' => 'asc']]])
         );
     }
 
@@ -127,7 +127,7 @@ class OpportunityManagementDataTest extends TestCase
         // Andi (sales_b) sebelum Zaki (sales_a) — urut nama tampil, bukan username.
         $this->assertSame(
             ['Opp B1', 'Opp A1', 'Opp A2'],
-            $this->names($user, ['order' => [['column' => 6, 'dir' => 'asc']]])
+            $this->names($user, ['order' => [['column' => 7, 'dir' => 'asc']]])
         );
     }
 
@@ -165,11 +165,11 @@ class OpportunityManagementDataTest extends TestCase
 
         $this->assertSame(
             ['Opp A2', 'Opp B1', 'Opp A1'],
-            $this->names($user, ['order' => [['column' => 5, 'dir' => 'asc']]])
+            $this->names($user, ['order' => [['column' => 6, 'dir' => 'asc']]])
         );
         $this->assertSame(
             ['Opp A1', 'Opp B1', 'Opp A2'],
-            $this->names($user, ['order' => [['column' => 5, 'dir' => 'desc']]])
+            $this->names($user, ['order' => [['column' => 6, 'dir' => 'desc']]])
         );
     }
 
@@ -226,5 +226,28 @@ class OpportunityManagementDataTest extends TestCase
         $user = $this->makeUser('viewer', 'Viewer');
 
         $this->assertCount(3, $this->names($user, ['order' => [['column' => 2, 'dir' => 'desc']]]));
+    }
+
+    public function test_division_column_returns_division_name_and_sorts(): void
+    {
+        $user = $this->makeUser('viewer', 'Viewer');
+        $water = Division::create(['division_name' => 'WATER', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
+        $ims = Division::create(['division_name' => 'IMS', 'description' => 'Ims', 'type' => 'Internal', 'status' => 'Active']);
+
+        $company = AccountCompany::create(['account_name' => 'PT Division', 'status' => 'Active']);
+        $waterOpp = Opportunity::create(['opportunity_name' => 'Opp Water', 'account_companies_id' => $company->id, 'owner_id' => $user->id, 'division_id' => $water->id]);
+        $imsOpp = Opportunity::create(['opportunity_name' => 'Opp Ims', 'account_companies_id' => $company->id, 'owner_id' => $user->id, 'division_id' => $ims->id]);
+
+        $response = $this->actingAs($user)->getJson(route('opportunity-management.data'))
+            ->assertOk();
+
+        $byName = collect($response->json('data'))->keyBy('opportunity_name');
+        $this->assertSame('WATER', $byName['Opp Water']['division_name']);
+        $this->assertSame('IMS', $byName['Opp Ims']['division_name']);
+
+        // Sort kolom Division (index 4) abjad: row ber-IMS sebelum row ber-WATER
+        // (row tanpa division null mendahului di MySQL, jadi bandingkan 2 terakhir).
+        $sorted = $this->names($user, ['order' => [['column' => 4, 'dir' => 'asc']]]);
+        $this->assertSame(['Opp Ims', 'Opp Water'], array_slice($sorted, -2));
     }
 }

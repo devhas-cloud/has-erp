@@ -570,10 +570,11 @@ class LeadsManagementController extends Controller
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $typesAccountsCompanies = TypesAccountsCompany::where('status', 'Active')->get();
+        $opportunityDivisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
         $categories = TaskCategory::with('division')->get();
 
         return view('leads-management.show', compact(
-            'lead', 'jobTitles', 'divisions', 'sources', 'contactMethods',
+            'lead', 'jobTitles', 'divisions', 'opportunityDivisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
             'businessValues', 'interactionLevels', 'users', 'accountCompanies',
             'typesAccountsCompanies', 'categories'
@@ -747,7 +748,9 @@ class LeadsManagementController extends Controller
                 'opportunity_name' => $lead->lead_title,
                 'account_companies_id' => $lead->account_companies_id,
                 'account_contacts_id' => $lead->account_contacts_id,
-                'division_id' => $lead->accountContact->divisions_id,
+                'division_id' => $request->filled('division_id')
+                    ? $request->integer('division_id')
+                    : $lead->accountContact->divisions_id,
                 'source_id' => $lead->source_id,
                 'budget' => $request->boolean('budget'),
                 'authorize' => $request->boolean('authorize'),

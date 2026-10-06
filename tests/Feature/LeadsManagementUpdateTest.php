@@ -8,7 +8,9 @@ use App\Models\Division;
 use App\Models\JobTitle;
 use App\Models\Lead;
 use App\Models\Module;
+use App\Models\Opportunity;
 use App\Models\Source;
+use App\Models\Stage;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -167,5 +169,24 @@ class LeadsManagementUpdateTest extends TestCase
 
         $response->assertOk();
         $this->assertSame($otherCompany->id, $lead->fresh()->account_companies_id);
+    }
+
+    public function test_convert_lead_uses_selected_division_for_opportunity(): void
+    {
+        $internal = Division::create(['division_name' => 'IMS', 'description' => 'Ims', 'type' => 'Internal', 'status' => 'Active']);
+        Stage::create(['id' => 1, 'stage_name' => 'New', 'status' => 'Active']);
+        $company = AccountCompany::create(['account_name' => 'PT Maju', 'status' => 'Active']);
+        $lead = $this->createLeadWithoutCompany();
+        $lead->update(['account_companies_id' => $company->id]);
+
+        $this->actingAs($this->user)->postJson(route('leads-management.converted', $lead->id), [
+            'division_id' => $internal->id,
+        ])->assertOk()->assertJson(['success' => true]);
+
+        $this->assertSame('Converted', $lead->fresh()->lead_status);
+
+        $opportunity = Opportunity::latest('id')->firstOrFail();
+        $this->assertSame($lead->id, $opportunity->lead_id);
+        $this->assertSame($internal->id, $opportunity->division_id);
     }
 }

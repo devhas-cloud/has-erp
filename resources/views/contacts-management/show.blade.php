@@ -576,6 +576,15 @@
                     <input type="text" id="no-name" placeholder="Nama opportunity">
                 </div>
                 <div class="form-group">
+                    <label>Division <span class="text-danger">*</span></label>
+                    <select id="no-division">
+                        <option value="">— Pilih —</option>
+                        @foreach($divisions as $d)
+                        <option value="{{ $d->id }}">{{ $d->division_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>End User</label>
                     <select id="no-end-user" style="width:100%"></select>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Opsional — ketik nama account untuk mencari.</div>
@@ -616,6 +625,7 @@ $(document).on('change', '#nl-source', function() {
 
 function openNewOpportunityModal() {
     $('#no-name').val('');
+    $('#no-division').val('');
     $('#no-end-user').val('').trigger('change');
     $('#newOpportunityModal .is-invalid').removeClass('is-invalid');
     new bootstrap.Modal('#newOpportunityModal').show();
@@ -690,13 +700,19 @@ $(document).on('click', '#btn-save-new-opportunity', function() {
         toastr.error('Opportunity Name wajib diisi.');
         return;
     }
+    if (!$('#no-division').val()) {
+        $('#no-division').addClass('is-invalid');
+        toastr.error('Division wajib dipilih.');
+        return;
+    }
 
     $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
     const payload = {
         _token: '{{ csrf_token() }}',
         opportunity_name: $('#no-name').val().trim(),
         account_companies_id: {{ $contact->account_companies_id ?? 'null' }},
-        account_contacts_id: {{ $contact->id }}
+        account_contacts_id: {{ $contact->id }},
+        division_id: $('#no-division').val()
     };
     const noEndUser = $('#no-end-user').val();
     if (noEndUser) payload.end_user_id = noEndUser;

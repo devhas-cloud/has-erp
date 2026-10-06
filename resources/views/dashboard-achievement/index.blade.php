@@ -95,9 +95,9 @@
             @foreach ($divisions as $div)
                 @php
                     $divBrands = $brandsByDivision->get($div->division_id, collect());
-                    $stg1 = $stageCountsByDivision[$div->division_id][1] ?? 0;
-                    $stg2 = $stageCountsByDivision[$div->division_id][2] ?? 0;
-                    $stg4 = $stageCountsByDivision[$div->division_id][4] ?? 0;
+                    $prob25 = $probabilityCountsByDivision[$div->division_id][25] ?? 0;
+                    $prob50 = $probabilityCountsByDivision[$div->division_id][50] ?? 0;
+                    $prob70 = $probabilityCountsByDivision[$div->division_id][70] ?? 0;
                 @endphp
                 <div class="card-custom fade-in stagger-{{ min($loop->iteration, 4) }} mb-3">
                     <div class="card-header-custom d-flex justify-content-between align-items-center">
@@ -172,7 +172,7 @@
                                             Quote 25%</span>
                                     </div>
                                     <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                                        <div class="stat-value">{{ $stg1 }}</div>
+                                        <div class="stat-value">{{ $prob25 }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -186,7 +186,7 @@
                                             Quote 50%</span>
                                     </div>
                                     <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                                        <div class="stat-value">{{ $stg2 }}</div>
+                                        <div class="stat-value">{{ $prob50 }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -200,7 +200,7 @@
                                             Quote 70%</span>
                                     </div>
                                     <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                                        <div class="stat-value">{{ $stg4 }}</div>
+                                        <div class="stat-value">{{ $prob70 }}</div>
                                     </div>
 
                                 </div>

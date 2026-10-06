@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Division;
+use App\Models\Opportunity;
 use App\Models\Quotation;
 use App\Models\Stage;
 
@@ -18,12 +20,24 @@ class DashboardAchievementController extends Controller
             ->where('opportunities.stage_id', $wonStageId)
             ->sum('quotations.grand_total');
 
-        // 2. Achievement per divisi (via task -> handling_group -> division)
-        $divisions = Quotation::query()
+        // 2. Achievement per divisi (via opportunity -> division). Baris divisi
+        //    ditentukan daftar tetap [Enviro, WATER, IH, Gas, IMS]; divisi tanpa
+        //    data tetap tampil dengan nilai 0.
+        $divOrder = ['Enviro', 'WATER', 'IH', 'Gas', 'IMS'];
+
+        $divisionList = Division::whereIn('division_name', $divOrder)
+            ->get(['id', 'division_name'])
+            ->unique('division_name');
+
+        // Urutkan sesuai urutan daftar (di luar DB agar portabel lintas driver).
+        $divisionRank = array_flip($divOrder);
+        $divisionList = $divisionList
+            ->sortBy(fn ($d) => $divisionRank[$d->division_name] ?? 99)
+            ->values();
+
+        $achievementRows = Quotation::query()
             ->join('opportunities', 'opportunities.id', '=', 'quotations.opportunity_id')
-            ->join('tasks', 'tasks.id', '=', 'quotations.task_id')
-            ->join('handling_groups', 'handling_groups.id', '=', 'tasks.handling_group_id')
-            ->join('divisions', 'divisions.id', '=', 'handling_groups.division_id')
+            ->join('divisions', 'divisions.id', '=', 'opportunities.division_id')
             ->where('quotations.status', Quotation::STATUS_FINISH)
             ->where('opportunities.stage_id', $wonStageId)
             ->groupBy('divisions.id', 'divisions.division_name')
@@ -33,15 +47,22 @@ class DashboardAchievementController extends Controller
                  COUNT(DISTINCT quotations.id) as quotation_count,
                  SUM(quotations.grand_total) as total'
             )
-            ->orderByDesc('total')
-            ->get();
+            ->get()
+            ->keyBy('division_id');
+
+        $divisions = $divisionList
+            ->map(fn ($d) => (object) [
+                'division_id' => $d->id,
+                'division_name' => $d->division_name,
+                'quotation_count' => (int) ($achievementRows[$d->id]->quotation_count ?? 0),
+                'total' => (float) ($achievementRows[$d->id]->total ?? 0),
+            ])
+            ->values();
 
         // 3. Brand terjual per divisi (quotation_items.part_number = master_products.code)
         $brands = Quotation::query()
             ->join('opportunities', 'opportunities.id', '=', 'quotations.opportunity_id')
-            ->join('tasks', 'tasks.id', '=', 'quotations.task_id')
-            ->join('handling_groups', 'handling_groups.id', '=', 'tasks.handling_group_id')
-            ->join('divisions', 'divisions.id', '=', 'handling_groups.division_id')
+            ->join('divisions', 'divisions.id', '=', 'opportunities.division_id')
             ->join('quotation_items', 'quotation_items.quotation_id', '=', 'quotations.id')
             ->join('master_products', 'master_products.code', '=', 'quotation_items.part_number')
             ->where('quotations.status', Quotation::STATUS_FINISH)
@@ -61,32 +82,30 @@ class DashboardAchievementController extends Controller
 
         $brandsByDivision = $brands->groupBy('division_id');
 
-        // 4. Pipeline opportunity per divisi (stage 1 = New, 2 = Proposal & Quote, 4 = Negotiation)
-        $stageIds = [1, 2, 4];
-        $opportunityCounts = Quotation::query()
-            ->join('opportunities', 'opportunities.id', '=', 'quotations.opportunity_id')
-            ->join('tasks', 'tasks.id', '=', 'quotations.task_id')
-            ->join('handling_groups', 'handling_groups.id', '=', 'tasks.handling_group_id')
-            ->join('divisions', 'divisions.id', '=', 'handling_groups.division_id')
-            ->whereIn('opportunities.stage_id', $stageIds)
-            ->groupBy('divisions.id', 'opportunities.stage_id')
+        // 4. Jumlah opportunity per divisi dikelompokkan probabilitas 25% / 50% / 70%.
+        //    Hitung SEMUA opportunity milik divisi (tanpa syarat quotation).
+        $probabilityRows = Opportunity::query()
+            ->join('divisions', 'divisions.id', '=', 'opportunities.division_id')
+            ->whereIn('divisions.id', $divisionList->pluck('id'))
+            ->whereIn('opportunities.probability', [25, 50, 70])
+            ->groupBy('divisions.id', 'opportunities.probability')
             ->selectRaw(
                 'divisions.id as division_id,
-                 opportunities.stage_id,
-                 COUNT(DISTINCT opportunities.id) as total'
+                 opportunities.probability,
+                 COUNT(*) as total'
             )
             ->get();
 
-        $stageCountsByDivision = [];
-        foreach ($opportunityCounts as $row) {
-            $stageCountsByDivision[$row->division_id][$row->stage_id] = (int) $row->total;
+        $probabilityCountsByDivision = [];
+        foreach ($probabilityRows as $row) {
+            $probabilityCountsByDivision[$row->division_id][(int) $row->probability] = (int) $row->total;
         }
 
         return view('dashboard-achievement.index', compact(
             'totalAchievement',
             'divisions',
             'brandsByDivision',
-            'stageCountsByDivision'
+            'probabilityCountsByDivision'
         ));
     }
 }
