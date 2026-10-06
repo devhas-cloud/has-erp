@@ -1788,6 +1788,15 @@ class QuotationTest extends TestCase
         $this->assertSame('<strong>s</strong>', Quotation::renderDescription('<strong>s</strong>'));
     }
 
+    public function test_render_description_normalizes_inline_style_spans_to_semantic_tags(): void
+    {
+        $this->assertSame('<b>bold</b>', Quotation::renderDescription('<span style="font-weight: bold">bold</span>'));
+        $this->assertSame('<b>bold</b>', Quotation::renderDescription('<span style="font-weight:bold">bold</span>'));
+        $this->assertSame('<i>italic</i>', Quotation::renderDescription('<span style="font-style: italic">italic</span>'));
+        $this->assertSame('<u>under</u>', Quotation::renderDescription('<span style="text-decoration: underline">under</span>'));
+        $this->assertSame('teks polos', Quotation::renderDescription('<span style="color: red">teks polos</span>'));
+    }
+
     public function test_store_sanitizes_item_description_keeps_bold_italic_underline(): void
     {
         $config = $this->createApprovedConfiguration();

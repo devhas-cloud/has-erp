@@ -14,6 +14,7 @@ use App\Models\Task;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use App\Models\ConfigurationTemplate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -842,11 +843,8 @@ class WaterConfigurationApprovalTest extends TestCase
 
     public function test_fetch_template_returns_parent_and_children(): void
     {
-        $task = $this->createQuoteTask();
-
-        $this->actingAs($this->creator)->postJson(route('water-configuration.store'), [
-            'task_id' => $task->id,
-            'parameter_note' => 'pH',
+        $this->actingAs($this->creator)->postJson(route('water-configuration.template-store'), [
+            'name' => 'Template pH',
             'items' => [
                 ['_key' => 'new-1', 'description' => 'Parent pH', 'qty' => 1],
                 ['_key' => 'new-2', 'parent_key' => 'new-1', 'description' => 'Child sensor A', 'qty' => 1],
@@ -855,10 +853,10 @@ class WaterConfigurationApprovalTest extends TestCase
             ],
         ])->assertOk();
 
-        $config = QuoteConfiguration::latest('id')->firstOrFail();
+        $template = ConfigurationTemplate::latest('id')->firstOrFail();
 
         $response = $this->actingAs($this->creator)
-            ->getJson(route('water-configuration.fetch-template', $config->id))
+            ->getJson(route('water-configuration.fetch-template', $template->id))
             ->assertOk()
             ->assertJson(['success' => true]);
 

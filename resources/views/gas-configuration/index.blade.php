@@ -1,44 +1,86 @@
 @extends('layouts.app')
 
-@section('title', 'Gas Configuration')
-@section('page-title', 'Gas Configuration')
+@section('title', 'Quote Configuration')
+@section('page-title', 'Quote Configuration')
 
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Gas Configuration</h1>
-        <p class="page-header-sub">Kelola konfigurasi quotation dari task quote</p>
+        <h1 class="page-header-title">Quote Configuration</h1>
+        <p class="page-header-sub">Kelola konfigurasi quotation (pH, Ammonia, COD, TSS dan Debit) dari task quote serta template part instrument.</p>
     </div>
-    @if($canCreate)
     <div class="page-header-actions">
-        <a href="{{ route('gas-configuration.create') }}" class="btn-accent">
+        @if($canCreate)
+        <a href="{{ route('gas-configuration.create') }}" class="btn-accent" id="btn-create-config">
             <i class="fa fa-plus"></i>
             <span>Buat Configuration</span>
         </a>
+        <a href="{{ route('gas-configuration.template-create') }}" class="btn-accent d-none" id="btn-create-template">
+            <i class="fa fa-plus"></i>
+            <span>Buat Template</span>
+        </a>
+        @endif
     </div>
-    @endif
 </div>
 
-<div class="card-custom fade-in">
-    <div class="card-header-custom">
-        <span><i class="fa-solid fa-droplet me-2" style="color:var(--accent)"></i>Daftar Configuration</span>
+<ul class="nav nav-tabs" id="wcTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-config-tab" data-bs-toggle="tab" data-bs-target="#tab-config" type="button" role="tab">Configuration</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-template-tab" data-bs-toggle="tab" data-bs-target="#tab-template" type="button" role="tab">Template</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-config" role="tabpanel">
+        <div class="card-custom fade-in">
+            <div class="card-header-custom">
+                <span><i class="fa-solid fa-droplet me-2" style="color:var(--accent)"></i>Daftar Configuration</span>
+            </div>
+            <div class="card-body-custom p-2">
+                <div class="table-responsive">
+                    <table id="gas-config-table" class="table table-custom align-middle mb-0" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th style="width:50px">#</th>
+                                <th>Opportunity</th>
+                                <th>To (Company)</th>
+                                <th>Tanggal</th>
+                                <th>Item</th>
+                                <th>Dibuat Oleh</th>
+                                <th>Status</th>
+                                <th class="text-center" style="width:150px">Aksi</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card-body-custom p-2">
-        <div class="table-responsive">
-            <table id="gas-config-table" class="table table-custom align-middle mb-0" style="width:100%">
-                <thead>
-                    <tr>
-                        <th style="width:50px">#</th>
-                        <th>Opportunity</th>
-                        <th>To (Company)</th>
-                        <th>Tanggal</th>
-                        <th>Item</th>
-                        <th>Dibuat Oleh</th>
-                        <th>Status</th>
-                        <th class="text-center" style="width:150px">Aksi</th>
-                    </tr>
-                </thead>
-            </table>
+
+    <div class="tab-pane fade" id="tab-template" role="tabpanel">
+        <div class="card-custom fade-in mt-0">
+            <div class="card-header-custom">
+                <span><i class="fa-solid fa-bookmark me-2" style="color:var(--accent)"></i>Daftar Template</span>
+            </div>
+            <div class="card-body-custom p-2">
+                <div class="table-responsive">
+                    <table id="gas-template-table" class="table table-custom align-middle mb-0" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th style="width:50px">#</th>
+                                <th>Nama</th>
+                                <th>Deskripsi</th>
+                                <th>Item</th>
+                                <th>Dibuat Oleh</th>
+                                <th>Tanggal</th>
+                                <th class="text-center" style="width:150px">Aksi</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -111,6 +153,8 @@ let wcRejectModalInstance = null;
 let wcTable = null;
 let wcRejectId = null;
 let wcTrackModalInstance = null;
+let tplTable = null;
+let tplTableInit = false;
 
 const wcShowUrl = '{{ route("gas-configuration.show", "__ID__") }}';
 const wcEditUrl = '{{ route("gas-configuration.edit", "__ID__") }}';
@@ -119,7 +163,12 @@ const wcSubmitUrl = '{{ route("gas-configuration.submit", "__ID__") }}';
 const wcApproveUrl = '{{ route("gas-configuration.approve", "__ID__") }}';
 const wcRejectUrl = '{{ route("gas-configuration.reject", "__ID__") }}';
 const wcVersionsUrl = '{{ route("gas-configuration.versions", "__ID__") }}';
-const wcShowUrlBase = '{{ route("gas-configuration.show", "__ID__") }}';
+const tplShowUrl = '{{ route("gas-configuration.template-show", "__ID__") }}';
+const tplEditUrl = '{{ route("gas-configuration.template-edit", "__ID__") }}';
+const tplDeleteUrl = '{{ route("gas-configuration.template-destroy", "__ID__") }}';
+
+const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
+const canDelete = {{ $canDelete ? 'true' : 'false' }};
 
 function openTrackModal(id) {
     $('#wc-track-body').html('<tr><td colspan="6" class="config-card-empty"><span class="config-spinner"></span>Memuat...</td></tr>');
@@ -197,6 +246,46 @@ function initWcTable() {
     });
 }
 
+function initTplTable() {
+    if (tplTable) {
+        tplTable.destroy();
+    }
+
+    tplTable = $('#gas-template-table').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: '{{ route("gas-configuration.template-data") }}',
+        order: [[1, 'asc']],
+        columns: [
+            { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
+            { data: 'name', orderable: true, searchable: true,
+                render: function(data) { return '<strong style="color:var(--text-primary)">' + data + '</strong>'; }
+            },
+            { data: 'description', orderable: false, searchable: true,
+                render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
+            },
+            { data: 'item_count', orderable: false, searchable: false, className: 'text-center' },
+            { data: 'creator_name', orderable: false, searchable: true },
+            { data: 'created_at', orderable: true, searchable: false },
+            {
+                data: 'id', orderable: false, searchable: false, className: 'text-center',
+                render: function(data, type, row) {
+                    var btn = '<div class="d-flex justify-content-center gap-1">';
+                    btn += '<a href="' + tplShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
+                    if (canUpdate) {
+                        btn += '<a href="' + tplEditUrl.replace('__ID__', data) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
+                    }
+                    if (canDelete) {
+                        btn += '<button class="btn-icon" title="Hapus" onclick="deleteTemplate(' + data + ')"><i class="fa fa-trash"></i></button>';
+                    }
+                    btn += '</div>';
+                    return btn;
+                }
+            }
+        ]
+    });
+}
+
 function deleteWc(id) {
     Swal.fire({
         title: 'Hapus Configuration?',
@@ -216,6 +305,31 @@ function deleteWc(id) {
         }).done(function(res) {
             toastr.success(res.message || 'Quotation dihapus.');
             wcTable.ajax.reload();
+        }).fail(function(xhr) {
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus.');
+        });
+    });
+}
+
+function deleteTemplate(id) {
+    Swal.fire({
+        title: 'Hapus Template?',
+        text: 'Template #' + id + ' akan dihapus permanen.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal'
+    }).then(function(result) {
+        if (!result.isConfirmed) {
+            return;
+        }
+        $.ajax({
+            url: tplDeleteUrl.replace('__ID__', id),
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+        }).done(function(res) {
+            toastr.success(res.message || 'Template dihapus.');
+            tplTable.ajax.reload();
         }).fail(function(xhr) {
             toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus.');
         });
@@ -301,6 +415,26 @@ $(document).on('click', '#btn-reject-wc', function() {
 
 $(document).ready(function() {
     initWcTable();
+
+    $('#wcTabs button[data-bs-toggle="tab"]').on('shown.bs.tab', function(e) {
+        var target = $(e.target).attr('data-bs-target');
+        if (target === '#tab-template') {
+            $('#btn-create-config').addClass('d-none');
+            $('#btn-create-template').removeClass('d-none');
+            if (!tplTableInit) {
+                tplTableInit = true;
+                initTplTable();
+            } else if (tplTable) {
+                tplTable.columns.adjust();
+            }
+        } else {
+            $('#btn-create-template').addClass('d-none');
+            $('#btn-create-config').removeClass('d-none');
+            if (wcTable) {
+                wcTable.columns.adjust();
+            }
+        }
+    });
 });
 </script>
 @endsection

@@ -160,6 +160,13 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('water-configuration/search-products', [WaterConfigurationController::class, 'searchProducts'])->name('water-configuration.search-products');
     Route::get('water-configuration/fetch-task', [WaterConfigurationController::class, 'fetchTask'])->name('water-configuration.fetch-task');
     Route::get('water-configuration/{id}/template', [WaterConfigurationController::class, 'fetchTemplate'])->name('water-configuration.fetch-template');
+    Route::get('water-configuration/template/data', [WaterConfigurationController::class, 'templateData'])->name('water-configuration.template-data');
+    Route::get('water-configuration/template/create', [WaterConfigurationController::class, 'templateCreate'])->name('water-configuration.template-create');
+    Route::get('water-configuration/template/{id}/edit', [WaterConfigurationController::class, 'templateEdit'])->name('water-configuration.template-edit');
+    Route::get('water-configuration/template/{id}', [WaterConfigurationController::class, 'templateShow'])->name('water-configuration.template-show');
+    Route::post('water-configuration/template', [WaterConfigurationController::class, 'templateStore'])->name('water-configuration.template-store');
+    Route::put('water-configuration/template/{id}', [WaterConfigurationController::class, 'templateUpdate'])->name('water-configuration.template-update');
+    Route::delete('water-configuration/template/{id}', [WaterConfigurationController::class, 'templateDestroy'])->name('water-configuration.template-destroy');
     Route::resource('water-configuration', WaterConfigurationController::class);
 
     Route::get('enviro-configuration/data', [EnviroConfigurationController::class, 'data'])->name('enviro-configuration.data');
@@ -173,6 +180,13 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('enviro-configuration/search-products', [EnviroConfigurationController::class, 'searchProducts'])->name('enviro-configuration.search-products');
     Route::get('enviro-configuration/fetch-task', [EnviroConfigurationController::class, 'fetchTask'])->name('enviro-configuration.fetch-task');
     Route::get('enviro-configuration/{id}/template', [EnviroConfigurationController::class, 'fetchTemplate'])->name('enviro-configuration.fetch-template');
+    Route::get('enviro-configuration/template/data', [EnviroConfigurationController::class, 'templateData'])->name('enviro-configuration.template-data');
+    Route::get('enviro-configuration/template/create', [EnviroConfigurationController::class, 'templateCreate'])->name('enviro-configuration.template-create');
+    Route::get('enviro-configuration/template/{id}/edit', [EnviroConfigurationController::class, 'templateEdit'])->name('enviro-configuration.template-edit');
+    Route::get('enviro-configuration/template/{id}', [EnviroConfigurationController::class, 'templateShow'])->name('enviro-configuration.template-show');
+    Route::post('enviro-configuration/template', [EnviroConfigurationController::class, 'templateStore'])->name('enviro-configuration.template-store');
+    Route::put('enviro-configuration/template/{id}', [EnviroConfigurationController::class, 'templateUpdate'])->name('enviro-configuration.template-update');
+    Route::delete('enviro-configuration/template/{id}', [EnviroConfigurationController::class, 'templateDestroy'])->name('enviro-configuration.template-destroy');
     Route::resource('enviro-configuration', EnviroConfigurationController::class);
 
     Route::get('ih-configuration/data', [IhConfigurationController::class, 'data'])->name('ih-configuration.data');
@@ -186,6 +200,13 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('ih-configuration/search-products', [IhConfigurationController::class, 'searchProducts'])->name('ih-configuration.search-products');
     Route::get('ih-configuration/fetch-task', [IhConfigurationController::class, 'fetchTask'])->name('ih-configuration.fetch-task');
     Route::get('ih-configuration/{id}/template', [IhConfigurationController::class, 'fetchTemplate'])->name('ih-configuration.fetch-template');
+    Route::get('ih-configuration/template/data', [IhConfigurationController::class, 'templateData'])->name('ih-configuration.template-data');
+    Route::get('ih-configuration/template/create', [IhConfigurationController::class, 'templateCreate'])->name('ih-configuration.template-create');
+    Route::get('ih-configuration/template/{id}/edit', [IhConfigurationController::class, 'templateEdit'])->name('ih-configuration.template-edit');
+    Route::get('ih-configuration/template/{id}', [IhConfigurationController::class, 'templateShow'])->name('ih-configuration.template-show');
+    Route::post('ih-configuration/template', [IhConfigurationController::class, 'templateStore'])->name('ih-configuration.template-store');
+    Route::put('ih-configuration/template/{id}', [IhConfigurationController::class, 'templateUpdate'])->name('ih-configuration.template-update');
+    Route::delete('ih-configuration/template/{id}', [IhConfigurationController::class, 'templateDestroy'])->name('ih-configuration.template-destroy');
     Route::resource('ih-configuration', IhConfigurationController::class);
 
     Route::get('gas-configuration/data', [GasConfigurationController::class, 'data'])->name('gas-configuration.data');
@@ -199,6 +220,13 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('gas-configuration/search-products', [GasConfigurationController::class, 'searchProducts'])->name('gas-configuration.search-products');
     Route::get('gas-configuration/fetch-task', [GasConfigurationController::class, 'fetchTask'])->name('gas-configuration.fetch-task');
     Route::get('gas-configuration/{id}/template', [GasConfigurationController::class, 'fetchTemplate'])->name('gas-configuration.fetch-template');
+    Route::get('gas-configuration/template/data', [GasConfigurationController::class, 'templateData'])->name('gas-configuration.template-data');
+    Route::get('gas-configuration/template/create', [GasConfigurationController::class, 'templateCreate'])->name('gas-configuration.template-create');
+    Route::get('gas-configuration/template/{id}/edit', [GasConfigurationController::class, 'templateEdit'])->name('gas-configuration.template-edit');
+    Route::get('gas-configuration/template/{id}', [GasConfigurationController::class, 'templateShow'])->name('gas-configuration.template-show');
+    Route::post('gas-configuration/template', [GasConfigurationController::class, 'templateStore'])->name('gas-configuration.template-store');
+    Route::put('gas-configuration/template/{id}', [GasConfigurationController::class, 'templateUpdate'])->name('gas-configuration.template-update');
+    Route::delete('gas-configuration/template/{id}', [GasConfigurationController::class, 'templateDestroy'])->name('gas-configuration.template-destroy');
     Route::resource('gas-configuration', GasConfigurationController::class);
 
     Route::get('ims-configuration/data', [ImsConfigurationController::class, 'data'])->name('ims-configuration.data');

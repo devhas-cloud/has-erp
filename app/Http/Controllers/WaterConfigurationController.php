@@ -13,6 +13,7 @@ use App\Models\QuoteConfigurationItem;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use App\Support\ConfigurationTemplateHandling;
 use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,19 @@ use Illuminate\Support\Facades\DB;
 
 class WaterConfigurationController extends Controller
 {
+    use ConfigurationTemplateHandling;
+
     private const MODULE_CODE = 'MOD_WATER_CONFIGURATION';
+
+    protected function templateViewRoot(): string
+    {
+        return 'water-configuration';
+    }
+
+    protected function templateDivisionId(): ?int
+    {
+        return $this->waterDivisionId();
+    }
 
     public function index()
     {
@@ -61,75 +74,6 @@ class WaterConfigurationController extends Controller
         return Division::where('division_name', 'PD')->value('id');
     }
 
-    /**
-     * Daftar configuration divisi WATER yang pernah dibuat, dipakai sebagai
-     * template isian. Hanya versi terakhir tiap group yang disertakan.
-     */
-    private function templateList(): array
-    {
-        $waterId = $this->waterDivisionId();
-        if (! $waterId) {
-            return [];
-        }
-
-        $latestIds = QuoteConfiguration::query()
-            ->selectRaw('MAX(id) as id')
-            ->where('division_id', $waterId)
-            ->groupBy('group_id')
-            ->pluck('id');
-
-        return QuoteConfiguration::with(['items', 'task', 'opportunity.accountCompany'])
-            ->whereIn('id', $latestIds)
-            ->where('division_id', $waterId)
-            ->orderByDesc('id')
-            ->get()
-            ->map(fn ($config) => [
-                'id' => $config->id,
-                'label' => ($config->opportunity?->opportunity_name ?? $config->task?->title ?? 'Configuration #'.$config->id)
-                    .' — '.($config->date?->format('d/m/Y') ?? '—')
-                    .' ('.($config->items->whereNull('parent_id')->count()).' parent)',
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Ambil item (parent + children) dari sebuah configuration sebagai template
-     * isian, dalam urutan DFS sehingga parent muncul sebelum children.
-     */
-    public function fetchTemplate(Request $request, $id): JsonResponse
-    {
-        $config = QuoteConfiguration::with(['items'])
-            ->where('division_id', $this->waterDivisionId())
-            ->findOrFail($id);
-
-        $all = $config->items->keyBy('id');
-        $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
-
-        $items = [];
-        $walk = function ($parentId) use (&$walk, &$items, $children) {
-            foreach ($children[$parentId] ?? [] as $item) {
-                $items[] = [
-                    '_key' => 'tpl-'.$item->id,
-                    'parent_key' => $item->parent_id ? 'tpl-'.$item->parent_id : null,
-                    'item_no' => $item->item_no,
-                    'product_id' => $item->product_id,
-                    'category' => $item->category,
-                    'part_number' => $item->part_number,
-                    'description' => $item->description,
-                    'qty' => $item->qty,
-                ];
-                $walk($item->id);
-            }
-        };
-
-        $walk('_root');
-
-        return response()->json([
-            'success' => true,
-            'items' => $items,
-        ]);
-    }
 
     /**
      * Daftar task bertipe Quote (kategori yang mengaktifkan divisi penanganan),
@@ -1217,7 +1161,7 @@ class WaterConfigurationController extends Controller
      *
      * @param  array<int,int>  $parentByChildId  [child_id => parent_id]
      */
-    private function assignParents(array $parentByChildId): void
+    private function assignParents(array $parentByChildId, string $table = 'quote_configuration_items'): void
     {
         if (empty($parentByChildId)) {
             return;
@@ -1235,7 +1179,7 @@ class WaterConfigurationController extends Controller
         $placeholders = implode(',', array_fill(0, count($childIds), '?'));
 
         DB::update(
-            "UPDATE quote_configuration_items SET parent_id = CASE id{$cases} END WHERE id IN ({$placeholders})",
+            "UPDATE {$table} SET parent_id = CASE id{$cases} END WHERE id IN ({$placeholders})",
             array_merge($bindings, $childIds)
         );
     }

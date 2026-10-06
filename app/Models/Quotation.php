@@ -311,6 +311,23 @@ class Quotation extends Model
         $text = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $text);
         $text = preg_replace('#<style\b[^>]*>.*?</style>#is', '', $text);
 
+        // Browser (execCommand styleWithCSS) kadang memakai <span style="...">
+        // alih-alih tag semantik. Normalisasi format inline jadi b/i/u agar
+        // strip_tags di bawah tidak menyingkirkan format.
+        $text = preg_replace_callback('#<span\b[^>]*>(.*?)</span>#is', function (array $m): string {
+            if (preg_match('#font-weight\s*:\s*bold#i', $m[0])) {
+                return '<b>'.$m[1].'</b>';
+            }
+            if (preg_match('#font-style\s*:\s*italic#i', $m[0])) {
+                return '<i>'.$m[1].'</i>';
+            }
+            if (preg_match('#text-decoration(?:-line)?\s*:\s*underline#i', $m[0])) {
+                return '<u>'.$m[1].'</u>';
+            }
+
+            return $m[1];
+        }, $text);
+
         // Block element dari contenteditable: pembuka menjadi <br>, penutup dihapus.
         $text = preg_replace('#<(div|p|section)\b[^>]*>#i', '<br>', $text);
         $text = preg_replace('#</(div|p|section)\s*>#i', '', $text);

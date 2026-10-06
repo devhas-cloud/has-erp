@@ -842,23 +842,20 @@ class IhConfigurationApprovalTest extends TestCase
 
     public function test_fetch_template_returns_parent_and_children(): void
     {
-        $task = $this->createQuoteTask();
-
-        $this->actingAs($this->creator)->postJson(route('ih-configuration.store'), [
-            'task_id' => $task->id,
-            'parameter_note' => 'pH',
-            'items' => [
-                ['_key' => 'new-1', 'description' => 'Parent pH', 'qty' => 1],
-                ['_key' => 'new-2', 'parent_key' => 'new-1', 'description' => 'Child sensor A', 'qty' => 1],
-                ['_key' => 'new-3', 'parent_key' => 'new-1', 'description' => 'Child sensor B', 'qty' => 1],
-                ['_key' => 'new-4', 'description' => 'Parent NH3', 'qty' => 1],
-            ],
-        ])->assertOk();
-
-        $config = QuoteConfiguration::latest('id')->firstOrFail();
+        $templateId = $this->actingAs($this->creator)
+            ->postJson(route('ih-configuration.template-store'), [
+                'name' => 'Template pH',
+                'items' => [
+                    ['_key' => 'new-1', 'description' => 'Parent pH', 'qty' => 1],
+                    ['_key' => 'new-2', 'parent_key' => 'new-1', 'description' => 'Child sensor A', 'qty' => 1],
+                    ['_key' => 'new-3', 'parent_key' => 'new-1', 'description' => 'Child sensor B', 'qty' => 1],
+                    ['_key' => 'new-4', 'description' => 'Parent NH3', 'qty' => 1],
+                ],
+            ])->assertOk()
+            ->json('id');
 
         $response = $this->actingAs($this->creator)
-            ->getJson(route('ih-configuration.fetch-template', $config->id))
+            ->getJson(route('ih-configuration.fetch-template', $templateId))
             ->assertOk()
             ->assertJson(['success' => true]);
 

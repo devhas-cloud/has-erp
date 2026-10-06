@@ -3042,6 +3042,7 @@
     </script>
     @stack('modals')
     @yield('scripts')
+    @stack('page-scripts')
 
 </body>
 
