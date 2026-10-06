@@ -25,7 +25,7 @@ class WaterConfigurationController extends Controller
 {
     use ConfigurationTemplateHandling;
 
-    private const MODULE_CODE = 'MOD_WATER_CONFIGURATION';
+    private const MODULE_CODE = 'MOD_Water_CONFIGURATION';
 
     protected function templateViewRoot(): string
     {
@@ -61,11 +61,11 @@ class WaterConfigurationController extends Controller
     }
 
     /**
-     * Id divisi WATER. Kembali null bila divisi belum terdaftar.
+     * Id divisi Water. Kembali null bila divisi belum terdaftar.
      */
     private function waterDivisionId(): ?int
     {
-        return Division::where('division_name', 'WATER')->value('id');
+        return Division::where('division_name', 'Water')->value('id');
     }
 
     // Id divisi PD. Kembali null bila divisi belum terdaftar.
@@ -172,7 +172,7 @@ class WaterConfigurationController extends Controller
     {
         $divisionId = $this->waterDivisionId();
 
-        // Hanya tampilkan versi terbaru tiap group milik divisi WATER.
+        // Hanya tampilkan versi terbaru tiap group milik divisi Water.
         $latestIds = QuoteConfiguration::query()
             ->selectRaw('MAX(id) as id')
             ->where('division_id', $divisionId)
@@ -378,7 +378,7 @@ class WaterConfigurationController extends Controller
     }
 
     /**
-     * Pencarian produk master_products (hanya aktif milik divisi WATER).
+     * Pencarian produk master_products (hanya aktif milik divisi Water).
      * Format DataTables server-side agar bisa dipaginasi 100 baris/halaman.
      */
     public function searchProducts(Request $request): JsonResponse
@@ -1048,7 +1048,7 @@ class WaterConfigurationController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Produk tidak ditemukan di master product divisi WATER: #'.$missing->implode(', #').'.',
+            'message' => 'Produk tidak ditemukan di master product divisi Water: #'.$missing->implode(', #').'.',
         ], 422);
     }
 

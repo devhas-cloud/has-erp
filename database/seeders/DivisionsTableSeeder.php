@@ -13,7 +13,7 @@ class DivisionsTableSeeder extends Seeder
         // Nama boleh sama antara Internal & External — dibedakan oleh kolom `type`.
         $divisions = [
             ['division_name' => 'Admin', 'description' => 'Administrasi', 'type' => 'Internal', 'status' => 'Active'],
-            ['division_name' => 'WATER', 'description' => 'Water Management', 'type' => 'Internal', 'status' => 'Active'],
+            ['division_name' => 'Water', 'description' => 'Water Management', 'type' => 'Internal', 'status' => 'Active'],
             ['division_name' => 'IMS', 'description' => 'IMS Management', 'type' => 'Internal', 'status' => 'Active'],
             ['division_name' => 'PD', 'description' => 'PD Management', 'type' => 'Internal', 'status' => 'Active'],
             ['division_name' => 'Marketing', 'description' => 'Marketing Management', 'type' => 'Internal', 'status' => 'Active'],

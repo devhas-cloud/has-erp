@@ -43,7 +43,7 @@ class CurrencyManagementTest extends TestCase
     private function createProduct(array $overrides = []): MasterProduct
     {
         $division = Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',

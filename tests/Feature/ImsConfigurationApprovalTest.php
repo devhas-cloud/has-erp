@@ -46,7 +46,7 @@ class ImsConfigurationApprovalTest extends TestCase
         ]);
 
         $this->water = Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',
@@ -118,7 +118,7 @@ class ImsConfigurationApprovalTest extends TestCase
             ]);
         }
 
-        // User divisi WATER diberi hak approve modul IMS tapi beda divisi,
+        // User divisi Water diberi hak approve modul IMS tapi beda divisi,
         // agar middleware lolos dan aturan divisi (controller) yang menguji.
         UserAccessControl::create([
             'user_id' => $this->waterUser->id,
@@ -189,7 +189,7 @@ class ImsConfigurationApprovalTest extends TestCase
     {
         $this->createImsQuotation();
 
-        // Buat config WATER langsung (division_id = WATER) untuk memastikan tidak bocor ke list IMS.
+        // Buat config Water langsung (division_id = Water) untuk memastikan tidak bocor ke list IMS.
         $task = $this->createQuoteTask();
         QuoteConfiguration::create([
             'division_id' => $this->water->id,
@@ -223,7 +223,7 @@ class ImsConfigurationApprovalTest extends TestCase
             'status' => 'Active',
         ]);
         MasterProduct::create([
-            'name' => 'pH WATER',
+            'name' => 'pH Water',
             'code' => 'W-001',
             'brand' => 's::can',
             'category' => 'pH',
@@ -294,11 +294,11 @@ class ImsConfigurationApprovalTest extends TestCase
         $quotation = $this->createImsQuotation();
         $task = Task::find($quotation->task_id);
 
-        // Divisi WATER tetap bisa membuat config untuk task yang sama (unik per division_id + task_id)
+        // Divisi Water tetap bisa membuat config untuk task yang sama (unik per division_id + task_id)
         $this->actingAs($this->waterUser)
             ->postJson(route('ims-configuration.store'), [
                 'task_id' => $task->id,
-                'items' => [['_key' => 'new-1', 'description' => 'Material dari WATER', 'qty' => 2]],
+                'items' => [['_key' => 'new-1', 'description' => 'Material dari Water', 'qty' => 2]],
             ])
             ->assertOk();
 

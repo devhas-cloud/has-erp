@@ -46,7 +46,7 @@ class HandlingGroupTaskTest extends TestCase
         ]);
 
         $this->water = Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',
@@ -69,7 +69,7 @@ class HandlingGroupTaskTest extends TestCase
         $this->abu = User::create(['username' => 'abu', 'email' => 'abu@has.com', 'password' => bcrypt('secret'), 'division_id' => $this->pd->id]);
         $this->maya = User::create(['username' => 'maya', 'email' => 'maya@has.com', 'password' => bcrypt('secret')]);
 
-        $this->waterGroup = HandlingGroup::create(['name' => 'WATER']);
+        $this->waterGroup = HandlingGroup::create(['name' => 'Water']);
         $this->waterGroup->users()->sync([$this->maidin->id, $this->frida->id, $this->abu->id, $this->maya->id]);
     }
 
@@ -183,7 +183,7 @@ class HandlingGroupTaskTest extends TestCase
             ->getJson(route('configuration.list', 'handling-groups'));
 
         $response->assertOk()
-            ->assertJsonFragment(['name' => 'WATER'])
+            ->assertJsonFragment(['name' => 'Water'])
             ->assertJsonFragment(['members' => 'maidin, frida, abu, maya']);
 
         $store = $this->actingAs($this->admin)->postJson(
@@ -240,7 +240,7 @@ class HandlingGroupTaskTest extends TestCase
             ->assertJsonFragment(['name' => 'Water Quote']);
 
         $byRelated = $this->actingAs($this->admin)
-            ->getJson(route('configuration.list', 'task-categories').'?search=WATER');
+            ->getJson(route('configuration.list', 'task-categories').'?search=Water');
 
         $byRelated->assertOk()
             ->assertJsonFragment(['name' => 'Water Quote']);
@@ -255,12 +255,12 @@ class HandlingGroupTaskTest extends TestCase
             ->getJson(route('configuration.list', 'handling-groups').'?search=maidin');
 
         $byMember->assertOk()
-            ->assertJsonFragment(['name' => 'WATER']);
+            ->assertJsonFragment(['name' => 'Water']);
 
         $byDivision = $this->actingAs($this->admin)
-            ->getJson(route('configuration.list', 'handling-groups').'?search=WATER');
+            ->getJson(route('configuration.list', 'handling-groups').'?search=Water');
 
         $byDivision->assertOk()
-            ->assertJsonFragment(['name' => 'WATER']);
+            ->assertJsonFragment(['name' => 'Water']);
     }
 }

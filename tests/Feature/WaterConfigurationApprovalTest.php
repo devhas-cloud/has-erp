@@ -47,7 +47,7 @@ class WaterConfigurationApprovalTest extends TestCase
         parent::setUp();
 
         $this->water = Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',
@@ -121,7 +121,7 @@ class WaterConfigurationApprovalTest extends TestCase
         ]);
 
         $module = Module::create([
-            'module_code' => 'MOD_WATER_CONFIGURATION',
+            'module_code' => 'MOD_Water_CONFIGURATION',
             'module_name' => 'Water Configuration',
             'route_name' => 'water-configuration',
             'group' => 'Quotation',
@@ -198,7 +198,7 @@ class WaterConfigurationApprovalTest extends TestCase
         $this->assertTrue($quotation->is_current);
         $this->assertSame('ammo::lyser pro', $quotation->items()->first()->description);
         $this->assertSame($this->creator->division_id, $quotation->division_id);
-        $this->assertSame('WATER', $quotation->division?->division_name);
+        $this->assertSame('Water', $quotation->division?->division_name);
     }
 
     public function test_create_sanitizes_item_description(): void
@@ -610,7 +610,7 @@ class WaterConfigurationApprovalTest extends TestCase
             'price' => 12500000,
             'status' => 'Active',
         ]);
-        // Produk nama mirip tapi divisi IMS (non-WATER) => tidak boleh tampil
+        // Produk nama mirip tapi divisi IMS (non-Water) => tidak boleh tampil
         MasterProduct::create([
             'name' => 'pH::lyser ims',
             'code' => 'E-999-IMS',
@@ -620,7 +620,7 @@ class WaterConfigurationApprovalTest extends TestCase
             'price' => 1000,
             'status' => 'Active',
         ]);
-        // Produk nonaktif walau divisi WATER => tidak boleh tampil
+        // Produk nonaktif walau divisi Water => tidak boleh tampil
         MasterProduct::create([
             'name' => 'Produk Nonaktif',
             'code' => 'X-001',

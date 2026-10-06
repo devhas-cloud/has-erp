@@ -31,7 +31,7 @@ class ProductManagementPageTest extends TestCase
     private function createDivision(): Division
     {
         return Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',
@@ -70,7 +70,7 @@ class ProductManagementPageTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('product-management.index'))
             ->assertOk()
-            ->assertSee('WATER');
+            ->assertSee('Water');
     }
 
     public function test_data_endpoint_returns_products(): void
@@ -83,7 +83,7 @@ class ProductManagementPageTest extends TestCase
             ->assertJsonPath('recordsTotal', 1);
 
         $this->assertSame('E-514-4-075', $response->json('data.0.code'));
-        $this->assertSame('WATER', $response->json('data.0.division_name'));
+        $this->assertSame('Water', $response->json('data.0.division_name'));
         $this->assertSame('12,500,000', $response->json('data.0.price_formatted'));
         $this->assertSame('Main', $response->json('data.0.type'));
         $this->assertSame('s::can / 0.01pH', $response->json('data.0.parameter'));
@@ -154,7 +154,7 @@ class ProductManagementPageTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.name', 'pH::lyser pro')
             ->assertJsonPath('data.code', 'E-514-4-075')
-            ->assertJsonPath('data.division_name', 'WATER')
+            ->assertJsonPath('data.division_name', 'Water')
             ->assertJsonPath('data.price', '12500000.00');
     }
 
@@ -211,12 +211,12 @@ class ProductManagementPageTest extends TestCase
 
     public function test_import_uploads_csv_and_creates_products(): void
     {
-        $water = $this->createDivision(); // lookup divisi WATER untuk import
+        $water = $this->createDivision(); // lookup divisi Water untuk import
 
         $csv = "Name,Code,Brand,Category,Division,Description,Price,Status\n"
-            ."pH::lyser pro,E-514-4-075,s::can,Sensor,WATER,Sensor pH,12500000,Active\n"
-            ."ammo::lyser pro,E-532-pro-075,s::can,Sensor,WATER,Sensor ammonia,\"Rp 15.000.000,50\",Inactive\n"
-            .",E-000-EMP,,,WATER,,5000,Active\n"; // nama kosong => tetap boleh
+            ."pH::lyser pro,E-514-4-075,s::can,Sensor,Water,Sensor pH,12500000,Active\n"
+            ."ammo::lyser pro,E-532-pro-075,s::can,Sensor,Water,Sensor ammonia,\"Rp 15.000.000,50\",Inactive\n"
+            .",E-000-EMP,,,Water,,5000,Active\n"; // nama kosong => tetap boleh
 
         $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
 
@@ -438,11 +438,11 @@ class ProductManagementPageTest extends TestCase
             'type' => 'External',
             'status' => 'Active',
         ]);
-        $internal = $this->createDivision(); // WATER, tipe Internal
+        $internal = $this->createDivision(); // Water, tipe Internal
 
         $csv = "Code,Division,Price,Status\n"
             ."EXT-1,VENDOR-EXT,1000,Active\n"
-            ."INT-1,WATER,1000,Active\n";
+            ."INT-1,Water,1000,Active\n";
 
         $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
 
@@ -468,11 +468,11 @@ class ProductManagementPageTest extends TestCase
             'type' => 'External',
             'status' => 'Active',
         ]);
-        $this->createDivision(); // WATER, tipe Internal
+        $this->createDivision(); // Water, tipe Internal
 
         $references = ProductImportService::getReferenceData();
 
-        $this->assertContains('WATER', $references['division']);
+        $this->assertContains('Water', $references['division']);
         $this->assertNotContains('VENDOR-EXT', $references['division']);
     }
 

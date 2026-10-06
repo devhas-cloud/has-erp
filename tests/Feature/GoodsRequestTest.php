@@ -38,7 +38,7 @@ class GoodsRequestTest extends TestCase
         parent::setUp();
 
         $this->division = Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',
@@ -448,7 +448,7 @@ class GoodsRequestTest extends TestCase
         $this->assertTrue($response->json('success'));
         $this->assertCount(1, $response->json('data'));
         $this->assertSame('A-1', $response->json('data.0.part_number'));
-        $this->assertSame('WATER', $response->json('data.0.division_name'));
+        $this->assertSame('Water', $response->json('data.0.division_name'));
         $this->assertArrayHasKey('quote_configuration_item_id', $response->json('data.0'));
     }
 

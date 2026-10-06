@@ -1,6 +1,6 @@
 # HAS-ERP
 
-Web aplikasi ERP/CRM berbasis **Laravel 12** yang mengelola proses bisnis dari **Lead → Opportunity → Task/Quote → Quotation**, lengkap dengan manajemen akun & kontak, task planner dengan approval flow, notifikasi real-time, kontrol akses per-modul, serta modul konfigurasi teknis (IMS & WATER) yang menghasilkan dokumen quotation ber-versi.
+Web aplikasi ERP/CRM berbasis **Laravel 12** yang mengelola proses bisnis dari **Lead → Opportunity → Task/Quote → Quotation**, lengkap dengan manajemen akun & kontak, task planner dengan approval flow, notifikasi real-time, kontrol akses per-modul, serta modul konfigurasi teknis (IMS & Water) yang menghasilkan dokumen quotation ber-versi.
 
 ## Teknologi
 
@@ -120,7 +120,7 @@ Controller: `ProductManagementController`
 ### 9. Water Configuration (Konfigurasi Teknis Air)
 Controller: `WaterConfigurationController`
 
-- Konfigurasi teknis (breakdown item produk) untuk task quotation divisi **WATER**, satu level di bawah Quotation.
+- Konfigurasi teknis (breakdown item produk) untuk task quotation divisi **Water**, satu level di bawah Quotation.
 - Header di-derive dari task/opportunity/lead (to_name, lokasi, PIC, sales).
 - **Item hierarki parent–child**; harga item diambil dari MasterProduct.
 - **Approval workflow**: draft → submit → waiting_approval → approve/reject; approve hanya oleh approver divisi yang sama (bukan creator), admin override.
@@ -139,7 +139,7 @@ Controller: `ImsConfigurationController`
 ### 11. Quotation (Pembuatan Penawaran Harga)
 Controller: `QuotationController`
 
-- Dokumen quotation final dari task: prefill dari **semua konfigurasi yang sudah approved** (IMS + WATER).
+- Dokumen quotation final dari task: prefill dari **semua konfigurasi yang sudah approved** (IMS + Water).
 - **3 tab item**: List Items (utama), List Configuration (snapshot item konfigurasi), Cost/Biaya (tidak mempengaruhi subtotal).
 - Item hierarki parent–child di ketiga tab; deskripsi item disanitasi HTML (`<b><i><u><br>`).
 - **Mesin kalkulasi total** (`Quotation::calculateTotals`): subtotal = Σ(qty×price) → diskon (% / manual) → DPP → PPN (11%) → grand total.

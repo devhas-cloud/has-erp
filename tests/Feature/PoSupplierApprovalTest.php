@@ -32,7 +32,7 @@ class PoSupplierApprovalTest extends TestCase
         parent::setUp();
 
         $this->division = Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',

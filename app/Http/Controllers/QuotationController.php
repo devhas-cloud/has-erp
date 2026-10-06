@@ -112,7 +112,7 @@ class QuotationController extends Controller
     }
 
     /**
-     * Config approved versi terakhir milik sebuah task (IMS + WATER).
+     * Config approved versi terakhir milik sebuah task (IMS + Water).
      */
     private function approvedConfigsOfTask(Task $task)
     {
@@ -248,7 +248,7 @@ class QuotationController extends Controller
         $config->setRelation('task', $task);
         $config->setRelation('opportunity', $task->opportunity);
 
-        // Daftar config terpilih (gabungan IMS + WATER).
+        // Daftar config terpilih (gabungan IMS + Water).
         $configList = $configs->map(fn ($c) => [
             'id' => $c->id,
             'division_id' => $c->division_id,

@@ -53,8 +53,8 @@ class IhConfigurationApprovalTest extends TestCase
         ]);
 
         $this->other = Division::create([
-            'division_name' => 'WATER',
-            'description' => 'WATER Management',
+            'division_name' => 'Water',
+            'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',
         ]);
@@ -609,10 +609,10 @@ class IhConfigurationApprovalTest extends TestCase
             'price' => 12500000,
             'status' => 'Active',
         ]);
-        // Produk nama mirip tapi divisi WATER (non-IH) => tidak boleh tampil
+        // Produk nama mirip tapi divisi Water (non-IH) => tidak boleh tampil
         MasterProduct::create([
             'name' => 'pH::lyser ims',
-            'code' => 'E-999-WATER',
+            'code' => 'E-999-Water',
             'brand' => 's::can',
             'category' => 'pH',
             'division_id' => $this->other->id,

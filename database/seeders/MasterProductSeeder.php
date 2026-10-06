@@ -13,13 +13,13 @@ class MasterProductSeeder extends Seeder
     {
         $baseCurrencyId = Currency::where('is_base', true)->where('status', 'Active')->value('id');
 
-        $waterDivision = Division::where('division_name', 'WATER')->first();
+        $waterDivision = Division::where('division_name', 'Water')->first();
         $imsDivision = Division::where('division_name', 'IMS')->first();
 
         if ($waterDivision) {
             $this->seedWaterProducts($waterDivision->id, $baseCurrencyId);
         } else {
-            $this->command?->warn('Divisi WATER tidak ditemukan, seed produk WATER dilewati.');
+            $this->command?->warn('Divisi Water tidak ditemukan, seed produk Water dilewati.');
         }
 
         if ($imsDivision) {
@@ -90,7 +90,7 @@ class MasterProductSeeder extends Seeder
             );
         }
 
-        $this->command?->info('Seeded '.count($products).' produk WATER.');
+        $this->command?->info('Seeded '.count($products).' produk Water.');
     }
 
     private function seedImsProducts(int $divisionId, ?int $baseCurrencyId): void

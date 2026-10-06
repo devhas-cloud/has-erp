@@ -39,11 +39,11 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Migrasi data template WATER lama ke tabel generic (id dipertahankan,
-        // division_id mengikuti divisi WATER). Dijalankan hanya bila tabel lama
-        // ada dan divisi WATER terdaftar.
+        // Migrasi data template Water lama ke tabel generic (id dipertahankan,
+        // division_id mengikuti divisi Water). Dijalankan hanya bila tabel lama
+        // ada dan divisi Water terdaftar.
         if (Schema::hasTable('water_configuration_templates')) {
-            $waterDivisionId = DB::table('divisions')->where('division_name', 'WATER')->value('id');
+            $waterDivisionId = DB::table('divisions')->where('division_name', 'Water')->value('id');
 
             if ($waterDivisionId) {
                 DB::table('water_configuration_templates')->orderBy('id')->chunkById(500, function ($templates) use ($waterDivisionId) {

@@ -21,11 +21,11 @@ class DashboardAchievementController extends Controller
             ->sum('quotations.grand_total');
 
         // 2. Achievement per divisi (via opportunity -> division). Baris divisi
-        //    ditentukan daftar tetap [Enviro, WATER, IH, Gas, IMS]; divisi tanpa
+        //    ditentukan daftar tetap [Enviro, Water, IH, Gas, IMS]; divisi tanpa
         //    data tetap tampil dengan nilai 0.
-        $divOrder = ['Enviro', 'WATER', 'IH', 'Gas', 'IMS'];
+        $divOrder = ['Enviro', 'Water', 'IH', 'Gas', 'IMS'];
 
-        $divisionList = Division::whereIn('division_name', $divOrder)
+        $divisionList = Division::whereIn('division_name', $divOrder)->where('type', 'Internal')
             ->get(['id', 'division_name'])
             ->unique('division_name');
 

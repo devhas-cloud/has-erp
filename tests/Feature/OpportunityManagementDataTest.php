@@ -104,7 +104,7 @@ class OpportunityManagementDataTest extends TestCase
 
     public function test_non_sales_division_sees_all_opportunities(): void
     {
-        $water = Division::create(['division_name' => 'WATER', 'description' => 'Water', 'type' => 'External', 'status' => 'Active']);
+        $water = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'External', 'status' => 'Active']);
         $user = $this->makeUser('water_user', 'Water', $water->id);
 
         $this->assertCount(3, $this->names($user));
@@ -231,7 +231,7 @@ class OpportunityManagementDataTest extends TestCase
     public function test_division_column_returns_division_name_and_sorts(): void
     {
         $user = $this->makeUser('viewer', 'Viewer');
-        $water = Division::create(['division_name' => 'WATER', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
+        $water = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
         $ims = Division::create(['division_name' => 'IMS', 'description' => 'Ims', 'type' => 'Internal', 'status' => 'Active']);
 
         $company = AccountCompany::create(['account_name' => 'PT Division', 'status' => 'Active']);
@@ -242,10 +242,10 @@ class OpportunityManagementDataTest extends TestCase
             ->assertOk();
 
         $byName = collect($response->json('data'))->keyBy('opportunity_name');
-        $this->assertSame('WATER', $byName['Opp Water']['division_name']);
+        $this->assertSame('Water', $byName['Opp Water']['division_name']);
         $this->assertSame('IMS', $byName['Opp Ims']['division_name']);
 
-        // Sort kolom Division (index 4) abjad: row ber-IMS sebelum row ber-WATER
+        // Sort kolom Division (index 4) abjad: row ber-IMS sebelum row ber-Water
         // (row tanpa division null mendahului di MySQL, jadi bandingkan 2 terakhir).
         $sorted = $this->names($user, ['order' => [['column' => 4, 'dir' => 'asc']]]);
         $this->assertSame(['Opp Ims', 'Opp Water'], array_slice($sorted, -2));

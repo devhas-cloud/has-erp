@@ -27,7 +27,7 @@ class LeadsManagementDataTest extends TestCase
     {
         parent::setUp();
 
-        $this->division = Division::create(['division_name' => 'WATER', 'description' => 'Water', 'type' => 'External', 'status' => 'Active']);
+        $this->division = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'External', 'status' => 'Active']);
 
         $module = Module::create([
             'module_code' => 'MOD_LEADS_MANAGEMENT',

@@ -87,21 +87,21 @@ class ErDummyDataSeeder extends Seeder
 
     private function seedEmployees(): array
     {
-        $divisionIds = Division::whereIn('division_name', ['Admin', 'WATER', 'IMS'])->pluck('id', 'division_name');
+        $divisionIds = Division::whereIn('division_name', ['Admin', 'Water', 'IMS'])->pluck('id', 'division_name');
         $jobTitleIds = JobTitle::whereIn('title_name', ['Staff', 'Supervisor', 'Manager', 'CEO'])->pluck('id', 'title_name');
 
         $rows = [
             // [nama, gender, division, title, base, join (yrs ago), status]
             ['Budi Setiawan',      'male',   'Admin',  'CEO',        15000000, 6, 'active'],
-            ['Ratih Prasetyo',     'female', 'WATER',  'Manager',    11000000, 5, 'active'],
+            ['Ratih Prasetyo',     'female', 'Water',  'Manager',    11000000, 5, 'active'],
             ['Agus Hidayat',       'male',   'IMS',    'Manager',    10000000, 4, 'active'],
-            ['Siti Aminah',        'female', 'WATER',  'Supervisor',  8000000, 4, 'active'],
+            ['Siti Aminah',        'female', 'Water',  'Supervisor',  8000000, 4, 'active'],
             ['Dedi Supriyadi',     'male',   'IMS',    'Supervisor',  9500000, 3, 'on_leave'],
-            ['Andi Prasetyo',      'male',   'WATER',  'Staff',       6500000, 3, 'active'],
+            ['Andi Prasetyo',      'male',   'Water',  'Staff',       6500000, 3, 'active'],
             ['Rina Marlina',       'female', 'Admin',  'Staff',       5200000, 2, 'active'],
-            ['Hendra Wijaya',      'male',   'WATER',  'Staff',       5800000, 2, 'active'],
+            ['Hendra Wijaya',      'male',   'Water',  'Staff',       5800000, 2, 'active'],
             ['Fitri Rahmawati',    'female', 'IMS',    'Staff',       5500000, 2, 'active'],
-            ['Joko Susilo',        'male',   'WATER',  'Staff',       4700000, 2, 'terminated'],
+            ['Joko Susilo',        'male',   'Water',  'Staff',       4700000, 2, 'terminated'],
         ];
 
         $bosses = [

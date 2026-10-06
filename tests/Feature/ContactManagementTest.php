@@ -35,7 +35,7 @@ class ContactManagementTest extends TestCase
     {
         parent::setUp();
 
-        $this->division = Division::create(['division_name' => 'WATER', 'description' => 'Water', 'type' => 'External', 'status' => 'Active']);
+        $this->division = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'External', 'status' => 'Active']);
         $this->salesDivision = Division::create(['division_name' => 'Sales', 'description' => 'Sales', 'type' => 'Internal', 'status' => 'Active']);
 
         $module = Module::create([
@@ -201,7 +201,7 @@ class ContactManagementTest extends TestCase
     /**
      * Picker "Assigned To" dirender sebagai <option> statis (bukan ajax) dan
      * hanya boleh berisi user divisi Sales — "assignee"/"salesrep" (Sales)
-     * harus muncul, "creator" (WATER) tidak boleh muncul sebagai pilihan.
+     * harus muncul, "creator" (Water) tidak boleh muncul sebagai pilihan.
      */
     public function test_assigned_to_options_only_include_sales_division_users(): void
     {

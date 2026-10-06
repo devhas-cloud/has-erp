@@ -32,7 +32,7 @@ class ConfigurationTemplateTest extends TestCase
     public static function modules(): array
     {
         return [
-            'water' => ['water-configuration', 'WATER'],
+            'water' => ['water-configuration', 'Water'],
             'enviro' => ['enviro-configuration', 'Enviro'],
             'ih' => ['ih-configuration', 'IH'],
             'gas' => ['gas-configuration', 'Gas'],

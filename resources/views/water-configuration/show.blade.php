@@ -220,8 +220,8 @@
                 </table>
                 <div class="alert alert-info py-2 px-3 mt-3 mb-0" style="font-size:12px">
                     <i class="fa fa-circle-info me-1"></i>
-                    Aturan: user divisi WATER (pembuat) tidak bisa approve dokumennya sendiri. Approval hanya dapat
-                    dilakukan oleh user lain yang satu divisi dengan pembuat (divisi WATER).
+                    Aturan: user divisi Water (pembuat) tidak bisa approve dokumennya sendiri. Approval hanya dapat
+                    dilakukan oleh user lain yang satu divisi dengan pembuat (divisi Water).
                 </div>
             </div>
         </div>

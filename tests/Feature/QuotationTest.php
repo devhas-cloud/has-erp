@@ -46,7 +46,7 @@ class QuotationTest extends TestCase
         parent::setUp();
 
         $this->division = Division::create([
-            'division_name' => 'WATER',
+            'division_name' => 'Water',
             'description' => 'Water Management',
             'type' => 'Internal',
             'status' => 'Active',
@@ -226,7 +226,7 @@ class QuotationTest extends TestCase
     {
         $task = $this->createTask();
 
-        // Config WATER approved (versi terakhir).
+        // Config Water approved (versi terakhir).
         $water = QuoteConfiguration::create([
             'division_id' => $this->division->id,
             'group_id' => 1,
@@ -441,7 +441,7 @@ class QuotationTest extends TestCase
             ->assertOk();
 
         $this->assertSame(1, $response->json('recordsTotal'));
-        $this->assertSame('WATER', $response->json('data.0.division_name'));
+        $this->assertSame('Water', $response->json('data.0.division_name'));
     }
 
     public function test_search_products_filters_by_division(): void
@@ -834,7 +834,7 @@ class QuotationTest extends TestCase
     {
         $task = $this->createTask();
 
-        // Config WATER approved (versi terakhir).
+        // Config Water approved (versi terakhir).
         $water = QuoteConfiguration::create([
             'division_id' => $this->division->id,
             'group_id' => 1,

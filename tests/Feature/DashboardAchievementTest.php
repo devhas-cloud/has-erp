@@ -20,7 +20,7 @@ class DashboardAchievementTest extends TestCase
 
     public function test_dashboard_lists_fixed_divisions_with_opportunity_probability_counts(): void
     {
-        $water = Division::create(['division_name' => 'WATER', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
+        $water = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
         Division::create(['division_name' => 'Enviro', 'description' => 'Enviro', 'type' => 'Internal', 'status' => 'Active']);
         Division::create(['division_name' => 'IH', 'description' => 'IH', 'type' => 'Internal', 'status' => 'Active']);
         Division::create(['division_name' => 'Gas', 'description' => 'Gas', 'type' => 'Internal', 'status' => 'Active']);
@@ -34,7 +34,7 @@ class DashboardAchievementTest extends TestCase
         $company = AccountCompany::create(['account_name' => 'PT Maju', 'status' => 'Active']);
 
         $opportunity = Opportunity::create([
-            'opportunity_name' => 'Opp WATER',
+            'opportunity_name' => 'Opp Water',
             'account_companies_id' => $company->id,
             'owner_id' => $owner->id,
             'division_id' => $water->id,
@@ -88,9 +88,9 @@ class DashboardAchievementTest extends TestCase
         $response = $this->actingAs($admin)->get(route('dashboard-achievement.index'))->assertOk();
 
         $divisions = $response->viewData('divisions');
-        $this->assertSame(['Enviro', 'WATER', 'IH', 'Gas', 'IMS'], $divisions->pluck('division_name')->all());
+        $this->assertSame(['Enviro', 'Water', 'IH', 'Gas', 'IMS'], $divisions->pluck('division_name')->all());
 
-        $waterRow = $divisions->firstWhere('division_name', 'WATER');
+        $waterRow = $divisions->firstWhere('division_name', 'Water');
         $this->assertSame(1, (int) $waterRow->quotation_count);
         $this->assertEquals(1000000, (float) $waterRow->total);
         // Divisi lain tampil dengan nilai 0.
@@ -98,7 +98,7 @@ class DashboardAchievementTest extends TestCase
             $this->assertSame(0, (int) $divisions->firstWhere('division_name', $name)->quotation_count);
         }
 
-        // Brand terjual tercatat di divisi WATER.
+        // Brand terjual tercatat di divisi Water.
         $brands = $response->viewData('brandsByDivision')->get($water->id, collect());
         $this->assertSame('HAS', $brands->first()->brand);
         $this->assertEquals(1000000, (float) $brands->first()->total_value);
