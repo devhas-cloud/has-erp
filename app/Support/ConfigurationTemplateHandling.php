@@ -8,10 +8,12 @@ use App\Models\Currency;
 use App\Models\Log;
 use App\Models\MasterProduct;
 use App\Models\Quotation;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Handling template mandiri (berjudul, scoped per divisi) untuk seluruh
@@ -100,6 +102,73 @@ trait ConfigurationTemplateHandling
             'template' => $template,
             'backUrl' => route($this->templateViewRoot().'.index'),
             'editUrl' => route($this->templateViewRoot().'.template-edit', $template->id),
+            'pdfUrl' => route($this->templateViewRoot().'.template-pdf', $template->id),
+        ]);
+    }
+
+    public function templatePdf($id)
+    {
+        $template = ConfigurationTemplate::with(['items.product', 'creator', 'division'])
+            ->where('division_id', $this->templateDivisionId())
+            ->findOrFail($id);
+
+        $pdf = Pdf::loadView('configuration.template-pdf', compact('template'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->stream('Template-'.Str::slug($template->name).'.pdf');
+    }
+
+    /**
+     * Duplikat template beserta item hierarkinya (parent remap, urutan DFS).
+     * Nama disalin dengan suffix " (copy)".
+     */
+    public function templateDuplicate($id): JsonResponse
+    {
+        $source = ConfigurationTemplate::with('items')
+            ->where('division_id', $this->templateDivisionId())
+            ->findOrFail($id);
+
+        $copy = DB::transaction(function () use ($source) {
+            $copy = ConfigurationTemplate::create([
+                'division_id' => $source->division_id,
+                'name' => $source->name.' (copy)',
+                'description' => $source->description,
+                'created_by' => Auth::id(),
+            ]);
+
+            $itemIdMap = [];
+            foreach ($source->items as $item) {
+                $new = $copy->items()->create([
+                    'item_no' => $item->item_no,
+                    'parent_id' => $item->parent_id ? ($itemIdMap[$item->parent_id] ?? null) : null,
+                    'product_id' => $item->product_id,
+                    'category' => $item->category,
+                    'part_number' => $item->part_number,
+                    'description' => $item->description,
+                    'qty' => $item->qty,
+                    'price' => $item->price,
+                    'price_currency' => $item->price_currency,
+                    'currency' => $item->currency,
+                    'unit' => $item->unit,
+                    'sort_order' => $item->sort_order,
+                ]);
+                $itemIdMap[$item->id] = $new->id;
+            }
+
+            return $copy;
+        });
+
+        Log::record(
+            'duplicate_'.$this->templateViewRoot().'_template',
+            "Template '{$source->name}' diduplikat menjadi '{$copy->name}'",
+            self::MODULE_CODE,
+            $copy
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Template diduplikat menjadi "'.$copy->name.'".',
+            'id' => $copy->id,
         ]);
     }
 

@@ -44,6 +44,9 @@
             <i class="fa fa-pen me-1"></i> <span>Edit Template</span>
         </a>
         @endif
+        <a href="{{ $pdfUrl }}" target="_blank" class="btn-accent">
+            <i class="fa fa-file-pdf me-1"></i> <span>Cetak PDF</span>
+        </a>
     </div>
 </div>
 

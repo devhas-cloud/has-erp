@@ -166,7 +166,9 @@ const wcVersionsUrl = '{{ route("gas-configuration.versions", "__ID__") }}';
 const tplShowUrl = '{{ route("gas-configuration.template-show", "__ID__") }}';
 const tplEditUrl = '{{ route("gas-configuration.template-edit", "__ID__") }}';
 const tplDeleteUrl = '{{ route("gas-configuration.template-destroy", "__ID__") }}';
+const tplDuplicateUrl = '{{ route("gas-configuration.template-duplicate", "__ID__") }}';
 
+const canCreate = {{ $canCreate ? 'true' : 'false' }};
 const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
 const canDelete = {{ $canDelete ? 'true' : 'false' }};
 
@@ -272,6 +274,9 @@ function initTplTable() {
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1">';
                     btn += '<a href="' + tplShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
+                    if (canCreate) {
+                        btn += '<button class="btn-icon" title="Duplicate" onclick="duplicateTemplate(' + data + ')"><i class="fa fa-copy"></i></button>';
+                    }
                     if (canUpdate) {
                         btn += '<a href="' + tplEditUrl.replace('__ID__', data) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
                     }
@@ -308,6 +313,28 @@ function deleteWc(id) {
         }).fail(function(xhr) {
             toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus.');
         });
+    });
+}
+
+function duplicateTemplate(id) {
+    Swal.fire({
+        title: 'Duplicate Template?',
+        text: 'Template #' + id + ' akan disalin dengan nama "( copy )".',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Duplicate',
+        cancelButtonText: 'Batal'
+    }).then(function(result) {
+        if (!result.isConfirmed) {
+            return;
+        }
+        $.post(tplDuplicateUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
+            .done(function(res) {
+                toastr.success(res.message || 'Template diduplikat.');
+                tplTable.ajax.reload();
+            }).fail(function(xhr) {
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal duplikat.');
+            });
     });
 }
 

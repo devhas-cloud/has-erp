@@ -164,6 +164,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('water-configuration/template/create', [WaterConfigurationController::class, 'templateCreate'])->name('water-configuration.template-create');
     Route::get('water-configuration/template/{id}/edit', [WaterConfigurationController::class, 'templateEdit'])->name('water-configuration.template-edit');
     Route::get('water-configuration/template/{id}', [WaterConfigurationController::class, 'templateShow'])->name('water-configuration.template-show');
+    Route::get('water-configuration/template/{id}/pdf', [WaterConfigurationController::class, 'templatePdf'])->name('water-configuration.template-pdf');
+    Route::post('water-configuration/template/{id}/duplicate', [WaterConfigurationController::class, 'templateDuplicate'])->name('water-configuration.template-duplicate');
     Route::post('water-configuration/template', [WaterConfigurationController::class, 'templateStore'])->name('water-configuration.template-store');
     Route::put('water-configuration/template/{id}', [WaterConfigurationController::class, 'templateUpdate'])->name('water-configuration.template-update');
     Route::delete('water-configuration/template/{id}', [WaterConfigurationController::class, 'templateDestroy'])->name('water-configuration.template-destroy');
@@ -184,6 +186,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('enviro-configuration/template/create', [EnviroConfigurationController::class, 'templateCreate'])->name('enviro-configuration.template-create');
     Route::get('enviro-configuration/template/{id}/edit', [EnviroConfigurationController::class, 'templateEdit'])->name('enviro-configuration.template-edit');
     Route::get('enviro-configuration/template/{id}', [EnviroConfigurationController::class, 'templateShow'])->name('enviro-configuration.template-show');
+    Route::get('enviro-configuration/template/{id}/pdf', [EnviroConfigurationController::class, 'templatePdf'])->name('enviro-configuration.template-pdf');
+    Route::post('enviro-configuration/template/{id}/duplicate', [EnviroConfigurationController::class, 'templateDuplicate'])->name('enviro-configuration.template-duplicate');
     Route::post('enviro-configuration/template', [EnviroConfigurationController::class, 'templateStore'])->name('enviro-configuration.template-store');
     Route::put('enviro-configuration/template/{id}', [EnviroConfigurationController::class, 'templateUpdate'])->name('enviro-configuration.template-update');
     Route::delete('enviro-configuration/template/{id}', [EnviroConfigurationController::class, 'templateDestroy'])->name('enviro-configuration.template-destroy');
@@ -204,6 +208,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('ih-configuration/template/create', [IhConfigurationController::class, 'templateCreate'])->name('ih-configuration.template-create');
     Route::get('ih-configuration/template/{id}/edit', [IhConfigurationController::class, 'templateEdit'])->name('ih-configuration.template-edit');
     Route::get('ih-configuration/template/{id}', [IhConfigurationController::class, 'templateShow'])->name('ih-configuration.template-show');
+    Route::get('ih-configuration/template/{id}/pdf', [IhConfigurationController::class, 'templatePdf'])->name('ih-configuration.template-pdf');
+    Route::post('ih-configuration/template/{id}/duplicate', [IhConfigurationController::class, 'templateDuplicate'])->name('ih-configuration.template-duplicate');
     Route::post('ih-configuration/template', [IhConfigurationController::class, 'templateStore'])->name('ih-configuration.template-store');
     Route::put('ih-configuration/template/{id}', [IhConfigurationController::class, 'templateUpdate'])->name('ih-configuration.template-update');
     Route::delete('ih-configuration/template/{id}', [IhConfigurationController::class, 'templateDestroy'])->name('ih-configuration.template-destroy');
@@ -224,6 +230,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('gas-configuration/template/create', [GasConfigurationController::class, 'templateCreate'])->name('gas-configuration.template-create');
     Route::get('gas-configuration/template/{id}/edit', [GasConfigurationController::class, 'templateEdit'])->name('gas-configuration.template-edit');
     Route::get('gas-configuration/template/{id}', [GasConfigurationController::class, 'templateShow'])->name('gas-configuration.template-show');
+    Route::get('gas-configuration/template/{id}/pdf', [GasConfigurationController::class, 'templatePdf'])->name('gas-configuration.template-pdf');
+    Route::post('gas-configuration/template/{id}/duplicate', [GasConfigurationController::class, 'templateDuplicate'])->name('gas-configuration.template-duplicate');
     Route::post('gas-configuration/template', [GasConfigurationController::class, 'templateStore'])->name('gas-configuration.template-store');
     Route::put('gas-configuration/template/{id}', [GasConfigurationController::class, 'templateUpdate'])->name('gas-configuration.template-update');
     Route::delete('gas-configuration/template/{id}', [GasConfigurationController::class, 'templateDestroy'])->name('gas-configuration.template-destroy');
@@ -244,6 +252,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('ims-configuration/template/create', [ImsConfigurationController::class, 'templateCreate'])->name('ims-configuration.template-create');
     Route::get('ims-configuration/template/{id}/edit', [ImsConfigurationController::class, 'templateEdit'])->name('ims-configuration.template-edit');
     Route::get('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateShow'])->name('ims-configuration.template-show');
+    Route::get('ims-configuration/template/{id}/pdf', [ImsConfigurationController::class, 'templatePdf'])->name('ims-configuration.template-pdf');
+    Route::post('ims-configuration/template/{id}/duplicate', [ImsConfigurationController::class, 'templateDuplicate'])->name('ims-configuration.template-duplicate');
     Route::post('ims-configuration/template', [ImsConfigurationController::class, 'templateStore'])->name('ims-configuration.template-store');
     Route::put('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateUpdate'])->name('ims-configuration.template-update');
     Route::delete('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateDestroy'])->name('ims-configuration.template-destroy');
