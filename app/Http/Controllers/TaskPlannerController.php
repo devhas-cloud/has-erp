@@ -559,9 +559,9 @@ class TaskPlannerController extends Controller
             'status' => 'required|in:todo,in_progress,done',
         ]);
 
-        // jika task category = "visit" maka wajib record google map location saat transition status done
+        // jika task category ditandai visit maka wajib record google map location saat transition status done
         $taskCategory = $task->category;
-        if ($taskCategory && strtolower($taskCategory->name) === 'visit' && $validated['status'] === 'done') {
+        if ($taskCategory && $taskCategory->visit && $validated['status'] === 'done') {
             $cekLocation = TaskVisit::where('task_id', $task->id)->where('user_id', Auth::id())->first();
             if (! $cekLocation) {
                 return response()->json([

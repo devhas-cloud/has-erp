@@ -868,8 +868,8 @@
             </div>
 
             <!-- ── Visit Location ── -->
-            <!-- Tampil Jika category task visiting -->
-            @if (strtolower($task->category->name) === 'visiting' or strtolower($task->category->name) === 'visit')
+            <!-- Tampil Jika category task visit -->
+            @if ($task->category?->visit)
             <div class="card-custom fade-in stagger-4 mt-4">
                 <div class="card-header-custom">
                     <span><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Visit Location</span>

@@ -15,15 +15,22 @@ class TaskCategory extends Model
         'description',
         'division_id',
         'use_division_handler',
+        'visit',
     ];
 
     protected $casts = [
         'use_division_handler' => 'boolean',
+        'visit' => 'boolean',
     ];
 
     public function setUseDivisionHandlerAttribute($value): void
     {
         $this->attributes['use_division_handler'] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    public function setVisitAttribute($value): void
+    {
+        $this->attributes['visit'] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 
     public function division(): BelongsTo

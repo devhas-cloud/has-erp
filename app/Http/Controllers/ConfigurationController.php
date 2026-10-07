@@ -256,12 +256,14 @@ class ConfigurationController extends Controller
                 'model' => TaskCategory::class,
                 'label' => 'Task Category',
                 'slug' => 'task-categories',
-                'columns' => ['name', 'description', 'division_id', 'use_division_handler'],
+                'no_duplicate' => true,
+                'columns' => ['name', 'description', 'division_id', 'use_division_handler', 'visit'],
                 'rules' => [
                     'name' => 'required|string|max:50',
                     'description' => 'nullable|string',
                     'division_id' => 'nullable|exists:divisions,id',
                     'use_division_handler' => 'required|in:Yes,No',
+                    'visit' => 'required|in:Yes,No',
                 ],
                 'display_map' => [
                     'division_id' => 'division.division_name',
@@ -275,6 +277,12 @@ class ConfigurationController extends Controller
                     ],
                     'use_division_handler' => [
                         'label' => 'Divisi Penanganan',
+                        'type' => 'select',
+                        'options' => ['No', 'Yes'],
+                        'default' => 'No',
+                    ],
+                    'visit' => [
+                        'label' => 'Visit Count',
                         'type' => 'select',
                         'options' => ['No', 'Yes'],
                         'default' => 'No',

@@ -181,7 +181,7 @@
                                 @foreach ($categories as $cat)
                                     <option value="{{ $cat->id }}"
                                         {{ $task->category_id == $cat->id ? 'selected' : '' }}
-                                        @if(strtolower($cat->name) === 'visit') data-visit="1" @endif>
+                                        @if($cat->visit) data-visit="1" @endif>
                                         {{ $cat->division_id ? '[' . optional($cat->division)->division_name . '] ' : '[Global] ' }}
                                         {{ $cat->name }}
                                     </option>

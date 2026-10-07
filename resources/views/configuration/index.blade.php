@@ -578,8 +578,10 @@
                 });
                 rows += '<td><div class="config-actions">';
                 @if ($canCreate)
-                    rows += '<button class="btn-icon btn-duplicate-config" title="Duplicate" data-table="' + table +
-                        '" data-id="' + item.id + '"><i class="fa-solid fa-copy"></i></button>';
+                    if (!cfgMeta.no_duplicate) {
+                        rows += '<button class="btn-icon btn-duplicate-config" title="Duplicate" data-table="' + table +
+                            '" data-id="' + item.id + '"><i class="fa-solid fa-copy"></i></button>';
+                    }
                 @endif
                 @if ($canUpdate)
                     rows += '<button class="btn-icon btn-edit-config" title="Edit" data-table="' + table +
@@ -806,7 +808,11 @@
                         input.appendChild(option);
                     });
                     if (itemData && itemData[key] !== undefined) {
-                        input.value = itemData[key];
+                        var selVal = itemData[key];
+                        if (typeof selVal === 'boolean') selVal = selVal ? 'Yes' : 'No';
+                        else if (selVal === 1 || selVal === '1') selVal = 'Yes';
+                        else if (selVal === 0 || selVal === '0') selVal = 'No';
+                        input.value = selVal;
                     } else if (ef.default !== undefined) {
                         input.value = ef.default;
                     }
