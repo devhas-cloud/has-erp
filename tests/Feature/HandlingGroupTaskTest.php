@@ -69,7 +69,7 @@ class HandlingGroupTaskTest extends TestCase
         $this->abu = User::create(['username' => 'abu', 'email' => 'abu@has.com', 'password' => bcrypt('secret'), 'division_id' => $this->pd->id]);
         $this->maya = User::create(['username' => 'maya', 'email' => 'maya@has.com', 'password' => bcrypt('secret')]);
 
-        $this->waterGroup = HandlingGroup::create(['name' => 'Water']);
+        $this->waterGroup = HandlingGroup::create(['name' => 'Water', 'division_id' => $this->water->id]);
         $this->waterGroup->users()->sync([$this->maidin->id, $this->frida->id, $this->abu->id, $this->maya->id]);
     }
 

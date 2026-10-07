@@ -33,7 +33,7 @@ class TaskPlannerAccountContactTest extends TestCase
             'role' => 'Admin',
         ]);
 
-        $this->visitCategory = TaskCategory::create(['name' => 'Visit']);
+        $this->visitCategory = TaskCategory::create(['name' => 'Visit', 'visit' => true]);
         $this->otherCategory = TaskCategory::create(['name' => 'General']);
 
         $company = AccountCompany::create(['account_name' => 'PT Maju Bersama', 'status' => 'Active']);
@@ -178,5 +178,4 @@ class TaskPlannerAccountContactTest extends TestCase
         $response->assertSee('data-visit="1"', false);
         $response->assertSee('id="task-account-contact-container"', false);
     }
-
 }

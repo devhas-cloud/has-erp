@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Currency;
+use App\Models\Division;
 use App\Models\Log;
 use App\Models\MasterProduct;
 use App\Models\ProfitEstimate;
@@ -590,7 +591,11 @@ class QuotationController extends Controller
             ->orderBy('name');
 
         if ($divisionId) {
-            $query->where('division_id', $divisionId);
+            $divisionIds = [$divisionId];
+            if ($pdId = Division::where('division_name', 'PD')->value('id')) {
+                $divisionIds[] = $pdId;
+            }
+            $query->whereIn('division_id', array_unique($divisionIds));
         }
 
         $recordsTotal = $query->count();

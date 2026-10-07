@@ -646,8 +646,8 @@
                 <div class="card-body-custom">
                     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
                         <div>
-                            <h5 style="margin:0;font-weight:700;font-size:18px;letter-spacing:-0.3px">{{ $task->title }}
-                            </h5>
+                            <h5 style="margin:0;font-weight:700;font-size:18px;letter-spacing:-0.3px">{{ $task->title }}</h5>
+                            <h6>{{ $task->opportunity?->opportunity_name ?? '—' }} — {{ $task->opportunity?->accountCompany->account_name ?? '—' }}</h6>
                             <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">
                                 Created by <strong>{{ $task->creator?->display_name ?? '—' }}</strong>
                             </div>
@@ -673,7 +673,7 @@
                     <div
                         style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap;font-size:13px;color:var(--text-muted)">
                         <span><i class="fa fa-folder me-1"></i>
-                            <span style="font-weight:600">{{ $task->category?->name ?? '—' }}</span>
+                            <span style="font-weight:600; font-weight: bold;">{{ $task->category?->name ?? '—' }}</span>
                         </span>
                         <span><i class="fa fa-building me-1"></i> {{ $task->whatsappGroup?->group_name ?? '—' }}</span>
                         <span><i class="fa fa-calendar-check me-1"></i> Due:

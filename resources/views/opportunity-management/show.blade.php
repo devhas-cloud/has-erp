@@ -953,11 +953,11 @@
                     @elseif($canUpdate && !$canApprove)
 
                         @if($opportunity->stage?->id === 2) <!-- Jika tahap Proposal & Quote -->
-                            <button type="button" class="btn btn-sm btn-accent" style="height: 15px"  onclick="openInReviewModal()">
+                            <button type="button" class="btn btn-sm btn-accent" style="height: 30px"  onclick="openInReviewModal()">
                                 <i class="fa fa-arrow-right"></i> In Review
                             </button>
 
-                        <button type="button" class="btn btn-accent-danger" onclick="openCloseLossModal()">
+                        <button type="button" class="btn btn-accent-danger" style="height: 30px" onclick="openCloseLossModal()">
                             <i class="fa fa-circle-xmark"></i> Close Lost
                         </button>
                         @endif

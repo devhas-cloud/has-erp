@@ -80,6 +80,8 @@ class ConfigurationController extends Controller
                         'type' => 'select_fk',
                         'source' => 'divisions',
                         'source_key' => 'division_name',
+                        'default' => 'Internal',
+                        'filter' => ['type' => 'Internal'],
                     ],
                     'user_ids' => [
                         'label' => 'Anggota',
@@ -114,6 +116,7 @@ class ConfigurationController extends Controller
                         'type' => 'select_fk',
                         'source' => 'divisions',
                         'source_key' => 'division_name',
+                        'filter' => ['type' => 'Internal'],
                     ],
                 ],
             ],
@@ -256,7 +259,6 @@ class ConfigurationController extends Controller
                 'model' => TaskCategory::class,
                 'label' => 'Task Category',
                 'slug' => 'task-categories',
-                'no_duplicate' => true,
                 'columns' => ['name', 'description', 'division_id', 'use_division_handler', 'visit'],
                 'rules' => [
                     'name' => 'required|string|max:50',
@@ -274,6 +276,7 @@ class ConfigurationController extends Controller
                         'type' => 'select_fk',
                         'source' => 'divisions',
                         'source_key' => 'division_name',
+                        'filter' => ['type' => 'Internal'],
                     ],
                     'use_division_handler' => [
                         'label' => 'Divisi Penanganan',
@@ -521,7 +524,8 @@ class ConfigurationController extends Controller
     {
         $search = $request->get('search', '');
 
-        $query = HandlingGroup::with(['users', 'division']);
+        $query = HandlingGroup::with(['users', 'division'])
+            ->whereHas('division', fn ($d) => $d->where('type', 'Internal'));
 
         if ($search) {
             $query->where(function ($q) use ($search) {

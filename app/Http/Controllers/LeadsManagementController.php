@@ -618,7 +618,7 @@ class LeadsManagementController extends Controller
             'types_accounts_companies_id' => 'required|exists:types_accounts_companies,id',
             'business_entities_id' => 'required|exists:business_entities,id',
             'business_values_id' => 'required|exists:business_values,id',
-            'interaction_levels_id' => 'required|exists:interaction_levels,id',
+            'interaction_levels_id' => 'nullable|exists:interaction_levels,id',
             'address_street' => 'required|string',
             'address_city' => 'required|string|max:100',
             'address_province' => 'required|string|max:100',
@@ -751,6 +751,7 @@ class LeadsManagementController extends Controller
                 'division_id' => $request->filled('division_id')
                     ? $request->integer('division_id')
                     : $lead->accountContact->divisions_id,
+                'close_date' => now()->addMonths(3)->format('Y-m-d'),
                 'source_id' => $lead->source_id,
                 'budget' => $request->boolean('budget'),
                 'authorize' => $request->boolean('authorize'),

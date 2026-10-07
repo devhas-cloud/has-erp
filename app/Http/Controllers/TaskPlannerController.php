@@ -510,7 +510,7 @@ class TaskPlannerController extends Controller
                 ->latest()
                 ->first();
             if ($quotation && $quotation->opportunity) {
-                $quotation->opportunity->update(['quote_ready' => true]);
+                $quotation->opportunity->update(['quote_ready' => true,'stage_id' => 2]); //maka status opportunity menjadi stage_id = 2 (Proposal/Quote)
             }
         }
 
@@ -518,8 +518,7 @@ class TaskPlannerController extends Controller
 
         // Task kategori quote/proposal diselesaikan lewat tombol "Complete Task",
         // sehingga log & pesan menyesuaikan (bukan approve).
-        $isCompleteCategory = $taskCategory
-            && in_array(strtolower($taskCategory->name), ['quote', 'proposal'], true);
+        $isCompleteCategory = $taskCategory && in_array(strtolower($taskCategory->name), ['quote', 'proposal'], true);
 
         $action = $isCompleteCategory ? 'complete_task' : 'approve_task';
         $description = $isCompleteCategory

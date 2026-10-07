@@ -119,7 +119,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Tanggal</label>
-                    <input type="date" id="wc-date" name="date" class="form-control" value="{{ $quotation?->date?->format('Y-m-d') }}">
+                    <input type="date" id="wc-date" name="date" class="form-control" value="{{ $quotation?->date?->format('Y-m-d') }}" readonly>
                 </div>
             </div>
         </div>

@@ -622,7 +622,8 @@ class OpportunityManagementController extends Controller
         $forecasts = Forecast::where('status', 'Active')->get();
         $lossReasons = LossReason::where('status', 'Active')->get();
         $divisions = Division::where('status', 'Active')->get();
-        $handlingGroups = HandlingGroup::orderBy('name')->get();
+        $handlingGroups = HandlingGroup::whereHas('division', fn ($d) => $d->where('type', 'Internal'))
+            ->orderBy('name')->get();
         $sources = Source::where('status', 'Active')->get();
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();

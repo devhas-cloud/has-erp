@@ -577,12 +577,6 @@
                     }
                 });
                 rows += '<td><div class="config-actions">';
-                @if ($canCreate)
-                    if (!cfgMeta.no_duplicate) {
-                        rows += '<button class="btn-icon btn-duplicate-config" title="Duplicate" data-table="' + table +
-                            '" data-id="' + item.id + '"><i class="fa-solid fa-copy"></i></button>';
-                    }
-                @endif
                 @if ($canUpdate)
                     rows += '<button class="btn-icon btn-edit-config" title="Edit" data-table="' + table +
                         '" data-id="' + item.id + '"><i class="fa-solid fa-pen-to-square"></i></button>';
@@ -727,21 +721,14 @@
             if (statusGroup) statusGroup.style.display = hasStatus ? '' : 'none';
             if (nameGroup) nameGroup.style.display = (cfg && cfg.no_name_field) ? 'none' : '';
 
-            if (mode === 'create') {
-                const isDuplicate = itemData != null;
-                if (modalTitle) modalTitle.textContent = (isDuplicate ? 'Duplicate ' : 'Tambah ') + label;
-            } else if (mode === 'edit' && itemData) {
-                if (modalTitle) modalTitle.textContent = 'Edit ' + label;
+            if (modalTitle) {
+                modalTitle.textContent = (mode === 'edit' && itemData ? 'Edit ' : 'Tambah ') + label;
             }
 
-            // Prefill saat edit ATAU duplicate (create + itemData).
+            // Prefill saat edit.
             if (itemData) {
-                if (editId) editId.value = mode === 'edit' ? itemData.id : '';
-                if (fieldName) {
-                    fieldName.value = itemData.name
-                        ? itemData.name + (mode === 'edit' ? '' : ' (copy)')
-                        : '';
-                }
+                if (editId) editId.value = itemData.id;
+                if (fieldName) fieldName.value = itemData.name || '';
                 if (hasDesc && fieldDesc) fieldDesc.value = itemData.description || '';
 
                 if (hasStatus && fieldStatus) {
@@ -977,58 +964,6 @@
                 });
             } else {
                 openModal('edit', table, data);
-            }
-        });
-
-        $(document).on('click', '.btn-duplicate-config', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            const table = $(this).data('table');
-            const id = $(this).data('id');
-            const cacheKey = table + '_' + id;
-
-            let data = itemsCache[cacheKey];
-
-            if (!data) {
-                const btn = $(this);
-                btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i>');
-
-                $.get(routes.list.replace('__TABLE__', table), {
-                    page: 1,
-                    per_page: 100
-                }, function(res) {
-                    const nameCol = res.columns[0];
-                    const cfg = configMeta[table] || {};
-                    res.data.forEach(function(item) {
-                        const entry = {
-                            id: item.id,
-                            name: item[nameCol] || '',
-                            description: item.description || '',
-                            status: item.status || 'Active'
-                        };
-                        if (cfg.extra_fields) {
-                            Object.keys(cfg.extra_fields).forEach(function(k) {
-                                entry[k] = item[k] !== undefined ? item[k] : null;
-                            });
-                        }
-                        itemsCache[table + '_' + item.id] = entry;
-                    });
-
-                    data = itemsCache[cacheKey];
-                    btn.prop('disabled', false).html('<i class="fa-solid fa-copy"></i>');
-
-                    if (data) {
-                        openModal('create', table, data);
-                    } else {
-                        toastr.error('Data tidak ditemukan.');
-                    }
-                }).fail(function() {
-                    btn.prop('disabled', false).html('<i class="fa-solid fa-copy"></i>');
-                    toastr.error('Gagal memuat data.');
-                });
-            } else {
-                openModal('create', table, data);
             }
         });
 

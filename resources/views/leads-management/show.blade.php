@@ -1502,7 +1502,7 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display:none">
                                     <label>Interaction Level <span class="text-danger">*</span></label>
                                     <select id="qual-interaction" required>
                                         <option value="">— Pilih —</option>
@@ -2523,7 +2523,7 @@ $(document).on('click', '#btn-confirm-qualified', function() {
         { field: '#qual-segmentation', label: 'Segmentation' },
         { field: '#qual-biz-entity', label: 'Business Entity' },
         { field: '#qual-biz-value', label: 'Business Value' },
-        { field: '#qual-interaction', label: 'Interaction Level' },
+       // { field: '#qual-interaction', label: 'Interaction Level' },
         { field: '#qual-addr-street', label: 'Address Street' },
         { field: '#qual-addr-city', label: 'City' },
         { field: '#qual-addr-province', label: 'Province' },
@@ -2555,7 +2555,7 @@ $(document).on('click', '#btn-confirm-qualified', function() {
         account_types_id: $('#qual-account-type').val(),
         business_entities_id: $('#qual-biz-entity').val(),
         business_values_id: $('#qual-biz-value').val(),
-        interaction_levels_id: $('#qual-interaction').val(),
+        // interaction_levels_id: $('#qual-interaction').val(),
         address_street: $('#qual-addr-street').val(),
         address_city: $('#qual-addr-city').val(),
         address_province: $('#qual-addr-province').val(),
