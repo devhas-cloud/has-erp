@@ -398,7 +398,7 @@ class GoodsRequestTest extends TestCase
             'part_number' => 'A-1',
             'description' => 'Sensor A',
             'qty' => 1,
-            'price' => 100000,
+            'selling_price' => 100000,
             'sort_order' => 1,
         ]);
 
@@ -520,9 +520,9 @@ class GoodsRequestTest extends TestCase
      */
     public function test_search_products_excludes_price_and_filters_by_search_term(): void
     {
-        MasterProduct::create(['name' => 'pH Sensor', 'code' => 'PH-100', 'division_id' => $this->division->id, 'price' => 5000000, 'status' => 'Active']);
-        MasterProduct::create(['name' => 'Flow Meter', 'code' => 'FM-200', 'division_id' => $this->division->id, 'price' => 2000000, 'status' => 'Active']);
-        MasterProduct::create(['name' => 'Nonaktif', 'code' => 'OFF-1', 'division_id' => $this->division->id, 'price' => 1000, 'status' => 'Inactive']);
+        MasterProduct::create(['name' => 'pH Sensor', 'code' => 'PH-100', 'division_id' => $this->division->id, 'selling_price' => 5000000, 'status' => 'Active']);
+        MasterProduct::create(['name' => 'Flow Meter', 'code' => 'FM-200', 'division_id' => $this->division->id, 'selling_price' => 2000000, 'status' => 'Active']);
+        MasterProduct::create(['name' => 'Nonaktif', 'code' => 'OFF-1', 'division_id' => $this->division->id, 'selling_price' => 1000, 'status' => 'Inactive']);
 
         $response = $this->actingAs($this->creator)
             ->getJson(route('goods-request.search-products'))

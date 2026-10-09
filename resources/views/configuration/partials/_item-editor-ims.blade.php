@@ -122,7 +122,8 @@
                     $key = $item->id ? 'db-'.$item->id : 'new-'.(++$wcKeySeq);
                     $parentKey = $item->parent_id ? 'db-'.$item->parent_id : '';
                     $isParent = $depth === 0;
-                    $price = $item->price ?? $item->product?->price;
+                    $price = $item->selling_price ?? $item->product?->selling_price;
+                    $purchasePrice = $item->purchase_price_currency ?? $item->product?->purchase_price ?? 0;
                     echo '<tr data-key="'.$key.'" data-parent="'.$parentKey.'" data-depth="'.$depth.'" class="wc-item-row">';
                     echo '<td class="text-center"><div class="form-control form-control-sm wc-item-no text-center" contenteditable="true" data-placeholder="1">'.e($item->item_no ?? '').'</div></td>';
                     echo '<td><input type="hidden" class="wc-product-id" value="'.$item->product_id.'">';
@@ -144,6 +145,7 @@
                     echo '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">'.$item->qty.'</div></td>';
                     echo '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">'.e($item->unit).'</div></td>';
                     echo '<td><input type="hidden" class="wc-price" value="'.e($price).'">';
+                    echo '<input type="hidden" class="wc-purchase-price" value="'.e($purchasePrice).'">';
                     echo '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="'.($price ? number_format($price, 0, '.', ',') : '').'" placeholder="0"></td>';
                     echo '<td class="text-center">';
                     echo '<div class="d-flex justify-content-center gap-1">';
@@ -280,7 +282,8 @@ function addItemRow(item, parentKey) {
         depth = (parseInt(parentRow.attr('data-depth')) || 0) + 1;
     }
     var isParent = !parentKey;
-    var priceRaw = (item.price != null && item.price !== '') ? item.price : '';
+    var priceRaw = (item.selling_price != null && item.selling_price !== '') ? item.selling_price : '';
+    var purchaseRaw = (item.purchase_price_currency != null && item.purchase_price_currency !== '') ? item.purchase_price_currency : '';
 
     var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" class="wc-item-row">';
     html += '<td class="text-center"><div class="form-control form-control-sm wc-item-no text-center" contenteditable="true" data-placeholder="1">' + (item.item_no || '') + '</div></td>';
@@ -303,6 +306,7 @@ function addItemRow(item, parentKey) {
     html += '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">' + (item.qty != null && item.qty !== '' ? item.qty : 1) + '</div></td>';
     html += '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">' + (item.unit || '') + '</div></td>';
     html += '<td><input type="hidden" class="wc-price" value="' + priceRaw + '">';
+    html += '<input type="hidden" class="wc-purchase-price" value="' + purchaseRaw + '">';
     html += '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="' + (priceRaw !== '' ? priceDisplayOf(priceRaw) : '') + '" placeholder="0"></td>';
     html += '<td class="text-center"><div class="d-flex justify-content-center gap-1">';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
@@ -449,7 +453,8 @@ function collectItems() {
             part_number: $row.find('.wc-part').val().trim(),
             description: descHtml,
             qty: isNaN(qty) || qty < 1 ? 1 : qty,
-            price: $row.find('.wc-price').val().trim() || null,
+            selling_price: $row.find('.wc-price').val().trim() || null,
+            purchase_price_currency: $row.find('.wc-purchase-price').val().trim() || null,
             unit: $row.find('.wc-unit').text().trim() || null
         });
     });
@@ -532,7 +537,8 @@ $(document).ready(function() {
                     name: rowData.name,
                     category: rowData.category,
                     description: rowData.description,
-                    price: rowData.price
+                    selling_price: rowData.selling_price,
+                    purchase_price_currency: rowData.purchase_price_currency
                 };
             }
         } else {

@@ -606,7 +606,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'category' => 'pH',
             'description' => 'parameter spectro sensor pH',
             'division_id' => $this->enviro->id,
-            'price' => 12500000,
+            'selling_price' => 12500000,
             'status' => 'Active',
         ]);
         // Produk nama mirip tapi divisi Water (non-Enviro) => tidak boleh tampil
@@ -616,7 +616,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'brand' => 's::can',
             'category' => 'pH',
             'division_id' => $this->other->id,
-            'price' => 1000,
+            'selling_price' => 1000,
             'status' => 'Active',
         ]);
         // Produk nonaktif walau divisi Enviro => tidak boleh tampil
@@ -625,7 +625,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'code' => 'X-001',
             'brand' => 'x',
             'division_id' => $this->enviro->id,
-            'price' => 1000,
+            'selling_price' => 1000,
             'status' => 'Inactive',
         ]);
 
@@ -656,7 +656,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'brand' => 's::can',
             'category' => 'Ammonia',
             'division_id' => $this->enviro->id,
-            'price' => 15000000,
+            'selling_price' => 15000000,
             'status' => 'Active',
         ]);
 
@@ -682,9 +682,9 @@ class EnviroConfigurationApprovalTest extends TestCase
         $this->assertSame($product->id, $quotation->items()->first()->product_id);
         $this->assertSame('ammo::lyser pro', $quotation->items()->first()->product->name);
         // Price diambil dari database (master_products) via product_id.
-        $this->assertEquals(15000000, $quotation->items()->first()->price);
-        // Tanpa master currency -> dianggap base: price_currency = price, currency IDR.
-        $this->assertEquals(15000000, $quotation->items()->first()->price_currency);
+        $this->assertEquals(15000000, $quotation->items()->first()->selling_price);
+        // Tanpa master currency -> dianggap base: selling_price_currency = price, currency IDR.
+        $this->assertEquals(15000000, $quotation->items()->first()->selling_price_currency);
         $this->assertSame('IDR', $quotation->items()->first()->currency);
     }
 
@@ -697,7 +697,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'category' => 'pH',
             'division_id' => $this->enviro->id,
             'description' => 'pH sensor',
-            'price' => 5000000,
+            'selling_price' => 5000000,
             'status' => 'Active',
         ]);
 
@@ -708,8 +708,8 @@ class EnviroConfigurationApprovalTest extends TestCase
             'task_id' => $task->id,
             'parameter_note' => 'pH',
             'items' => [
-                ['_key' => 'new-1', 'product_id' => $product->id, 'category' => 'pH', 'description' => 'sensor', 'qty' => 1, 'price' => 12345],
-                ['_key' => 'new-2', 'product_id' => $product->id, 'category' => 'pH', 'description' => 'sensor 0', 'qty' => 0, 'price' => 999],
+                ['_key' => 'new-1', 'product_id' => $product->id, 'category' => 'pH', 'description' => 'sensor', 'qty' => 1, 'selling_price' => 12345],
+                ['_key' => 'new-2', 'product_id' => $product->id, 'category' => 'pH', 'description' => 'sensor 0', 'qty' => 0, 'selling_price' => 999],
                 ['_key' => 'new-3', 'product_id' => null, 'category' => 'pH', 'description' => 'manual', 'qty' => 1],
             ],
         ])->assertOk();
@@ -718,11 +718,11 @@ class EnviroConfigurationApprovalTest extends TestCase
         $rows = $quotation->items()->orderBy('sort_order')->get();
 
         // qty >= 1 dengan product_id → price dari DB (5000000), abaikan input user 12345.
-        $this->assertEquals(5000000, $rows[0]->price);
+        $this->assertEquals(5000000, $rows[0]->selling_price);
         // qty 0 → price 0 meski ada product_id.
-        $this->assertEquals(0, $rows[1]->price);
+        $this->assertEquals(0, $rows[1]->selling_price);
         // tanpa product_id → price 0.
-        $this->assertEquals(0, $rows[2]->price);
+        $this->assertEquals(0, $rows[2]->selling_price);
     }
 
     public function test_store_price_follows_currency_rate(): void
@@ -741,7 +741,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'category' => 'pH',
             'division_id' => $this->enviro->id,
             'description' => 'harga dalam base',
-            'price' => 5000000,
+            'selling_price' => 5000000,
             'currency_id' => $base->id,
             'status' => 'Active',
         ]);
@@ -753,7 +753,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'category' => 'pH',
             'division_id' => $this->enviro->id,
             'description' => 'harga dalam USD',
-            'price' => 100,
+            'selling_price' => 100,
             'currency_id' => $usd->id,
             'status' => 'Active',
         ]);
@@ -773,17 +773,17 @@ class EnviroConfigurationApprovalTest extends TestCase
         $quotation = QuoteConfiguration::latest('id')->firstOrFail();
         $rows = $quotation->items()->orderBy('sort_order')->get();
 
-        // Produk base (IDR) → price = price_currency = 5.000.000, currency IDR.
-        $this->assertEquals(5000000, $rows[0]->price);
-        $this->assertEquals(5000000, $rows[0]->price_currency);
+        // Produk base (IDR) → price = selling_price_currency = 5.000.000, currency IDR.
+        $this->assertEquals(5000000, $rows[0]->selling_price);
+        $this->assertEquals(5000000, $rows[0]->selling_price_currency);
         $this->assertSame('IDR', $rows[0]->currency);
-        // Produk USD → price_currency 100 (USD), price = 100 × 20.000 = 2.000.000.
-        $this->assertEquals(2000000, $rows[1]->price);
-        $this->assertEquals(100, $rows[1]->price_currency);
+        // Produk USD → selling_price_currency 100 (USD), price = 100 × 20.000 = 2.000.000.
+        $this->assertEquals(2000000, $rows[1]->selling_price);
+        $this->assertEquals(100, $rows[1]->selling_price_currency);
         $this->assertSame('USD', $rows[1]->currency);
         // Tanpa product_id → harga 0, tanpa mata uang.
-        $this->assertEquals(0, $rows[2]->price);
-        $this->assertEquals(0, $rows[2]->price_currency);
+        $this->assertEquals(0, $rows[2]->selling_price);
+        $this->assertEquals(0, $rows[2]->selling_price_currency);
         $this->assertNull($rows[2]->currency);
     }
 
@@ -799,7 +799,7 @@ class EnviroConfigurationApprovalTest extends TestCase
             'brand' => 's::can',
             'category' => 'pH',
             'division_id' => $this->enviro->id,
-            'price' => 1000,
+            'selling_price' => 1000,
             'status' => 'Active',
         ]);
 
@@ -837,7 +837,7 @@ class EnviroConfigurationApprovalTest extends TestCase
         $config = QuoteConfiguration::latest('id')->firstOrFail();
         $this->assertSame(30, $config->items()->count());
         $this->assertSame(20, $config->items()->whereNotNull('parent_id')->count());
-        $this->assertEquals(1000, $config->items()->whereNotNull('parent_id')->first()->price);
+        $this->assertEquals(1000, $config->items()->whereNotNull('parent_id')->first()->selling_price);
     }
 
     public function test_fetch_template_returns_parent_and_children(): void

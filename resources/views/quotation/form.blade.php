@@ -391,7 +391,7 @@
                                         echo '</div></div></td>';
                                         echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" data-fx-table="items"'.$fxQty.' value="'.($item['qty'] ?? '').'"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end'.($syncSource ? ' qt-price-synced' : '').'" data-fx-table="items"'.$fxPrice.($syncSource ? ' readonly' : '').' value="'.($item['price'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end'.($syncSource ? ' qt-price-synced' : '').'" data-fx-table="items"'.$fxPrice.($syncSource ? ' readonly' : '').' value="'.($item['selling_price'] ?? '').'"></td>';
                                         echo '<td class="qt-amount text-end"></td>';
                                         echo '<td class="text-center">';
                                         echo '<button type="button" class="btn-icon" title="Add Item dari Config" onclick="openQtItemPicker(this)"><i class="fa fa-cart-plus"></i></button>';
@@ -500,7 +500,7 @@
                                         echo '</div></div></td>';
                                         echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" data-fx-table="costs"'.$fxCQty.' value="'.($item['qty'] ?? '').'"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-cost-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" data-fx-table="costs"'.$fxCPrice.' value="'.($item['price'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" data-fx-table="costs"'.$fxCPrice.' value="'.($item['selling_price'] ?? '').'"></td>';
                                         echo '<td class="qt-cost-amount text-end"></td>';
                                         echo '<td class="text-center">';
                                         echo '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtCostItem(this)"><i class="fa fa-plus"></i></button>';
@@ -1057,7 +1057,7 @@ function addQtRow(item, parentKey) {
     html += '</div></div></td>';
     html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" data-fx-table="items" value="' + (item.qty != null ? item.qty : '') + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-unit" value="' + (item.unit || '') + '"></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" data-fx-table="items" value="' + (item.price != null ? item.price : '') + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end" data-fx-table="items" value="' + (item.selling_price != null ? item.selling_price : '') + '"></td>';
     html += '<td class="qt-amount text-end"></td>';
     html += '<td class="text-center">';
     html += '<button type="button" class="btn-icon" title="Add Item dari Config" onclick="openQtItemPicker(this)"><i class="fa fa-cart-plus"></i></button>';
@@ -1095,7 +1095,7 @@ function addQtChild(btn) {
     if (btn) {
         parentKey = $(btn).closest('tr').attr('data-key');
     }
-    addQtRow({ description: '', qty: '', price: '', unit: '', part_number: '', item_no: '', quote_configuration_id: '' }, parentKey);
+    addQtRow({ description: '', qty: '', selling_price: '', unit: '', part_number: '', item_no: '', quote_configuration_id: '' }, parentKey);
 }
 
 function removeQtItem(btn) {
@@ -1148,7 +1148,7 @@ function qtCollectItems() {
             part_number: $(this).find('.qt-pn').val(),
             description: $(this).find('.qt-desc').html(),
             qty: qtToRaw($qty.val()),
-            price: qtToRaw($price.val()),
+            selling_price: qtToRaw($price.val()),
             cost_sync_source: $(this).attr('data-cost-sync-source') || null,
             unit: $(this).find('.qt-unit').val(),
             formula: formula
@@ -1218,7 +1218,7 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
         var parentKey = it.parent_id ? String(it.parent_id) : '';
         var fxQty = (it.formula && it.formula.qty) ? ' data-fx="' + String(it.formula.qty).replace(/"/g, '&quot;') + '"' : '';
         var fxPrice = (it.formula && it.formula.price) ? ' data-fx="' + String(it.formula.price).replace(/"/g, '&quot;') + '"' : '';
-        var priceVal = it.price_currency != null ? it.price_currency : (it.price != null ? it.price : '');
+        var priceVal = it.selling_price_currency != null ? it.selling_price_currency : (it.selling_price != null ? it.selling_price : '');
         html += '<tr class="qc-item" data-key="' + key + '" data-parent="' + parentKey + '" data-depth="' + depth + '" data-cat="' + escAttr(cat) + '">';
         html += '<td class="text-center qt-row-col qc-row-num"></td>';
         html += '<td style="padding-left:' + (depth * 24) + 'px"><input type="text" class="form-control form-control-sm qc-pn" value="' + (it.part_number || '') + '"></td>';
@@ -1226,7 +1226,7 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
         html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
         html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" data-fx-table="config:' + configId + '"' + fxQty + ' value="' + (it.qty != null ? it.qty : '') + '"></td>';
         html += '<td>' + qtCurrencySelect(it.currency) + '</td>';
-        html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + priceVal + '"></td>';
+        html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + priceVal + '"><input type="hidden" class="qc-purchase-price" value="' + (it.purchase_price_currency != null ? it.purchase_price_currency : '') + '"></td>';
         html += '<td class="qc-idr text-end"></td>';
         html += '<td class="qc-amount text-end"></td>';
         html += '<td class="text-center">';
@@ -1462,7 +1462,7 @@ function qcRowHtml(configId, item, parentKey, key, cat) {
     item = item || {};
     var fxQty = (item.formula && item.formula.qty) ? ' data-fx="' + String(item.formula.qty).replace(/"/g, '&quot;') + '"' : '';
     var fxPrice = (item.formula && item.formula.price) ? ' data-fx="' + String(item.formula.price).replace(/"/g, '&quot;') + '"' : '';
-    var priceVal = item.price_currency != null ? item.price_currency : (item.price != null ? item.price : '');
+    var priceVal = item.price_currency != null ? item.price_currency : (item.selling_price != null ? item.selling_price : '');
     var html = '<tr class="qc-item" data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" data-cat="' + String(cat).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">';
     html += '<td class="text-center qt-row-col qc-row-num"></td>';
     html += '<td style="padding-left:' + (depth * 24) + 'px"><input type="text" class="form-control form-control-sm qc-pn" value="' + (item.part_number || '') + '"></td>';
@@ -1470,7 +1470,7 @@ function qcRowHtml(configId, item, parentKey, key, cat) {
     html += '<div class="qt-desc-toolbar"><button type="button" data-cmd="bold" title="Bold"><b>B</b></button><button type="button" data-cmd="italic" title="Italic"><i>I</i></button><button type="button" data-cmd="underline" title="Underline"><u>U</u></button></div></div></td>';
     html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qc-qty" data-fx-table="config:' + configId + '"' + fxQty + ' value="' + (item.qty != null ? item.qty : '') + '"></td>';
     html += '<td>' + qtCurrencySelect(item.currency) + '</td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + priceVal + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qc-price text-end" data-fx-table="config:' + configId + '"' + fxPrice + ' value="' + priceVal + '"><input type="hidden" class="qc-purchase-price" value="' + (item.purchase_price_currency != null ? item.purchase_price_currency : '') + '"></td>';
     html += '<td class="qc-idr text-end"></td>';
     html += '<td class="qc-amount text-end"></td>';
     html += '<td class="text-center">';
@@ -1637,8 +1637,9 @@ function qtCollectConfigItems() {
                 description: $(this).find('.qc-desc').html(),
                 qty: qtToRaw($qty.val()),
                 currency: $(this).find('.qc-currency').val() || '',
-                price_currency: qtToRaw($price.val()),
-                price: qtToIdr(qtToRaw($price.val()), $(this).find('.qc-currency').val()),
+                selling_price_currency: qtToRaw($price.val()),
+                selling_price: qtToIdr(qtToRaw($price.val()), $(this).find('.qc-currency').val()),
+                purchase_price_currency: $(this).find('.qc-purchase-price').val() || null,
                 unit: '',
                 formula: formula
             });
@@ -1753,8 +1754,9 @@ $(document).ready(function() {
                     name: rowData.name,
                     category: rowData.category,
                     description: rowData.description,
-                    price: rowData.price,
-                    price_currency: rowData.price_currency,
+                    selling_price: rowData.selling_price,
+                    selling_price_currency: rowData.selling_price_currency,
+                    purchase_price_currency: rowData.purchase_price_currency,
                     currency: rowData.currency
                 };
             }
@@ -1781,8 +1783,9 @@ $(document).ready(function() {
                 part_number: p.code || '',
                 description: p.description || p.name || '',
                 qty: 1,
-                price: p.price,
-                price_currency: p.price_currency != null ? p.price_currency : p.price,
+                selling_price: p.selling_price,
+                selling_price_currency: p.selling_price_currency != null ? p.selling_price_currency : p.selling_price,
+                purchase_price_currency: p.purchase_price_currency,
                 currency: p.currency
             };
             var html = qcRowHtml(configId, item, qtcfgTargetParentKey, key);
@@ -1975,7 +1978,7 @@ function qtCostRowHtml(item, parentKey) {
     html += '</div></div></td>';
     html += '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-cost-qty" data-fx-table="costs"' + (item.formula && item.formula.qty ? ' data-fx="' + String(item.formula.qty).replace(/"/g, '&quot;') + '"' : '') + ' value="' + (item.qty != null ? item.qty : '') + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-cost-unit" value="' + (item.unit || '') + '"></td>';
-    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" data-fx-table="costs"' + (item.formula && item.formula.price ? ' data-fx="' + String(item.formula.price).replace(/"/g, '&quot;') + '"' : '') + ' value="' + (item.price != null ? item.price : '') + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-cost-price text-end" data-fx-table="costs"' + (item.formula && item.formula.price ? ' data-fx="' + String(item.formula.price).replace(/"/g, '&quot;') + '"' : '') + ' value="' + (item.selling_price != null ? item.selling_price : '') + '"></td>';
     html += '<td class="qt-cost-amount text-end"></td>';
     html += '<td class="text-center">';
     html += '<button type="button" class="btn-icon" title="Tambah Anak" onclick="addQtCostItem(this)"><i class="fa fa-plus"></i></button>';
@@ -2014,7 +2017,7 @@ function qtCostSyncEmpty() {
 
 function addQtCostItem(btn) {
     var parentKey = btn ? $(btn).closest('tr').attr('data-key') : null;
-    qtCostRowHtml({ description: '', qty: '', price: '', unit: '', item_no: '' }, parentKey);
+    qtCostRowHtml({ description: '', qty: '', selling_price: '', unit: '', item_no: '' }, parentKey);
 }
 
 function removeQtCostItem(btn) {
@@ -2050,7 +2053,7 @@ function qtCollectCostItems() {
             item_no: $(this).find('.qt-cost-no').val(),
             description: desc,
             qty: qtToRaw($qty.val()),
-            price: qtToRaw($price.val()),
+            selling_price: qtToRaw($price.val()),
             unit: $(this).find('.qt-cost-unit').val(),
             formula: formula
         });
@@ -2613,7 +2616,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
             if (cc.length) {
                 s += leafTotal(tree, ch);
             } else {
-                s += (parseFloat(qtToRaw(ch.qty)) || 0) * (parseFloat(qtToRaw(ch.price)) || 0);
+                s += (parseFloat(qtToRaw(ch.qty)) || 0) * (parseFloat(qtToRaw(ch.selling_price)) || 0);
             }
         });
         return s;
@@ -2630,8 +2633,8 @@ function qtBuildConfigPicker(container, $legend, clickable) {
         var label = it.change_status.charAt(0).toUpperCase() + it.change_status.slice(1);
         var title = '';
         if (it.change_status === 'berubah' && it.previous) {
-            title = 'Sebelumnya: qty ' + (it.previous.qty == null ? '-' : it.previous.qty) + ', harga ' + qtFmtPrice(it.previous.price)
-                + (it.previous.currency && it.previous.currency !== 'IDR' ? ' (' + it.previous.currency + ' ' + qtFmtPrice(it.previous.price_currency) + ')' : '');
+            title = 'Sebelumnya: qty ' + (it.previous.qty == null ? '-' : it.previous.qty) + ', harga ' + qtFmtPrice(it.previous.selling_price)
+                + (it.previous.currency && it.previous.currency !== 'IDR' ? ' (' + it.previous.currency + ' ' + qtFmtPrice(it.previous.selling_price_currency) + ')' : '');
         } else if (it.change_status === 'dihapus') {
             title = 'Item ini ada di snapshot quotation tetapi sudah tidak ada di configuration terbaru';
         } else if (it.change_status === 'baru') {
@@ -2643,16 +2646,16 @@ function qtBuildConfigPicker(container, $legend, clickable) {
     var prevLine = function(it) {
         if (!it || it.change_status !== 'berubah' || !it.previous) return '';
         var p = it.previous;
-        var harga = qtFmtPrice(p.price);
-        if (p.currency && p.currency !== 'IDR' && p.price_currency != null) {
-            harga += ' (' + qtCurrencySymbol(p.currency) + ' ' + qtFmtPrice(p.price_currency) + ')';
+        var harga = qtFmtPrice(p.selling_price);
+        if (p.currency && p.currency !== 'IDR' && p.selling_price_currency != null) {
+            harga += ' (' + qtCurrencySymbol(p.currency) + ' ' + qtFmtPrice(p.selling_price_currency) + ')';
         }
         return '<span class="qt-picker-prev"><i class="fa fa-clock-rotate-left me-1"></i>Sebelumnya: qty ' + (p.qty == null ? '-' : p.qty) + ', harga Rp ' + harga + '</span>';
     };
     // Harga sebelum kurs (mata uang asing) sebagai keterangan kecil di bawah harga Rp.
     var fxLine = function(it) {
-        if (!it || !it.currency || it.currency === 'IDR' || it.price_currency == null) return '';
-        return '<span class="qt-picker-fx">' + $('<div>').text(qtCurrencySymbol(it.currency) + ' ' + qtFmtPrice(it.price_currency)).html() + '</span>';
+        if (!it || !it.currency || it.currency === 'IDR' || it.selling_price_currency == null) return '';
+        return '<span class="qt-picker-fx">' + $('<div>').text(qtCurrencySymbol(it.currency) + ' ' + qtFmtPrice(it.selling_price_currency)).html() + '</span>';
     };
     var theadHtml = '<thead><tr>' +
         '<th style="width:170px">Part Number</th>' +
@@ -2717,7 +2720,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
                 if (hasKids(tree, root)) {
                     addPoolRow('-', desc, root.qty, leafTotal(tree, root), 0, root);
                 } else {
-                    addPoolRow(root.part_number || '-', desc, root.qty, parseFloat(qtToRaw(root.price)) || 0, 0, root);
+                    addPoolRow(root.part_number || '-', desc, root.qty, parseFloat(qtToRaw(root.selling_price)) || 0, 0, root);
                 }
                 var walk = function(it, depth) {
                     var key = it.id != null ? it.id : (it._key || it.__key);
@@ -2726,7 +2729,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
                             ch.part_number || '-',
                             ch.description || ch.name || '',
                             ch.qty,
-                            parseFloat(qtToRaw(ch.price)) || 0,
+                            parseFloat(qtToRaw(ch.selling_price)) || 0,
                             depth,
                             ch
                         );
@@ -2750,7 +2753,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
                     root.part_number || '-',
                     root.description || root.name || '',
                     root.qty,
-                    parseFloat(qtToRaw(root.price)) || 0,
+                    parseFloat(qtToRaw(root.selling_price)) || 0,
                     0,
                     root
                 );

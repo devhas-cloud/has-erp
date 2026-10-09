@@ -91,11 +91,11 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Total nilai PO (IDR, hasil qty x price per baris).
+     * Total nilai PO (IDR, hasil qty x selling_price per baris).
      */
     public function grandTotal(): float
     {
-        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0) * (float) ($item->price ?? 0));
+        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0) * (float) ($item->selling_price ?? 0));
     }
 
     /**
@@ -236,7 +236,7 @@ class PurchaseOrder extends Model
 
     /**
      * Total untuk dicetak: dalam mata uang asli bila seragam (jumlah
-     * qty x price_currency), atau dalam Rupiah (grandTotal()) bila item
+     * qty x selling_price_currency), atau dalam Rupiah (grandTotal()) bila item
      * memakai mata uang campuran.
      */
     public function printTotal(): float
@@ -245,6 +245,6 @@ class PurchaseOrder extends Model
             return $this->grandTotal();
         }
 
-        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0) * (float) ($item->price_currency ?? 0));
+        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0) * (float) ($item->selling_price_currency ?? 0));
     }
 }

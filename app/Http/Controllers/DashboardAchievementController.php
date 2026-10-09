@@ -74,7 +74,7 @@ class DashboardAchievementController extends Controller
                 'divisions.id as division_id,
                  master_products.brand,
                  COUNT(DISTINCT quotation_items.id) as item_count,
-                 SUM(quotation_items.qty * quotation_items.price) as total_value'
+                 SUM(quotation_items.qty * quotation_items.selling_price) as total_value'
             )
             ->orderBy('division_id')
             ->orderByDesc('total_value')

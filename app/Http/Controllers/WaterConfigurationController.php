@@ -264,7 +264,8 @@ class WaterConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'nullable|integer',
-            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
+            'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
 
@@ -412,7 +413,7 @@ class WaterConfigurationController extends Controller
         $products = $query
             ->skip($start)
             ->take($length)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'selling_price', 'purchase_price']);
 
         $data = $products->map(fn ($product) => [
             'id' => $product->id,
@@ -421,7 +422,8 @@ class WaterConfigurationController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
-            'price' => $product->price,
+            'selling_price' => $product->selling_price,
+            'purchase_price' => $product->purchase_price,
         ])->all();
 
         return response()->json([
@@ -457,7 +459,8 @@ class WaterConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'nullable|integer',
-            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
+            'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
 
@@ -854,8 +857,9 @@ class WaterConfigurationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
-                    'price_currency' => $item->price_currency,
+                    'selling_price' => $item->selling_price,
+                    'selling_price_currency' => $item->selling_price_currency,
+                    'purchase_price_currency' => $item->purchase_price_currency,
                     'currency' => $item->currency,
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
@@ -1061,9 +1065,10 @@ class WaterConfigurationController extends Controller
      *   5. pasang parent_id semua anak dalam 1 UPDATE ... CASE
      *
      * Harga seluruhnya dari master product:
-     *   currency       = currencies.name milik produk (base bila produk tanpa currency)
-     *   price_currency = master_products.price (sebelum kurs)
-     *   price          = master_products.price x currencies.rate (IDR sesudah kurs; base -> 1)
+     *   currency               = currencies.name milik produk (base bila produk tanpa currency)
+     *   selling_price_currency = master_products.selling_price (sebelum kurs)
+     *   selling_price          = master_products.selling_price x currencies.rate (IDR sesudah kurs; base -> 1)
+     *   purchase_price_currency = master_products.purchase_price (snapshot)
      */
     private function syncItems(QuoteConfiguration $quotation, array $items): void
     {
@@ -1073,7 +1078,7 @@ class WaterConfigurationController extends Controller
 
         $products = MasterProduct::with('currency')
             ->whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
-            ->get(['id', 'price', 'currency_id'])
+            ->get(['id', 'selling_price', 'purchase_price', 'currency_id'])
             ->keyBy('id');
 
         $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
@@ -1095,8 +1100,9 @@ class WaterConfigurationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => $qty,
-                'price' => $pricing['price'],
-                'price_currency' => $pricing['price_currency'],
+                'selling_price' => $pricing['selling_price'],
+                'selling_price_currency' => $pricing['selling_price_currency'],
+                'purchase_price_currency' => $pricing['purchase_price_currency'],
                 'currency' => $pricing['currency'],
                 'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
@@ -1135,23 +1141,24 @@ class WaterConfigurationController extends Controller
     /**
      * Harga item dari master product. Qty <= 0 atau tanpa produk -> harga 0.00
      *
-     * @return array{currency: ?string, price_currency: float, price: float}
+     * @return array{currency: ?string, selling_price_currency: float, selling_price: float, purchase_price_currency: float}
      */
     private function pricingFromProduct(?MasterProduct $product, int $qty, string $baseCurrency): array
     {
         if (! $product) {
-            return ['currency' => null, 'price_currency' => 0.00, 'price' => 0.00];
+            return ['currency' => null, 'selling_price_currency' => 0.00, 'selling_price' => 0.00, 'purchase_price_currency' => 0.00];
         }
 
         $currency = $product->currency;
         $isForeign = $currency && ! $currency->is_base;
         $rate = $isForeign ? (float) $currency->rate : 1.0;
-        $priceCurrency = $qty > 0 ? round((float) $product->price, 2) : 0.00;
+        $priceCurrency = $qty > 0 ? round((float) $product->selling_price, 2) : 0.00;
 
         return [
             'currency' => $isForeign ? strtoupper($currency->name) : $baseCurrency,
-            'price_currency' => $priceCurrency,
-            'price' => round($priceCurrency * $rate, 2),
+            'selling_price_currency' => $priceCurrency,
+            'selling_price' => round($priceCurrency * $rate, 2),
+            'purchase_price_currency' => round((float) $product->purchase_price, 2),
         ];
     }
 

@@ -19,7 +19,7 @@ class QuotationItem extends Model
         'part_number',
         'description',
         'qty',
-        'price',
+        'selling_price',
         'cost_sync_source',
         'unit',
         'formula',
@@ -30,7 +30,7 @@ class QuotationItem extends Model
     {
         return [
             'qty' => 'integer',
-            'price' => 'float',
+            'selling_price' => 'float',
             'formula' => 'array',
         ];
     }

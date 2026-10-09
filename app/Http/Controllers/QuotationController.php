@@ -203,9 +203,10 @@ class QuotationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    // price = IDR sesudah kurs; price_currency + currency = snapshot sebelum kurs.
-                    'price' => $item->price,
-                    'price_currency' => $item->price_currency ?? $item->price,
+                    // selling_price = IDR sesudah kurs; selling_price_currency + currency = snapshot sebelum kurs.
+                    'selling_price' => $item->selling_price,
+                    'selling_price_currency' => $item->selling_price_currency ?? $item->selling_price,
+                    'purchase_price_currency' => $item->purchase_price_currency,
                     'currency' => strtoupper($item->currency ?: $base),
                     'unit' => $item->unit,
                 ];
@@ -268,7 +269,7 @@ class QuotationController extends Controller
         $base = Currency::baseName();
         foreach ($configs as $c) {
             foreach ($c->items as $item) {
-                $key = ($item->part_number ?: '').'|'.($item->description ?: '').'|'.(string) $item->price;
+                $key = ($item->part_number ?: '').'|'.($item->description ?: '').'|'.(string) $item->selling_price;
                 if (isset($seen[$key])) {
                     continue;
                 }
@@ -280,8 +281,9 @@ class QuotationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
-                    'price_currency' => $item->price_currency ?? $item->price,
+                    'selling_price' => $item->selling_price,
+                    'selling_price_currency' => $item->selling_price_currency ?? $item->selling_price,
+                    'purchase_price_currency' => $item->purchase_price_currency,
                     'currency' => strtoupper($item->currency ?: $base),
                     'unit' => $item->unit,
                 ];
@@ -422,13 +424,13 @@ class QuotationController extends Controller
             $matched[$g][$key] = true;
             $liveIdByKey[$g][$key] = $item['id'];
             $changed = (int) $prev->qty !== (int) $item['qty']
-                || round((float) $prev->price, 2) !== round((float) $item['price'], 2);
+                || round((float) $prev->selling_price, 2) !== round((float) $item['selling_price'], 2);
 
             $item['change_status'] = $changed ? 'berubah' : 'sama';
             $item['previous'] = [
                 'qty' => $prev->qty,
-                'price' => $prev->price,
-                'price_currency' => $prev->price_currency,
+                'selling_price' => $prev->selling_price,
+                'selling_price_currency' => $prev->selling_price_currency,
                 'currency' => $prev->currency,
             ];
             $summary[$changed ? 'berubah' : 'sama']++;
@@ -467,8 +469,8 @@ class QuotationController extends Controller
                         'part_number' => $si->part_number,
                         'description' => $si->description,
                         'qty' => $si->qty,
-                        'price' => $si->price,
-                        'price_currency' => $si->price_currency,
+                        'selling_price' => $si->selling_price,
+                        'selling_price_currency' => $si->selling_price_currency,
                         'currency' => $si->currency,
                         'unit' => $si->unit,
                         'change_status' => 'dihapus',
@@ -615,7 +617,7 @@ class QuotationController extends Controller
         $products = $query
             ->skip($start)
             ->take($length)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price', 'currency_id']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'selling_price', 'purchase_price', 'currency_id']);
 
         $data = $products->map(fn ($product) => [
             'id' => $product->id,
@@ -624,8 +626,9 @@ class QuotationController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
-            'price' => $product->priceInBase(),
-            'price_currency' => (float) $product->price,
+            'selling_price' => $product->sellingPriceInBase(),
+            'selling_price_currency' => (float) $product->selling_price,
+            'purchase_price_currency' => (float) $product->purchase_price,
             'currency' => strtoupper($product->currency?->name ?: Currency::baseName()),
         ])->all();
 
@@ -664,7 +667,7 @@ class QuotationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
+                    'selling_price' => $item->selling_price,
                     'unit' => $item->unit,
                 ];
                 $walk($item->id);
@@ -1002,7 +1005,7 @@ class QuotationController extends Controller
                 'part_number' => $item->part_number,
                 'description' => $item->description,
                 'qty' => $item->qty,
-                'price' => $item->price,
+                'selling_price' => $item->selling_price,
                 'cost_sync_source' => $item->cost_sync_source,
                 'unit' => $item->unit,
                 'formula' => $item->formula,
@@ -1016,8 +1019,9 @@ class QuotationController extends Controller
                 'part_number' => $item->part_number,
                 'description' => $item->description,
                 'qty' => $item->qty,
-                'price' => $item->price,
-                'price_currency' => $item->price_currency,
+                'selling_price' => $item->selling_price,
+                'selling_price_currency' => $item->selling_price_currency,
+                'purchase_price_currency' => $item->purchase_price_currency,
                 'currency' => $item->currency,
                 'unit' => $item->unit,
                 'formula' => $item->formula,
@@ -1028,7 +1032,7 @@ class QuotationController extends Controller
                 'item_no' => $item->item_no,
                 'description' => $item->description,
                 'qty' => $item->qty,
-                'price' => $item->price,
+                'selling_price' => $item->selling_price,
                 'unit' => $item->unit,
                 'formula' => $item->formula,
             ])->all(),
@@ -1536,7 +1540,7 @@ class QuotationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
+                    'selling_price' => $item->selling_price,
                     'cost_sync_source' => $item->cost_sync_source,
                     'unit' => $item->unit,
                     'formula' => $item->formula ?: null,
@@ -1552,8 +1556,9 @@ class QuotationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
-                    'price_currency' => $item->price_currency,
+                    'selling_price' => $item->selling_price,
+                    'selling_price_currency' => $item->selling_price_currency,
+                    'purchase_price_currency' => $item->purchase_price_currency,
                     'currency' => $item->currency,
                     'unit' => $item->unit,
                     'formula' => $item->formula ?: null,
@@ -1569,7 +1574,7 @@ class QuotationController extends Controller
                     'parent_id' => $item->parent_id ? ($costIdMap[$item->parent_id] ?? null) : null,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
+                    'selling_price' => $item->selling_price,
                     'unit' => $item->unit,
                     'formula' => $item->formula ?: null,
                     'sort_order' => $item->sort_order,
@@ -1832,7 +1837,7 @@ class QuotationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'nullable|integer|min:0',
-            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
             // 'biaya', atau 'config:<quote_configuration_id>:<kategori>' (subtotal
             // satu kategori pada tab List Configuration — lihat syncItems()).
             'items.*.cost_sync_source' => ['nullable', 'string', 'max:191', 'regex:/^(biaya|config:\d+:.+)$/'],
@@ -1849,8 +1854,9 @@ class QuotationController extends Controller
             'config_items.*.part_number' => 'nullable|string|max:100',
             'config_items.*.description' => 'nullable|string',
             'config_items.*.qty' => 'nullable|integer|min:0',
-            'config_items.*.price' => 'nullable|numeric|min:0',
-            'config_items.*.price_currency' => 'nullable|numeric|min:0',
+            'config_items.*.selling_price' => 'nullable|numeric|min:0',
+            'config_items.*.selling_price_currency' => 'nullable|numeric|min:0',
+            'config_items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'config_items.*.currency' => 'nullable|string|max:10',
             'config_items.*.unit' => 'nullable|string|max:50',
             'config_items.*.formula' => 'nullable|array',
@@ -1863,7 +1869,7 @@ class QuotationController extends Controller
             'cost_items.*.title' => 'nullable|string|max:200',
             'cost_items.*.description' => 'nullable|string',
             'cost_items.*.qty' => 'nullable|integer|min:0',
-            'cost_items.*.price' => 'nullable|numeric|min:0',
+            'cost_items.*.selling_price' => 'nullable|numeric|min:0',
             'cost_items.*.unit' => 'nullable|string|max:50',
             'cost_items.*.formula' => 'nullable|array',
             'cost_items.*.formula.qty' => 'nullable|string|max:255',
@@ -1895,7 +1901,7 @@ class QuotationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
-                'price' => $item['price'] ?? null,
+                'selling_price' => $item['selling_price'] ?? null,
                 'cost_sync_source' => $item['cost_sync_source'] ?? null,
                 'unit' => $item['unit'] ?? null,
                 'formula' => isset($item['formula']) && is_array($item['formula']) ? json_encode(array_filter($item['formula'])) : null,
@@ -1955,27 +1961,28 @@ class QuotationController extends Controller
         $payload = [];
 
         // Skema harga (sama dengan quote_configuration_items):
-        //   currency       = kode mata uang (currencies.name), base bila kosong
-        //   price_currency = harga satuan sebelum kurs (input user)
-        //   price          = harga satuan IDR = price_currency x rate (dihitung server)
-        // Payload lama tanpa price_currency: price dianggap sudah IDR.
+        //   currency               = kode mata uang (currencies.name), base bila kosong
+        //   selling_price_currency = harga satuan sebelum kurs (input user)
+        //   selling_price          = harga satuan IDR = selling_price_currency x rate (dihitung server)
+        //   purchase_price_currency = snapshot harga beli (mata uang produk) dari master product
+        // Payload lama tanpa selling_price_currency: selling_price dianggap sudah IDR.
         $currencies = Currency::active()->get()->keyBy(fn ($c) => strtoupper($c->name));
         $base = Currency::baseName();
 
         foreach (array_values($configItems) as $i => $item) {
             $keyMap[$item['_key']] = $i;
 
-            $hasPriceCurrency = isset($item['price_currency']) && $item['price_currency'] !== '';
+            $hasPriceCurrency = isset($item['selling_price_currency']) && $item['selling_price_currency'] !== '';
 
             if ($hasPriceCurrency) {
                 $code = strtoupper(trim((string) ($item['currency'] ?? ''))) ?: $base;
                 $currency = $currencies[$code] ?? null;
                 $rate = $currency && ! $currency->is_base ? (float) $currency->rate : 1.0;
-                $priceCurrency = round((float) $item['price_currency'], 2);
+                $priceCurrency = round((float) $item['selling_price_currency'], 2);
                 $price = round($priceCurrency * $rate, 2);
             } else {
                 $code = $base;
-                $price = isset($item['price']) && $item['price'] !== '' ? round((float) $item['price'], 2) : null;
+                $price = isset($item['selling_price']) && $item['selling_price'] !== '' ? round((float) $item['selling_price'], 2) : null;
                 $priceCurrency = $price;
             }
 
@@ -1990,8 +1997,9 @@ class QuotationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
-                'price' => $price,
-                'price_currency' => $priceCurrency,
+                'selling_price' => $price,
+                'selling_price_currency' => $priceCurrency,
+                'purchase_price_currency' => $item['purchase_price_currency'] ?? null,
                 'currency' => $code,
                 'unit' => $item['unit'] ?? null,
                 'formula' => isset($item['formula']) && is_array($item['formula']) ? json_encode(array_filter($item['formula'])) : null,
@@ -2065,7 +2073,7 @@ class QuotationController extends Controller
                 'title' => null,
                 'description' => $item['description'] ?? null,
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
-                'price' => $item['price'] ?? null,
+                'selling_price' => $item['selling_price'] ?? null,
                 'unit' => $item['unit'] ?? null,
                 'formula' => isset($item['formula']) && is_array($item['formula']) ? json_encode(array_filter($item['formula'])) : null,
                 'sort_order' => $i + 1,

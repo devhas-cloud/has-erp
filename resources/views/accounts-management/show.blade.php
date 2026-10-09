@@ -401,7 +401,7 @@
         }
 
         .card-collapsible.collapsed .card-body-custom {
-            display: none;
+            display: block;
         }
 
         .card-collapsible .card-header-custom .chevron i {
@@ -633,8 +633,8 @@
                             </div>
                         </div>
                         <div class="col-lg-6">
-                            <div class="card-custom card-collapsible collapsed" style="box-shadow:none">
-                                <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
+                            <div class="card-custom card-collapsible collapsed">
+                                <div class="card-header-custom">
                                     <span><i class="fa fa-file-invoice me-2" style="color:var(--accent)"></i>Billing
                                         Address</span>
                                     <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -662,8 +662,8 @@
                                 </div>
                             </div>
 
-                            <div class="card-custom card-collapsible collapsed mt-4" style="box-shadow:none">
-                                <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
+                            <div class="card-custom card-collapsible collapsed mt-4">
+                                <div class="card-header-custom">
                                     <span><i class="fa fa-truck me-2" style="color:var(--accent)"></i>Shipping
                                         Address</span>
                                     <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -880,10 +880,6 @@
 
 @section('scripts')
     <script>
-        function toggleCard(el) {
-            $(el).closest('.card-collapsible').toggleClass('collapsed');
-        }
-
         $(document).on('click', '.contact-card', function(e) {
             if (e.target.closest('a')) return;
             const href = $(this).data('href');

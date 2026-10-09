@@ -257,7 +257,7 @@
                         $walk = function ($parentId, $depth) use (&$walk, &$catRows, &$catSubtotal, $children) {
                             foreach ($children[$parentId] ?? [] as $item) {
                                 $catRows[] = ['item' => $item, 'depth' => $depth];
-                                $catSubtotal += (($item->price ?? $item->product?->price) ?? 0) * $item->qty;
+                                $catSubtotal += (($item->selling_price ?? $item->product?->selling_price) ?? 0) * $item->qty;
                                 $walk($item->id, $depth + 1);
                             }
                         };
@@ -266,7 +266,7 @@
                             if ($kids->isEmpty()) {
                                 // Root tanpa children -> dirender sbg baris data.
                                 $catRows[] = ['item' => $root, 'depth' => 0];
-                                $catSubtotal += (($root->price ?? $root->product?->price) ?? 0) * $root->qty;
+                                $catSubtotal += (($root->selling_price ?? $root->product?->selling_price) ?? 0) * $root->qty;
                             } else {
                                 // Root = judul kategori; children mulai kedalaman 1.
                                 $walk($root->id, 1);
@@ -275,7 +275,7 @@
                         $groups[] = ['category' => $category, 'rows' => $catRows, 'subtotal' => $catSubtotal];
                     }
 
-                    $totalPrice = $quotation->items->sum(fn ($item) => (($item->price ?? $item->product?->price) ?? 0) * $item->qty);
+                    $totalPrice = $quotation->items->sum(fn ($item) => (($item->selling_price ?? $item->product?->selling_price) ?? 0) * $item->qty);
                 @endphp
 
                 @forelse($groups as $group)
@@ -296,7 +296,7 @@
                                     @php
                                         $item = $row['item'];
                                         $depth = $row['depth'];
-                                        $price = $item->price ?? $item->product?->price;
+                                        $price = $item->selling_price ?? $item->product?->selling_price;
                                     @endphp
                                     <tr>
                                         <td class="text-center" style="padding-left:{{ 6 + $depth * 20 }}px">{{ $item->item_no }}</td>

@@ -328,8 +328,8 @@
                         </div>
                     </td>
                     <td class="qty-col">{{ $item->qty ?: '' }} {{ $item->qty ? $item->unit : '' }}</td>
-                    <td class="price-col">{{ $item->price ? \App\Models\Quotation::formatMoney($item->price) : '' }}</td>
-                    <td class="amount-col">{{ $item->qty && $item->price ? \App\Models\Quotation::formatMoney($item->qty * $item->price) : '' }}</td>
+            <td class="price-col">{{ $item->selling_price ? \App\Models\Quotation::formatMoney($item->selling_price) : '' }}</td>
+            <td class="amount-col">{{ $item->qty && $item->selling_price ? \App\Models\Quotation::formatMoney($item->qty * $item->selling_price) : '' }}</td>
                 </tr>
             @empty
                 <tr>

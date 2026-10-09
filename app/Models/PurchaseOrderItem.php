@@ -19,8 +19,9 @@ class PurchaseOrderItem extends Model
         'description',
         'qty',
         'unit',
-        'price',
-        'price_currency',
+        'selling_price',
+        'selling_price_currency',
+        'purchase_price_currency',
         'currency',
         'sort_order',
     ];
@@ -29,8 +30,9 @@ class PurchaseOrderItem extends Model
     {
         return [
             'qty' => 'integer',
-            'price' => 'float',
-            'price_currency' => 'float',
+            'selling_price' => 'float',
+            'selling_price_currency' => 'float',
+            'purchase_price_currency' => 'float',
         ];
     }
 
@@ -75,6 +77,6 @@ class PurchaseOrderItem extends Model
 
     public function amount(): float
     {
-        return (float) ($this->qty ?? 0) * (float) ($this->price ?? 0);
+        return (float) ($this->qty ?? 0) * (float) ($this->selling_price ?? 0);
     }
 }

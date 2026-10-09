@@ -77,7 +77,7 @@ class ConfigurationTemplateTest extends TestCase
             'brand' => 'brand',
             'category' => 'pH',
             'division_id' => $division->id,
-            'price' => 12500000,
+            'selling_price' => 12500000,
             'status' => 'Active',
         ]);
 
@@ -93,8 +93,8 @@ class ConfigurationTemplateTest extends TestCase
         $child = $template->items()->whereNotNull('parent_id')->firstOrFail();
         $this->assertSame($parent->id, $child->parent_id);
         $this->assertSame($child->product_id, $product->id);
-        $this->assertEquals(12500000, $child->price);
-        $this->assertEquals(12500000, $child->price_currency);
+        $this->assertEquals(12500000, $child->selling_price);
+        $this->assertEquals(12500000, $child->selling_price_currency);
         $this->assertSame(2, $child->qty);
     }
 
@@ -323,15 +323,15 @@ class ConfigurationTemplateTest extends TestCase
                 'name' => 'IMS Template Harga',
                 'items' => [
                     ['_key' => 'new-1', 'category' => 'pH', 'description' => 'Parent', 'qty' => 1],
-                    ['_key' => 'new-2', 'parent_key' => 'new-1', 'description' => 'Child sensor', 'qty' => 2, 'price' => 50000, 'unit' => 'pcs'],
+                    ['_key' => 'new-2', 'parent_key' => 'new-1', 'description' => 'Child sensor', 'qty' => 2, 'selling_price' => 50000, 'unit' => 'pcs'],
                 ],
             ])->assertOk()
             ->json('id');
 
         $template = ConfigurationTemplate::findOrFail($templateId);
         $child = $template->items()->whereNotNull('parent_id')->firstOrFail();
-        $this->assertEquals(50000, $child->price);
-        $this->assertEquals(50000, $child->price_currency);
+        $this->assertEquals(50000, $child->selling_price);
+        $this->assertEquals(50000, $child->selling_price_currency);
         $this->assertSame('IDR', $child->currency);
         $this->assertSame('pcs', $child->unit);
 
@@ -342,7 +342,7 @@ class ConfigurationTemplateTest extends TestCase
             ->json('items');
 
         $childPayload = collect($items)->firstWhere('parent_key', $items[0]['_key']);
-        $this->assertEquals(50000, $childPayload['price']);
+        $this->assertEquals(50000, $childPayload['selling_price']);
         $this->assertSame('pcs', $childPayload['unit']);
     }
 

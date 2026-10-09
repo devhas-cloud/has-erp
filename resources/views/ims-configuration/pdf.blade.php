@@ -214,7 +214,7 @@
             $groups[] = ['category' => $cat, 'rows' => $catRows];
         }
 
-        $totalPrice = $quotation->items->sum(fn ($item) => (($item->price ?? $item->product?->price) ?? 0) * $item->qty);
+        $totalPrice = $quotation->items->sum(fn ($item) => (($item->selling_price ?? $item->product?->selling_price) ?? 0) * $item->qty);
     @endphp
 
     <table class="parts">
@@ -236,7 +236,7 @@
                     @php
                         $item = $row['item'];
                         $depth = $row['depth'];
-                        $price = $item->price ?? $item->product?->price;
+                        $price = $item->selling_price ?? $item->product?->selling_price;
                     @endphp
                     <tr>
                         <td class="no-col" style="padding-left:{{ 6 + $depth * 12 }}px">{{ $item->item_no }}</td>

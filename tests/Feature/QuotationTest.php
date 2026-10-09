@@ -174,11 +174,11 @@ class QuotationTest extends TestCase
         $config->update(['group_id' => $config->id]);
 
         $items = [
-            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Multiparameter Sensor', 'qty' => 1, 'price' => 123100000, 'unit' => 'Unit'],
-            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Ammo::lyser', 'qty' => 1, 'price' => 257100000, 'unit' => 'Unit'],
-            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Measuring Flow Rate (Debit)', 'qty' => 1, 'price' => 105100000, 'unit' => 'Unit'],
-            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Smart Logger and Telemetry', 'qty' => 1, 'price' => 293000000, 'unit' => 'Unit'],
-            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Installation Materials', 'qty' => 1, 'price' => 50000000, 'unit' => 'Lot'],
+            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Multiparameter Sensor', 'qty' => 1, 'selling_price' => 123100000, 'unit' => 'Unit'],
+            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Ammo::lyser', 'qty' => 1, 'selling_price' => 257100000, 'unit' => 'Unit'],
+            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Measuring Flow Rate (Debit)', 'qty' => 1, 'selling_price' => 105100000, 'unit' => 'Unit'],
+            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Smart Logger and Telemetry', 'qty' => 1, 'selling_price' => 293000000, 'unit' => 'Unit'],
+            ['category' => 'Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING)', 'description' => 'Installation Materials', 'qty' => 1, 'selling_price' => 50000000, 'unit' => 'Lot'],
         ];
 
         foreach (array_values($items) as $i => $item) {
@@ -187,7 +187,7 @@ class QuotationTest extends TestCase
                 'category' => $item['category'],
                 'description' => $item['description'],
                 'qty' => $item['qty'],
-                'price' => $item['price'],
+                'selling_price' => $item['selling_price'],
                 'unit' => $item['unit'],
                 'sort_order' => $i + 1,
             ]);
@@ -207,7 +207,7 @@ class QuotationTest extends TestCase
             'part_number' => $override['part_number'] ?? null,
             'description' => $override['description'] ?? 'Item',
             'qty' => $override['qty'] ?? 1,
-            'price' => $override['price'] ?? 1000,
+            'selling_price' => $override['selling_price'] ?? 1000,
             'unit' => $override['unit'] ?? 'Unit',
         ], $override);
     }
@@ -313,7 +313,7 @@ class QuotationTest extends TestCase
             'status' => Quotation::STATUS_DRAFT,
             'created_by' => $this->admin->id,
         ]);
-        $quotation->items()->create(['description' => 'Multiparameter Sensor', 'qty' => 1, 'price' => 123100000]);
+        $quotation->items()->create(['description' => 'Multiparameter Sensor', 'qty' => 1, 'selling_price' => 123100000]);
 
         $response = $this->actingAs($this->admin)->get(route('quotation.create'));
         $response->assertOk();
@@ -336,8 +336,8 @@ class QuotationTest extends TestCase
         ]);
 
         $parent = $quotation->items()->create(['item_no' => '1', 'description' => 'Multiparameter Sensor', 'qty' => 1, 'unit' => 'Kit', 'sort_order' => 1]);
-        $child = $quotation->items()->create(['item_no' => 'a', 'parent_id' => $parent->id, 'description' => 'pH::lyser', 'qty' => 1, 'unit' => 'Unit', 'price' => 123100000, 'sort_order' => 2]);
-        $quotation->items()->create(['item_no' => '2', 'description' => 'Flow Meter', 'qty' => 1, 'unit' => 'Unit', 'price' => 105100000, 'sort_order' => 3]);
+        $child = $quotation->items()->create(['item_no' => 'a', 'parent_id' => $parent->id, 'description' => 'pH::lyser', 'qty' => 1, 'unit' => 'Unit', 'selling_price' => 123100000, 'sort_order' => 2]);
+        $quotation->items()->create(['item_no' => '2', 'description' => 'Flow Meter', 'qty' => 1, 'unit' => 'Unit', 'selling_price' => 105100000, 'sort_order' => 3]);
 
         $response = $this->actingAs($this->admin)
             ->getJson(route('quotation.fetch-template').'?quotation_id='.$quotation->id)
@@ -355,7 +355,7 @@ class QuotationTest extends TestCase
         $this->assertSame('tpl-'.$child->id, $items[1]['_key']);
         $this->assertSame('tpl-'.$parent->id, $items[1]['parent_key']);
         $this->assertSame('a', $items[1]['item_no']);
-        $this->assertSame(123100000.0, (float) $items[1]['price']);
+        $this->assertSame(123100000.0, (float) $items[1]['selling_price']);
 
         $this->assertNull($items[2]['parent_key']);
         $this->assertSame('2', $items[2]['item_no']);
@@ -386,7 +386,7 @@ class QuotationTest extends TestCase
         $this->assertSame($config->id, $response->json('data.configs.0.id'));
         $this->assertSame(5, count($response->json('data.items')));
         $this->assertSame(5, count($response->json('data.products')));
-        $this->assertSame(123100000.0, (float) $response->json('data.items.0.price'));
+        $this->assertSame(123100000.0, (float) $response->json('data.items.0.selling_price'));
     }
 
     public function test_fetch_task_merges_water_and_ims_configs(): void
@@ -452,7 +452,7 @@ class QuotationTest extends TestCase
             'code' => 'PH-100',
             'brand' => 'HAS',
             'category' => 'Analyzer',
-            'price' => 5000000,
+            'selling_price' => 5000000,
             'status' => 'Active',
         ]);
         MasterProduct::create([
@@ -461,7 +461,7 @@ class QuotationTest extends TestCase
             'code' => 'UV-200',
             'brand' => 'S::CAN',
             'category' => 'Spectral',
-            'price' => 25000000,
+            'selling_price' => 25000000,
             'status' => 'Active',
         ]);
         MasterProduct::create([
@@ -470,7 +470,7 @@ class QuotationTest extends TestCase
             'code' => 'OFF-1',
             'brand' => 'HAS',
             'category' => 'Lainnya',
-            'price' => 1000,
+            'selling_price' => 1000,
             'status' => 'Inactive',
         ]);
 
@@ -481,7 +481,7 @@ class QuotationTest extends TestCase
         $data = collect($response->json('data'));
         $this->assertSame(1, $data->count());
         $this->assertSame('UV-200', $data->first()['code']);
-        $this->assertSame(25000000.0, (float) $data->first()['price']);
+        $this->assertSame(25000000.0, (float) $data->first()['selling_price']);
 
         // Tanpa filter divisi -> semua product aktif.
         $responseAll = $this->actingAs($this->admin)
@@ -511,7 +511,7 @@ class QuotationTest extends TestCase
             'code' => 'IDR-1',
             'brand' => 'HAS',
             'category' => 'Analyzer',
-            'price' => 5000000,
+            'selling_price' => 5000000,
             'currency_id' => $base->id,
             'status' => 'Active',
         ]);
@@ -521,7 +521,7 @@ class QuotationTest extends TestCase
             'code' => 'USD-1',
             'brand' => 'HAS',
             'category' => 'Analyzer',
-            'price' => 100,
+            'selling_price' => 100,
             'currency_id' => $usd->id,
             'status' => 'Active',
         ]);
@@ -533,9 +533,9 @@ class QuotationTest extends TestCase
         $data = collect($response->json('data'))->keyBy('code');
 
         // Produk base: price apa adanya.
-        $this->assertEquals(5000000.0, (float) $data['IDR-1']['price']);
+        $this->assertEquals(5000000.0, (float) $data['IDR-1']['selling_price']);
         // Produk USD: price × rate = 100 × 20.000 = 2.000.000.
-        $this->assertEquals(2000000.0, (float) $data['USD-1']['price']);
+        $this->assertEquals(2000000.0, (float) $data['USD-1']['selling_price']);
     }
 
     public function test_store_creates_quotation_with_hierarchy_and_totals(): void
@@ -543,17 +543,17 @@ class QuotationTest extends TestCase
         $config = $this->createApprovedConfiguration();
 
         $items = [
-            $this->itemPayload($config, ['_key' => 'row-1', 'item_no' => '1', 'description' => 'Multiparameter Sensor', 'qty' => null, 'price' => null]),
-            $this->itemPayload($config, ['_key' => 'row-2', 'parent_key' => 'row-1', 'item_no' => '1.1', 'description' => 'pH::lyser', 'qty' => 1, 'price' => 123100000]),
-            $this->itemPayload($config, ['_key' => 'row-3', 'parent_key' => 'row-2', 'item_no' => '1.1.1', 'description' => 'pH Sensor', 'qty' => 1, 'price' => 50000000]),
-            $this->itemPayload($config, ['_key' => 'row-4', 'item_no' => '2', 'description' => 'Flow Meter', 'qty' => null, 'price' => null]),
-            $this->itemPayload($config, ['_key' => 'row-5', 'parent_key' => 'row-4', 'item_no' => '2.1', 'description' => 'Flow Sensor', 'qty' => 2, 'price' => 100000]),
+            $this->itemPayload($config, ['_key' => 'row-1', 'item_no' => '1', 'description' => 'Multiparameter Sensor', 'qty' => null, 'selling_price' => null]),
+            $this->itemPayload($config, ['_key' => 'row-2', 'parent_key' => 'row-1', 'item_no' => '1.1', 'description' => 'pH::lyser', 'qty' => 1, 'selling_price' => 123100000]),
+            $this->itemPayload($config, ['_key' => 'row-3', 'parent_key' => 'row-2', 'item_no' => '1.1.1', 'description' => 'pH Sensor', 'qty' => 1, 'selling_price' => 50000000]),
+            $this->itemPayload($config, ['_key' => 'row-4', 'item_no' => '2', 'description' => 'Flow Meter', 'qty' => null, 'selling_price' => null]),
+            $this->itemPayload($config, ['_key' => 'row-5', 'parent_key' => 'row-4', 'item_no' => '2.1', 'description' => 'Flow Sensor', 'qty' => 2, 'selling_price' => 100000]),
         ];
 
         $configItems = [
-            ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => '324234', 'description' => 'phpsjdajd', 'qty' => 1, 'price' => 3000],
-            ['_key' => 'c-2', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => '324235', 'description' => 'phpsjdajd 2', 'qty' => 1, 'price' => 3000],
-            ['_key' => 'c-3', 'quote_configuration_id' => $config->id, 'category' => 'RO', 'part_number' => '324236', 'description' => 'phpsjdajd 3', 'qty' => 2, 'price' => 5000],
+            ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => '324234', 'description' => 'phpsjdajd', 'qty' => 1, 'selling_price' => 3000],
+            ['_key' => 'c-2', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => '324235', 'description' => 'phpsjdajd 2', 'qty' => 1, 'selling_price' => 3000],
+            ['_key' => 'c-3', 'quote_configuration_id' => $config->id, 'category' => 'RO', 'part_number' => '324236', 'description' => 'phpsjdajd 3', 'qty' => 2, 'selling_price' => 5000],
         ];
 
         $response = $this->actingAs($this->admin)->postJson(route('quotation.store'), [
@@ -584,7 +584,7 @@ class QuotationTest extends TestCase
         $this->assertCount(3, $quotation->configItems);
         $this->assertSame(2, $quotation->configItems->where('category', 'PH')->count());
         $this->assertSame(1, $quotation->configItems->where('category', 'RO')->count());
-        $this->assertSame(3000.0, (float) $quotation->configItems->firstWhere('part_number', '324234')->price);
+        $this->assertSame(3000.0, (float) $quotation->configItems->firstWhere('part_number', '324234')->selling_price);
         $this->assertSame(2, $quotation->configItems->firstWhere('part_number', '324236')->qty);
 
         // Struktur hierarki tersimpan
@@ -629,7 +629,7 @@ class QuotationTest extends TestCase
     {
         $config = $this->createApprovedConfiguration();
 
-        $items = [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000])];
+        $items = [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'selling_price' => 1000000])];
 
         $this->actingAs($this->admin)->postJson(route('quotation.store'), [
             'task_id' => $config->task_id,
@@ -654,7 +654,7 @@ class QuotationTest extends TestCase
     {
         $config = $this->createApprovedConfiguration();
 
-        $items = [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000])];
+        $items = [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'selling_price' => 1000000])];
 
         $this->actingAs($this->admin)->postJson(route('quotation.store'), [
             'task_id' => $config->task_id,
@@ -683,7 +683,7 @@ class QuotationTest extends TestCase
             'task_id' => $config->task_id,
             'quote_configuration_ids' => [$config->id],
             'items' => [
-                $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 2, 'price' => 500000, 'formula' => ['qty' => '=B1*2', 'price' => '=A2*B1']]),
+                $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 2, 'selling_price' => 500000, 'formula' => ['qty' => '=B1*2', 'price' => '=A2*B1']]),
             ],
             'formula' => ['discount_amount' => '=A1*0.1', 'ppn_amount' => '=A3*0.11'],
         ])->assertOk();
@@ -692,7 +692,7 @@ class QuotationTest extends TestCase
 
         $item = $quotation->items()->first();
         $this->assertSame(['qty' => '=B1*2', 'price' => '=A2*B1'], $item->formula);
-        $this->assertSame(500000.0, (float) $item->price);
+        $this->assertSame(500000.0, (float) $item->selling_price);
 
         $this->assertSame(['discount_amount' => '=A1*0.1', 'ppn_amount' => '=A3*0.11'], $quotation->formula);
     }
@@ -716,7 +716,7 @@ class QuotationTest extends TestCase
             'formula' => ['discount_amount' => '=A1*0.05'],
         ]);
         $quotation->update(['group_id' => $quotation->id]);
-        $quotation->items()->create(['description' => 'Item', 'qty' => 1, 'price' => 1000, 'formula' => ['price' => '=A1*B1']]);
+        $quotation->items()->create(['description' => 'Item', 'qty' => 1, 'selling_price' => 1000, 'formula' => ['price' => '=A1*B1']]);
 
         $response = $this->actingAs($this->admin)
             ->postJson(route('quotation.revise', $quotation->id))
@@ -740,9 +740,9 @@ class QuotationTest extends TestCase
         $config = $this->createApprovedConfiguration();
 
         $items = [
-            $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000]),
-            $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Biaya', 'qty' => 1, 'price' => 500000, 'cost_sync_source' => 'biaya']),
-            $this->itemPayload($config, ['_key' => 'row-3', 'description' => 'Item Configuration', 'qty' => 1, 'price' => 250000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']),
+            $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'selling_price' => 1000000]),
+            $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Biaya', 'qty' => 1, 'selling_price' => 500000, 'cost_sync_source' => 'biaya']),
+            $this->itemPayload($config, ['_key' => 'row-3', 'description' => 'Item Configuration', 'qty' => 1, 'selling_price' => 250000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']),
         ];
 
         $this->actingAs($this->admin)->postJson(route('quotation.store'), [
@@ -763,7 +763,7 @@ class QuotationTest extends TestCase
         $config = $this->createApprovedConfiguration();
 
         $items = [
-            $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000, 'cost_sync_source' => 'invalid']),
+            $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'selling_price' => 1000000, 'cost_sync_source' => 'invalid']),
         ];
 
         $this->actingAs($this->admin)->postJson(route('quotation.store'), [
@@ -791,7 +791,7 @@ class QuotationTest extends TestCase
             'created_by' => $this->user->id,
         ]);
         $quotation->update(['group_id' => $quotation->id]);
-        $quotation->items()->create(['description' => 'Item Configuration', 'qty' => 1, 'price' => 1000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']);
+        $quotation->items()->create(['description' => 'Item Configuration', 'qty' => 1, 'selling_price' => 1000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']);
 
         $response = $this->actingAs($this->admin)
             ->postJson(route('quotation.revise', $quotation->id))
@@ -817,8 +817,8 @@ class QuotationTest extends TestCase
             'task_id' => $config->task_id,
             'quote_configuration_ids' => [$config->id],
             'items' => [
-                $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item Biaya', 'qty' => 1, 'price' => 1000000, 'cost_sync_source' => 'biaya']),
-                $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Config', 'qty' => 1, 'price' => 300000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']),
+                $this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item Biaya', 'qty' => 1, 'selling_price' => 1000000, 'cost_sync_source' => 'biaya']),
+                $this->itemPayload($config, ['_key' => 'row-2', 'description' => 'Item Config', 'qty' => 1, 'selling_price' => 300000, 'cost_sync_source' => 'config:'.$config->id.':SPARING']),
             ],
         ])->assertOk();
 
@@ -922,12 +922,12 @@ class QuotationTest extends TestCase
             'task_id' => $config->task_id,
             'quote_configuration_ids' => [$config->id],
             'ppn_percent' => 11,
-            'items' => [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000])],
+            'items' => [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'selling_price' => 1000000])],
             'cost_title' => 'Biaya Mobilisasi',
             'cost_items' => [
-                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'description' => 'Mobilisasi Umum', 'qty' => 1, 'price' => 250000],
-                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'description' => 'Transport', 'qty' => 1, 'price' => 500000],
-                ['_key' => 'c-3', 'parent_key' => 'c-1', 'item_no' => '1.2', 'description' => 'Pemasangan', 'qty' => 2, 'price' => 250000],
+                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'description' => 'Mobilisasi Umum', 'qty' => 1, 'selling_price' => 250000],
+                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'description' => 'Transport', 'qty' => 1, 'selling_price' => 500000],
+                ['_key' => 'c-3', 'parent_key' => 'c-1', 'item_no' => '1.2', 'description' => 'Pemasangan', 'qty' => 2, 'selling_price' => 250000],
             ],
             'cost_notes' => 'Mobilisasi dikenakan biaya tambahan.',
         ])->assertOk();
@@ -942,12 +942,12 @@ class QuotationTest extends TestCase
         $this->assertNull($mobilisasi->parent_id);
         $this->assertSame($mobilisasi->id, $child->parent_id);
         $this->assertSame('1.1', $child->item_no);
-        $this->assertSame(500000.0, (float) $child->price);
+        $this->assertSame(500000.0, (float) $child->selling_price);
 
         $instChild = $quotation->costItems()->where('description', 'Pemasangan')->first();
         $this->assertSame($mobilisasi->id, $instChild->parent_id);
         $this->assertSame(2, $instChild->qty);
-        $this->assertSame(250000.0, (float) $instChild->price);
+        $this->assertSame(250000.0, (float) $instChild->selling_price);
 
         // Biaya TIDAK memengaruhi subtotal/grand_total.
         $this->assertSame(1000000.0, $quotation->subtotal);
@@ -963,12 +963,12 @@ class QuotationTest extends TestCase
             'task_id' => $config->task_id,
             'quote_configuration_ids' => [$config->id],
             'ppn_percent' => 11,
-            'items' => [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'price' => 1000000])],
+            'items' => [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'Item A', 'qty' => 1, 'selling_price' => 1000000])],
             'cost_title' => 'Biaya Mobilisasi',
             'cost_items' => [
-                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'description' => 'Mobilisasi Umum', 'qty' => 1, 'price' => 250000],
-                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'description' => 'Transport', 'qty' => 1, 'price' => 500000],
-                ['_key' => 'c-3', 'parent_key' => 'c-1', 'item_no' => '1.2', 'description' => 'Pemasangan', 'qty' => 2, 'price' => 250000],
+                ['_key' => 'c-1', 'parent_key' => null, 'item_no' => '1', 'description' => 'Mobilisasi Umum', 'qty' => 1, 'selling_price' => 250000],
+                ['_key' => 'c-2', 'parent_key' => 'c-1', 'item_no' => '1.1', 'description' => 'Transport', 'qty' => 1, 'selling_price' => 500000],
+                ['_key' => 'c-3', 'parent_key' => 'c-1', 'item_no' => '1.2', 'description' => 'Pemasangan', 'qty' => 2, 'selling_price' => 250000],
             ],
         ])->assertOk();
 
@@ -993,7 +993,7 @@ class QuotationTest extends TestCase
         $this->assertSame($rows[0]['_key'], $rows[2]['parent_key']);
 
         // Harga TIDAK diikutsertakan pada template; qty/unit tetap dipertahankan.
-        $this->assertArrayNotHasKey('price', $rows[1]);
+        $this->assertArrayNotHasKey('selling_price', $rows[1]);
         $this->assertSame(1, $rows[1]['qty']);
         $this->assertSame(2, $rows[2]['qty']);
     }
@@ -1026,8 +1026,8 @@ class QuotationTest extends TestCase
         ]);
         $quotation->update(['group_id' => $quotation->id]);
 
-        $parent = $quotation->costItems()->create(['description' => 'Mobilisasi Umum', 'qty' => 1, 'price' => 250000, 'item_no' => '1', 'sort_order' => 1]);
-        $quotation->costItems()->create(['parent_id' => $parent->id, 'description' => 'Transport', 'qty' => 1, 'price' => 500000, 'item_no' => '1.1', 'sort_order' => 2]);
+        $parent = $quotation->costItems()->create(['description' => 'Mobilisasi Umum', 'qty' => 1, 'selling_price' => 250000, 'item_no' => '1', 'sort_order' => 1]);
+        $quotation->costItems()->create(['parent_id' => $parent->id, 'description' => 'Transport', 'qty' => 1, 'selling_price' => 500000, 'item_no' => '1.1', 'sort_order' => 2]);
 
         $response = $this->actingAs($this->admin)
             ->postJson(route('quotation.revise', $quotation->id))
@@ -1041,7 +1041,7 @@ class QuotationTest extends TestCase
         $revParent = $revision->costItems()->where('description', 'Mobilisasi Umum')->first();
         $revChild = $revision->costItems()->where('description', 'Transport')->first();
         $this->assertSame($revParent->id, $revChild->parent_id);
-        $this->assertSame(500000.0, (float) $revChild->price);
+        $this->assertSame(500000.0, (float) $revChild->selling_price);
     }
 
     public function test_store_rejects_invalid_config_not_belonging_to_task(): void
@@ -1068,7 +1068,7 @@ class QuotationTest extends TestCase
             ->postJson(route('quotation.store'), [
                 'task_id' => $task->id,
                 'quote_configuration_ids' => [],
-                'items' => [['_key' => 'row-1', 'description' => 'Item', 'qty' => 1, 'price' => 1000]],
+                'items' => [['_key' => 'row-1', 'description' => 'Item', 'qty' => 1, 'selling_price' => 1000]],
             ])
             ->assertStatus(422);
 
@@ -1087,15 +1087,15 @@ class QuotationTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
         $quotation->configurations()->sync([$config->id]);
-        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'price' => 1000]);
+        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'selling_price' => 1000]);
 
         $this->actingAs($this->admin)->putJson(route('quotation.update', $quotation->id), [
             'task_id' => $config->task_id,
             'quote_configuration_ids' => [$config->id],
             'items' => [$this->itemPayload($config, ['_key' => 'row-1', 'description' => 'edited item'])],
             'config_items' => [
-                ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'ABC', 'description' => 'sensor', 'qty' => 1, 'price' => 9000],
-                ['_key' => 'c-2', 'quote_configuration_id' => $config->id, 'category' => 'RO', 'part_number' => 'DEF', 'description' => 'flow', 'qty' => 2, 'price' => 500],
+                ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'ABC', 'description' => 'sensor', 'qty' => 1, 'selling_price' => 9000],
+                ['_key' => 'c-2', 'quote_configuration_id' => $config->id, 'category' => 'RO', 'part_number' => 'DEF', 'description' => 'flow', 'qty' => 2, 'selling_price' => 500],
             ],
         ])->assertOk();
 
@@ -1103,16 +1103,16 @@ class QuotationTest extends TestCase
         $this->assertCount(2, $fresh->configItems);
         $this->assertSame(1, $fresh->configItems->where('category', 'PH')->count());
         $this->assertSame('ABC', $fresh->configItems->firstWhere('category', 'PH')->part_number);
-        $this->assertSame(9000.0, (float) $fresh->configItems->firstWhere('category', 'PH')->price);
+        $this->assertSame(9000.0, (float) $fresh->configItems->firstWhere('category', 'PH')->selling_price);
         $this->assertSame('edited item', $fresh->items()->first()->description);
     }
 
     /**
-     * Item config: price_currency (sebelum kurs) + currency dikirim client,
+     * Item config: selling_price_currency (sebelum kurs) + currency dikirim client,
      * price (IDR) dihitung server dari kurs master. Payload lama yang hanya
      * membawa price tetap diterima (price dianggap IDR).
      */
-    public function test_store_config_items_compute_price_from_price_currency_and_rate(): void
+    public function test_store_config_items_compute_price_from_selling_price_currency_and_rate(): void
     {
         Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
         Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 17500, 'is_base' => false, 'status' => 'Active']);
@@ -1124,9 +1124,9 @@ class QuotationTest extends TestCase
             'quote_configuration_ids' => [$config->id],
             'items' => [$this->itemPayload($config, ['_key' => 'row-1'])],
             'config_items' => [
-                ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'USD-1', 'description' => 'sensor usd', 'qty' => 2, 'currency' => 'usd', 'price_currency' => 4715.94, 'price' => 1],
-                ['_key' => 'c-2', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'IDR-1', 'description' => 'sensor idr', 'qty' => 1, 'currency' => '', 'price_currency' => 1000],
-                ['_key' => 'c-3', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'OLD-1', 'description' => 'payload lama', 'qty' => 1, 'price' => 9000],
+                ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'USD-1', 'description' => 'sensor usd', 'qty' => 2, 'currency' => 'usd', 'selling_price_currency' => 4715.94, 'selling_price' => 1],
+                ['_key' => 'c-2', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'IDR-1', 'description' => 'sensor idr', 'qty' => 1, 'currency' => '', 'selling_price_currency' => 1000],
+                ['_key' => 'c-3', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'part_number' => 'OLD-1', 'description' => 'payload lama', 'qty' => 1, 'selling_price' => 9000],
             ],
         ])->assertOk();
 
@@ -1134,32 +1134,32 @@ class QuotationTest extends TestCase
 
         // USD: kode dinormalkan, price = 4.715,94 x 17.500; price kiriman client diabaikan.
         $this->assertSame('USD', $items['USD-1']->currency);
-        $this->assertSame(4715.94, $items['USD-1']->price_currency);
-        $this->assertSame(82_528_950.0, $items['USD-1']->price);
+        $this->assertSame(4715.94, $items['USD-1']->selling_price_currency);
+        $this->assertSame(82_528_950.0, $items['USD-1']->selling_price);
         // Kosong -> base (IDR), rate 1.
         $this->assertSame('IDR', $items['IDR-1']->currency);
-        $this->assertSame(1000.0, $items['IDR-1']->price);
-        // Payload lama: price dianggap IDR, price_currency = price.
+        $this->assertSame(1000.0, $items['IDR-1']->selling_price);
+        // Payload lama: price dianggap IDR, selling_price_currency = price.
         $this->assertSame('IDR', $items['OLD-1']->currency);
-        $this->assertSame(9000.0, $items['OLD-1']->price_currency);
-        $this->assertSame(9000.0, $items['OLD-1']->price);
+        $this->assertSame(9000.0, $items['OLD-1']->selling_price_currency);
+        $this->assertSame(9000.0, $items['OLD-1']->selling_price);
     }
 
-    public function test_search_products_returns_price_currency_and_currency(): void
+    public function test_search_products_returns_selling_price_currency_and_currency(): void
     {
         $base = Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
         $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
 
-        MasterProduct::create(['division_id' => $this->division->id, 'name' => 'Produk USD', 'code' => 'USD-1', 'brand' => 'HAS', 'category' => 'Analyzer', 'price' => 100, 'currency_id' => $usd->id, 'status' => 'Active']);
-        MasterProduct::create(['division_id' => $this->division->id, 'name' => 'Produk IDR', 'code' => 'IDR-1', 'brand' => 'HAS', 'category' => 'Analyzer', 'price' => 5000, 'currency_id' => $base->id, 'status' => 'Active']);
+        MasterProduct::create(['division_id' => $this->division->id, 'name' => 'Produk USD', 'code' => 'USD-1', 'brand' => 'HAS', 'category' => 'Analyzer', 'selling_price' => 100, 'currency_id' => $usd->id, 'status' => 'Active']);
+        MasterProduct::create(['division_id' => $this->division->id, 'name' => 'Produk IDR', 'code' => 'IDR-1', 'brand' => 'HAS', 'category' => 'Analyzer', 'selling_price' => 5000, 'currency_id' => $base->id, 'status' => 'Active']);
 
         $data = collect($this->actingAs($this->admin)
             ->getJson(route('quotation.search-products').'?division_id='.$this->division->id)
             ->assertOk()
             ->json('data'))->keyBy('code');
 
-        $this->assertSame(['USD', 100.0, 2000000.0], [$data['USD-1']['currency'], (float) $data['USD-1']['price_currency'], (float) $data['USD-1']['price']]);
-        $this->assertSame(['IDR', 5000.0, 5000.0], [$data['IDR-1']['currency'], (float) $data['IDR-1']['price_currency'], (float) $data['IDR-1']['price']]);
+        $this->assertSame(['USD', 100.0, 2000000.0], [$data['USD-1']['currency'], (float) $data['USD-1']['selling_price_currency'], (float) $data['USD-1']['selling_price']]);
+        $this->assertSame(['IDR', 5000.0, 5000.0], [$data['IDR-1']['currency'], (float) $data['IDR-1']['selling_price_currency'], (float) $data['IDR-1']['selling_price']]);
     }
 
     /**
@@ -1210,16 +1210,16 @@ class QuotationTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
         $quotation->configurations()->sync([$v1->id]);
-        $snapA = $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 100]);
+        $snapA = $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'selling_price' => 100]);
         // B adalah anak A di snapshot; nanti dihapus di v2 -> harus tetap menunjuk induk A (id live).
-        $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'parent_id' => $snapA->id, 'category' => 'SPARING', 'part_number' => 'B-1', 'description' => 'Sensor B', 'qty' => 1, 'price' => 200]);
-        $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => null, 'description' => 'Kabel <b>lokal</b>', 'qty' => 3, 'price' => 50]);
+        $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'parent_id' => $snapA->id, 'category' => 'SPARING', 'part_number' => 'B-1', 'description' => 'Sensor B', 'qty' => 1, 'selling_price' => 200]);
+        $quotation->configItems()->create(['quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => null, 'description' => 'Kabel <b>lokal</b>', 'qty' => 3, 'selling_price' => 50]);
 
         // Configuration direvisi: A harga naik, B hilang, D baru, C tetap (dicocokkan lewat deskripsi).
         $v2 = $this->approveRevisionOf($v1, [
-            ['part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 150],
-            ['part_number' => 'D-1', 'description' => 'Sensor D', 'qty' => 2, 'price' => 300],
-            ['part_number' => null, 'description' => 'Kabel lokal', 'qty' => 3, 'price' => 50],
+            ['part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'selling_price' => 150],
+            ['part_number' => 'D-1', 'description' => 'Sensor D', 'qty' => 2, 'selling_price' => 300],
+            ['part_number' => null, 'description' => 'Kabel lokal', 'qty' => 3, 'selling_price' => 50],
         ]);
 
         $data = $this->actingAs($this->admin)
@@ -1232,7 +1232,7 @@ class QuotationTest extends TestCase
 
         $items = collect($data['items'])->keyBy(fn ($it) => $it['part_number'] ?: 'desc');
         $this->assertSame('berubah', $items['A-1']['change_status']);
-        $this->assertSame(100.0, (float) $items['A-1']['previous']['price']);
+        $this->assertSame(100.0, (float) $items['A-1']['previous']['selling_price']);
         $this->assertSame('baru', $items['D-1']['change_status']);
         $this->assertSame('sama', $items['desc']['change_status']);
 
@@ -1288,16 +1288,16 @@ class QuotationTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
         $quotation->configurations()->sync([$v1->id]);
-        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'price' => 1000]);
+        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'selling_price' => 1000]);
 
-        $v2 = $this->approveRevisionOf($v1, [['part_number' => 'A-1', 'description' => 'Sensor A', 'price' => 150]]);
+        $v2 = $this->approveRevisionOf($v1, [['part_number' => 'A-1', 'description' => 'Sensor A', 'selling_price' => 150]]);
 
         $this->actingAs($this->admin)->putJson(route('quotation.update', $quotation->id), [
             'task_id' => $v1->task_id,
             'quote_configuration_ids' => [$v2->id],
             'items' => [$this->itemPayload($v1, ['_key' => 'row-1', 'description' => 'edited item'])],
             'config_items' => [
-                ['_key' => 'c-1', 'quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 100],
+                ['_key' => 'c-1', 'quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'selling_price' => 100],
             ],
         ])->assertOk();
 
@@ -1325,9 +1325,9 @@ class QuotationTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
         $quotation->configurations()->sync([$v1->id]);
-        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'price' => 1000]);
+        $quotation->items()->create(['description' => 'item', 'qty' => 1, 'selling_price' => 1000]);
 
-        $v2 = $this->approveRevisionOf($v1, [['part_number' => 'A-1', 'description' => 'Sensor A', 'price' => 150]]);
+        $v2 = $this->approveRevisionOf($v1, [['part_number' => 'A-1', 'description' => 'Sensor A', 'selling_price' => 150]]);
 
         // Form edit masih mengirim id v1 (pivot lama) + snapshot yang menunjuk v1.
         $this->actingAs($this->admin)->putJson(route('quotation.update', $quotation->id), [
@@ -1335,7 +1335,7 @@ class QuotationTest extends TestCase
             'quote_configuration_ids' => [$v1->id],
             'items' => [$this->itemPayload($v1, ['_key' => 'row-1', 'description' => 'edited item'])],
             'config_items' => [
-                ['_key' => 'c-1', 'quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'price' => 100],
+                ['_key' => 'c-1', 'quote_configuration_id' => $v1->id, 'category' => 'SPARING', 'part_number' => 'A-1', 'description' => 'Sensor A', 'qty' => 1, 'selling_price' => 100],
             ],
         ])->assertOk();
 
@@ -1371,7 +1371,7 @@ class QuotationTest extends TestCase
             'quote_configuration_ids' => [$config->id],
             'items' => [$this->itemPayload($config, ['_key' => 'row-1'])],
             'config_items' => [
-                ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'description' => '<b>sensor</b><i>probe</i><script>alert(1)</script>', 'qty' => 1, 'price' => 5000],
+                ['_key' => 'c-1', 'quote_configuration_id' => $config->id, 'category' => 'PH', 'description' => '<b>sensor</b><i>probe</i><script>alert(1)</script>', 'qty' => 1, 'selling_price' => 5000],
             ],
         ])->assertOk();
 
@@ -1412,7 +1412,7 @@ class QuotationTest extends TestCase
             'parent_id' => $parent->id,
             'description' => 'pH::lyser',
             'qty' => 1,
-            'price' => 123100000,
+            'selling_price' => 123100000,
             'sort_order' => 2,
         ]);
         $quotation->items()->create([
@@ -1421,7 +1421,7 @@ class QuotationTest extends TestCase
             'parent_id' => $child->id,
             'description' => 'pH Sensor',
             'qty' => 1,
-            'price' => 50000000,
+            'selling_price' => 50000000,
             'sort_order' => 3,
         ]);
 
@@ -1445,7 +1445,7 @@ class QuotationTest extends TestCase
             'created_by' => $this->user->id,
         ]);
         $quotation->update(['group_id' => $quotation->id]);
-        $quotation->items()->create(['description' => 'test item', 'qty' => 1, 'price' => 1000]);
+        $quotation->items()->create(['description' => 'test item', 'qty' => 1, 'selling_price' => 1000]);
 
         // Submit oleh pembuat.
         $this->actingAs($this->user)
@@ -1612,8 +1612,8 @@ class QuotationTest extends TestCase
         $quotation->update(['group_id' => $quotation->id]);
 
         $parent = $quotation->items()->create(['item_no' => '1', 'description' => 'Multiparameter Sensor', 'qty' => 1, 'unit' => 'Kit']);
-        $quotation->items()->create(['item_no' => '1.1', 'parent_id' => $parent->id, 'description' => 'pH::lyser', 'qty' => 1, 'price' => 123100000]);
-        $quotation->configItems()->create(['quote_configuration_id' => $config->id, 'description' => 'snapshot config', 'qty' => 1, 'price' => 52_500_000, 'price_currency' => 3000, 'currency' => 'USD']);
+        $quotation->items()->create(['item_no' => '1.1', 'parent_id' => $parent->id, 'description' => 'pH::lyser', 'qty' => 1, 'selling_price' => 123100000]);
+        $quotation->configItems()->create(['quote_configuration_id' => $config->id, 'description' => 'snapshot config', 'qty' => 1, 'selling_price' => 52_500_000, 'selling_price_currency' => 3000, 'currency' => 'USD']);
         $quotation->configurations()->sync([$config->id]);
 
         $response = $this->actingAs($this->admin)
@@ -1633,7 +1633,7 @@ class QuotationTest extends TestCase
         $this->assertSame(1, $revision->configItems()->count());
         // Snapshot mata uang config item ikut tersalin apa adanya.
         $revCfg = $revision->configItems()->first();
-        $this->assertSame(['USD', 3000.0, 52_500_000.0], [$revCfg->currency, $revCfg->price_currency, $revCfg->price]);
+        $this->assertSame(['USD', 3000.0, 52_500_000.0], [$revCfg->currency, $revCfg->selling_price_currency, $revCfg->selling_price]);
         $this->assertTrue($revision->configurations->contains('id', $config->id));
 
         // Sumber approved menjadi archived.

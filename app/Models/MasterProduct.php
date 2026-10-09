@@ -20,7 +20,8 @@ class MasterProduct extends Model
         'division_id',
         'description',
         'image',
-        'price',
+        'selling_price',
+        'purchase_price',
         'currency_id',
         'status',
     ];
@@ -28,7 +29,8 @@ class MasterProduct extends Model
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2',
+            'selling_price' => 'decimal:2',
+            'purchase_price' => 'decimal:2',
         ];
     }
 
@@ -58,17 +60,17 @@ class MasterProduct extends Model
     }
 
     /**
-     * Nilai harga setara base (IDR): price × rate mata uang produk.
+     * Nilai harga jual setara base (IDR): selling_price × rate mata uang produk.
      * Produk tanpa currency atau ber-currency base dikonversi dgn rate 1.
      */
-    public function priceInBase(): float
+    public function sellingPriceInBase(): float
     {
         $currency = $this->relationLoaded('currency') ? $this->currency : $this->currency()->first();
 
         if ($currency && ! $currency->isBase()) {
-            return round((float) $this->price * (float) $currency->rate, 2);
+            return round((float) $this->selling_price * (float) $currency->rate, 2);
         }
 
-        return round((float) $this->price, 2);
+        return round((float) $this->selling_price, 2);
     }
 }

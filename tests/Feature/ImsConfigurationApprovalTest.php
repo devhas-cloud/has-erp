@@ -153,7 +153,7 @@ class ImsConfigurationApprovalTest extends TestCase
             'task_id' => $task->id,
             'parameter_note' => 'Material',
             'items' => [
-                ['_key' => 'new-1', 'category' => 'Material', 'part_number' => 'M-001', 'description' => 'Material A', 'qty' => 1, 'price' => 12500000, 'unit' => 'pcs'],
+                ['_key' => 'new-1', 'category' => 'Material', 'part_number' => 'M-001', 'description' => 'Material A', 'qty' => 1, 'selling_price' => 12500000, 'unit' => 'pcs'],
             ],
         ])->assertOk();
 
@@ -168,7 +168,7 @@ class ImsConfigurationApprovalTest extends TestCase
         $this->assertSame('IMS', $quotation->division?->division_name);
 
         $item = $quotation->items()->first();
-        $this->assertSame(12500000.0, (float) $item->price);
+        $this->assertSame(12500000.0, (float) $item->selling_price);
         $this->assertSame('pcs', $item->unit);
     }
 

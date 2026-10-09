@@ -45,7 +45,7 @@ class ProductManagementController extends Controller
             2 => 'brand',
             3 => 'category',
             4 => 'type',
-            6 => 'price',
+            6 => 'selling_price',
             7 => 'status',
         ];
 
@@ -74,8 +74,10 @@ class ProductManagementController extends Controller
                 'type' => $product->type ?? '—',
                 'parameter' => $product->parameter ?? '—',
                 'division_name' => $product->division?->division_name ?? '—',
-                'price' => $product->price,
-                'price_formatted' => number_format((float) $product->price, 2, '.', ','),
+                'selling_price' => $product->selling_price,
+                'selling_price_formatted' => number_format((float) $product->selling_price, 2, '.', ','),
+                'purchase_price' => $product->purchase_price,
+                'purchase_price_formatted' => number_format((float) $product->purchase_price, 2, '.', ','),
                 'currency_id' => $product->currency_id,
                 'currency_name' => $currency?->name ?? '—',
                 'currency_symbol' => $currency?->symbol ?: ($currency?->name ?? ''),
@@ -104,7 +106,8 @@ class ProductManagementController extends Controller
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
-            'price' => 'required|numeric|min:0',
+            'selling_price' => 'required|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
             'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
@@ -168,7 +171,8 @@ class ProductManagementController extends Controller
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
-            'price' => 'required|numeric|min:0',
+            'selling_price' => 'required|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
             'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
@@ -216,7 +220,7 @@ class ProductManagementController extends Controller
 
         $headers = [
             'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
-            'Description', 'Price', 'Currency', 'Status',
+            'Description', 'Selling Price', 'Purchase Price', 'Currency', 'Status',
         ];
 
         $service = new ProductExportService;

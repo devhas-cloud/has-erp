@@ -113,7 +113,7 @@ class ProfitEstimateTest extends TestCase
             'code' => 'PH-001',
             'brand' => 'Badger Meter',
             'division_id' => $this->division->id,
-            'price' => 2000,
+            'selling_price' => 2000,
             'currency_id' => $this->usd->id,
             'status' => 'Active',
         ]);
@@ -161,10 +161,10 @@ class ProfitEstimateTest extends TestCase
         $quotation->update(['group_id' => $quotation->id]);
         $quotation->configurations()->attach($config->id);
 
-        $quotation->items()->create(['item_no' => '1', 'part_number' => 'PH-001', 'description' => 'pHlyser<br>with cable', 'qty' => 2, 'price' => 100, 'unit' => 'Each', 'sort_order' => 1]);
-        $quotation->items()->create(['item_no' => '2', 'description' => 'Kalibrasi lokal', 'qty' => 1, 'price' => 100, 'unit' => 'Lot', 'sort_order' => 2]);
+        $quotation->items()->create(['item_no' => '1', 'part_number' => 'PH-001', 'description' => 'pHlyser<br>with cable', 'qty' => 2, 'selling_price' => 100, 'unit' => 'Each', 'sort_order' => 1]);
+        $quotation->items()->create(['item_no' => '2', 'description' => 'Kalibrasi lokal', 'qty' => 1, 'selling_price' => 100, 'unit' => 'Lot', 'sort_order' => 2]);
 
-        $quotation->costItems()->create(['item_no' => '1', 'description' => 'Survei', 'qty' => 2, 'price' => 1_000_000, 'unit' => 'Lot', 'sort_order' => 1]);
+        $quotation->costItems()->create(['item_no' => '1', 'description' => 'Survei', 'qty' => 2, 'selling_price' => 1_000_000, 'unit' => 'Lot', 'sort_order' => 1]);
 
         return $quotation->fresh();
     }
@@ -370,8 +370,8 @@ class ProfitEstimateTest extends TestCase
     public function test_create_form_exposes_quotation_config_items_for_picker(): void
     {
         $quotation = $this->createQuotation();
-        $quotation->configItems()->create(['category' => 'SPARING', 'part_number' => 'PH-001', 'description' => 'pHlyser<br>with cable', 'qty' => 2, 'unit' => 'Unit', 'price' => 35_000_000, 'price_currency' => 2000, 'currency' => 'USD']);
-        $quotation->configItems()->create(['category' => 'SPARING', 'part_number' => 'CAB-1', 'description' => 'Kabel', 'qty' => 1, 'price' => 500_000]);
+        $quotation->configItems()->create(['category' => 'SPARING', 'part_number' => 'PH-001', 'description' => 'pHlyser<br>with cable', 'qty' => 2, 'unit' => 'Unit', 'selling_price' => 35_000_000, 'selling_price_currency' => 2000, 'purchase_price_currency' => 2000, 'currency' => 'USD']);
+        $quotation->configItems()->create(['category' => 'SPARING', 'part_number' => 'CAB-1', 'description' => 'Kabel', 'qty' => 1, 'selling_price' => 500_000, 'purchase_price_currency' => 500_000]);
 
         $this->actingAs($this->admin)
             ->get(route('profit-estimate.create', ['quotation_id' => $quotation->id]))
@@ -380,11 +380,12 @@ class ProfitEstimateTest extends TestCase
                 return count($items) === 2
                     && $items[0]['description'] === 'pHlyser'
                     && $items[0]['currency'] === 'USD'
-                    && $items[0]['price_currency'] === 2000.0
-                    && $items[0]['price'] === 35_000_000.0
+                    && $items[0]['purchase_price_currency'] === 2000.0
+                    && $items[0]['purchase_price'] === 35_000_000.0
                     && $items[0]['qty'] === 2.0
                     && $items[1]['currency'] === 'IDR'
-                    && $items[1]['price_currency'] === 500_000.0;
+                    && $items[1]['purchase_price_currency'] === 500_000.0
+                    && $items[1]['purchase_price'] === 500_000.0;
             })
             ->assertViewHas('currencySymbols', fn ($s) => ($s['USD'] ?? null) === '$');
     }

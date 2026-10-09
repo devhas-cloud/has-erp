@@ -6,12 +6,12 @@ class ProductXlsxTemplateGenerator
 {
     private array $headers = [
         'name', 'code', 'brand', 'category', 'type', 'parameter', 'division',
-        'description', 'price', 'currency', 'status',
+        'description', 'selling_price', 'purchase_price', 'currency', 'status',
     ];
 
     private array $exampleRow = [
         'Laptop ThinkPad X1', 'PROD-001', 'Lenovo', 'Electronics', 'Main', 'i7-1365U / 16GB', 'IT',
-        'High-performance business laptop', '15000000', 'IDR', 'Active',
+        'High-performance business laptop', '15000000', '12000000', 'IDR', 'Active',
     ];
 
     public function generate(array $references, string $filePath): void

@@ -227,7 +227,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title"><i class="fa-solid fa-cart-plus me-2" style="color:var(--accent)"></i>Pilih Item dari List Configuration
-                    <small style="font-size:11px;color:var(--text-muted);font-weight:400">centang satu atau lebih; total harganya dimasukkan ke Amount baris</small></h6>
+                    <small style="font-size:11px;color:var(--text-muted);font-weight:400">centang satu atau lebih; total harga belinya (HPP) dimasukkan ke Amount baris</small></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -239,8 +239,8 @@
                                 <th style="width:150px">Part Number</th>
                                 <th>Deskripsi</th>
                                 <th style="width:90px" class="text-center">Qty</th>
-                                <th style="width:170px" class="text-end">Harga</th>
-                                <th style="width:140px" class="text-end">Rp Satuan</th>
+                                <th style="width:170px" class="text-end">Harga Beli</th>
+                                <th style="width:140px" class="text-end">Rp (HPP)</th>
                                 <th style="width:150px" class="text-end">Amount</th>
                             </tr>
                         </thead>
@@ -390,14 +390,14 @@ function plOpenConfigPicker(btn) {
                 lastCat = it.category;
                 $body.append('<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)"><td colspan="7"><i class="fa fa-tag me-1"></i>' + plEsc(it.category) + '</td></tr>');
             }
-            var amountIdr = (it.qty || 0) * (it.price || 0);
+            var amountIdr = (it.qty || 0) * (it.purchase_price || 0);
             $body.append('<tr class="pl-picker-row" style="cursor:pointer" data-idx="' + idx + '">'
                 + '<td class="text-center"><input type="checkbox" class="form-check-input pl-picker-check" data-idx="' + idx + '"></td>'
                 + '<td><code>' + plEsc(it.part_number || '-') + '</code></td>'
                 + '<td>' + plEsc(it.description) + '</td>'
                 + '<td class="text-center">' + plEsc(it.qty) + ' ' + plEsc(it.unit || '') + '</td>'
-                + '<td class="text-end" style="white-space:nowrap"><span style="font-size:11px;color:var(--text-muted)">' + plEsc(it.currency) + '</span> ' + plEsc(plSymbol(it.currency)) + ' ' + plFmt(it.price_currency) + '</td>'
-                + '<td class="text-end" style="white-space:nowrap">Rp ' + plFmt(it.price) + '</td>'
+                + '<td class="text-end" style="white-space:nowrap"><span style="font-size:11px;color:var(--text-muted)">' + plEsc(it.currency) + '</span> ' + plEsc(plSymbol(it.currency)) + ' ' + plFmt(it.purchase_price_currency) + '</td>'
+                + '<td class="text-end" style="white-space:nowrap">Rp ' + plFmt(it.purchase_price) + '</td>'
                 + '<td class="text-end" style="white-space:nowrap">Rp ' + plFmt(amountIdr) + '</td>'
                 + '</tr>');
         });
@@ -408,8 +408,8 @@ function plOpenConfigPicker(btn) {
     plPickerModal.show();
 }
 
-// Hitung total pilihan: satu mata uang -> Σ qty x harga sebelum kurs dalam mata uang itu;
-// campuran -> Σ qty x harga sesudah kurs dalam IDR.
+// Hitung total pilihan (harga beli/HPP): satu mata uang -> Σ qty x harga beli sebelum kurs
+// dalam mata uang itu; campuran -> Σ qty x harga beli sesudah kurs dalam IDR.
 function plPickerSelection() {
     var sel = [];
     $('.pl-picker-check:checked').each(function() { var it = PL.configItems[$(this).data('idx')]; if (it) sel.push(it); });
@@ -419,7 +419,7 @@ function plPickerSelection() {
     var codes = Object.keys(currencies);
     var single = codes.length === 1 && PL.currencies.indexOf(codes[0]) !== -1;
     var amount = 0;
-    sel.forEach(function(it) { amount += (it.qty || 0) * (single ? (it.price_currency || 0) : (it.price || 0)); });
+    sel.forEach(function(it) { amount += (it.qty || 0) * (single ? (it.purchase_price_currency || 0) : (it.purchase_price || 0)); });
     return { items: sel, currency: single ? codes[0] : 'IDR', amount: Math.round(amount * 10000) / 10000 };
 }
 

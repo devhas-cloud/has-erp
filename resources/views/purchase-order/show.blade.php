@@ -181,8 +181,8 @@
                                 <td class="text-center">{{ $item->qty ?? '—' }}</td>
                                 <td>{{ $item->unit ?: '—' }}</td>
                                 <td class="text-end">
-                                    @if($item->price_currency !== null)
-                                        {{ $item->currency ?: 'IDR' }} {{ number_format($item->price_currency, 2, ',', '.') }}
+                                            @if($item->selling_price_currency !== null)
+                                                {{ $item->currency ?: 'IDR' }} {{ number_format($item->selling_price_currency, 2, ',', '.') }}
                                     @else
                                         —
                                     @endif

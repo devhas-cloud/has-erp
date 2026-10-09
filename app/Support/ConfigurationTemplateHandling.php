@@ -77,7 +77,8 @@ trait ConfigurationTemplateHandling
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
+                    'selling_price' => $item->selling_price,
+                    'purchase_price_currency' => $item->purchase_price_currency,
                     'unit' => $item->unit,
                 ];
                 $walk($item->id);
@@ -146,8 +147,9 @@ trait ConfigurationTemplateHandling
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
-                    'price_currency' => $item->price_currency,
+                    'selling_price' => $item->selling_price,
+                    'selling_price_currency' => $item->selling_price_currency,
+                    'purchase_price_currency' => $item->purchase_price_currency,
                     'currency' => $item->currency,
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
@@ -365,7 +367,8 @@ trait ConfigurationTemplateHandling
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'nullable|integer',
-            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
+            'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ];
     }
@@ -382,7 +385,7 @@ trait ConfigurationTemplateHandling
 
         $products = MasterProduct::with('currency')
             ->whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
-            ->get(['id', 'price', 'currency_id'])
+            ->get(['id', 'selling_price', 'purchase_price', 'currency_id'])
             ->keyBy('id');
 
         $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
@@ -394,19 +397,21 @@ trait ConfigurationTemplateHandling
             $qty = (int) ($item['qty'] ?? 0);
             $productId = $item['product_id'] ?? null;
             $unit = $item['unit'] ?? null;
+            $product = $productId ? $products->get($productId) : null;
 
-            // Modul dengan pola harga client (mis. IMS) kirim 'price' eksplisit;
-            // simpan apa adanya. Modul lain tanpa 'price' -> recompute dari master product.
-            $explicitPrice = $item['price'] ?? null;
+            // Modul dengan pola harga client (mis. IMS) kirim 'selling_price' eksplisit;
+            // simpan apa adanya. Modul lain tanpa harga -> recompute dari master product.
+            $explicitPrice = $item['selling_price'] ?? null;
             if ($explicitPrice !== null && $explicitPrice !== '') {
                 $clientPrice = round((float) $explicitPrice, 2);
                 $pricing = [
                     'currency' => 'IDR',
-                    'price_currency' => $clientPrice,
-                    'price' => $clientPrice,
+                    'selling_price_currency' => $clientPrice,
+                    'selling_price' => $clientPrice,
+                    'purchase_price_currency' => $product ? round((float) $product->purchase_price, 2) : 0.0,
                 ];
             } else {
-                $pricing = $this->pricingFromProduct($productId ? $products->get($productId) : null, $qty, $baseCurrency);
+                $pricing = $this->pricingFromProduct($product, $qty, $baseCurrency);
             }
 
             $payload[] = [
@@ -418,8 +423,9 @@ trait ConfigurationTemplateHandling
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => $qty,
-                'price' => $pricing['price'],
-                'price_currency' => $pricing['price_currency'],
+                'selling_price' => $pricing['selling_price'],
+                'selling_price_currency' => $pricing['selling_price_currency'],
+                'purchase_price_currency' => $pricing['purchase_price_currency'],
                 'currency' => $pricing['currency'],
                 'unit' => $unit,
                 'sort_order' => $i + 1,

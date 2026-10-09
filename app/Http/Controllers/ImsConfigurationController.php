@@ -255,7 +255,8 @@ class ImsConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
-            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
+            'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
 
@@ -398,7 +399,7 @@ class ImsConfigurationController extends Controller
         $products = $query
             ->skip($start)
             ->take($length)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'selling_price', 'purchase_price']);
 
         $data = $products->map(fn ($product) => [
             'id' => $product->id,
@@ -407,7 +408,8 @@ class ImsConfigurationController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
-            'price' => $product->price,
+            'selling_price' => $product->selling_price,
+            'purchase_price' => $product->purchase_price,
         ])->all();
 
         return response()->json([
@@ -443,7 +445,8 @@ class ImsConfigurationController extends Controller
             'items.*.part_number' => 'nullable|string|max:100',
             'items.*.description' => 'required|string',
             'items.*.qty' => 'required|integer|min:1',
-            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
+            'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'items.*.unit' => 'nullable|string|max:50',
         ]);
 
@@ -842,7 +845,9 @@ class ImsConfigurationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'price' => $item->price,
+                    'selling_price' => $item->selling_price,
+                    'selling_price_currency' => $item->selling_price_currency,
+                    'purchase_price_currency' => $item->purchase_price_currency,
                     'unit' => $item->unit,
                     'sort_order' => $item->sort_order,
                 ]);
@@ -1020,9 +1025,10 @@ class ImsConfigurationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => (int) ($item['qty'] ?? 1),
-                'price' => $item['price'] ?? null,
-                'price_currency' => $item['price'] ?? null,
-                'currency' => $item['price'] ? 'IDR' : null,
+                'selling_price' => $item['selling_price'] ?? null,
+                'selling_price_currency' => $item['selling_price'] ?? null,
+                'purchase_price_currency' => $item['purchase_price_currency'] ?? null,
+                'currency' => isset($item['selling_price']) && $item['selling_price'] ? 'IDR' : null,
                 'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
@@ -1127,23 +1133,24 @@ class ImsConfigurationController extends Controller
     /**
      * Harga item dari master product. Qty <= 0 atau tanpa produk -> harga 0.00
      *
-     * @return array{currency: ?string, price_currency: float, price: float}
+     * @return array{currency: ?string, selling_price_currency: float, selling_price: float, purchase_price_currency: float}
      */
     private function pricingFromProduct(?MasterProduct $product, int $qty, string $baseCurrency): array
     {
         if (! $product) {
-            return ['currency' => null, 'price_currency' => 0.00, 'price' => 0.00];
+            return ['currency' => null, 'selling_price_currency' => 0.00, 'selling_price' => 0.00, 'purchase_price_currency' => 0.00];
         }
 
         $currency = $product->currency;
         $isForeign = $currency && ! $currency->is_base;
         $rate = $isForeign ? (float) $currency->rate : 1.0;
-        $priceCurrency = $qty > 0 ? round((float) $product->price, 2) : 0.00;
+        $priceCurrency = $qty > 0 ? round((float) $product->selling_price, 2) : 0.00;
 
         return [
             'currency' => $isForeign ? strtoupper($currency->name) : $baseCurrency,
-            'price_currency' => $priceCurrency,
-            'price' => round($priceCurrency * $rate, 2),
+            'selling_price_currency' => $priceCurrency,
+            'selling_price' => round($priceCurrency * $rate, 2),
+            'purchase_price_currency' => round((float) $product->purchase_price, 2),
         ];
     }
 }

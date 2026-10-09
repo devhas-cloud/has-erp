@@ -682,8 +682,8 @@
                                         </div>
                                     </td>
                                     <td class="text-center">{{ $item->qty ?: '' }} {{ $item->qty ? $item->unit : '' }}</td>
-                                    <td class="text-end">{{ $item->price ? \App\Models\Quotation::formatMoney($item->price) : '' }}</td>
-                                    <td class="text-end">{{ $item->qty && $item->price ? \App\Models\Quotation::formatMoney($item->qty * $item->price) : '' }}</td>
+                    <td class="text-end">{{ $item->selling_price ? \App\Models\Quotation::formatMoney($item->selling_price) : '' }}</td>
+                    <td class="text-end">{{ $item->qty && $item->selling_price ? \App\Models\Quotation::formatMoney($item->qty * $item->selling_price) : '' }}</td>
                                 </tr>
                             @empty
                                 <tr>
@@ -723,7 +723,7 @@
                                         @php
                                             $code = strtoupper($it->currency ?: 'IDR');
                                             $symbol = $symbols[$code] ?? ($code === 'IDR' ? 'Rp' : $code);
-                                            $amount = ($it->qty ?? 0) * ($it->price ?? 0);
+                                            $amount = ($it->qty ?? 0) * ($it->selling_price ?? 0);
                                             $catSubtotal += $amount;
                                         @endphp
                                         <tr>
@@ -732,11 +732,11 @@
                                             <td>{!! \App\Models\Quotation::renderDescription($it->description) !!}</td>
                                             <td class="text-center">{{ $it->qty ?: '' }} {{ $it->unit ?: '' }}</td>
                                             <td class="text-end" style="white-space:nowrap">
-                                                @if($it->price_currency !== null)
-                                                    <span style="font-size:11px;color:var(--text-muted);margin-right:4px">{{ $code }}</span>{{ $symbol }} {{ $code === 'IDR' ? \App\Models\Quotation::formatMoney($it->price_currency) : number_format($it->price_currency, 2, '.', ',') }}
+                                            @if($it->selling_price_currency !== null)
+                                                <span style="font-size:11px;color:var(--text-muted);margin-right:4px">{{ $code }}</span>{{ $symbol }} {{ $code === 'IDR' ? \App\Models\Quotation::formatMoney($it->selling_price_currency) : number_format($it->selling_price_currency, 2, '.', ',') }}
                                                 @endif
                                             </td>
-                                            <td class="text-end">{{ $it->price ? \App\Models\Quotation::formatMoney($it->price) : '' }}</td>
+                                            <td class="text-end">{{ $it->selling_price ? \App\Models\Quotation::formatMoney($it->selling_price) : '' }}</td>
                                             <td class="text-end">{{ $amount ? \App\Models\Quotation::formatMoney($amount) : '' }}</td>
                                         </tr>
                                     @endforeach
@@ -800,8 +800,8 @@
                                         </div>
                                     </td>
                                     <td class="text-center">{{ $citem->qty ?: '' }} {{ $citem->qty ? $citem->unit : '' }}</td>
-                                    <td class="text-end">{{ $citem->price ? \App\Models\Quotation::formatMoney($citem->price) : '' }}</td>
-                                    <td class="text-end">{{ $citem->qty && $citem->price ? \App\Models\Quotation::formatMoney($citem->qty * $citem->price) : '' }}</td>
+                            <td class="text-end">{{ $citem->selling_price ? \App\Models\Quotation::formatMoney($citem->selling_price) : '' }}</td>
+                            <td class="text-end">{{ $citem->qty && $citem->selling_price ? \App\Models\Quotation::formatMoney($citem->qty * $citem->selling_price) : '' }}</td>
                                 </tr>
                             @empty
                                 <tr>
@@ -812,7 +812,7 @@
                     </table>
                 </div>
                 @php
-                    $costTotal = $quotation->costItems->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->price ?? 0)), 0);
+                                $costTotal = $quotation->costItems->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->selling_price ?? 0)), 0);
                 @endphp
                 <div class="d-flex justify-content-end mt-2">
                     <table class="table table-custom align-middle mb-0" style="max-width:340px">

@@ -18,8 +18,9 @@ class QuotationConfigItem extends Model
         'part_number',
         'description',
         'qty',
-        'price',
-        'price_currency',
+        'selling_price',
+        'selling_price_currency',
+        'purchase_price_currency',
         'currency',
         'unit',
         'formula',
@@ -27,16 +28,18 @@ class QuotationConfigItem extends Model
     ];
 
     /**
-     * price          = harga satuan IDR sesudah kurs (price_currency x rate)
-     * price_currency = harga satuan sebelum kurs, dalam mata uang `currency`
-     * currency       = kode mata uang (currencies.name)
+     * selling_price          = harga satuan IDR sesudah kurs (selling_price_currency x rate)
+     * selling_price_currency = harga satuan sebelum kurs, dalam mata uang `currency`
+     * purchase_price_currency= snapshot harga beli (mata uang produk) dari master product
+     * currency               = kode mata uang (currencies.name)
      */
     protected function casts(): array
     {
         return [
             'qty' => 'integer',
-            'price' => 'float',
-            'price_currency' => 'float',
+            'selling_price' => 'float',
+            'selling_price_currency' => 'float',
+            'purchase_price_currency' => 'float',
             'formula' => 'array',
         ];
     }

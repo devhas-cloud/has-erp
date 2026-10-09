@@ -64,7 +64,7 @@ class DashboardAchievementTest extends TestCase
         ]);
 
         $product = MasterProduct::create(['name' => 'Sensor', 'code' => 'BR-1', 'brand' => 'HAS']);
-        $quotation->items()->create(['part_number' => $product->code, 'qty' => 2, 'price' => 500000]);
+        $quotation->items()->create(['part_number' => $product->code, 'qty' => 2, 'selling_price' => 500000]);
 
         // Jumlah opportunity per probabilitas (tanpa syarat quotation).
         foreach ([25, 50, 70] as $prob) {

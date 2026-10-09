@@ -280,8 +280,9 @@ class ProductImportService
             }
 
             try {
-                // Parse price
-                $price = $this->parsePrice($data['price'] ?? '');
+                // Parse harga jual & harga beli
+                $price = $this->parsePrice($data['selling_price'] ?? '');
+                $purchasePrice = $this->parsePrice($data['purchase_price'] ?? '');
 
                 // Parse status (case-insensitive)
                 $status = 'Active';
@@ -362,7 +363,8 @@ class ProductImportService
                     'type' => $type,
                     'parameter' => $parameter,
                     'description' => $this->nullIfEmpty($data['description'] ?? ''),
-                    'price' => $price,
+                    'selling_price' => $price,
+                    'purchase_price' => $purchasePrice,
                     'currency_id' => $currencyId,
                     'status' => $status,
                     'division_id' => $divisionId,

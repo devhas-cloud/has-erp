@@ -49,7 +49,7 @@ class ProductManagementPageTest extends TestCase
             'parameter' => 's::can / 0.01pH',
             'division_id' => $this->createDivision()->id,
             'description' => 'Sensor pH untuk water monitoring',
-            'price' => 12500000.00,
+            'selling_price' => 12500000.00,
             'status' => 'Active',
         ], $overrides));
     }
@@ -84,7 +84,7 @@ class ProductManagementPageTest extends TestCase
 
         $this->assertSame('E-514-4-075', $response->json('data.0.code'));
         $this->assertSame('Water', $response->json('data.0.division_name'));
-        $this->assertSame('12,500,000', $response->json('data.0.price_formatted'));
+        $this->assertSame('12,500,000.00', $response->json('data.0.selling_price_formatted'));
         $this->assertSame('Main', $response->json('data.0.type'));
         $this->assertSame('s::can / 0.01pH', $response->json('data.0.parameter'));
     }
@@ -103,7 +103,7 @@ class ProductManagementPageTest extends TestCase
                 'parameter' => 's::can / 0.05ppm',
                 'division_id' => $division->id,
                 'description' => 'Sensor ammonia',
-                'price' => 15000000.00,
+                'selling_price' => 15000000.00,
                 'status' => 'Active',
             ])
             ->assertOk()
@@ -121,7 +121,7 @@ class ProductManagementPageTest extends TestCase
         $this->actingAs($this->admin)
             ->postJson(route('product-management.store'), [
                 'code' => 'INV-001',
-                'price' => 1000,
+                'selling_price' => 1000,
                 'status' => 'Active',
                 'type' => 'Spare',
             ])
@@ -139,7 +139,7 @@ class ProductManagementPageTest extends TestCase
             ->postJson(route('product-management.store'), [
                 'name' => 'Duplikat',
                 'code' => 'E-514-4-075',
-                'price' => 1000,
+                'selling_price' => 1000,
                 'status' => 'Active',
             ])
             ->assertUnprocessable();
@@ -155,7 +155,7 @@ class ProductManagementPageTest extends TestCase
             ->assertJsonPath('data.name', 'pH::lyser pro')
             ->assertJsonPath('data.code', 'E-514-4-075')
             ->assertJsonPath('data.division_name', 'Water')
-            ->assertJsonPath('data.price', '12500000.00');
+            ->assertJsonPath('data.selling_price', '12500000.00');
     }
 
     public function test_update_changes_product(): void
@@ -167,7 +167,7 @@ class ProductManagementPageTest extends TestCase
                 'name' => 'pH::lyser pro V2',
                 'code' => 'E-514-4-075',
                 'brand' => 's::can',
-                'price' => 13000000.00,
+                'selling_price' => 13000000.00,
                 'status' => 'Inactive',
             ])
             ->assertOk()
@@ -213,7 +213,7 @@ class ProductManagementPageTest extends TestCase
     {
         $water = $this->createDivision(); // lookup divisi Water untuk import
 
-        $csv = "Name,Code,Brand,Category,Division,Description,Price,Status\n"
+        $csv = "Name,Code,Brand,Category,Division,Description,Selling Price,Status\n"
             ."pH::lyser pro,E-514-4-075,s::can,Sensor,Water,Sensor pH,12500000,Active\n"
             ."ammo::lyser pro,E-532-pro-075,s::can,Sensor,Water,Sensor ammonia,\"Rp 15.000.000,50\",Inactive\n"
             .",E-000-EMP,,,Water,,5000,Active\n"; // nama kosong => tetap boleh
@@ -230,12 +230,12 @@ class ProductManagementPageTest extends TestCase
             'code' => 'E-514-4-075',
             'name' => 'pH::lyser pro',
             'division_id' => $water->id,
-            'price' => 12500000.00,
+            'selling_price' => 12500000.00,
             'status' => 'Active',
         ]);
         $this->assertDatabaseHas('master_products', [
             'code' => 'E-532-pro-075',
-            'price' => 15000000.50,
+            'selling_price' => 15000000.50,
             'status' => 'Inactive',
         ]);
         $this->assertDatabaseHas('master_products', [
@@ -248,7 +248,7 @@ class ProductManagementPageTest extends TestCase
     {
         $this->createProduct(['code' => 'E-514-4-075', 'name' => 'Nama Lama']);
 
-        $csv = "Name,Code,Price,Status\n"
+        $csv = "Name,Code,Selling Price,Status\n"
             ."Nama Lama,E-999-X,1000,Active\n"         // nama duplikat (dipakai E-514-4-075) => gagal
             ."Nama Baru,E-514-4-075,999999,Active\n"   // update by code
             .",E-999,1000,Active\n"                    // nama kosong => boleh
@@ -267,7 +267,7 @@ class ProductManagementPageTest extends TestCase
         $this->assertDatabaseHas('master_products', [
             'code' => 'E-514-4-075',
             'name' => 'Nama Baru',
-            'price' => 999999.00,
+            'selling_price' => 999999.00,
         ]);
         $this->assertDatabaseHas('master_products', ['code' => 'E-999', 'name' => null]);
         $this->assertDatabaseMissing('master_products', ['code' => 'E-999-X']);
@@ -275,7 +275,7 @@ class ProductManagementPageTest extends TestCase
 
     public function test_import_rejects_duplicate_name_within_same_file(): void
     {
-        $csv = "Name,Code,Price,Status\n"
+        $csv = "Name,Code,Selling Price,Status\n"
             ."Sensor pH,E-111,1000,Active\n"
             ."sensor ph,E-222,2000,Active\n"; // case-insensitive => dianggap sama
 
@@ -296,7 +296,7 @@ class ProductManagementPageTest extends TestCase
         $payload = [
             'name' => '',
             'code' => 'EMP-001',
-            'price' => 1000,
+            'selling_price' => 1000,
             'status' => 'Active',
         ];
 
@@ -304,7 +304,7 @@ class ProductManagementPageTest extends TestCase
         $this->actingAs($this->admin)->postJson(route('product-management.store'), [
             'name' => '',
             'code' => 'EMP-002',
-            'price' => 2000,
+            'selling_price' => 2000,
             'status' => 'Active',
         ])->assertOk();
 
@@ -320,7 +320,7 @@ class ProductManagementPageTest extends TestCase
             ->postJson(route('product-management.store'), [
                 'name' => 'pH::lyser pro',
                 'code' => 'CODE-BARU',
-                'price' => 1000,
+                'selling_price' => 1000,
                 'status' => 'Active',
             ])
             ->assertUnprocessable()
@@ -337,7 +337,7 @@ class ProductManagementPageTest extends TestCase
             ->putJson(route('product-management.update', $product->id), [
                 'name' => 'pH::lyser pro',
                 'code' => 'E-514-4-075',
-                'price' => 13000000.00,
+                'selling_price' => 13000000.00,
                 'status' => 'Active',
             ])
             ->assertOk();
@@ -361,7 +361,7 @@ class ProductManagementPageTest extends TestCase
                 'parameter' => 'kalibrasi tahunan',
                 'division_id' => $division->id,
                 'description' => 'Deskripsi baru',
-                'price' => 13000000.00,
+                'selling_price' => 13000000.00,
                 'status' => 'Inactive',
             ])
             ->assertOk()
@@ -379,7 +379,7 @@ class ProductManagementPageTest extends TestCase
 
     public function test_import_parses_type_parameter(): void
     {
-        $csv = "Name,Code,Type,Parameter,Price,Status\n"
+        $csv = "Name,Code,Type,Parameter,Selling Price,Status\n"
             ."Servis Kalibrasi,SVC-001,Service,Kalibrasi 1 tahun,250000,Active\n"
             ."Sparepart X,SPR-001,Acc,s::can,50000,Active\n"
             ."Tanpa Klasifikasi,EMP-001,,,5000,Active\n";
@@ -411,7 +411,7 @@ class ProductManagementPageTest extends TestCase
 
     public function test_import_rejects_invalid_type(): void
     {
-        $csv = "Code,Type,Price,Status\n"
+        $csv = "Code,Type,Selling Price,Status\n"
             ."BAD-1,Spare,1000,Active\n"
             ."OK-1,Acc,1000,Active\n";
 
@@ -440,7 +440,7 @@ class ProductManagementPageTest extends TestCase
         ]);
         $internal = $this->createDivision(); // Water, tipe Internal
 
-        $csv = "Code,Division,Price,Status\n"
+        $csv = "Code,Division,Selling Price,Status\n"
             ."EXT-1,VENDOR-EXT,1000,Active\n"
             ."INT-1,Water,1000,Active\n";
 

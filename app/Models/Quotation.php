@@ -364,7 +364,7 @@ class Quotation extends Model
      * Hitung subtotal / diskon / netto (DPP) / PPN / grand total.
      *
      * Aturan:
-     *   - subtotal = jumlah(qty x price)
+     *   - subtotal = jumlah(qty x selling_price)
      *   - diskon   = jika discount_percent diisi -> subtotal x persen/100;
      *                jika tidak, pakai discount_amount (manual).
      *   - netto    = subtotal - diskon  (sekaligus menjadi DPP)
@@ -383,7 +383,7 @@ class Quotation extends Model
 
         foreach ($items as $item) {
             $qty = (float) ($item['qty'] ?? 0);
-            $price = (float) ($item['price'] ?? 0);
+            $price = (float) ($item['selling_price'] ?? 0);
             $subtotal += $qty * $price;
         }
 

@@ -174,7 +174,8 @@ class ProductExportService
             $product->parameter ?? '',
             $product->division?->division_name ?? '',
             $product->description ?? '',
-            $product->price ?? 0,
+            $product->selling_price ?? 0,
+            $product->purchase_price ?? 0,
             $product->currency?->name ?? '',
             $product->status ?? 'Active',
         ];

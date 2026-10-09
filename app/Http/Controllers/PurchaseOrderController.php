@@ -166,8 +166,9 @@ class PurchaseOrderController extends Controller
                 'description' => Quotation::renderDescription($item->description),
                 'qty' => $item->qty,
                 'unit' => $item->unit,
-                'price' => $item->price,
-                'price_currency' => $item->price_currency,
+                'selling_price' => $item->selling_price,
+                'selling_price_currency' => $item->selling_price_currency,
+                'purchase_price_currency' => $item->purchase_price_currency,
                 'currency' => $item->currency,
             ])->all(),
             'currencies' => Currency::formOptions(),
@@ -368,7 +369,7 @@ class PurchaseOrderController extends Controller
             })
             ->orderBy('name')
             ->limit(50)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'price', 'currency_id']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'selling_price', 'purchase_price', 'currency_id']);
 
         $data = $products->map(fn (MasterProduct $product) => [
             'id' => $product->id,
@@ -377,7 +378,8 @@ class PurchaseOrderController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
-            'price' => (float) $product->price,
+            'selling_price' => (float) $product->selling_price,
+            'purchase_price_currency' => (float) $product->purchase_price,
             'currency' => $product->currency && ! $product->currency->isBase() ? strtoupper($product->currency->name) : $base,
             'rate' => $product->currency && ! $product->currency->isBase() ? (float) $product->currency->rate : 1,
         ])->values();
@@ -412,8 +414,9 @@ class PurchaseOrderController extends Controller
             'items.*.description' => 'nullable|string',
             'items.*.qty' => 'nullable|integer|min:0',
             'items.*.unit' => 'nullable|string|max:50',
-            'items.*.price' => 'nullable|numeric|min:0',
-            'items.*.price_currency' => 'nullable|numeric|min:0',
+            'items.*.selling_price' => 'nullable|numeric|min:0',
+            'items.*.selling_price_currency' => 'nullable|numeric|min:0',
+            'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'items.*.currency' => 'nullable|string|max:10',
         ]);
     }
@@ -430,7 +433,7 @@ class PurchaseOrderController extends Controller
      *   3. pasang parent_id berdasar parent_key
      *
      * Harga: bila baris punya master_product_id dan user belum mengirim
-     * price_currency, diisi otomatis dari master product (Q2=A: tetap bisa
+     * selling_price_currency, diisi otomatis dari master product (Q2=A: tetap bisa
      * diedit/negosiasi supplier).
      */
     private function syncItems(PurchaseOrder $purchaseOrder, array $items): void
@@ -461,7 +464,7 @@ class PurchaseOrderController extends Controller
         $productIds = collect($items)->pluck('master_product_id')->filter()->unique()->values();
         $products = MasterProduct::with('currency')
             ->whereIn('id', $productIds)
-            ->get(['id', 'price', 'currency_id'])
+            ->get(['id', 'selling_price', 'purchase_price', 'currency_id'])
             ->keyBy('id');
         $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
 
@@ -486,8 +489,9 @@ class PurchaseOrderController extends Controller
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'unit' => $item['unit'] ?? null,
-                'price' => $pricing['price'],
-                'price_currency' => $pricing['price_currency'],
+                'selling_price' => $pricing['selling_price'],
+                'selling_price_currency' => $pricing['selling_price_currency'],
+                'purchase_price_currency' => $pricing['purchase_price_currency'],
                 'currency' => $pricing['currency'],
                 'sort_order' => $i + 1,
                 'created_at' => $now,
@@ -526,22 +530,22 @@ class PurchaseOrderController extends Controller
 
     /**
      * Harga item: bila ada master_product_id dan user belum mengirim
-     * price_currency/currency, diisi dari master product (currency + harga asli
-     * sebelum kurs + harga IDR sesudah kurs). Nilai yang dikirim user (hasil
-     * edit/negosiasi) tetap dipakai.
+     * selling_price_currency/currency, diisi dari master product (currency + harga asli
+     * sebelum kurs + harga IDR sesudah kurs). purchase_price_currency di-snapshot dari master
+     * product. Nilai yang dikirim user (hasil edit/negosiasi) tetap dipakai.
      *
-     * @return array{currency: ?string, price_currency: ?float, price: ?float}
+     * @return array{currency: ?string, selling_price_currency: ?float, selling_price: ?float, purchase_price_currency: float}
      */
     private function pricingForItem(array $item, \Illuminate\Support\Collection $products, string $baseCurrency): array
     {
         $productId = $item['master_product_id'] ?? null;
         $product = $productId ? $products->get($productId) : null;
 
-        $rawPriceCurrency = $item['price_currency'] ?? null;
+        $rawPriceCurrency = $item['selling_price_currency'] ?? null;
         $hasPriceCurrency = $rawPriceCurrency !== null && $rawPriceCurrency !== '';
 
         if ($product && ! $hasPriceCurrency) {
-            $priceCurrency = round((float) $product->price, 2);
+            $priceCurrency = round((float) $product->selling_price, 2);
             $currency = $product->currency && ! $product->currency->isBase()
                 ? strtoupper($product->currency->name)
                 : $baseCurrency;
@@ -555,15 +559,21 @@ class PurchaseOrderController extends Controller
             $rate = (float) (Currency::where('name', $currency)->value('rate') ?? 1);
         }
 
-        $price = $item['price'] ?? null;
+        $price = $item['selling_price'] ?? null;
         if (($price === null || $price === '') && $priceCurrency !== null) {
             $price = round($priceCurrency * $rate, 2);
         }
 
+        $purchasePrice = $item['purchase_price_currency'] ?? null;
+        if ($purchasePrice === null || $purchasePrice === '') {
+            $purchasePrice = $product ? (float) $product->purchase_price : 0.0;
+        }
+
         return [
             'currency' => $currency,
-            'price_currency' => $priceCurrency,
-            'price' => $price !== null && $price !== '' ? round((float) $price, 2) : null,
+            'selling_price_currency' => $priceCurrency,
+            'selling_price' => $price !== null && $price !== '' ? round((float) $price, 2) : null,
+            'purchase_price_currency' => round((float) $purchasePrice, 2),
         ];
     }
 

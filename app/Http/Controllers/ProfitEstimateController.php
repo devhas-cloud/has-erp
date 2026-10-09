@@ -641,7 +641,7 @@ class ProfitEstimateController extends Controller
             $costParentIds = $quotation->costItems->pluck('parent_id')->filter()->unique()->all();
             $costTotal = $quotation->costItems
                 ->filter(fn ($i) => ! in_array($i->id, $costParentIds, true))
-                ->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->price ?? 0)), 0);
+                ->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->selling_price ?? 0)), 0);
 
             $costPlanned = [];
             foreach (ProfitEstimate::DEFAULT_COST_PLANNED_LABELS as $idx => $label) {
@@ -678,21 +678,30 @@ class ProfitEstimateController extends Controller
 
     /**
      * Snapshot item List Configuration quotation untuk modal "Pilih dari
-     * Configuration" di form PL (harga satuan sebelum & sesudah kurs).
+     * Configuration" di form PL — menampilkan HARGA BELI (HPP) snapshot
+     * purchase_price_currency sebelum kurs + purchase_price (IDR sesudah kurs).
      */
     private function configItemsForPicker(Quotation $quotation): array
     {
-        return $quotation->configItems->map(fn ($it) => [
-            'id' => $it->id,
-            'category' => $it->category ?: 'Lainnya',
-            'part_number' => $it->part_number,
-            'description' => $this->firstLine($it->description),
-            'qty' => (float) ($it->qty ?: 0),
-            'unit' => $it->unit,
-            'currency' => strtoupper($it->currency ?: ProfitEstimate::BASE_CURRENCY),
-            'price_currency' => (float) ($it->price_currency ?? $it->price ?? 0),
-            'price' => (float) ($it->price ?? 0),
-        ])->values()->all();
+        $rates = $this->currentRates();
+
+        return $quotation->configItems->map(function ($it) use ($rates) {
+            $code = strtoupper($it->currency ?: ProfitEstimate::BASE_CURRENCY);
+            $purchaseCurrency = (float) ($it->purchase_price_currency ?? 0);
+            $rate = $code === ProfitEstimate::BASE_CURRENCY ? 1.0 : (float) ($rates[$code] ?? 1.0);
+
+            return [
+                'id' => $it->id,
+                'category' => $it->category ?: 'Lainnya',
+                'part_number' => $it->part_number,
+                'description' => $this->firstLine($it->description),
+                'qty' => (float) ($it->qty ?: 0),
+                'unit' => $it->unit,
+                'currency' => $code,
+                'purchase_price_currency' => $purchaseCurrency,
+                'purchase_price' => round($purchaseCurrency * $rate, 2),
+            ];
+        })->values()->all();
     }
 
     private function firstLine(?string $html): string

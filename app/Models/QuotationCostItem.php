@@ -16,7 +16,7 @@ class QuotationCostItem extends Model
         'parent_id',
         'description',
         'qty',
-        'price',
+        'selling_price',
         'unit',
         'formula',
         'sort_order',
@@ -26,7 +26,7 @@ class QuotationCostItem extends Model
     {
         return [
             'qty' => 'integer',
-            'price' => 'float',
+            'selling_price' => 'float',
             'formula' => 'array',
         ];
     }

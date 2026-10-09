@@ -218,7 +218,7 @@
                 @foreach($group['items'] as $item)
                     @php
                         $qty = $item->qty;
-                        $unitPrice = $printCurrencyMatches ? $item->price_currency : $item->price;
+                            $unitPrice = $printCurrencyMatches ? $item->selling_price_currency : $item->selling_price;
                         $amount = $qty !== null && $unitPrice !== null ? $qty * $unitPrice : null;
                     @endphp
                     <tr>

@@ -222,7 +222,7 @@
         // Total = jumlah qty x price dari baris leaf saja (parent tidak dihitung 2x).
         $costTotal = $quotation->costItems
             ->filter(fn ($i) => ! in_array($i->id, $parentIds))
-            ->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->price ?? 0)), 0);
+                ->reduce(fn ($c, $i) => $c + (($i->qty ?? 0) * ($i->selling_price ?? 0)), 0);
     @endphp
 
     @if($quotation->cost_title)
@@ -273,8 +273,8 @@
                     <td> {{ $item->item_no }} &emsp; {!! \App\Models\Quotation::renderDescription($item->description) !!}</td>
                     <td class="qty-col">{{ $item->qty ?: '' }}</td>
                     <td class="unit-col">{{ $item->qty ? $item->unit : '' }}</td>
-                    <td class="price-col">{{ $item->price ? \App\Models\Quotation::formatMoney($item->price) : '' }}</td>
-                    <td class="amount-col">{{ $item->qty && $item->price ? \App\Models\Quotation::formatMoney($item->qty * $item->price) : '' }}</td>
+                    <td class="price-col">{{ $item->selling_price ? \App\Models\Quotation::formatMoney($item->selling_price) : '' }}</td>
+                    <td class="amount-col">{{ $item->qty && $item->selling_price ? \App\Models\Quotation::formatMoney($item->qty * $item->selling_price) : '' }}</td>
                 </tr>
             @endif
         @empty

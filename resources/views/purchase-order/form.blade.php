@@ -330,7 +330,7 @@ function poRowHtml(item, parentKey) {
 
     var html = '<tr data-key="' + key + '" data-parent="' + parentKeyAttr + '" data-depth="' + depth + '"';
     html += ' data-goods-request-item-id="' + (item.goods_request_item_id || '') + '" data-goods-request-id="' + (item.goods_request_id || '') + '"';
-    html += ' data-master-product-id="' + (item.master_product_id || '') + '">';
+    html += ' data-master-product-id="' + (item.master_product_id || '') + '" data-purchase-price="' + (item.purchase_price_currency != null ? item.purchase_price_currency : '') + '">';
     html += '<td class="text-center po-row-num"></td>';
     html += '<td>' + sourceBadge + '</td>';
     html += '<td><div class="d-flex gap-1">';
@@ -341,7 +341,7 @@ function poRowHtml(item, parentKey) {
     html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm po-qty" value="' + (item.qty != null ? item.qty : '') + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm po-unit" value="' + poEsc(item.unit || '') + '"></td>';
     html += '<td>' + poCurrencySelect(item.currency) + '</td>';
-    html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-end po-price-currency" value="' + (item.price_currency != null ? poFmt(item.price_currency) : '') + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-end po-price-currency" value="' + (item.selling_price_currency != null ? poFmt(item.selling_price_currency) : '') + '"></td>';
     html += '<td class="text-end po-amount">0</td>';
     html += '<td class="text-center">';
     html += '<button type="button" class="btn-icon" title="Tambah Baris Anak" onclick="poAddChild(this)"><i class="fa fa-plus"></i></button>';
@@ -465,8 +465,9 @@ function poCollectItems() {
             qty: $row.find('.po-qty').val(),
             unit: $row.find('.po-unit').val(),
             currency: currency,
-            price_currency: priceCurrency,
-            price: price
+            selling_price_currency: priceCurrency,
+            selling_price: price,
+            purchase_price_currency: $row.attr('data-purchase-price') || null
         });
     });
     return items;
@@ -506,7 +507,7 @@ function poSearchProducts() {
                 html += '<a href="javascript:void(0)" class="list-group-item list-group-item-action po-product-item" data-idx="' + poolIdx + '">';
                 html += '<div class="d-flex justify-content-between align-items-center">';
                 html += '<strong>' + poEsc(p.code || '') + ' &middot; ' + poEsc(p.name || '') + '</strong>';
-                html += '<span class="badge" style="background:var(--accent-soft);color:var(--accent)">' + poEsc(p.currency) + ' ' + poFmt(p.price) + '</span>';
+                html += '<span class="badge" style="background:var(--accent-soft);color:var(--accent)">' + poEsc(p.currency) + ' ' + poFmt(p.selling_price) + '</span>';
                 html += '</div>';
                 if (p.brand || p.category) html += '<div class="text-muted" style="font-size:12px">' + poEsc([p.brand, p.category].filter(Boolean).join(' · ')) + '</div>';
                 html += '</a>';
@@ -531,7 +532,8 @@ $(document).on('click', '.po-product-item', function() {
     }
     var $currency = $row.find('.po-currency');
     $currency.val(p.currency || (poCurrencies.length ? poCurrencies[0].name : 'IDR'));
-    $row.find('.po-price-currency').val(p.price != null ? poFmt(p.price) : '');
+    $row.find('.po-price-currency').val(p.selling_price != null ? poFmt(p.selling_price) : '');
+    $row.attr('data-purchase-price', p.purchase_price_currency != null ? p.purchase_price_currency : '');
     poRecalc();
     if (poProductPickerInstance) poProductPickerInstance.hide();
     toastr.success('Produk diterapkan.');

@@ -139,7 +139,7 @@
                     @php
                         $item = $row['item'];
                         $depth = $row['depth'];
-                        $price = $item->price;
+                        $price = $item->selling_price;
                     @endphp
                     <tr>
                         <td class="no-col" style="padding-left:{{ 6 + $depth * 12 }}px">{{ $item->item_no }}</td>

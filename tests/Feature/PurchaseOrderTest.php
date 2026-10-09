@@ -186,8 +186,8 @@ class PurchaseOrderTest extends TestCase
                     'qty' => 2,
                     'unit' => 'Unit',
                     'currency' => 'IDR',
-                    'price_currency' => 100000,
-                    'price' => 100000,
+                    'selling_price_currency' => 100000,
+                    'selling_price' => 100000,
                 ],
                 [
                     'goods_request_item_id' => $grIms->items->first()->id,
@@ -197,8 +197,8 @@ class PurchaseOrderTest extends TestCase
                     'qty' => 5,
                     'unit' => 'Pcs',
                     'currency' => 'IDR',
-                    'price_currency' => 50000,
-                    'price' => 50000,
+                    'selling_price_currency' => 50000,
+                    'selling_price' => 50000,
                 ],
             ],
         ])->assertOk();
@@ -553,8 +553,8 @@ class PurchaseOrderTest extends TestCase
             'qty' => 2,
             'unit' => 'Unit',
             'currency' => 'EUR',
-            'price_currency' => 941,
-            'price' => 941 * 15800,
+            'selling_price_currency' => 941,
+            'selling_price' => 941 * 15800,
             'sort_order' => 1,
         ]);
         // Mata uang berbeda pada item kedua -> printCurrency() harus fallback ke IDR.
@@ -565,8 +565,8 @@ class PurchaseOrderTest extends TestCase
             'qty' => 1,
             'unit' => 'Each',
             'currency' => 'IDR',
-            'price_currency' => 100000,
-            'price' => 100000,
+            'selling_price_currency' => 100000,
+            'selling_price' => 100000,
             'sort_order' => 2,
         ]);
 
@@ -604,8 +604,8 @@ class PurchaseOrderTest extends TestCase
                     'qty' => 2,
                     'unit' => 'Unit',
                     'currency' => 'IDR',
-                    'price_currency' => 100000,
-                    'price' => 100000,
+                    'selling_price_currency' => 100000,
+                    'selling_price' => 100000,
                 ],
             ],
         ])->assertOk();
@@ -643,7 +643,7 @@ class PurchaseOrderTest extends TestCase
             'name' => 'pH::lyser pro',
             'code' => 'E-514-4-075',
             'division_id' => $this->division->id,
-            'price' => 100,
+            'selling_price' => 100,
             'currency_id' => $usd->id,
             'status' => 'Active',
         ]);
@@ -654,7 +654,7 @@ class PurchaseOrderTest extends TestCase
 
         $this->assertSame($product->id, $response->json('data.0.id'));
         $this->assertSame('USD', $response->json('data.0.currency'));
-        $this->assertEquals(100.0, $response->json('data.0.price'));
+        $this->assertEquals(100.0, $response->json('data.0.selling_price'));
         $this->assertEquals(20000, $response->json('data.0.rate'));
     }
 
@@ -671,7 +671,7 @@ class PurchaseOrderTest extends TestCase
             'name' => 'Sensor DO',
             'code' => 'DO-001',
             'division_id' => $this->division->id,
-            'price' => 100,
+            'selling_price' => 100,
             'currency_id' => $usd->id,
             'status' => 'Active',
         ]);
@@ -694,9 +694,9 @@ class PurchaseOrderTest extends TestCase
         $item = $po->items->first();
 
         $this->assertSame($product->id, $item->master_product_id);
-        $this->assertSame(100.0, (float) $item->price_currency);
+        $this->assertSame(100.0, (float) $item->selling_price_currency);
         $this->assertSame('USD', $item->currency);
-        $this->assertSame(2000000.0, (float) $item->price);
+        $this->assertSame(2000000.0, (float) $item->selling_price);
         $this->assertSame(4000000, (int) $po->grandTotal());
     }
 
@@ -710,7 +710,7 @@ class PurchaseOrderTest extends TestCase
             'name' => 'Sensor A',
             'code' => 'PN-1',
             'division_id' => $this->division->id,
-            'price' => 50000,
+            'selling_price' => 50000,
             'status' => 'Active',
         ]);
         $gr = $this->makeApprovedGoodsRequest($this->division, [

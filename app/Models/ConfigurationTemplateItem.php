@@ -19,8 +19,9 @@ class ConfigurationTemplateItem extends Model
         'part_number',
         'description',
         'qty',
-        'price',
-        'price_currency',
+        'selling_price',
+        'selling_price_currency',
+        'purchase_price_currency',
         'currency',
         'unit',
         'sort_order',
@@ -30,8 +31,9 @@ class ConfigurationTemplateItem extends Model
     {
         return [
             'qty' => 'integer',
-            'price' => 'float',
-            'price_currency' => 'float',
+            'selling_price' => 'float',
+            'selling_price_currency' => 'float',
+            'purchase_price_currency' => 'float',
         ];
     }
 

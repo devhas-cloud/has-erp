@@ -54,7 +54,7 @@ class CurrencyManagementTest extends TestCase
             'code' => 'E-514-4-075',
             'brand' => 's::can',
             'division_id' => $division->id,
-            'price' => 12500000.00,
+            'selling_price' => 12500000.00,
             'status' => 'Active',
         ], $overrides));
     }
@@ -228,7 +228,7 @@ class CurrencyManagementTest extends TestCase
         $this->actingAs($this->admin)
             ->postJson(route('product-management.store'), [
                 'code' => 'NEW-001',
-                'price' => 5000,
+                'selling_price' => 5000,
                 'status' => 'Active',
             ])
             ->assertOk()
@@ -248,7 +248,7 @@ class CurrencyManagementTest extends TestCase
         $this->actingAs($this->admin)
             ->postJson(route('product-management.store'), [
                 'code' => 'NEW-USD-001',
-                'price' => 100,
+                'selling_price' => 100,
                 'currency_id' => $usd->id,
                 'status' => 'Active',
             ])
@@ -279,7 +279,7 @@ class CurrencyManagementTest extends TestCase
     {
         $this->seedCurrencies();
         $usd = Currency::where('name', 'USD')->first();
-        $product = $this->createProduct(['currency_id' => $usd->id, 'price' => 100]);
+        $product = $this->createProduct(['currency_id' => $usd->id, 'selling_price' => 100]);
 
         $response = $this->actingAs($this->admin)
             ->getJson(route('product-management.show', $product->id))
