@@ -811,7 +811,12 @@
         <button type="button" class="btn-accent" onclick="openEditModal({{ $opportunity->id }})">
             <i class="fa fa-pen"></i><span>Edit</span>
         </button>
+        @else
+        <button type="button" class="btn-accent" onclick="openCloseLossModal()">
+            <i class="fa fa-circle-xmark"></i> Close Lost
+        </button>
         @endif
+
         <a href="{{ route('opportunity-management.index') }}" class="btn-ghost">
             <i class="fa fa-arrow-left"></i><span>Kembali</span>
         </a>
@@ -929,7 +934,8 @@
                     </div>
                 </div>
 
-
+                {{-- tidak di aktifkan dulu karena ada perubahan di flow approval close loss --}}
+                {{--
                 <div class="opp-header__actions">
                     @if($opportunity->close_loss_status === 'pending')
                         <span class="status-badge" style="background:#fef3c7;color:#92400e"><i class="fa fa-hourglass-half"></i> Menunggu Approval Close Loss</span>
@@ -972,6 +978,22 @@
                         </button>
                         @endif
 
+                    @endif
+                </div> --}}
+
+                <div class="opp-header__actions">
+                    @if($opportunity->close_loss_status === 'pending')
+                        <span class="status-badge" style="background:#fef3c7;color:#92400e"><i class="fa fa-hourglass-half"></i> Menunggu Approval Close Loss</span>
+                        @if($canApprove)
+                            <button type="button" class="btn btn-sm btn-success" onclick="openCloseLossReview()">
+                                <i class="fa fa-eye"></i> Review &amp; Approve
+                            </button>
+                        @endif
+                        @if($canUpdate && !$canApprove)
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="openCloseLossModal()">
+                                <i class="fa fa-pen"></i> Ubah
+                            </button>
+                        @endif
                     @endif
                 </div>
 
@@ -2057,11 +2079,16 @@ function renderActivity(a) {
         });
     }
     var taskBadge = '';
-    if (a.task) {
-        taskBadge = '<span class="status-badge status-active" style="font-size:10px;padding:1px 8px;margin-left:8px"><i class="fa fa-tasks" style="font-size:9px"></i> Task #' + a.task.id + '</span>';
+
+
+    var relatedBadge = '';
+    if (a.related) {
+        var relIcon = (a.related.type === 'quote_pdf' || a.related.type === 'proposal_pdf') ? 'fa-file-pdf' : (a.related.type === 'proposal' ? 'fa-file-text' : 'fa-file-invoice');
+        relatedBadge = '<a href="' + a.related.url + '" target="_blank" rel="noopener" class="status-badge" style="font-size:10px;padding:1px 8px;margin-left:8px;color:var(--accent);background:var(--accent-soft);text-decoration:none" title="Buka dokumen terkait"><i class="fa ' + relIcon + '" style="font-size:9px"></i> ' + a.related.label + '</a>';
     }
 
     var replyCount = (a.replies && a.replies.length) ? a.replies.length : 0;
+    var hasTaskNested = (a.replies || []).some(function(r) { return r.from_task; });
     var repliesSectionId = 'replies-section-' + a.id;
     var replyFormId = 'reply-form-' + a.id;
     var replyFileId = 'reply-file-' + a.id;
@@ -2102,16 +2129,19 @@ function renderActivity(a) {
         replyToggle = '<button class="activity-reply-toggle" onclick="toggleReplies(' + a.id + ')"><i class="fa fa-comments"></i> ' + toggleLabel + '</button>';
     }
 
-    var replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
-        '<div class="reply-input-row">' +
-        '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' + a.id + ')}">' +
-        '<div class="reply-actions">' +
-        '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
-        '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
-        '</div></div>' +
-        '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
-        '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div>' +
-        '<div class="mention-suggestions reply-mention-suggestions" id="mention-suggestions-reply-' + a.id + '"></div></div>';
+    var replyFormHtml = '';
+    if (!hasTaskNested) {
+        replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
+            '<div class="reply-input-row">' +
+            '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' + a.id + ')}">' +
+            '<div class="reply-actions">' +
+            '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
+            '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
+            '</div></div>' +
+            '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
+            '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div>' +
+            '<div class="mention-suggestions reply-mention-suggestions" id="mention-suggestions-reply-' + a.id + '"></div></div>';
+    }
 
     var html = '<div class="activity-post" id="activity-' + a.id + '">' +
         '<div class="activity-post-avatar">' + avatar + '</div>' +
@@ -2120,11 +2150,12 @@ function renderActivity(a) {
         '<span class="activity-post-author">' + (a.user ? a.user.display_name : '—') + '</span>' +
         '<span class="activity-post-time">' + time + '</span>' +
         taskBadge +
+        relatedBadge +
         '</div>' +
         '<div class="activity-post-content">' + renderMentions(a.content || '') + '</div>' +
         (attachmentsHtml ? '<div class="activity-post-attachments">' + attachmentsHtml + '</div>' : '') +
         '<div class="activity-post-actions">' +
-        '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>' +
+        (hasTaskNested ? '' : '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>') +
         replyToggle +
         '</div>' +
         repliesHtml +
