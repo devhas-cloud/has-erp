@@ -13,6 +13,8 @@ use App\Models\Source;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ContactManagementTest extends TestCase
@@ -264,6 +266,41 @@ class ContactManagementTest extends TestCase
         $this->actingAs($this->creator)->postJson(route('contact-management.store'), $payload)->assertOk();
 
         $this->assertNull(AccountContact::firstOrFail()->name_referral);
+    }
+
+    public function test_store_persists_uploaded_contact_icon(): void
+    {
+        Storage::fake('public');
+
+        $response = $this->actingAs($this->creator)->postJson(route('contact-management.store'), array_merge($this->payload, [
+            'icon' => UploadedFile::fake()->image('photo.png'),
+        ]));
+
+        $response->assertOk();
+        $contact = AccountContact::firstOrFail();
+        $this->assertNotNull($contact->icon);
+        Storage::disk('public')->assertExists($contact->icon);
+        $this->assertStringContainsString('storage/'.$contact->icon, $contact->icon_url);
+    }
+
+    public function test_data_endpoint_includes_company_icon_fields(): void
+    {
+        $company = AccountCompany::create(array_merge($this->payload, [
+            'account_name' => 'PT Sinar Abadi',
+            'status' => 'Active',
+        ]));
+
+        AccountContact::create(array_merge($this->payload, [
+            'account_companies_id' => $company->id,
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+
+        $response = $this->actingAs($this->creator)->getJson(route('contact-management.data'));
+
+        $response->assertOk();
+        $this->assertSame('PT Sinar Abadi', $response->json('data.0.company_name_display'));
+        $this->assertSame('PT', $response->json('data.0.company_initials'));
     }
 
 }

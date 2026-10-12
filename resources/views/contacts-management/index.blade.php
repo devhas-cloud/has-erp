@@ -108,8 +108,8 @@
                 <tr>
                     <th style="width:50px">#</th>
                     <th>Name</th>
-                    <th>Title</th>
                     <th>Account Name</th>
+                    <th>Title</th>
                     <th>Mobile</th>
                     <th>Email</th>
                     <th>Owner</th>
@@ -178,6 +178,16 @@
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="contact-form-section-body">
+                            <div class="contact-form-row">
+                                <div class="form-group">
+                                    <label>Photo Profile</label>
+                                    <div style="display:flex;align-items:center;gap:12px">
+                                        <span id="contact-icon-preview" class="avatar-circle" style="overflow:hidden;flex:0 0 36px"></span>
+                                        <input type="file" name="icon" id="contact-icon" accept="image/*">
+                                    </div>
+                                    <small class="text-muted" style="font-size:11px">PNG/JPG, maks 2MB.</small>
+                                </div>
+                            </div>
                             <div class="contact-form-row">
                                 <div class="form-group small">
                                     <label>Salutation <span class="text-danger">*</span></label>
@@ -439,6 +449,15 @@ function toggleContactReferral() {
     }
 }
 
+function contactUpdateIconPreview(src, initials) {
+    const $p = $('#contact-icon-preview');
+    if (src) {
+        $p.html('<img src="' + src + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">');
+    } else {
+        $p.text(initials || '');
+    }
+}
+
 function resetContactForm() {
     document.getElementById('contact-form').reset();
     document.getElementById('contact-edit-id').value = '';
@@ -453,6 +472,7 @@ function resetContactForm() {
     $('#contact-mobile').val('');
     $('#contact-mobile-full').val('');
     toggleContactReferral();
+    contactUpdateIconPreview('', '');
 }
 
 function openCreateModal() {
@@ -475,6 +495,7 @@ function openEditModal(id) {
             document.getElementById('contact-edit-id').value = res.data.id;
             $('#contact-salutation').val(res.data.salutation);
             $('#contact-full-name').val(res.data.full_name);
+            contactUpdateIconPreview(res.data.icon_url || '', (res.data.full_name || '?').substring(0, 2).toUpperCase());
             $('#contact-account').val(res.data.account_companies_id).trigger('change');
             $('#contact-assigned-to').val(res.data.assigned_to_id).trigger('change');
             $('#contact-email').val(res.data.email);
@@ -529,8 +550,19 @@ function initContactsTable() {
                         '</div>';
                 }
             },
+            {
+                data: 'account_name', orderable: false,
+                render: function(data, type, row) {
+                    var avatar = row.company_icon
+                        ? '<img src="' + row.company_icon + '" class="avatar-circle" alt="" style="background:transparent">'
+                        : '<div class="avatar-circle">' + row.company_initials + '</div>';
+                    return '<div style="display:flex;align-items:center;gap:10px">' +
+                        avatar +
+                        '<span style="color:var(--text-primary);font-weight:500">' + row.company_name_display + '</span>' +
+                        '</div>';
+                }
+            },
             { data: 'title', orderable: false },
-            { data: 'account_name', orderable: false },
             { data: 'mobile' },
             { data: 'email' },
             { data: 'owner_name', orderable: false },
@@ -715,6 +747,13 @@ $(document).on('click', '.btn-delete-contact', function() {
 
 $(document).on('change', '#contact-account', function() {
     $(this).removeClass('is-invalid');
+});
+
+$(document).on('change', '#contact-icon', function() {
+    const file = this.files && this.files[0];
+    if (file) {
+        contactUpdateIconPreview(URL.createObjectURL(file), '');
+    }
 });
 
 $(document).on('change', '#contact-source', function() {

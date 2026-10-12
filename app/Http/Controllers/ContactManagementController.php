@@ -115,10 +115,13 @@ class ContactManagementController extends Controller
                 'id' => $contact->id,
                 'full_name' => $contact->full_name ?? '—',
                 'initials' => strtoupper(substr($contact->full_name ?? '?', 0, 2)),
-                'icon' => $contact->icon,
+                'icon' => $contact->icon_url,
                 'name_display' => $contact->full_name ?? '—',
                 'title' => $contact->jobTitle?->title_name ?? '—',
                 'account_name' => $contact->accountCompany?->account_name ?? '—',
+                'company_icon' => $contact->accountCompany?->icon_url,
+                'company_initials' => strtoupper(substr((string) ($contact->accountCompany?->account_name ?? '?'), 0, 2)),
+                'company_name_display' => $contact->accountCompany?->account_name ?? '—',
                 'mobile' => $contact->mobile ?? '—',
                 'email' => $contact->email ?? '—',
                 'owner_name' => $contact->contactOwner?->display_name ?? '—',
@@ -141,6 +144,7 @@ class ContactManagementController extends Controller
         $validated = $request->validate([
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
+            'icon' => 'nullable|image|max:2048',
             'account_companies_id' => 'required|exists:account_companies,id',
             'email' => 'required|email|max:100|unique:account_contacts,email',
             'phone' => 'nullable|string|max:30',
@@ -167,6 +171,10 @@ class ContactManagementController extends Controller
         $validated['name_referral'] = $isReferralSource
             ? (trim((string) ($validated['name_referral'] ?? '')) ?: null)
             : null;
+
+        if ($request->hasFile('icon')) {
+            $validated['icon'] = $request->file('icon')->store('contact-icons', 'public');
+        }
 
         AccountContact::create(array_merge($validated, [
             'contact_owner_id' => Auth::id(),
@@ -198,6 +206,7 @@ class ContactManagementController extends Controller
         $validated = $request->validate([
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
+            'icon' => 'nullable|image|max:2048',
             'account_companies_id' => 'required|exists:account_companies,id',
             'email' => 'required|email|max:100|unique:account_contacts,email,'.$contact->id,
             'phone' => 'nullable|string|max:30',
@@ -220,6 +229,11 @@ class ContactManagementController extends Controller
         $validated['name_referral'] = $isReferralSource
             ? (trim((string) ($validated['name_referral'] ?? '')) ?: null)
             : null;
+
+        if ($request->hasFile('icon')) {
+            $this->deleteContactIcon($contact->icon);
+            $validated['icon'] = $request->file('icon')->store('contact-icons', 'public');
+        }
 
         $contact->update($validated);
 
@@ -366,6 +380,13 @@ $sources = Source::where('status', 'Active')->get();
     private function isReferralSource($sourceId): bool
     {
         return str_contains(strtolower((string) Source::find($sourceId)?->source_name), 'referral');
+    }
+
+    private function deleteContactIcon(?string $path): void
+    {
+        if ($path && ! preg_match('#^(https?:)?/#i', $path)) {
+            Storage::disk('public')->delete($path);
+        }
     }
 
     public function export()

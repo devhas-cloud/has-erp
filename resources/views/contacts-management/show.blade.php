@@ -252,8 +252,8 @@
 <div class="account-header-wrapper fade-in">
     <div class="account-header">
         <div class="account-header__identity">
-            @if($contact->icon)
-                <img src="{{ $contact->icon }}" class="avatar-circle" alt="" style="background:transparent">
+            @if($contact->icon_url)
+                <img src="{{ $contact->icon_url }}" class="avatar-circle" alt="" style="background:transparent">
             @else
                 <div class="avatar-circle" style="font-size:15px">
                     {{ strtoupper(substr($contact->full_name ?? '?', 0, 2)) }}
