@@ -412,6 +412,64 @@
             transform: rotate(180deg);
         }
 
+        /* ── Modal Add Contact ── */
+        .modal-contact .modal-dialog { max-width: 800px; }
+        .contact-form-section {
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .contact-form-section-header {
+            padding: 10px 16px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--card-border);
+            font-weight: 700;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .contact-form-section-body { padding: 16px; }
+        .contact-form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+        .contact-form-row .form-group { flex: 1; min-width: 200px; }
+        .contact-form-row .form-group.small { flex: 0 0 160px; }
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--text-primary);
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+            outline: none;
+        }
+        .form-group input.is-invalid,
+        .form-group select.is-invalid {
+            border-color: #dc3545 !important;
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
+        }
+        select.is-invalid + .select2-container .select2-selection {
+            border-color: #dc3545 !important;
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
+        }
+        .mobile-picker { display: flex; gap: 8px; align-items: stretch; }
+        .mobile-picker select { width: 92px; flex: 0 0 92px; }
+        .mobile-picker input { flex: 1; }
+
         @media (max-width: 767.98px) {
             .account-header {
                 flex-direction: column;
@@ -470,8 +528,8 @@
     <div class="account-header-wrapper fade-in">
         <div class="account-header">
             <div class="account-header__identity">
-                @if ($account->icon)
-                    <img src="{{ $account->icon }}" class="avatar-circle" alt="" style="background:transparent">
+                @if ($account->icon_url)
+                    <img src="{{ $account->icon_url }}" class="avatar-circle" alt="" style="background:transparent">
                 @else
                     <div class="avatar-circle" style="font-size:15px">
                         {{ strtoupper(substr($account->account_name ?? '?', 0, 2)) }}
@@ -637,7 +695,7 @@
                                 <div class="card-header-custom">
                                     <span><i class="fa fa-file-invoice me-2" style="color:var(--accent)"></i>Billing
                                         Address</span>
-                                    <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                                    <span class="chevron"></span>
                                 </div>
                                 <div class="card-body-custom">
                                     @php
@@ -666,7 +724,7 @@
                                 <div class="card-header-custom">
                                     <span><i class="fa fa-truck me-2" style="color:var(--accent)"></i>Shipping
                                         Address</span>
-                                    <span class="chevron"><i class="fa fa-chevron-down"></i></span>
+                                    <span class="chevron"></span>
                                 </div>
                                 <div class="card-body-custom">
                                     @php
@@ -695,6 +753,14 @@
                 </div>
 
                 <div class="tab-pane fade" id="tab-contact" role="tabpanel">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--card-border)">
+                        <strong style="font-size:13px">Contacts</strong>
+                        @if ($canCreate)
+                            <button type="button" class="btn-accent btn-sm" onclick="openAccountContactModal()">
+                                <i class="fa fa-plus"></i> Add Contact
+                            </button>
+                        @endif
+                    </div>
                     @if ($account->contacts->isEmpty())
                         <div class="empty-state contact-empty">
                             <i class="fa fa-address-book"></i>
@@ -703,6 +769,10 @@
                     @else
                         <div class="contact-list" style="padding:16px">
                             <div class="contact-card-grid">
+                                @php
+                                    $contactRowsIsSalesStaff = strtolower(Auth::user()->division?->division_name ?? '') === 'sales'
+                                        && strtolower(Auth::user()->hierarchyRole?->role_name) === 'staff';
+                                @endphp
                                 @foreach ($account->contacts as $c)
                                     <div class="contact-card"
                                         data-href="{{ route('contact-management.show', ['contact_management' => $c->id]) }}">
@@ -729,40 +799,43 @@
                                                 @endif
                                             </div>
                                         </div>
-                                        <div class="contact-card__rows">
-                                            @if ($c->email)
-                                                <div class="contact-card__row">
-                                                    <i class="fa fa-envelope"></i>
-                                                    <a href="mailto:{{ $c->email }}">{{ $c->email }}</a>
-                                                </div>
-                                            @endif
-                                            @if ($c->phone)
-                                                <div class="contact-card__row">
-                                                    <i class="fa fa-phone"></i>
-                                                    <a href="tel:{{ $c->phone }}">{{ $c->phone }}</a>
-                                                </div>
-                                            @endif
-                                            @if ($c->mobile)
-                                                <div class="contact-card__row">
-                                                    <i class="fa fa-mobile"></i>
-                                                    <a href="tel:{{ $c->mobile }}">{{ $c->mobile }}</a>
-                                                </div>
-                                            @endif
-                                            @if ($c->contactMethod?->method_name || $c->contactOwner?->display_name)
-                                                <div class="contact-card__row">
-                                                    <i class="fa fa-address-book"></i>
-                                                    <span>
-                                                        @if ($c->contactMethod?->method_name)
-                                                            {{ $c->contactMethod->method_name }}
-                                                        @endif
-                                                        @if ($c->contactOwner?->display_name)
-                                                            <span style="color:var(--text-muted)">&middot;
-                                                                {{ $c->contactOwner->display_name }}</span>
-                                                        @endif
-                                                    </span>
-                                                </div>
-                                            @endif
-                                        </div>
+
+                                        @if (! ($contactRowsIsSalesStaff && Auth::id() !== $c->contact_owner_id))
+                                            <div class="contact-card__rows">
+                                                    @if ($c->email)
+                                                        <div class="contact-card__row">
+                                                            <i class="fa fa-envelope"></i>
+                                                            <a href="mailto:{{ $c->email }}">{{ $c->email }}</a>
+                                                        </div>
+                                                    @endif
+                                                    @if ($c->phone)
+                                                        <div class="contact-card__row">
+                                                            <i class="fa fa-phone"></i>
+                                                            <a href="tel:{{ $c->phone }}">{{ $c->phone }}</a>
+                                                        </div>
+                                                    @endif
+                                                    @if ($c->mobile)
+                                                        <div class="contact-card__row">
+                                                            <i class="fa fa-mobile"></i>
+                                                            <a href="tel:{{ $c->mobile }}">{{ $c->mobile }}</a>
+                                                        </div>
+                                                    @endif
+                                                    @if ($c->contactMethod?->method_name || $c->contactOwner?->display_name)
+                                                        <div class="contact-card__row">
+                                                            <i class="fa fa-address-book"></i>
+                                                            <span>
+                                                                @if ($c->contactMethod?->method_name)
+                                                                    {{ $c->contactMethod->method_name }}
+                                                                @endif
+                                                                @if ($c->contactOwner?->display_name)
+                                                                    <span style="color:var(--text-muted)">&middot;
+                                                                        {{ $c->contactOwner->display_name }}</span>
+                                                                @endif
+                                                            </span>
+                                                        </div>
+                                                    @endif
+                                            </div>
+                                        @endif
                                     </div>
                                 @endforeach
                             </div>
@@ -878,12 +951,288 @@
     </div>
 @endsection
 
+@push('modals')
+<div class="modal fade modal-contact" id="accountContactModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Add Contact</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+                <form id="account-contact-form" autocomplete="off">
+                    <input type="hidden" name="account_companies_id" id="ac-contact-account-id">
+
+                    <div class="contact-form-section">
+                        <div class="contact-form-section-header">
+                            <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Contact Information</span>
+                        </div>
+                        <div class="contact-form-section-body">
+                            <div class="contact-form-row">
+                                <div class="form-group small">
+                                    <label>Salutation <span class="text-danger">*</span></label>
+                                    <select name="salutation" id="ac-contact-salutation">
+                                        <option value="">—</option>
+                                        <option value="Bapak">Bapak</option>
+                                        <option value="Ibu">Ibu</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Full Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="full_name" id="ac-contact-full-name" required>
+                                </div>
+                            </div>
+                            <div class="contact-form-row">
+                                <div class="form-group">
+                                    <label>Email <span class="text-danger">*</span></label>
+                                    <input type="email" name="email" id="ac-contact-email">
+                                </div>
+                                <div class="form-group">
+                                    <label>Mobile <span class="text-danger">*</span></label>
+                                    <div class="mobile-picker">
+                                        <select id="ac-contact-mobile-country" class="form-select"></select>
+                                        <input type="tel" id="ac-contact-mobile" placeholder="8123456789" inputmode="numeric">
+                                    </div>
+                                    <input type="hidden" name="mobile" id="ac-contact-mobile-full">
+                                </div>
+                            </div>
+                            <div class="contact-form-row">
+                                <div class="form-group">
+                                    <label>Job Title <span class="text-danger">*</span></label>
+                                    <select name="job_titles_id" id="ac-contact-job-title">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($jobTitles as $jt)
+                                        <option value="{{ $jt->id }}">{{ $jt->title_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Contact Source <span class="text-danger">*</span></label>
+                                    <select name="sources_id" id="ac-contact-source">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($sources as $src)
+                                        <option value="{{ $src->id }}" @if(str_contains(strtolower($src->source_name), 'referral')) data-referral="1" @endif>{{ $src->source_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Department <span class="text-danger">*</span></label>
+                                    <select name="divisions_id" id="ac-contact-division">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($divisions as $div)
+                                        <option value="{{ $div->id }}">{{ $div->division_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="contact-form-row" id="ac-contact-referral-group" style="display:none">
+                                <div class="form-group">
+                                    <label>Referral Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="name_referral" id="ac-contact-referral" maxlength="150" placeholder="Nama pemberi referensi">
+                                </div>
+                            </div>
+                            <div class="contact-form-row">
+                                <div class="form-group">
+                                    <label>Preferred Contact Method <span class="text-danger">*</span></label>
+                                    <select name="contact_methods_id" id="ac-contact-method">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($contactMethods as $cm)
+                                        <option value="{{ $cm->id }}">{{ $cm->method_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Role in Project <span class="text-danger">*</span></label>
+                                    <select name="role_in_projects_id" id="ac-contact-role">
+                                        <option value="">— Pilih —</option>
+                                        @foreach($roleInProjects as $rp)
+                                        <option value="{{ $rp->id }}">{{ $rp->role_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-account-contact">
+                    <i class="fa fa-save me-1"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+
 @section('scripts')
     <script>
         $(document).on('click', '.contact-card', function(e) {
             if (e.target.closest('a')) return;
             const href = $(this).data('href');
             if (href) window.location.href = href;
+        });
+
+        let accountContactModalInstance = null;
+
+        const accountContactCountryCodes = [
+            { code: '+62', flag: '🇮🇩', name: 'Indonesia' },
+            { code: '+1',  flag: '🇺🇸', name: 'United States' },
+            { code: '+65', flag: '🇸🇬', name: 'Singapore' },
+            { code: '+60', flag: '🇲🇾', name: 'Malaysia' },
+            { code: '+86', flag: '🇨🇳', name: 'China' },
+            { code: '+91', flag: '🇮🇳', name: 'India' },
+            { code: '+81', flag: '🇯🇵', name: 'Japan' },
+            { code: '+82', flag: '🇰🇷', name: 'South Korea' },
+            { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
+            { code: '+33', flag: '🇫🇷', name: 'France' },
+            { code: '+49', flag: '🇩🇪', name: 'Germany' },
+            { code: '+39', flag: '🇮🇹', name: 'Italy' },
+            { code: '+61', flag: '🇦🇺', name: 'Australia' },
+            { code: '+64', flag: '🇳🇿', name: 'New Zealand' },
+            { code: '+66', flag: '🇹🇭', name: 'Thailand' },
+            { code: '+84', flag: '🇻🇳', name: 'Vietnam' },
+            { code: '+63', flag: '🇵🇭', name: 'Philippines' },
+        ];
+
+        function accountContactPopulateCountryCodes() {
+            const $sel = $('#ac-contact-mobile-country');
+            if ($sel.children().length) return;
+            accountContactCountryCodes.forEach(function(c) {
+                $sel.append('<option value="' + c.code + '">' + c.flag + ' ' + c.code + '</option>');
+            });
+            $sel.val('+62');
+            if (!$sel.hasClass('select2-hidden-accessible')) {
+                $sel.select2({
+                    theme: 'bootstrap-5',
+                    dropdownAutoWidth: true,
+                    width: '92px',
+                    minimumResultsForSearch: 5,
+                    dropdownParent: $('#accountContactModal'),
+                });
+            }
+        }
+
+        function accountContactBuildMobile() {
+            const code = $('#ac-contact-mobile-country').val() || '+62';
+            let local = ($('#ac-contact-mobile').val() || '').replace(/\D/g, '');
+            if (code === '+62' && local.startsWith('0')) {
+                local = local.replace(/^0+/, '');
+            }
+            return local ? code + local : '';
+        }
+
+        function accountContactToggleReferral() {
+            const isRef = $('#ac-contact-source').find(':selected').data('referral') ? true : false;
+            $('#ac-contact-referral-group').toggle(isRef);
+            if (!isRef) {
+                $('#ac-contact-referral').val('').removeClass('is-invalid');
+            }
+        }
+
+        function resetAccountContactForm() {
+            document.getElementById('account-contact-form').reset();
+            $('#ac-contact-account-id').val('{{ $account->id }}');
+            $('#account-contact-form .is-invalid').removeClass('is-invalid');
+            $('#ac-contact-mobile-country').val('+62').trigger('change');
+            $('#ac-contact-mobile').val('');
+            $('#ac-contact-mobile-full').val('');
+            accountContactToggleReferral();
+        }
+
+        function openAccountContactModal() {
+            resetAccountContactForm();
+            if (!accountContactModalInstance) {
+                accountContactModalInstance = new bootstrap.Modal(document.getElementById('accountContactModal'));
+            }
+            accountContactModalInstance.show();
+        }
+
+        $(document).on('shown.bs.modal', '#accountContactModal', function() {
+            accountContactPopulateCountryCodes();
+        });
+
+        $(document).on('change', '#ac-contact-source', function() {
+            $(this).removeClass('is-invalid');
+            accountContactToggleReferral();
+        });
+
+        $(document).on('change input', '#account-contact-form input.is-invalid, #account-contact-form select.is-invalid', function() {
+            $(this).removeClass('is-invalid');
+        });
+
+        $(document).on('click', '#btn-save-account-contact', function() {
+            const $btn = $(this);
+
+            $('#account-contact-form .is-invalid').removeClass('is-invalid');
+
+            const validations = [
+                { field: '#ac-contact-salutation', label: 'Salutation' },
+                { field: '#ac-contact-full-name', label: 'Full Name' },
+                { field: '#ac-contact-email', label: 'Email' },
+                { field: '#ac-contact-job-title', label: 'Job Title' },
+                { field: '#ac-contact-source', label: 'Contact Source' },
+                { field: '#ac-contact-division', label: 'Department' },
+                { field: '#ac-contact-method', label: 'Preferred Contact Method' },
+                { field: '#ac-contact-role', label: 'Role in Project' },
+            ];
+
+            for (let i = 0; i < validations.length; i++) {
+                const v = validations[i];
+                const $el = $(v.field);
+                const val = $el.val() ? $el.val().trim() : '';
+                if (!val) {
+                    $el.addClass('is-invalid');
+                    toastr.error(v.label + ' wajib diisi.');
+                    $el.focus();
+                    return;
+                }
+            }
+
+            if (!$('#ac-contact-mobile').val() || !$('#ac-contact-mobile').val().replace(/\D/g, '')) {
+                $('#ac-contact-mobile').addClass('is-invalid');
+                toastr.error('Mobile wajib diisi.');
+                $('#ac-contact-mobile').focus();
+                return;
+            }
+            $('#ac-contact-mobile-full').val(accountContactBuildMobile());
+
+            if ($('#ac-contact-source').find(':selected').data('referral') && !$.trim($('#ac-contact-referral').val())) {
+                $('#ac-contact-referral-group').show();
+                $('#ac-contact-referral').addClass('is-invalid');
+                toastr.error('Referral Name wajib diisi untuk sumber Referral.');
+                $('#ac-contact-referral').focus();
+                return;
+            }
+
+            const formData = new FormData(document.getElementById('account-contact-form'));
+            formData.append('_token', '{{ csrf_token() }}');
+
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+
+            $.ajax({
+                url: '{{ route("contact-management.store") }}',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(res) {
+                    toastr.success(res.message);
+                    if (accountContactModalInstance) accountContactModalInstance.hide();
+                    window.location.reload();
+                },
+                error: function(xhr) {
+                    $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                    var errors = xhr.responseJSON?.errors;
+                    if (errors) {
+                        var first = Object.values(errors)[0];
+                        toastr.error(Array.isArray(first) ? first[0] : first);
+                    } else {
+                        toastr.error(xhr.responseJSON?.message || 'Failed to save data.');
+                    }
+                }
+            });
         });
     </script>
 @endsection

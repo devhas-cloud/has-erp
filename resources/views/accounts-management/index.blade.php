@@ -226,6 +226,18 @@
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="account-form-section-body">
+
+                             <div class="account-form-row">
+                                <div class="form-group">
+                                    <label>Company Logo</label>
+                                    <div style="display:flex;align-items:center;gap:12px">
+                                        <span id="account-icon-preview" class="avatar-circle" style="overflow:hidden;flex:0 0 36px"></span>
+                                        <input type="file" name="icon" id="account-icon" accept="image/*">
+                                    </div>
+                                    <small class="text-muted" style="font-size:11px">PNG/JPG, maks 2MB.</small>
+                                </div>
+                            </div>
+
                             <div class="account-form-row">
                                 <div class="form-group">
                                     <label>Account Name <span class="text-danger">*</span></label>
@@ -367,11 +379,11 @@
                             <div class="account-form-row">
                                 <div class="form-group">
                                     <label>Billing City</label>
-                                    <input type="text" name="address_billing_city" id="account-bill-city">
+                                    <input type="text" name="address_billing_city" id="account-bill-city" list="account-city-suggestions">
                                 </div>
                                 <div class="form-group">
                                     <label>Billing Province</label>
-                                    <input type="text" name="address_billing_province" id="account-bill-province">
+                                    <input type="text" name="address_billing_province" id="account-bill-province" list="account-province-suggestions">
                                 </div>
                                 <div class="form-group small">
                                     <label>Billing Zip</label>
@@ -379,7 +391,7 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Billing Country</label>
-                                    <input type="text" name="address_billing_country" id="account-bill-country">
+                                    <input type="text" name="address_billing_country" id="account-bill-country" list="account-country-suggestions">
                                 </div>
                             </div>
                         </div>
@@ -423,11 +435,11 @@
                             <div class="account-form-row">
                                 <div class="form-group">
                                     <label>Shipping City</label>
-                                    <input type="text" name="address_shipping_city" id="account-ship-city">
+                                    <input type="text" name="address_shipping_city" id="account-ship-city" list="account-city-suggestions">
                                 </div>
                                 <div class="form-group">
                                     <label>Shipping Province</label>
-                                    <input type="text" name="address_shipping_province" id="account-ship-province">
+                                    <input type="text" name="address_shipping_province" id="account-ship-province" list="account-province-suggestions">
                                 </div>
                                 <div class="form-group small">
                                     <label>Shipping Zip</label>
@@ -435,11 +447,26 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Shipping Country</label>
-                                    <input type="text" name="address_shipping_country" id="account-ship-country">
+                                    <input type="text" name="address_shipping_country" id="account-ship-country" list="account-country-suggestions">
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <datalist id="account-city-suggestions">
+                        @foreach($accountCities as $city)
+                        <option value="{{ $city }}"></option>
+                        @endforeach
+                    </datalist>
+                    <datalist id="account-province-suggestions">
+                        @foreach($accountProvinces as $province)
+                        <option value="{{ $province }}"></option>
+                        @endforeach
+                    </datalist>
+                    <datalist id="account-country-suggestions">
+                        @foreach($accountCountries as $country)
+                        <option value="{{ $country }}"></option>
+                        @endforeach
+                    </datalist>
                 </form>
             </div>
             <div class="modal-footer">
@@ -556,7 +583,17 @@ function resetAccountForm() {
     $('#account-end-user').val('').trigger('change');
     $('#account-parent').val('').trigger('change');
     accountUpdateSegmentationDependentFields();
+    accountUpdateIconPreview('', '');
     accountMapResetAll();
+}
+
+function accountUpdateIconPreview(src, initials) {
+    var $p = $('#account-icon-preview');
+    if (src) {
+        $p.html('<img src="' + src + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">');
+    } else {
+        $p.text(initials || '');
+    }
 }
 
 function openCreateModal() {
@@ -577,6 +614,7 @@ function openEditModal(id) {
             document.getElementById('accountModalTitle').textContent = 'Edit Account';
             document.getElementById('account-edit-id').value = res.data.id;
             $('#account-name').val(res.data.account_name);
+            accountUpdateIconPreview(res.data.icon_url || '', (res.data.account_name || '?').substring(0, 2).toUpperCase());
             $('#account-type').val(res.data.types_accounts_companies_id);
             $('#account-source').val(res.data.sources_id);
             $('#account-website').val(res.data.website);
@@ -949,6 +987,13 @@ $(document).on('change', '#account-end-user', function() {
 });
 
 $(document).on('change', '#account-segmentation', accountUpdateSegmentationDependentFields);
+
+$(document).on('change', '#account-icon', function() {
+    var file = this.files && this.files[0];
+    if (file) {
+        accountUpdateIconPreview(URL.createObjectURL(file), '');
+    }
+});
 
 $(document).on('change', '#account-parent', function() {
     $(this).removeClass('is-invalid');

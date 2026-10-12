@@ -5,10 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\AccountCompany;
 use App\Models\BusinessEntity;
 use App\Models\BusinessValue;
+use App\Models\ContactMethod;
+use App\Models\Division;
 use App\Models\InteractionLevel;
+use App\Models\JobTitle;
+use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
 use App\Models\TypesAccountsCompany;
+use App\Models\User;
 use App\Services\AccountExportService;
 use App\Services\AccountImportService;
 use App\Services\AccountXlsxTemplateGenerator;
@@ -29,6 +34,21 @@ class AccountManagementController extends Controller
         $businessValues = BusinessValue::where('status', 'Active')->get();
         $interactionLevels = InteractionLevel::where('status', 'Active')->get();
 
+        // Saran autocomplete alamat: gabungan unik nilai billing + shipping
+        // dari akun yang sudah dimuat (tanpa query tambahan).
+        $suggest = function (string $billing, string $shipping) use ($accountCompanies) {
+            return $accountCompanies->pluck($billing)
+                ->merge($accountCompanies->pluck($shipping))
+                ->map(fn ($v) => trim((string) $v))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+        };
+        $accountCities = $suggest('address_billing_city', 'address_shipping_city');
+        $accountProvinces = $suggest('address_billing_province', 'address_shipping_province');
+        $accountCountries = $suggest('address_billing_country', 'address_shipping_country');
+
         return view('accounts-management.index', compact(
             'accountCompanies',
             'typesAccountsCompanies',
@@ -36,7 +56,10 @@ class AccountManagementController extends Controller
             'segmentations',
             'businessEntities',
             'businessValues',
-            'interactionLevels'
+            'interactionLevels',
+            'accountCities',
+            'accountProvinces',
+            'accountCountries'
         ));
     }
 
@@ -85,7 +108,7 @@ class AccountManagementController extends Controller
                 'id' => $account->id,
                 'account_name' => $account->account_name ?? '—',
                 'initials' => strtoupper(substr($account->account_name ?? '?', 0, 2)),
-                'icon' => $account->icon,
+                'icon' => $account->icon_url,
                 'name_display' => $account->account_name ?? '—',
                 'phone' => $account->phone ?? '—',
                 'owner_name' => $account->accountOwner?->display_name ?? '—',
@@ -104,6 +127,7 @@ class AccountManagementController extends Controller
     {
         $validated = $request->validate([
             'account_name' => 'required|string|max:150',
+            'icon' => 'nullable|image|max:2048',
             'types_accounts_companies_id' => 'required|exists:types_accounts_companies,id',
             'sources_id' => 'required|exists:sources,id',
             'segmentation_id' => 'required|exists:segmentations,id',
@@ -130,6 +154,10 @@ class AccountManagementController extends Controller
         $validated['account_owner_id'] = Auth::id();
         $validated['status'] = 'Active';
 
+        if ($request->hasFile('icon')) {
+            $validated['icon'] = $request->file('icon')->store('account-icons', 'public');
+        }
+
         AccountCompany::create($validated);
 
         return response()->json([
@@ -154,6 +182,7 @@ class AccountManagementController extends Controller
 
         $validated = $request->validate([
             'account_name' => 'required|string|max:150',
+            'icon' => 'nullable|image|max:2048',
             'types_accounts_companies_id' => 'required|exists:types_accounts_companies,id',
             'sources_id' => 'required|exists:sources,id',
             'segmentation_id' => 'required|exists:segmentations,id',
@@ -176,6 +205,11 @@ class AccountManagementController extends Controller
             'address_shipping_postal_code' => 'nullable|string|max:10',
             'address_shipping_country' => 'nullable|string|max:100',
         ]);
+
+        if ($request->hasFile('icon')) {
+            $this->deleteAccountIcon($account->icon);
+            $validated['icon'] = $request->file('icon')->store('account-icons', 'public');
+        }
 
         $account->update($validated);
 
@@ -200,10 +234,6 @@ class AccountManagementController extends Controller
             'contacts' => function ($q) {
                 $q->where('status', 'Active')
                     ->orderBy('full_name');
-
-                if(strtolower(Auth::user()->division?->division_name ?? '') === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
-                    $q->where('assigned_to_id', Auth::id());   // jika Sales dan bukan managaer tampilkan sesuai yang ia bisa akses
-                }
             },
 
             'contacts.jobTitle',
@@ -236,7 +266,20 @@ class AccountManagementController extends Controller
             'opportunities.forecast',
         ])->findOrFail($id);
 
-        return view('accounts-management.show', compact('account'));
+        // Referensi untuk modal "Add Contact" (sama dengan contacts-management).
+        $sources = Source::where('status', 'Active')->get();
+        $jobTitles = JobTitle::where('status', 'Active')->get();
+        $divisions = Division::where('type', 'External')->where('status', 'Active')->get();
+        $contactMethods = ContactMethod::where('status', 'Active')->get();
+        $roleInProjects = RoleInProject::where('status', 'Active')->get();
+        $assignableUsers = User::whereHas('division', fn ($q) => $q->whereRaw('LOWER(division_name) = ?', ['sales']))
+            ->orderBy('full_name')
+            ->get();
+
+        return view('accounts-management.show', compact(
+            'account', 'sources', 'jobTitles', 'divisions',
+            'contactMethods', 'roleInProjects', 'assignableUsers'
+        ));
     }
 
     public function destroy($id): JsonResponse
@@ -334,5 +377,12 @@ class AccountManagementController extends Controller
 
         return response()->download($filePath, 'accounts-export-'.date('Y-m-d').'.xlsx')
             ->deleteFileAfterSend(true);
+    }
+
+    private function deleteAccountIcon(?string $path): void
+    {
+        if ($path && ! preg_match('#^(https?:)?/#i', $path)) {
+            Storage::disk('public')->delete($path);
+        }
     }
 }

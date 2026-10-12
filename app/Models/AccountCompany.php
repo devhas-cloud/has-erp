@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccountCompany extends Model
 {
+    protected $appends = ['icon_url'];
+
     protected $fillable = [
         'account_name',
         'icon',
@@ -40,6 +43,25 @@ class AccountCompany extends Model
     public function source(): BelongsTo
     {
         return $this->belongsTo(Source::class, 'sources_id');
+    }
+
+    /**
+     * URL logo perusahaan. Kolom icon menyimpan path relatif di disk public
+     * (hasil upload dari form akun); nilai yang sudah berupa URL dipakai apa adanya.
+     */
+    protected function iconUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if (! $this->icon) {
+                    return null;
+                }
+
+                return preg_match('#^(https?:)?/#i', $this->icon)
+                    ? $this->icon
+                    : asset('storage/'.$this->icon);
+            },
+        );
     }
 
     public function typesAccountsCompany(): BelongsTo
