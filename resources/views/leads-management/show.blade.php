@@ -614,6 +614,8 @@
     }
 
     /* ── Responsive ── */
+    .activity-post-avatar, .activity-reply-avatar, .mention-suggestion-avatar { overflow: hidden; }
+
     @media (max-width: 767.98px) {
         .lead-header { flex-direction: column; }
         .lead-header__identity { flex-wrap: wrap; }
@@ -914,7 +916,11 @@
                             <div style="padding:4px 0">
                                 @foreach ($leadLogs as $log)
                                     <div class="activity-post" style="padding:16px 22px">
-                                        <div class="activity-post-avatar">{{ strtoupper(substr($log->user?->display_name ?? 'S', 0, 2)) }}</div>
+                                        @if($log->user?->avatar_url)
+                                            <img src="{{ $log->user->avatar_url }}" class="activity-post-avatar" alt="" style="background:transparent;object-fit:cover">
+                                        @else
+                                            <div class="activity-post-avatar">{{ strtoupper(substr($log->user?->display_name ?? 'S', 0, 2)) }}</div>
+                                        @endif
                                         <div class="activity-post-body">
                                             <div class="activity-post-header">
                                                 <span class="activity-post-author">{{ $log->user?->display_name ?? 'System' }}</span>
@@ -1953,8 +1959,16 @@ function loadActivities() {
     });
 }
 
+function leadAvatarHtml(user, cls) {
+    var u = user || {};
+    if (u.avatar_url) {
+        return '<img src="' + u.avatar_url + '" class="' + cls + '" alt="" style="background:transparent;object-fit:cover">';
+    }
+    return '<div class="' + cls + '">' + (u.display_name || '?').substring(0, 2).toUpperCase() + '</div>';
+}
+
 function renderActivity(a) {
-    var avatar = a.user ? (a.user.display_name || '?').substring(0, 2).toUpperCase() : '??';
+    var avatar = leadAvatarHtml(a.user, 'activity-post-avatar');
     var time = a.created_at ? moment(a.created_at).fromNow() : '—';
     var attachmentsHtml = '';
     if (a.attachments && a.attachments.length > 0) {
@@ -1990,7 +2004,6 @@ function renderActivity(a) {
         var displayStyle = replyCount > 2 ? 'style="display:none"' : '';
         repliesHtml = '<div class="activity-replies" id="' + repliesSectionId + '" ' + displayStyle + '>';
         a.replies.forEach(function(r) {
-            var rAvatar = r.user ? (r.user.display_name || '?').substring(0, 2).toUpperCase() : '??';
             var rTime = r.created_at ? moment(r.created_at).fromNow() : '—';
             var rAttach = '';
             if (r.attachments && r.attachments.length > 0) {
@@ -2006,7 +2019,7 @@ function renderActivity(a) {
                 rAttach = '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">' + rAttach + '</div>';
             }
             repliesHtml += '<div class="activity-reply" id="activity-' + r.id + '">' +
-                '<div class="activity-reply-avatar">' + rAvatar + '</div>' +
+                leadAvatarHtml(r.user, 'activity-reply-avatar') +
                 '<div class="activity-reply-body">' +
                 '<div class="activity-reply-header"><span class="activity-reply-author">' + (r.user ? r.user.display_name : '—') + '</span><span class="activity-reply-time">' + rTime + '</span></div>' +
                 '<div class="activity-reply-content">' + renderMentions(r.content || '') + '</div>' + rAttach +
@@ -2036,7 +2049,7 @@ function renderActivity(a) {
     }
 
     var html = '<div class="activity-post" id="activity-' + a.id + '">' +
-        '<div class="activity-post-avatar">' + avatar + '</div>' +
+        avatar +
         '<div class="activity-post-body">' +
         '<div class="activity-post-header">' +
         '<span class="activity-post-author">' + (a.user ? a.user.display_name : '—') + '</span>' +
@@ -2414,9 +2427,11 @@ function searchMentions(query, input) {
             mentionIndex = 0;
             var html = '';
             res.results.forEach(function(user, i) {
-                var initials = user.initials || '?';
+                var avatarHtml = user.avatar_url
+                    ? '<img src="' + user.avatar_url + '" class="mention-suggestion-avatar" alt="" style="object-fit:cover;background:transparent">'
+                    : '<div class="mention-suggestion-avatar">' + (user.initials || '?') + '</div>';
                 html += '<div class="mention-suggestion-item" onclick="selectMention(\'' + user.username + '\')" onmouseenter="mentionIndex=' + i + ';updateMentionActive()">' +
-                    '<div class="mention-suggestion-avatar">' + initials + '</div>' +
+                    avatarHtml +
                     '<span class="mention-suggestion-name">' + user.display_name + '</span></div>';
             });
             var dropdownId = $(input).attr('id') === 'activity-input' ? '#mention-suggestions' : '#mention-suggestions-reply-' + $(input).attr('id').replace('reply-input-', '');

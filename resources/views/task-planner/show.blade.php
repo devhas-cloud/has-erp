@@ -602,6 +602,8 @@
             height: 55vh;
             border-radius: 0 0 var(--radius-sm) var(--radius-sm);
         }
+
+        .activity-post-avatar, .activity-reply-avatar, .mention-suggestion-avatar { overflow: hidden; }
     </style>
 @endsection
 
@@ -760,8 +762,13 @@
                                 <div class="activity-feed" style="padding:4px 0">
                                     @foreach ($taskLogs as $log)
                                         <div class="activity-post">
-                                            <div class="activity-post-avatar">
-                                                {{ strtoupper(substr($log->user?->display_name ?? 'S', 0, 2)) }}</div>
+                                            @if($log->user?->avatar_url)
+                                                <img src="{{ $log->user->avatar_url }}" class="activity-post-avatar" alt="" style="background:transparent;object-fit:cover">
+                                            @else
+                                                <div class="activity-post-avatar">
+                                                    {{ strtoupper(substr($log->user?->display_name ?? 'S', 0, 2)) }}
+                                                </div>
+                                            @endif
                                             <div class="activity-post-body">
                                                 <div class="activity-post-header">
                                                     <span
@@ -885,10 +892,13 @@
                     @else
                         @foreach ($task->assignees as $assignee)
                             <div class="assignee-badge" style="margin-bottom:6px">
-                                <span>{{ strtoupper(substr($assignee->display_name, 0, 2)) }}</span>
+                                @if($assignee->avatar_url)
+                                    <img src="{{ $assignee->avatar_url }}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover">
+                                @else
+                                    <span>{{ strtoupper(substr($assignee->display_name, 0, 2)) }}</span>
+                                @endif
                                 <span>{{ $assignee->display_name }}</span>
-                                <small
-                                    style="opacity:0.7">({{ optional($assignee->hierarchyRole)->role_name ?? 'N/A' }})</small>
+                                <small style="opacity:0.7">({{ optional($assignee->hierarchyRole)->role_name ?? 'N/A' }})</small>
                             </div>
                         @endforeach
                     @endif
@@ -1556,6 +1566,16 @@
             });
         }
 
+        function taskAvatarHtml(username, avatarUrl, cls, extraStyle) {
+            var style = extraStyle || '';
+            if (avatarUrl) {
+                return '<div class="' + cls + '" style="overflow:hidden;' + style + '"><img src="' + avatarUrl +
+                    '" alt="" style="width:100%;height:100%;object-fit:cover"></div>';
+            }
+            return '<div class="' + cls + '" style="' + style + '">' + ((username || '?').substring(0, 2)
+                .toUpperCase()) + '</div>';
+        }
+
         function renderActivity(a) {
             var avatar = a.username ? a.username.substring(0, 2).toUpperCase() : '??';
             var time = a.created_at ? moment(a.created_at).fromNow() : '—';
@@ -1588,8 +1608,8 @@
             }
 
             var isMine = a.user_id === currentUserId;
-            var avatarCircle = '<div class="activity-post-avatar" style="' + (isMine ?
-                'background:var(--accent);color:#fff' : '') + '">' + avatar + '</div>';
+            var avatarCircle = taskAvatarHtml(a.username, a.avatar_url, 'activity-post-avatar', isMine ?
+                'background:var(--accent);color:#fff' : '');
 
             // Replies
             var replyCount = (a.replies && a.replies.length) ? a.replies.length : 0;
@@ -1602,7 +1622,6 @@
                 var displayStyle = replyCount > 2 ? 'style="display:none"' : '';
                 repliesHtml = '<div class="activity-replies" id="' + repliesSectionId + '" ' + displayStyle + '>';
                 a.replies.forEach(function(r) {
-                    var rAvatar = r.username ? r.username.substring(0, 2).toUpperCase() : '??';
                     var rTime = r.created_at ? moment(r.created_at).fromNow() : '—';
                     var rAttach = '';
                     if (r.attachments && r.attachments.length > 0) {
@@ -1625,7 +1644,7 @@
                             '</div>';
                     }
                     repliesHtml += '<div class="activity-reply" id="activity-' + r.id + '">' +
-                        '<div class="activity-reply-avatar">' + rAvatar + '</div>' +
+                        taskAvatarHtml(r.username, r.avatar_url, 'activity-reply-avatar', '') +
                         '<div class="activity-reply-body">' +
                         '<div class="activity-reply-header"><span class="activity-reply-author">' + (r.username ||
                             '—') + '</span><span class="activity-reply-time">' + rTime + '</span></div>' +
@@ -2115,11 +2134,13 @@
                     mentionIndex = 0;
                     var html = '';
                     res.results.forEach(function(user, i) {
-                        var initials = user.initials || '?';
+                        var avatarHtml = user.avatar_url
+                            ? '<img src="' + user.avatar_url + '" class="mention-suggestion-avatar" alt="" style="object-fit:cover;background:transparent">'
+                            : '<div class="mention-suggestion-avatar">' + (user.initials || '?') + '</div>';
                         html += '<div class="mention-suggestion-item" onclick="selectMention(\'' + user
                             .username + '\')" onmouseenter="mentionIndex=' + i +
                             ';updateMentionActive()">' +
-                            '<div class="mention-suggestion-avatar">' + initials + '</div>' +
+                            avatarHtml +
                             '<span class="mention-suggestion-name">' + user.display_name + '</span></div>';
                     });
                     var dropdownId = $(input).attr('id') === 'activity-input' ? '#mention-suggestions' :

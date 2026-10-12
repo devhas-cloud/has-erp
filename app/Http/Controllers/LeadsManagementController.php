@@ -929,6 +929,14 @@ class LeadsManagementController extends Controller
             ->orderBy('created_at', 'asc')
             ->paginate(20);
 
+        // Sertakan avatar user (icon) di payload aktivitas + balasan.
+        foreach ($activities->items() as $activity) {
+            $activity->user?->append('avatar_url');
+            foreach ($activity->replies as $reply) {
+                $reply->user?->append('avatar_url');
+            }
+        }
+
         // Aktivitas task (post + lampiran/pdf) tampil sebagai children dari parent
         // lead activity yang terhubung ke task tersebut (Activity.task_id).
         $taskIds = collect($activities->items())
@@ -953,8 +961,8 @@ class LeadsManagementController extends Controller
                     $children = $grouped[$activity->task_id]->map(fn ($ta) => [
                         'id' => 'ta-'.$ta->id,
                         'user' => $ta->user
-                            ? ['id' => $ta->user->id, 'display_name' => $ta->user->display_name]
-                            : ['id' => null, 'display_name' => '—'],
+                            ? ['id' => $ta->user->id, 'display_name' => $ta->user->display_name, 'avatar_url' => $ta->user->avatar_url]
+                            : ['id' => null, 'display_name' => '—', 'avatar_url' => null],
                         'created_at' => $ta->created_at?->toIso8601String(),
                         'content' => $ta->content ?? '',
                         'attachments' => $ta->attachments->map(fn ($att) => [
@@ -1278,6 +1286,7 @@ class LeadsManagementController extends Controller
                 'username' => $u->username,
                 'display_name' => $u->display_name,
                 'initials' => strtoupper(substr($u->display_name, 0, 2)),
+                'avatar_url' => $u->avatar_url,
             ]);
 
         return response()->json(['results' => $users->toArray()]);

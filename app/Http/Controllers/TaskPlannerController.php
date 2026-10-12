@@ -756,6 +756,7 @@ class TaskPlannerController extends Controller
                 'user_id' => $a->user_id,
                 'username' => $a->user->display_name,
                 'initials' => strtoupper(substr($a->user->display_name, 0, 2)),
+                'avatar_url' => $a->user->avatar_url,
                 'content' => $a->content,
                 'attachments' => $a->attachments->map(fn ($att) => [
                     'url' => $att->attachment_url,
@@ -765,12 +766,14 @@ class TaskPlannerController extends Controller
                 'reply_to' => $a->reply_to_id ? [
                     'id' => $a->replyTo->id,
                     'username' => $a->replyTo->user?->display_name,
+                    'avatar_url' => $a->replyTo->user?->avatar_url,
                     'content' => Str::limit($a->replyTo->content ?? '', 120),
                 ] : null,
                 'replies' => $a->replies->map(fn ($r) => [
                     'id' => $r->id,
                     'user_id' => $r->user_id,
                     'username' => $r->user->display_name,
+                    'avatar_url' => $r->user->avatar_url,
                     'content' => $r->content,
                     'created_at' => $r->created_at->toIso8601String(),
                     'attachments' => $r->attachments->map(fn ($att) => [

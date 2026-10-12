@@ -134,6 +134,18 @@ class LeadsManagementTest extends TestCase
         $this->assertStringContainsString('list="qual-city-suggestions"', $html);
     }
 
+    public function test_search_users_returns_avatar_url(): void
+    {
+        $this->user->update(['icon' => 'avatars/user.png']);
+
+        $response = $this->actingAs($this->user)->getJson(route('users.search', ['q' => 'leadsmanager']));
+
+        $response->assertOk();
+        $u = collect($response->json('results'))->firstWhere('username', 'leadsmanager');
+        $this->assertNotNull($u);
+        $this->assertStringContainsString('storage/avatars/user.png', $u['avatar_url']);
+    }
+
     public function test_data_endpoint_returns_icon_urls(): void
     {
         $company = AccountCompany::create([
