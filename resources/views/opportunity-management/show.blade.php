@@ -812,7 +812,7 @@
             <i class="fa fa-pen"></i><span>Edit</span>
         </button>
         @else
-        <button type="button" class="btn-accent" onclick="openCloseLossModal()">
+        <button type="button" class="btn-accent-danger" onclick="openCloseLossModal()">
             <i class="fa fa-circle-xmark"></i> Close Lost
         </button>
         @endif

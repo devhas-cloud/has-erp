@@ -174,6 +174,7 @@ class ContactExportService
             $contact->mobile ?? '',
             $contact->jobTitle?->title_name ?? '',
             $contact->source?->source_name ?? '',
+            $contact->name_referral ?? '',
             $contact->division?->division_name ?? '',
             $contact->contactMethod?->method_name ?? '',
             $contact->roleInProject?->role_name ?? '',

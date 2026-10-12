@@ -65,6 +65,7 @@ class ContactManagementTest extends TestCase
             'mobile' => '81234567890',
             'job_titles_id' => $jobTitle->id,
             'sources_id' => $source->id,
+            'name_referral' => 'Andi Wijaya',
             'divisions_id' => $this->division->id,
             'contact_methods_id' => $contactMethod->id,
             'role_in_projects_id' => $roleInProject->id,
@@ -195,6 +196,8 @@ class ContactManagementTest extends TestCase
         $this->actingAs($this->creator)->get(route('contact-management.show', $contact->id))
             ->assertOk()
             ->assertSee('Assigned To')
+            ->assertSee('Referral Name')
+            ->assertSee('Andi Wijaya')
             ->assertSee('assignee');
     }
 
@@ -238,6 +241,29 @@ class ContactManagementTest extends TestCase
         $html = $response->getContent();
         $group = substr($html, strpos($html, 'id="contact-assigned-to-group"'), 80);
         $this->assertStringNotContainsString('style="display:none"', $group);
+    }
+
+    public function test_store_requires_name_referral_when_source_is_referral(): void
+    {
+        $payload = array_merge($this->payload, ['name_referral' => '']);
+
+        $this->actingAs($this->creator)->postJson(route('contact-management.store'), $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name_referral');
+        $this->assertSame(0, AccountContact::count());
+    }
+
+    public function test_store_nulls_name_referral_when_source_is_not_referral(): void
+    {
+        $otherSource = Source::create(['source_name' => 'Website', 'status' => 'Active']);
+        $payload = array_merge($this->payload, [
+            'sources_id' => $otherSource->id,
+            'name_referral' => 'Harusnya Diabaikan',
+        ]);
+
+        $this->actingAs($this->creator)->postJson(route('contact-management.store'), $payload)->assertOk();
+
+        $this->assertNull(AccountContact::firstOrFail()->name_referral);
     }
 
 }

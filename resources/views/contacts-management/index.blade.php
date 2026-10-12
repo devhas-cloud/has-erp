@@ -110,7 +110,7 @@
                     <th>Name</th>
                     <th>Title</th>
                     <th>Account Name</th>
-                    <th>Phone</th>
+                    <th>Mobile</th>
                     <th>Email</th>
                     <th>Owner</th>
                     <th>Assigned To</th>
@@ -208,7 +208,7 @@
                                     <label>Email <span class="text-danger">*</span></label>
                                     <input type="email" name="email" id="contact-email">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display: none">
                                     <label>Phone</label>
                                     <input type="text" name="phone" id="contact-phone">
                                 </div>
@@ -236,7 +236,7 @@
                                     <select name="sources_id" id="contact-source">
                                         <option value="">— Pilih —</option>
                                         @foreach($sources as $src)
-                                        <option value="{{ $src->id }}">{{ $src->source_name }}</option>
+                                        <option value="{{ $src->id }}" @if(str_contains(strtolower($src->source_name), 'referral')) data-referral="1" @endif>{{ $src->source_name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -248,6 +248,12 @@
                                         <option value="{{ $div->id }}">{{ $div->division_name }}</option>
                                         @endforeach
                                     </select>
+                                </div>
+                            </div>
+                            <div class="contact-form-row" id="contact-referral-group" style="display:none">
+                                <div class="form-group">
+                                    <label>Referral Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="name_referral" id="contact-referral" maxlength="150" placeholder="Nama pemberi referensi">
                                 </div>
                             </div>
                             <div class="contact-form-row">
@@ -425,6 +431,14 @@ function toggleContactSection(header) {
     header.closest('.contact-form-section').classList.toggle('open');
 }
 
+function toggleContactReferral() {
+    const isRef = $('#contact-source').find(':selected').data('referral') ? true : false;
+    $('#contact-referral-group').toggle(isRef);
+    if (!isRef) {
+        $('#contact-referral').val('').removeClass('is-invalid');
+    }
+}
+
 function resetContactForm() {
     document.getElementById('contact-form').reset();
     document.getElementById('contact-edit-id').value = '';
@@ -438,6 +452,7 @@ function resetContactForm() {
     $('#contact-mobile-country').val('+62').trigger('change');
     $('#contact-mobile').val('');
     $('#contact-mobile-full').val('');
+    toggleContactReferral();
 }
 
 function openCreateModal() {
@@ -470,6 +485,8 @@ function openEditModal(id) {
             $('#contact-mobile-full').val(res.data.mobile);
             $('#contact-job-title').val(res.data.job_titles_id);
             $('#contact-source').val(res.data.sources_id);
+            $('#contact-referral').val(res.data.name_referral || '');
+            toggleContactReferral();
             $('#contact-division').val(res.data.divisions_id);
             $('#contact-method').val(res.data.contact_methods_id);
             $('#contact-role').val(res.data.role_in_projects_id);
@@ -514,7 +531,7 @@ function initContactsTable() {
             },
             { data: 'title', orderable: false },
             { data: 'account_name', orderable: false },
-            { data: 'phone' },
+            { data: 'mobile' },
             { data: 'email' },
             { data: 'owner_name', orderable: false },
             { data: 'assigned_to_name', orderable: false },
@@ -604,6 +621,14 @@ $(document).on('click', '#btn-save-contact', function() {
     }
     $('#contact-mobile-full').val(contactBuildMobile());
 
+    if ($('#contact-source').find(':selected').data('referral') && !$.trim($('#contact-referral').val())) {
+        $('#contact-referral-group').show();
+        $('#contact-referral').addClass('is-invalid');
+        toastr.error('Referral Name wajib diisi untuk sumber Referral.');
+        $('#contact-referral').focus();
+        return;
+    }
+
     const formData = new FormData(document.getElementById('contact-form'));
 
     const url = isEdit
@@ -690,6 +715,11 @@ $(document).on('click', '.btn-delete-contact', function() {
 
 $(document).on('change', '#contact-account', function() {
     $(this).removeClass('is-invalid');
+});
+
+$(document).on('change', '#contact-source', function() {
+    $(this).removeClass('is-invalid');
+    toggleContactReferral();
 });
 
 $(document).on('shown.bs.modal', '#contactModal', function() {

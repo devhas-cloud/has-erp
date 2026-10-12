@@ -351,11 +351,14 @@
                                     <tr class="info-table-group"><td colspan="2">General</td></tr>
                                     <tr><td>Full Name</td><td><strong>{{ trim(($contact->salutation ? $contact->salutation.' ' : '').($contact->full_name ?? '—')) }}</strong></td></tr>
                                     <tr><td>Email</td><td>@if($contact->email)<a href="mailto:{{ $contact->email }}" style="color:var(--accent)">{{ $contact->email }}</a>@else — @endif</td></tr>
-                                    <tr><td>Phone</td><td>{{ $contact->phone ?? '—' }}</td></tr>
+                                    {{-- <tr><td>Phone</td><td>{{ $contact->phone ?? '—' }}</td></tr> --}}
                                     <tr><td>Mobile</td><td>{{ $contact->mobile ?? '—' }}</td></tr>
                                     <tr class="info-table-group"><td colspan="2">Classification</td></tr>
                                     <tr><td>Job Title</td><td>{{ $contact->jobTitle?->title_name ?? '—' }}</td></tr>
                                     <tr><td>Contact Source</td><td>{{ $contact->source?->source_name ?? '—' }}</td></tr>
+                                    @if($contact->name_referral)
+                                    <tr><td>Referral Name</td><td>{{ $contact->name_referral }}</td></tr>
+                                    @endif
                                     <tr><td>Department</td><td>{{ $contact->division?->division_name ?? '—' }}</td></tr>
                                     <tr><td>Preferred Contact Method</td><td>{{ $contact->contactMethod?->method_name ?? '—' }}</td></tr>
                                     <tr><td>Role in Project</td><td>{{ $contact->roleInProject?->role_name ?? '—' }}</td></tr>

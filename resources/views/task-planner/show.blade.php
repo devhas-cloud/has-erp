@@ -647,7 +647,7 @@
                     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
                         <div>
                             <h5 style="margin:0;font-weight:700;font-size:18px;letter-spacing:-0.3px">{{ $task->title }}</h5>
-                            <h6>{{ $task->opportunity?->opportunity_name ?? '—' }} — {{ $task->opportunity?->accountCompany->account_name ?? '—' }}</h6>
+                            <h6>{{ $task->opportunity?->opportunity_name ?? $task->lead?->lead_title }} — {{ $task->opportunity?->accountCompany->account_name ?? $task->lead?->accountCompany?->account_name }}</h6>
                             <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">
                                 Created by <strong>{{ $task->creator?->display_name ?? '—' }}</strong>
                             </div>
@@ -657,8 +657,7 @@
                         @if ($task->status === 'todo') status-pending
                         @elseif($task->status === 'in_progress') style="background:var(--info-soft);color:#1e40af;"
                         @elseif($task->status === 'waiting_approval') style="background:#fef3c7;color:#92400e;"
-                        @else status-active @endif
-                    ">
+                        @else status-active @endif ">
                             @if ($task->status === 'todo')
                                 To Do
                             @elseif($task->status === 'in_progress')
@@ -795,7 +794,30 @@
                         $isAssignee = $task->assignees->contains('id', Auth::id());
                         $canTransition = $isCreator || $isAssignee;
                     @endphp
-                    @if ($task->status !== 'done' && $isAssignee)
+
+                    <!-- Tombol ini dengan skema muncul jika, status tidak != done, task berupa visit true, maka pembuat dan assignee bisa melakukan start progress dan complete task -->
+                    @if ($task->status !== 'done' && $task->category?->visit)
+                        <div style="display:flex;gap:10px;flex-wrap:wrap">
+                            @if ($task->status === 'todo')
+                                <button type="button" class="btn btn-sm btn-accent btn-transition"
+                                    data-id="{{ $task->id }}" data-status="in_progress"
+                                    style="background:#2563eb;font-size:10px">
+                                    <i class="fa fa-play me-1"></i>Start Progress
+                                </button>
+                            @endif
+                            @if ($task->status === 'in_progress')
+                                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+                                    <button type="button" class="btn btn-sm btn-accent btn-complete-task"
+                                        data-id="{{ $task->id }}" data-status="done" style="font-size:10px">
+                                        <i class="fa fa-check me-1"></i>Complete Task
+                                    </button>
+
+                                </div>
+                            @endif
+                        </div>
+
+                     <!-- Tombol ini dengan skema muncul jika, status tidak != done, task bukan visit true, dimana dengan skema delegasi dari atasan maka perlu Start progres, mask as done, approve -->
+                    @elseif ($task->status !== 'done' && $isAssignee)
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
                             @if ($task->status === 'todo')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
@@ -812,6 +834,7 @@
                                 </button>
                             @endif
                         </div>
+
                     @endif
 
 
@@ -1924,6 +1947,12 @@
         }
 
         $(document).on('click', '#btn-record-visit', function() {
+
+            if ( '{{ $task->status }}' === 'todo') {
+                toastr.error('Task belum dimulai. Tidak bisa record visit.');
+                return;
+            }
+
             if (!navigator.geolocation) {
                 toastr.error('Geolocation tidak didukung.');
                 return;

@@ -22,6 +22,7 @@ use App\Models\RoleInProject;
 use App\Models\Segmentation;
 use App\Models\Source;
 use App\Models\Task;
+use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\TypesAccountsCompany;
 use App\Models\User;
@@ -140,7 +141,7 @@ class LeadsManagementController extends Controller
         if (isset($columnOrderMap[$orderColumnIndex])) {
             $query->orderBy($columnOrderMap[$orderColumnIndex], $orderDirection);
         }
-        $query->orderBy('id', $orderDirection === 'desc' ? 'desc' : 'asc');
+        $query->orderBy('created_at', $orderDirection === 'desc' ? 'desc' : 'asc');
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
@@ -238,8 +239,8 @@ class LeadsManagementController extends Controller
             'lead_status' => 'required|in:New,Approach,Qualified,Unqualified',
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
-            'email' => 'required|email|max:100|unique:account_contacts,email',
-            'mobile' => 'required|string|max:30|unique:account_contacts,mobile',
+            'email' => 'nullable|email|max:100|unique:account_contacts,email',
+            'mobile' => 'nullable|string|max:30|unique:account_contacts,mobile',
             'phone' => 'nullable|string|max:30',
             'job_titles_id' => 'required|exists:job_titles,id',
             'divisions_id' => 'required|exists:divisions,id',
@@ -271,6 +272,13 @@ class LeadsManagementController extends Controller
             'identification' => 'boolean',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
+
+        if (! $request->filled('email') && ! $request->filled('mobile')) {
+            return response()->json([
+                'success' => false,
+                'errors' => ['contact' => ['Minimal isi salah satu: Email atau Mobile.']],
+            ], 422);
+        }
 
         DB::beginTransaction();
         try {
@@ -306,9 +314,9 @@ class LeadsManagementController extends Controller
                 'account_companies_id' => $company ? $company->id : null,
                 'full_name' => $request->full_name,
                 'salutation' => $request->salutation,
-                'email' => $request->email,
+                'email' => trim((string) $request->email) ?: null,
                 'phone' => $request->phone,
-                'mobile' => $request->mobile,
+                'mobile' => trim((string) $request->mobile) ?: null,
                 'job_titles_id' => $request->job_titles_id,
                 'divisions_id' => $request->divisions_id,
                 'contact_methods_id' => $request->contact_methods_id,
@@ -401,8 +409,8 @@ class LeadsManagementController extends Controller
             'lead_status' => 'required|in:New,Approach,Qualified,Unqualified',
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
-            'email' => 'required|email|max:100',
-            'mobile' => 'nullable|string|max:30',
+            'email' => 'nullable|email|max:100|unique:account_contacts,email,'.$lead->account_contacts_id,
+            'mobile' => 'nullable|string|max:30|unique:account_contacts,mobile,'.$lead->account_contacts_id,
             'job_titles_id' => 'required|exists:job_titles,id',
             'divisions_id' => 'required|exists:divisions,id',
             'source_id' => 'nullable|exists:sources,id',
@@ -432,6 +440,13 @@ class LeadsManagementController extends Controller
             'identification' => 'boolean',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
+
+        if (! $request->filled('email') && ! $request->filled('mobile')) {
+            return response()->json([
+                'success' => false,
+                'errors' => ['contact' => ['Minimal isi salah satu: Email atau Mobile.']],
+            ], 422);
+        }
 
         DB::beginTransaction();
         try {
@@ -489,9 +504,9 @@ class LeadsManagementController extends Controller
                 'account_companies_id' => $company?->id,
                 'full_name' => $request->full_name,
                 'salutation' => $request->salutation,
-                'email' => $request->email,
+                'email' => trim((string) $request->email) ?: null,
                 'phone' => $request->phone,
-                'mobile' => $request->mobile,
+                'mobile' => trim((string) $request->mobile) ?: null,
                 'job_titles_id' => $request->job_titles_id,
                 'divisions_id' => $request->divisions_id,
                 'contact_methods_id' => $request->contact_methods_id,
@@ -870,11 +885,148 @@ class LeadsManagementController extends Controller
 
         $activities = $lead->activities()
             ->whereNull('reply_to_id')
-            ->with(['user', 'attachments', 'replies.user', 'replies.attachments', 'task'])
+            ->with([
+                'user',
+                'attachments',
+                'replies.user',
+                'replies.attachments',
+                'task.proposals',
+                'task.quoteConfigurations.division',
+                'task.quotations',
+                'task.category',
+            ])
             ->orderBy('created_at', 'asc')
             ->paginate(20);
 
+        // Aktivitas task (post + lampiran/pdf) tampil sebagai children dari parent
+        // lead activity yang terhubung ke task tersebut (Activity.task_id).
+        $taskIds = collect($activities->items())
+            ->pluck('task_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($taskIds->isNotEmpty()) {
+            $grouped = TaskActivity::with(['user', 'attachments'])
+                ->whereIn('task_id', $taskIds)
+                ->orderBy('created_at', 'asc')
+                ->get()
+                ->groupBy('task_id');
+
+            foreach ($activities->items() as $activity) {
+                if (! $activity->task_id) {
+                    continue;
+                }
+
+                if (isset($grouped[$activity->task_id])) {
+                    $children = $grouped[$activity->task_id]->map(fn ($ta) => [
+                        'id' => 'ta-'.$ta->id,
+                        'user' => $ta->user
+                            ? ['id' => $ta->user->id, 'display_name' => $ta->user->display_name]
+                            : ['id' => null, 'display_name' => '—'],
+                        'created_at' => $ta->created_at?->toIso8601String(),
+                        'content' => $ta->content ?? '',
+                        'attachments' => $ta->attachments->map(fn ($att) => [
+                            'attachment_url' => $att->attachment_url,
+                            'attachment_name' => $att->attachment_name,
+                            'attachment_type' => $att->attachment_type,
+                        ])->all(),
+                        'from_task' => true,
+                        'task_id' => $activity->task_id,
+                    ])->all();
+
+                    $activity->setRelation('replies', $activity->replies->concat($children));
+                }
+
+                // Badge terkait: proposal ATAU quote, tergantung hasil task.
+                $activity->related = $this->relatedDocumentForTask($activity->task);
+            }
+        }
+
         return response()->json($activities);
+    }
+
+    /**
+     * Dokumen terkait sebuah task, dipakai sebagai badge sejajar tag
+     * "Created task". Saat task selesai (done), tampilkan PDF final sesuai
+     * kategori: quote -> quotation.pdf, proposal -> proposal terakhir di-upload.
+     * Sebelum selesai: proposal -> quote configuration -> quotation.
+     *
+     * @return array{type: string, label: string, url: string}|null
+     */
+    private function relatedDocumentForTask(?Task $task): ?array
+    {
+        if (! $task) {
+            return null;
+        }
+
+        $category = $task->category?->name;
+        $isQuote = $category !== null && mb_strtolower($category) === 'quote';
+        $isProposal = $category !== null && mb_strtolower($category) === 'proposal';
+
+        if ($task->status === 'done') {
+            if ($isQuote && $task->quotations->isNotEmpty()) {
+                $quotation = $task->quotations->sortByDesc('id')->first();
+
+                return [
+                    'type' => 'quote_pdf',
+                    'label' => 'Quote Penawaran (PDF)',
+                    'url' => route('quotation.pdf', $quotation->id),
+                ];
+            }
+
+            if ($isProposal && $task->proposals->isNotEmpty()) {
+                $proposal = $task->proposals->sortByDesc('id')->first();
+
+                return [
+                    'type' => 'proposal_pdf',
+                    'label' => 'Proposal (PDF) v'.($proposal->version ?? 1),
+                    'url' => route('task-planner.proposal-view', [$task->id, $proposal->id]),
+                ];
+            }
+        }
+
+        if ($task->proposals->isNotEmpty()) {
+            $proposal = $task->proposals->sortByDesc('version')->first();
+
+            return [
+                'type' => 'proposal',
+                'label' => 'Proposal v'.$proposal->version,
+                'url' => route('task-planner.proposal-view', [$task->id, $proposal->id]),
+            ];
+        }
+
+        if ($task->quoteConfigurations->isNotEmpty()) {
+            $config = $task->quoteConfigurations->sortByDesc('id')->first();
+            $division = $config->division?->division_name;
+            $routeKey = [
+                'Water' => 'water-configuration',
+                'Enviro' => 'enviro-configuration',
+                'IH' => 'ih-configuration',
+                'Gas' => 'gas-configuration',
+                'IMS' => 'ims-configuration',
+            ][$division] ?? null;
+
+            if ($routeKey) {
+                return [
+                    'type' => 'quote',
+                    'label' => "Quote {$division} #{$config->id}",
+                    'url' => route($routeKey.'.show', $config->id),
+                ];
+            }
+        }
+
+        if ($task->quotations->isNotEmpty()) {
+            $quotation = $task->quotations->sortByDesc('id')->first();
+
+            return [
+                'type' => 'quotation',
+                'label' => 'Quotation #'.$quotation->id,
+                'url' => route('quotation.show', $quotation->id),
+            ];
+        }
+
+        return null;
     }
 
     public function storeActivity(Request $request, $id): JsonResponse

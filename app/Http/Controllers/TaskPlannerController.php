@@ -476,9 +476,23 @@ class TaskPlannerController extends Controller
             return response()->json(['success' => false, 'message' => 'Hanya creator yang bisa approve.'], 403);
         }
 
-        if ($task->status !== 'waiting_approval') {
+        if ($task->status !== 'waiting_approval' && $task->category?->visit !== true) {
             return response()->json(['success' => false, 'message' => 'Task tidak dalam status waiting approval.'], 422);
         }
+
+
+        // jika task category ditandai visit maka wajib record google map location saat transition status done
+
+        if ($task->category?->visit === true) {
+            $cekLocation = TaskVisit::where('task_id', $task->id)->where('user_id', Auth::id())->first();
+            if (! $cekLocation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Task complete harus record lokasi sebelum menandai selesai.',
+                ], 422);
+            }
+        }
+
 
         // jika task category = "proposal" maka wajib ada proposal PDF
         $taskCategory = $task->category;
@@ -525,6 +539,13 @@ class TaskPlannerController extends Controller
             ? "{$task->title} di-complete"
             : "{$task->title} disetujui";
 
+
+        // jika task category->visit true, maka log Task Complete
+         if ($task->category?->visit === true) {
+            $action = 'complete_task';
+            $description = "{$task->title} di-complete";
+        }
+
         Log::record($action, $description, 'MOD_TASK_PLANNER', $task);
         return response()->json([
             'success' => true,
@@ -558,17 +579,7 @@ class TaskPlannerController extends Controller
             'status' => 'required|in:todo,in_progress,done',
         ]);
 
-        // jika task category ditandai visit maka wajib record google map location saat transition status done
         $taskCategory = $task->category;
-        if ($taskCategory && $taskCategory->visit && $validated['status'] === 'done') {
-            $cekLocation = TaskVisit::where('task_id', $task->id)->where('user_id', Auth::id())->first();
-            if (! $cekLocation) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Task kategori Visit harus record lokasi sebelum menandai selesai.',
-                ], 422);
-            }
-        }
 
         // jika task category = "proposal" maka wajib upload proposal PDF sebelum mark as done
         if ($taskCategory && strtolower($taskCategory->name) === 'proposal' && $validated['status'] === 'done') {

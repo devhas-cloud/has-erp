@@ -256,7 +256,6 @@
                         <th>Name</th>
                         <th>Title</th>
                         <th>Company</th>
-                        <th>Phone</th>
                         <th>Mobile</th>
                         <th>Lead Status</th>
                         <th>Owner</th>
@@ -318,16 +317,17 @@
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Email <span class="text-danger">*</span></label>
-                                    <input type="email" name="email" id="lead-email">
+                                    <label>Email</label>
+                                    <input type="email" name="email" id="lead-email" autocomplete="off">
                                 </div>
                                 <div class="form-group">
-                                    <label>Mobile  <span class="text-danger">*</span></label>
+                                    <label>Mobile</label>
                                     <div class="mobile-picker">
                                         <select id="lead-mobile-country" class="form-select"></select>
                                         <input type="tel" id="lead-mobile" placeholder="8123456789" inputmode="numeric">
                                     </div>
                                     <input type="hidden" name="mobile" id="lead-mobile-full">
+                                    <div class="form-text" style="font-size:11px;color:var(--text-muted)">Minimal isi salah satu: Email atau Mobile.</div>
                                 </div>
                                 <div class="form-group" style="display:none">
                                     <label>Phone</label>
@@ -861,7 +861,6 @@ function initLeadsTable() {
                         '</div>';
                 }
             },
-            { data: 'phone' },
             { data: 'mobile' },
             { data: 'status_badge' },
             { data: 'owner_name' },
@@ -900,7 +899,6 @@ function initLeadsTable() {
                 }
             }
         ],
-        order: [[9, 'desc']],
         pageLength: 10,
         lengthMenu: [10, 15, 25, 50, 100],
         // Filter, urutan, pencarian & halaman tetap saat kembali dari halaman detail (per tab browser)
@@ -1066,8 +1064,6 @@ $(document).on('click', '#btn-save-lead', function() {
         { field: '#lead-status', label: 'Lead Status' },
         { field: '#lead-salutation', label: 'Salutation' },
         { field: '#lead-full-name', label: 'Full Name' },
-        { field: '#lead-email', label: 'Email' },
-        { field: '#lead-mobile', label: 'Mobile' },
         { field: '#lead-job-title', label: 'Job Title' },
         { field: '#lead-division', label: 'Department' },
         { field: '#lead-source', label: 'Lead Source' },
@@ -1123,10 +1119,18 @@ $(document).on('click', '#btn-save-lead', function() {
         }
     }
 
-    if (!$('#lead-mobile').val() || !$('#lead-mobile').val().replace(/\D/g, '')) {
+    const leadEmail = ($('#lead-email').val() || '').trim();
+    const leadMobileDigits = ($('#lead-mobile').val() || '').replace(/\D/g, '');
+    if (!leadEmail && !leadMobileDigits) {
+        $('#lead-email').addClass('is-invalid');
         $('#lead-mobile').addClass('is-invalid');
-        toastr.error('Mobile wajib diisi.');
-        $('#lead-mobile').focus();
+        toastr.error('Minimal isi salah satu: Email atau Mobile.');
+        return;
+    }
+    if (leadEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(leadEmail)) {
+        $('#lead-email').addClass('is-invalid');
+        toastr.error('Format email tidak valid.');
+        $('#lead-email').focus();
         return;
     }
     $('#lead-mobile-full').val(leadBuildMobile());

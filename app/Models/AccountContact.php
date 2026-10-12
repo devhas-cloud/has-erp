@@ -18,6 +18,7 @@ class AccountContact extends Model
         'mobile',
         'job_titles_id',
         'sources_id',
+        'name_referral',
         'role_in_projects_id',
         'contact_methods_id',
         'divisions_id',

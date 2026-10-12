@@ -73,7 +73,6 @@ class ContactManagementController extends Controller
             $query->where(function ($q) use ($searchValue) {
                 $q->where('full_name', 'like', "%{$searchValue}%")
                     ->orWhere('email', 'like', "%{$searchValue}%")
-                    ->orWhere('phone', 'like', "%{$searchValue}%")
                     ->orWhere('mobile', 'like', "%{$searchValue}%")
                     ->orWhereHas('accountCompany', function ($q) use ($searchValue) {
                         $q->where('account_name', 'like', "%{$searchValue}%");
@@ -95,7 +94,7 @@ class ContactManagementController extends Controller
 
         $columnOrderMap = [
             1 => 'full_name',
-            4 => 'phone',
+            4 => 'mobile',
             5 => 'email',
         ];
 
@@ -120,7 +119,7 @@ class ContactManagementController extends Controller
                 'name_display' => $contact->full_name ?? '—',
                 'title' => $contact->jobTitle?->title_name ?? '—',
                 'account_name' => $contact->accountCompany?->account_name ?? '—',
-                'phone' => $contact->phone ?? '—',
+                'mobile' => $contact->mobile ?? '—',
                 'email' => $contact->email ?? '—',
                 'owner_name' => $contact->contactOwner?->display_name ?? '—',
                 'assigned_to_name' => $contact->assignedTo?->display_name ?? '—',
@@ -137,6 +136,8 @@ class ContactManagementController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $isReferralSource = $this->isReferralSource($request->sources_id);
+
         $validated = $request->validate([
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
@@ -146,6 +147,7 @@ class ContactManagementController extends Controller
             'mobile' => 'required|string|max:30|unique:account_contacts,mobile',
             'job_titles_id' => 'required|exists:job_titles,id',
             'sources_id' => 'required|exists:sources,id',
+            'name_referral' => ['nullable', 'string', 'max:150', Rule::requiredIf($isReferralSource)],
             'divisions_id' => 'required|exists:divisions,id',
             'contact_methods_id' => 'required|exists:contact_methods,id',
             'role_in_projects_id' => 'required|exists:role_in_projects,id',
@@ -160,6 +162,11 @@ class ContactManagementController extends Controller
         // Default assigned_to ke pembuat kontak kalau tidak diisi (field ini
         // disembunyikan untuk user divisi Sales, jadi selalu jatuh ke sini).
         $validated['assigned_to_id'] = $validated['assigned_to_id'] ?? Auth::id();
+
+        // name_referral hanya relevan untuk source Referral; default null.
+        $validated['name_referral'] = $isReferralSource
+            ? (trim((string) ($validated['name_referral'] ?? '')) ?: null)
+            : null;
 
         AccountContact::create(array_merge($validated, [
             'contact_owner_id' => Auth::id(),
@@ -186,6 +193,8 @@ class ContactManagementController extends Controller
     {
         $contact = AccountContact::findOrFail($id);
 
+        $isReferralSource = $this->isReferralSource($request->sources_id);
+
         $validated = $request->validate([
             'salutation' => 'required|in:Ibu,Bapak',
             'full_name' => 'required|string|max:150',
@@ -195,6 +204,7 @@ class ContactManagementController extends Controller
             'mobile' => 'required|string|max:30|unique:account_contacts,mobile,'.$contact->id,
             'job_titles_id' => 'required|exists:job_titles,id',
             'sources_id' => 'required|exists:sources,id',
+            'name_referral' => ['nullable', 'string', 'max:150', Rule::requiredIf($isReferralSource)],
             'divisions_id' => 'required|exists:divisions,id',
             'contact_methods_id' => 'required|exists:contact_methods,id',
             'role_in_projects_id' => 'required|exists:role_in_projects,id',
@@ -205,6 +215,11 @@ class ContactManagementController extends Controller
             'address_postal_code' => 'nullable|string|max:10',
             'address_country' => 'nullable|string|max:100',
         ]);
+
+        // name_referral hanya relevan untuk source Referral; default null.
+        $validated['name_referral'] = $isReferralSource
+            ? (trim((string) ($validated['name_referral'] ?? '')) ?: null)
+            : null;
 
         $contact->update($validated);
 
@@ -348,6 +363,11 @@ $sources = Source::where('status', 'Active')->get();
         }
     }
 
+    private function isReferralSource($sourceId): bool
+    {
+        return str_contains(strtolower((string) Source::find($sourceId)?->source_name), 'referral');
+    }
+
     public function export()
     {
         $query = AccountContact::with([
@@ -373,7 +393,7 @@ $sources = Source::where('status', 'Active')->get();
 
         $headers = [
             'Salutation', 'Full Name', 'Account', 'Email', 'Phone', 'Mobile',
-            'Job Title', 'Contact Source', 'Department', 'Contact Method', 'Role in Project',
+            'Job Title', 'Contact Source', 'Referral Name', 'Department', 'Contact Method', 'Role in Project',
             'Assigned To', 'Contact Owner',
             'Address Street', 'Address City', 'Address Province', 'Address Postal Code', 'Address Country',
             'Status', 'Created At',

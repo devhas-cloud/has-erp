@@ -1020,14 +1020,15 @@
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
-                                    <label>Email <span class="text-danger">*</span></label>
+                                    <label>Email</label>
                                     <input type="email" name="email" id="lead-email">
                                 </div>
                                 <div class="form-group">
                                     <label>Mobile</label>
                                     <input type="text" name="mobile" id="lead-mobile">
+                                    <div class="form-text" style="font-size:11px;color:var(--text-muted)">Minimal isi salah satu: Email atau Mobile.</div>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="display: none">
                                     <label>Phone</label>
                                     <input type="text" name="phone" id="lead-phone">
                                 </div>
@@ -1660,7 +1661,6 @@ function openEditModal(id) {
         { field: '#lead-status', label: 'Lead Status' },
         { field: '#lead-salutation', label: 'Salutation' },
         { field: '#lead-full-name', label: 'Full Name' },
-        { field: '#lead-email', label: 'Email' },
         { field: '#lead-job-title', label: 'Job Title' },
         { field: '#lead-division', label: 'Department' },
         { field: '#lead-source', label: 'Lead Source' },
@@ -1682,6 +1682,21 @@ function openEditModal(id) {
             $el.focus();
             return;
         }
+    }
+
+    const leadEmail = ($('#lead-email').val() || '').trim();
+    const leadMobile = ($('#lead-mobile').val() || '').trim();
+    if (!leadEmail && !leadMobile) {
+        $('#lead-email').addClass('is-invalid');
+        $('#lead-mobile').addClass('is-invalid');
+        toastr.error('Minimal isi salah satu: Email atau Mobile.');
+        return;
+    }
+    if (leadEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(leadEmail)) {
+        $('#lead-email').addClass('is-invalid');
+        toastr.error('Format email tidak valid.');
+        $('#lead-email').focus();
+        return;
     }
 
     const formData = new FormData(document.getElementById('lead-form'));
@@ -1860,11 +1875,18 @@ function renderActivity(a) {
         });
     }
     var taskBadge = '';
-    if (a.task) {
-        taskBadge = '<span class="status-badge status-active" style="font-size:10px;padding:1px 8px;margin-left:8px"><i class="fa fa-tasks" style="font-size:9px"></i> Task #' + a.task.id + '</span>';
+    // if (a.task) {
+    //     taskBadge = '<span class="status-badge status-active" style="font-size:10px;padding:1px 8px;margin-left:8px"><i class="fa fa-tasks" style="font-size:9px"></i> Task #' + a.task.title + '</span>';
+    // }
+
+    var relatedBadge = '';
+    if (a.related) {
+        var relIcon = (a.related.type === 'quote_pdf' || a.related.type === 'proposal_pdf') ? 'fa-file-pdf' : (a.related.type === 'proposal' ? 'fa-file-text' : 'fa-file-invoice');
+        relatedBadge = '<a href="' + a.related.url + '" target="_blank" rel="noopener" class="status-badge" style="font-size:10px;padding:1px 8px;margin-left:8px;color:var(--accent);background:var(--accent-soft);text-decoration:none" title="Buka dokumen terkait"><i class="fa ' + relIcon + '" style="font-size:9px"></i> ' + a.related.label + '</a>';
     }
 
     var replyCount = (a.replies && a.replies.length) ? a.replies.length : 0;
+    var hasTaskNested = (a.replies || []).some(function(r) { return r.from_task; });
     var repliesSectionId = 'replies-section-' + a.id;
     var replyFormId = 'reply-form-' + a.id;
     var replyFileId = 'reply-file-' + a.id;
@@ -1905,16 +1927,19 @@ function renderActivity(a) {
         replyToggle = '<button class="activity-reply-toggle" onclick="toggleReplies(' + a.id + ')"><i class="fa fa-comments"></i> ' + toggleLabel + '</button>';
     }
 
-    var replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
-        '<div class="reply-input-row">' +
-        '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' + a.id + ')}">' +
-        '<div class="reply-actions">' +
-        '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
-        '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
-        '</div></div>' +
-        '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
-        '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div>' +
-        '<div class="mention-suggestions reply-mention-suggestions" id="mention-suggestions-reply-' + a.id + '"></div></div>';
+    var replyFormHtml = '';
+    if (!hasTaskNested) {
+        replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
+            '<div class="reply-input-row">' +
+            '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' + a.id + ')}">' +
+            '<div class="reply-actions">' +
+            '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
+            '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
+            '</div></div>' +
+            '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
+            '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div>' +
+            '<div class="mention-suggestions reply-mention-suggestions" id="mention-suggestions-reply-' + a.id + '"></div></div>';
+    }
 
     var html = '<div class="activity-post" id="activity-' + a.id + '">' +
         '<div class="activity-post-avatar">' + avatar + '</div>' +
@@ -1923,11 +1948,12 @@ function renderActivity(a) {
         '<span class="activity-post-author">' + (a.user ? a.user.display_name : '—') + '</span>' +
         '<span class="activity-post-time">' + time + '</span>' +
         taskBadge +
+        relatedBadge +
         '</div>' +
         '<div class="activity-post-content">' + renderMentions(a.content || '') + '</div>' +
         (attachmentsHtml ? '<div class="activity-post-attachments">' + attachmentsHtml + '</div>' : '') +
         '<div class="activity-post-actions">' +
-        '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>' +
+        (hasTaskNested ? '' : '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>') +
         replyToggle +
         '</div>' +
         repliesHtml +
