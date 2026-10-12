@@ -610,6 +610,7 @@
         $backParam = request('back');
         $backLeadId = $backParam && str_starts_with($backParam, 'lead-') ? str_replace('lead-', '', $backParam) : null;
         $backOpportunityId = $backParam && str_starts_with($backParam, 'opportunity-') ? str_replace('opportunity-', '', $backParam) : null;
+        $backContactId = $backParam && str_starts_with($backParam, 'contact-') ? str_replace('contact-', '', $backParam) : null;
     @endphp
     <div class="page-header">
         <div>
@@ -630,6 +631,10 @@
             @elseif ($backOpportunityId)
                 <a href="{{ route('opportunity-management.show', $backOpportunityId) }}" class="btn-ghost">
                     <i class="fa fa-arrow-left"></i><span>Kembali ke Opportunity</span>
+                </a>
+            @elseif ($backContactId)
+                <a href="{{ route('contact-management.show', $backContactId) }}#tab-activity" class="btn-ghost">
+                    <i class="fa fa-arrow-left"></i><span>Kembali ke Contact</span>
                 </a>
             @else
                 <a href="{{ route('task-planner.index') }}" class="btn-ghost">

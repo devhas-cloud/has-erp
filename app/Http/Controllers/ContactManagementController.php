@@ -10,10 +10,13 @@ use App\Models\Forecast;
 use App\Models\JobTitle;
 use App\Models\Lead;
 use App\Models\Log;
+use App\Models\Notification;
 use App\Models\Opportunity;
 use App\Models\RoleInProject;
 use App\Models\Source;
 use App\Models\Stage;
+use App\Models\Task;
+use App\Models\TaskCategory;
 use App\Models\User;
 use App\Services\ContactExportService;
 use App\Services\ContactImportService;
@@ -21,6 +24,7 @@ use App\Services\ContactXlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -270,9 +274,20 @@ $sources = Source::where('status', 'Active')->get();
         $isSales = strtolower($user->division?->division_name ?? '') === 'sales'
             && strtolower($user->hierarchyRole?->role_name ?? '') !== 'manager';
 
+        // Task yang terhubung dengan contact: via tasks.account_contact_id
+        // ATAU via tasks.opportunity->account_contacts_id.
+        $activityTasks = Task::with(['accountContact', 'opportunity', 'category', 'creator', 'assignees'])
+            ->where(fn ($q) => $q
+                ->where('account_contact_id', $contact->id)
+                ->orWhereHas('opportunity', fn ($o) => $o->where('account_contacts_id', $contact->id)))
+            ->orderByDesc('created_at')
+            ->get();
+        $taskCategories = TaskCategory::with('division')->orderBy('name')->get();
+
         return view('contacts-management.show', compact(
             'contact', 'opportunities',
-            'sources', 'stages', 'forecasts', 'users', 'isSales', 'accountCompanies', 'divisions'
+            'sources', 'stages', 'forecasts', 'users', 'isSales', 'accountCompanies', 'divisions',
+            'activityTasks', 'taskCategories'
         ));
     }
 
@@ -311,6 +326,95 @@ $sources = Source::where('status', 'Active')->get();
             'success' => true,
             'message' => 'Lead berhasil dibuat.',
             'data' => $lead,
+        ]);
+    }
+
+    public function storeTask(Request $request, $id): JsonResponse
+    {
+        $contact = AccountContact::findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:150',
+            'description' => 'nullable|string|max:5000',
+            'category_id' => 'required|exists:task_categories,id',
+            'due_date' => 'required|date',
+            'time' => 'nullable|date_format:H:i',
+            'assignees' => 'nullable|array',
+            'assignees.*' => 'exists:users,id',
+        ]);
+
+        $validated['account_contact_id'] = $contact->id;
+        $validated['creator_id'] = Auth::id();
+        $validated['status'] = 'todo';
+
+        $assigneeIds = $request->input('assignees', []);
+        if (empty($assigneeIds)) {
+            $assigneeIds = [Auth::id()];
+        }
+        $otherAssignees = array_values(array_diff($assigneeIds, [Auth::id()]));
+        $validated['requires_approval'] = ! empty($otherAssignees);
+
+        DB::beginTransaction();
+        try {
+            $task = Task::create($validated);
+            $task->assignees()->sync($assigneeIds);
+
+            $task->load('creator');
+            foreach ($otherAssignees as $assigneeId) {
+                $assignee = User::find($assigneeId);
+                if ($assignee) {
+                    Notification::create([
+                        'user_id' => $assignee->id,
+                        'type' => 'task_assigned',
+                        'title' => "Tugas baru: {$task->title}",
+                        'body' => "{$task->creator->display_name} menugaskan Anda",
+                        'notifiable_type' => Task::class,
+                        'notifiable_id' => $task->id,
+                        'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Task berhasil dibuat.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membuat task: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function destroyTask($id, $task): JsonResponse
+    {
+        $contact = AccountContact::findOrFail($id);
+
+        $task = Task::where('id', $task)
+            ->where(fn ($q) => $q
+                ->where('account_contact_id', $contact->id)
+                ->orWhereHas('opportunity', fn ($o) => $o->where('account_contacts_id', $contact->id)))
+            ->first();
+
+        if (! $task) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task tidak ditemukan.',
+            ], 404);
+        }
+
+        $task->delete();
+
+        Log::record('delete_task', "Task #{$task->id}: {$task->title} dihapus dari contact #{$contact->id} ({$contact->full_name})", 'MOD_CONTACT_MANAGEMENT', $task);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task berhasil dihapus.',
         ]);
     }
 

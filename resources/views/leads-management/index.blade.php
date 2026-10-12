@@ -76,6 +76,63 @@
     .mobile-picker select { width: 92px; flex: 0 0 92px; }
     .mobile-picker input { flex: 1; }
 
+    /* ===== Peta alamat lead (pola accounts-management) ===== */
+    .lead-addr-map-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+    }
+    .lead-addr-map-toolbar .map-coords {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-left: auto;
+    }
+    .lead-addr-map {
+        width: 100%;
+        height: 260px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--card-border);
+        background: #f1f5f9;
+        z-index: 1;
+    }
+    .lead-addr-map-status {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin: 6px 0;
+        min-height: 16px;
+    }
+    .lead-addr-map-status.loading { color: #2563eb; }
+    .lead-addr-map-status.error { color: #b91c1c; }
+    .lead-addr-map-preview {
+        display: none;
+        border: 1px solid var(--accent-soft);
+        background: #fff;
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        margin-top: 8px;
+    }
+    .lead-addr-map-preview-title {
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--accent);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .lead-addr-map-preview-body {
+        font-size: 12px;
+        color: var(--text-primary);
+        line-height: 1.5;
+        margin-bottom: 8px;
+        white-space: pre-line;
+    }
+    .lead-addr-map-preview-actions {
+        display: flex;
+        gap: 8px;
+    }
+
     /* ===== Toolbar: filter Created Date + Lead Status ===== */
     .lead-toolbar {
         margin: 6px 6px 14px;
@@ -360,7 +417,7 @@
                                     <select name="source_id" id="lead-source">
                                         <option value="">— Pilih —</option>
                                         @foreach($sources as $src)
-                                        <option value="{{ $src->id }}" @if($src->source_name === 'Referral' or $src->source_name === 'Employe Referral') data-referral="1" @endif>{{ $src->source_name }}</option>
+                                        <option value="{{ $src->id }}" @if(str_contains(strtolower($src->source_name), 'referral')) data-referral="1" @endif>{{ $src->source_name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -501,6 +558,28 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="lead-addr-map-group" id="lead-addr-map-group">
+                                <div class="lead-addr-map-toolbar">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="leadAddrMapPickLocation()">
+                                        <i class="fa fa-map-marker-alt me-1"></i> Pilih Titik di Peta
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="leadAddrMapUseMyLocation()">
+                                        <i class="fa fa-location-crosshairs me-1"></i> Lokasi Saya
+                                    </button>
+                                    <span class="map-coords" id="lead-addr-map-coords">Belum ada titik.</span>
+                                </div>
+                                <div class="lead-addr-map" id="lead-addr-map"></div>
+                                <div class="lead-addr-map-status" id="lead-addr-map-status"></div>
+                                <div class="lead-addr-map-preview" id="lead-addr-map-preview">
+                                    <div class="lead-addr-map-preview-title"><i class="fa fa-map-pin me-1"></i>Alamat dari Peta</div>
+                                    <div class="lead-addr-map-preview-body" id="lead-addr-map-preview-body"></div>
+                                    <div class="lead-addr-map-preview-actions">
+                                        <button type="button" class="btn btn-primary btn-sm" id="lead-addr-map-apply" disabled onclick="leadAddrMapApply()">
+                                            <i class="fa fa-check me-1"></i> Gunakan Alamat Ini
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
                                     <label>Address Street</label>
@@ -510,11 +589,11 @@
                             <div class="lead-form-row">
                                 <div class="form-group">
                                     <label>City</label>
-                                    <input type="text" name="address_city" id="lead-addr-city">
+                                    <input type="text" name="address_city" id="lead-addr-city" list="lead-city-suggestions">
                                 </div>
                                 <div class="form-group">
                                     <label>Province</label>
-                                    <input type="text" name="address_province" id="lead-addr-province">
+                                    <input type="text" name="address_province" id="lead-addr-province" list="lead-province-suggestions">
                                 </div>
                                 <div class="form-group small">
                                     <label>Zip</label>
@@ -522,7 +601,7 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Country</label>
-                                    <input type="text" name="address_country" id="lead-addr-country">
+                                    <input type="text" name="address_country" id="lead-addr-country" list="lead-country-suggestions">
                                 </div>
                             </div>
                             <div class="lead-form-row">
@@ -562,6 +641,21 @@
 
                         </div>
                     </div>
+                    <datalist id="lead-city-suggestions">
+                        @foreach($accountCities as $city)
+                        <option value="{{ $city }}"></option>
+                        @endforeach
+                    </datalist>
+                    <datalist id="lead-province-suggestions">
+                        @foreach($accountProvinces as $province)
+                        <option value="{{ $province }}"></option>
+                        @endforeach
+                    </datalist>
+                    <datalist id="lead-country-suggestions">
+                        @foreach($accountCountries as $country)
+                        <option value="{{ $country }}"></option>
+                        @endforeach
+                    </datalist>
                 </form>
             </div>
             <div class="modal-footer">
@@ -712,6 +806,172 @@ function leadToggleReferral() {
     }
 }
 
+// Saat company sudah ada (terpilih/resulted), field account & alamat dikunci
+// mengikuti data company. Saat company baru (newTag/clear) field bisa diisi.
+const leadAddrReadonlyMap = [
+    { id: '#lead-addr-street', list: '' },
+    { id: '#lead-addr-city', list: 'lead-city-suggestions' },
+    { id: '#lead-addr-province', list: 'lead-province-suggestions' },
+    { id: '#lead-addr-zip', list: '' },
+    { id: '#lead-addr-country', list: 'lead-country-suggestions' },
+];
+
+function leadSetAccountLocked(locked) {
+    ['#lead-field-type', '#lead-segmentation', '#lead-biz-entity', '#lead-biz-value'].forEach(function(sel) {
+        $(sel).prop('disabled', !!locked);
+    });
+
+    leadAddrReadonlyMap.forEach(function(f) {
+        const $el = $(f.id);
+        $el.prop('readonly', !!locked);
+        if (locked) {
+            $el.removeAttr('list');
+        } else if (f.list) {
+            $el.attr('list', f.list);
+        }
+    });
+
+    $('#lead-addr-map-group').toggle(!locked);
+    if (locked) {
+        leadAddrMapReset();
+    } else {
+        setTimeout(function() { leadAddrMapInvalidate(); }, 150);
+    }
+}
+
+// ── Peta alamat (Leaflet + OSM, sudah dimuat global di layout) ──
+let leadAddrMap = null;
+let leadAddrMarker = null;
+let leadAddrResolved = null;
+let leadAddrClickTimer = null;
+
+function leadAddrMapEnsure() {
+    if (leadAddrMap) return;
+    leadAddrMap = L.map('lead-addr-map', {
+        center: [-6.2088, 106.8456],
+        zoom: 12,
+        zoomControl: true,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap',
+    }).addTo(leadAddrMap);
+    leadAddrMap.on('click', function(e) {
+        leadAddrMapOnPick(e.latlng.lat, e.latlng.lng);
+    });
+}
+
+function leadAddrMapInvalidate() {
+    if (leadAddrMap) leadAddrMap.invalidateSize();
+}
+
+function leadAddrMapReset() {
+    if (leadAddrMarker && leadAddrMap) {
+        leadAddrMap.removeLayer(leadAddrMarker);
+        leadAddrMarker = null;
+    }
+    leadAddrResolved = null;
+    if (leadAddrClickTimer) {
+        clearTimeout(leadAddrClickTimer);
+        leadAddrClickTimer = null;
+    }
+    $('#lead-addr-map-coords').text('Belum ada titik.');
+    $('#lead-addr-map-status').attr('class', 'lead-addr-map-status').text('');
+    $('#lead-addr-map-preview').hide();
+    $('#lead-addr-map-apply').prop('disabled', true);
+}
+
+function leadAddrMapPickLocation() {
+    const section = $('#lead-addr-map').closest('.lead-form-section');
+    if (section.length && !section.hasClass('open')) {
+        section.addClass('open');
+    }
+    leadAddrMapEnsure();
+    setTimeout(function() { leadAddrMapInvalidate(); }, 150);
+    toastr.info('Klik pada peta untuk memilih titik alamat.');
+}
+
+function leadAddrMapUseMyLocation() {
+    if (!navigator.geolocation) {
+        toastr.error('Geolocation tidak didukung browser.');
+        return;
+    }
+    leadAddrMapEnsure();
+    setTimeout(function() { leadAddrMapInvalidate(); }, 150);
+    const status = $('#lead-addr-map-status');
+    status.attr('class', 'lead-addr-map-status loading').text('Mendapatkan lokasi Anda...');
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            leadAddrMap.setView([pos.coords.latitude, pos.coords.longitude], 15);
+            leadAddrMapOnPick(pos.coords.latitude, pos.coords.longitude);
+        },
+        function() {
+            status.attr('class', 'lead-addr-map-status error').text('Gagal mendapatkan lokasi. Berikan izin lalu coba lagi.');
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+function leadAddrMapOnPick(lat, lng) {
+    if (leadAddrMarker) leadAddrMap.removeLayer(leadAddrMarker);
+    leadAddrMarker = L.marker([lat, lng]).addTo(leadAddrMap);
+    leadAddrMap.setView([lat, lng], 15);
+    $('#lead-addr-map-coords').text(lat.toFixed(6) + ', ' + lng.toFixed(6));
+    const status = $('#lead-addr-map-status');
+    status.attr('class', 'lead-addr-map-status loading').text('Mengambil alamat dari titik...');
+    if (leadAddrClickTimer) clearTimeout(leadAddrClickTimer);
+    leadAddrClickTimer = setTimeout(function() { leadAddrMapReverseGeocode(lat, lng); }, 600);
+}
+
+function leadAddrMapReverseGeocode(lat, lng) {
+    const status = $('#lead-addr-map-status');
+    const url = 'https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json&addressdetails=1&accept-language=id';
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data || data.error) {
+                throw new Error(data && data.error ? data.error : 'Alamat tidak ditemukan');
+            }
+            const addr = data.address || {};
+            const street = [addr.road, addr.house_number].filter(Boolean).join(' ') || [addr.neighbourhood, addr.suburb, addr.pedestrian].filter(Boolean).join(', ') || '';
+            const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+            const province = addr.state || addr.region || addr.county || '';
+            const postal = addr.postcode || '';
+            const country = addr.country || '';
+
+            leadAddrResolved = {
+                street: street,
+                city: city,
+                province: province,
+                postal_code: postal,
+                country: country,
+                display: [street, city, province, postal, country].filter(Boolean).join('\n'),
+            };
+
+            $('#lead-addr-map-preview-body').text(leadAddrResolved.display || 'Alamat tidak lengkap.');
+            $('#lead-addr-map-preview').show();
+            status.attr('class', 'lead-addr-map-status').text('Alamat ditemukan. Klik "Gunakan Alamat Ini" untuk mengisi form.');
+            $('#lead-addr-map-apply').prop('disabled', false);
+        })
+        .catch(function(err) {
+            leadAddrResolved = null;
+            status.attr('class', 'lead-addr-map-status error').text('Gagal mengambil alamat: ' + (err.message || 'coba lagi.'));
+            $('#lead-addr-map-preview').hide();
+            $('#lead-addr-map-apply').prop('disabled', true);
+        });
+}
+
+function leadAddrMapApply() {
+    if (!leadAddrResolved) return;
+    const r = leadAddrResolved;
+    if (r.street) $('#lead-addr-street').val(r.street);
+    if (r.city) $('#lead-addr-city').val(r.city);
+    if (r.province) $('#lead-addr-province').val(r.province);
+    if (r.postal_code) $('#lead-addr-zip').val(r.postal_code);
+    if (r.country) $('#lead-addr-country').val(r.country);
+    toastr.success('Alamat diisi dari peta.');
+}
+
 function toggleLeadSection(header) {
     header.closest('.lead-form-section').classList.toggle('open');
 }
@@ -735,6 +995,7 @@ function resetLeadForm() {
     $('#lead-mobile-full').val('');
     $('#lead-referral').val('');
     $('#lead-referral-group').hide();
+    leadSetAccountLocked(false);
 }
 
 function openCreateModal() {
@@ -797,6 +1058,7 @@ function openEditModal(id) {
             $('#lead-addr-country').val(res.company.address_billing_country);
             $('#lead-end-user').val(res.company.end_user).trigger('change');
         }
+        leadSetAccountLocked(!!res.company);
 
         if (res.lead.lead_can_be_contacted) {
             $('#lead-can-contact').prop('checked', true);
@@ -892,7 +1154,7 @@ function initLeadsTable() {
                     }
 
                     if (leadsCanDelete) {
-                        html += ' <button type="button" class="btn-icon danger btn-delete-lead" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-lead" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;
@@ -1332,6 +1594,7 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
                 $('#lead-addr-province').val('');
                 $('#lead-addr-zip').val('');
                 $('#lead-addr-country').val('');
+                leadSetAccountLocked(false);
             } else {
                 $('#lead-company-id').val(c.id);
                 if (c.segmentation_id) $('#lead-segmentation').val(c.segmentation_id);
@@ -1345,6 +1608,7 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
                 if (c.address_billing_province) $('#lead-addr-province').val(c.address_billing_province);
                 if (c.address_billing_postal_code) $('#lead-addr-zip').val(c.address_billing_postal_code);
                 if (c.address_billing_country) $('#lead-addr-country').val(c.address_billing_country);
+                leadSetAccountLocked(true);
             }
         }).on('select2:clear', function() {
             $('#lead-company-id').val('');
@@ -1359,6 +1623,7 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
             $('#lead-addr-province').val('');
             $('#lead-addr-zip').val('');
             $('#lead-addr-country').val('');
+            leadSetAccountLocked(false);
         });
     }
 

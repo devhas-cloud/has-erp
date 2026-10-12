@@ -90,6 +90,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('contact-management/import', [ContactManagementController::class, 'import'])->name('contact-management.import');
     Route::get('contact-management/export', [ContactManagementController::class, 'export'])->name('contact-management.export');
     Route::post('contact-management/{contact_management}/leads', [ContactManagementController::class, 'storeLead'])->name('contact-management.leads.store');
+    Route::post('contact-management/{contact_management}/tasks', [ContactManagementController::class, 'storeTask'])->name('contact-management.tasks.store');
+    Route::delete('contact-management/{contact_management}/tasks/{task}', [ContactManagementController::class, 'destroyTask'])->name('contact-management.tasks.destroy');
     Route::resource('contact-management', ContactManagementController::class);
 
     Route::get('accounts-management/data', [AccountManagementController::class, 'data'])->name('accounts-management.data');

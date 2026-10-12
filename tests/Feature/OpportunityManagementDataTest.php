@@ -250,4 +250,25 @@ class OpportunityManagementDataTest extends TestCase
         $sorted = $this->names($user, ['order' => [['column' => 4, 'dir' => 'asc']]]);
         $this->assertSame(['Opp Ims', 'Opp Water'], array_slice($sorted, -2));
     }
+
+    public function test_default_order_is_newest_created_first(): void
+    {
+        $user = $this->makeUser('viewer', 'Viewer');
+
+        Opportunity::where('opportunity_name', 'Opp B1')->update(['created_at' => '2026-03-01 10:00:00']);
+        Opportunity::where('opportunity_name', 'Opp A1')->update(['created_at' => '2026-03-02 10:00:00']);
+        Opportunity::where('opportunity_name', 'Opp A2')->update(['created_at' => '2026-03-03 10:00:00']);
+
+        $this->assertSame(['Opp A2', 'Opp A1', 'Opp B1'], $this->names($user));
+    }
+
+    public function test_account_column_includes_company_icon(): void
+    {
+        $user = $this->makeUser('viewer', 'Viewer');
+        AccountCompany::first()->update(['icon' => 'account-icons/logo.png']);
+
+        $response = $this->actingAs($user)->getJson(route('opportunity-management.data'))->assertOk();
+
+        $this->assertStringContainsString('storage/account-icons/logo.png', $response->json('data.0.company_icon'));
+    }
 }

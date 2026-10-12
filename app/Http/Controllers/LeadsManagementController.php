@@ -57,11 +57,27 @@ class LeadsManagementController extends Controller
         $user = Auth::user();
         $isSales = strtolower($user->division?->division_name) === 'sales' && strtolower($user->hierarchyRole?->role_name) !== 'manager';
 
+        // Saran autocomplete alamat: gabungan unik nilai billing + shipping
+        // dari akun yang sudah dimuat (tanpa query tambahan).
+        $suggest = function (string $billing, string $shipping) use ($accountCompanies) {
+            return $accountCompanies->pluck($billing)
+                ->merge($accountCompanies->pluck($shipping))
+                ->map(fn ($v) => trim((string) $v))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+        };
+        $accountCities = $suggest('address_billing_city', 'address_shipping_city');
+        $accountProvinces = $suggest('address_billing_province', 'address_shipping_province');
+        $accountCountries = $suggest('address_billing_country', 'address_shipping_country');
+
         return view('leads-management.index', compact(
             'jobTitles', 'divisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
             'businessValues', 'interactionLevels', 'users', 'accountCompanies',
-            'typesAccountsCompanies','isSales'
+            'typesAccountsCompanies','isSales',
+            'accountCities', 'accountProvinces', 'accountCountries'
         ));
     }
 
@@ -155,12 +171,12 @@ class LeadsManagementController extends Controller
                 'id' => $lead->id,
                 'full_name' => $lead->accountContact?->full_name ?? '—',
                 'initials' => strtoupper(substr($lead->accountContact?->full_name ?? '?', 0, 2)),
-                'icon' => $lead->accountContact?->icon,
+                'icon' => $lead->accountContact?->icon_url,
                 'name_display' => $lead->accountContact?->full_name ?? '—',
                 'lead_title' => $lead->lead_title ?? '—',
                 'account_name' => $lead->accountCompany?->account_name ?? '—',
                 'company_initials' => strtoupper(substr($lead->accountCompany?->account_name ?? '?', 0, 2)),
-                'company_icon' => $lead->accountCompany?->icon,
+                'company_icon' => $lead->accountCompany?->icon_url,
                 'company_name_display' => $lead->accountCompany?->account_name ?? '—',
                 'phone' => $lead->accountContact?->phone ?? '—',
                 'mobile' => $lead->accountContact?->mobile ?? '—',
@@ -588,11 +604,26 @@ class LeadsManagementController extends Controller
         $opportunityDivisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
         $categories = TaskCategory::with('division')->get();
 
+        // Saran autocomplete alamat: gabungan unik nilai billing + shipping.
+        $suggest = function (string $billing, string $shipping) use ($accountCompanies) {
+            return $accountCompanies->pluck($billing)
+                ->merge($accountCompanies->pluck($shipping))
+                ->map(fn ($v) => trim((string) $v))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+        };
+        $accountCities = $suggest('address_billing_city', 'address_shipping_city');
+        $accountProvinces = $suggest('address_billing_province', 'address_shipping_province');
+        $accountCountries = $suggest('address_billing_country', 'address_shipping_country');
+
         return view('leads-management.show', compact(
             'lead', 'jobTitles', 'divisions', 'opportunityDivisions', 'sources', 'contactMethods',
             'roleInProjects', 'segmentations', 'accountTypes', 'businessEntities',
             'businessValues', 'interactionLevels', 'users', 'accountCompanies',
-            'typesAccountsCompanies', 'categories'
+            'typesAccountsCompanies', 'categories',
+            'accountCities', 'accountProvinces', 'accountCountries'
         ));
     }
 
@@ -760,7 +791,7 @@ class LeadsManagementController extends Controller
             // 3. Buat Opportunity
             $opportunity = Opportunity::create([
                 'lead_id' => $lead->id,
-                'opportunity_name' => $lead->lead_title,
+                'opportunity_name' => $request->filled('opportunity_title') ? ucwords($request->opportunity_title) : ucwords($lead->lead_title),
                 'account_companies_id' => $lead->account_companies_id,
                 'account_contacts_id' => $lead->account_contacts_id,
                 'division_id' => $request->filled('division_id')

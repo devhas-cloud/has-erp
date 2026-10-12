@@ -8,8 +8,11 @@ use App\Models\ContactMethod;
 use App\Models\Division;
 use App\Models\JobTitle;
 use App\Models\Module;
+use App\Models\Opportunity;
 use App\Models\RoleInProject;
 use App\Models\Source;
+use App\Models\Task;
+use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,7 +51,7 @@ class ContactManagementTest extends TestCase
             'group' => 'CRM',
         ]);
 
-        $this->creator = $this->makeUser('creator', $module, ['can_create' => true, 'can_update' => true]);
+        $this->creator = $this->makeUser('creator', $module, ['can_create' => true, 'can_update' => true, 'can_delete' => true]);
         $this->assignee = $this->makeUser('assignee', $module, []);
         $this->salesUser = $this->makeUser('salesrep', $module, ['can_create' => true, 'can_update' => true], $this->salesDivision);
         $this->assignee->update(['division_id' => $this->salesDivision->id]);
@@ -298,9 +301,103 @@ class ContactManagementTest extends TestCase
 
         $response = $this->actingAs($this->creator)->getJson(route('contact-management.data'));
 
-        $response->assertOk();
+$response->assertOk();
         $this->assertSame('PT Sinar Abadi', $response->json('data.0.company_name_display'));
         $this->assertSame('PT', $response->json('data.0.company_initials'));
     }
 
+    public function test_activity_tab_lists_tasks_connected_to_contact(): void
+    {
+        $company = AccountCompany::create(array_merge($this->payload, ['account_name' => 'PT Akses', 'status' => 'Active']));
+        $contact = AccountContact::create(array_merge($this->payload, [
+            'account_companies_id' => $company->id,
+            'full_name' => 'Kontak Utama',
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+
+        $otherCompany = AccountCompany::create(array_merge($this->payload, ['account_name' => 'PT Lain', 'status' => 'Active']));
+        $otherContact = AccountContact::create(array_merge($this->payload, [
+            'account_companies_id' => $otherCompany->id,
+            'full_name' => 'Kontak Lain',
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+
+        $category = TaskCategory::create(['name' => 'Follow Up']);
+
+        Task::create(['title' => 'Task Kontak', 'account_contact_id' => $contact->id, 'category_id' => $category->id, 'due_date' => '2026-12-31', 'creator_id' => $this->creator->id]);
+        $opp = Opportunity::create([
+            'opportunity_name' => 'Opp Utama',
+            'account_companies_id' => $company->id,
+            'account_contacts_id' => $contact->id,
+            'owner_id' => $this->creator->id,
+        ]);
+        Task::create(['title' => 'Task Opportunity', 'opportunity_id' => $opp->id, 'category_id' => $category->id, 'due_date' => '2026-12-31', 'creator_id' => $this->creator->id]);
+        Task::create(['title' => 'Task Tak Terkait', 'account_contact_id' => $otherContact->id, 'category_id' => $category->id, 'due_date' => '2026-12-31', 'creator_id' => $this->creator->id]);
+
+        $response = $this->actingAs($this->creator)->get(route('contact-management.show', $contact->id));
+
+        $response->assertOk();
+        $response->assertSee('Task Kontak');
+        $response->assertSee('Task Opportunity');
+        $response->assertDontSee('Task Tak Terkait');
+        $response->assertSee('?back=contact-'.$contact->id);
+    }
+
+    public function test_store_contact_task_creates_task(): void
+    {
+        $company = AccountCompany::create(array_merge($this->payload, ['account_name' => 'PT Akses', 'status' => 'Active']));
+        $contact = AccountContact::create(array_merge($this->payload, [
+            'account_companies_id' => $company->id,
+            'full_name' => 'Kontak Utama',
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+        $category = TaskCategory::create(['name' => 'Follow Up']);
+
+        $response = $this->actingAs($this->creator)->postJson(route('contact-management.tasks.store', $contact->id), [
+            'title' => 'Task Baru',
+            'category_id' => $category->id,
+            'due_date' => '2026-12-31',
+            'assignees' => [$this->creator->id],
+        ]);
+
+        $response->assertOk();
+        $task = Task::firstOrFail();
+        $this->assertSame('Task Baru', $task->title);
+        $this->assertSame($contact->id, $task->account_contact_id);
+        $this->assertTrue($task->assignees()->where('users.id', $this->creator->id)->exists());
+    }
+
+    public function test_destroy_contact_task_deletes_task(): void
+    {
+        $company = AccountCompany::create(array_merge($this->payload, ['account_name' => 'PT Akses', 'status' => 'Active']));
+        $contact = AccountContact::create(array_merge($this->payload, [
+            'account_companies_id' => $company->id,
+            'full_name' => 'Kontak Utama',
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+        $otherCompany = AccountCompany::create(array_merge($this->payload, ['account_name' => 'PT Lain', 'status' => 'Active']));
+        $otherContact = AccountContact::create(array_merge($this->payload, [
+            'account_companies_id' => $otherCompany->id,
+            'full_name' => 'Kontak Lain',
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+        $category = TaskCategory::create(['name' => 'Follow Up']);
+
+        $task = Task::create(['title' => 'Task Hapus', 'account_contact_id' => $contact->id, 'category_id' => $category->id, 'due_date' => '2026-12-31', 'creator_id' => $this->creator->id]);
+        $foreign = Task::create(['title' => 'Task Asing', 'account_contact_id' => $otherContact->id, 'category_id' => $category->id, 'due_date' => '2026-12-31', 'creator_id' => $this->creator->id]);
+
+        // Task milik kontak lain tidak boleh dihapus lewat contact ini.
+        $this->actingAs($this->creator)->deleteJson(route('contact-management.tasks.destroy', ['contact_management' => $contact->id, 'task' => $foreign->id]))
+            ->assertStatus(404);
+
+        $response = $this->actingAs($this->creator)->deleteJson(route('contact-management.tasks.destroy', ['contact_management' => $contact->id, 'task' => $task->id]));
+        $response->assertOk();
+        $this->assertNull(Task::find($task->id));
+        $this->assertNotNull(Task::find($foreign->id));
+    }
 }

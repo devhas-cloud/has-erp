@@ -655,6 +655,63 @@
     .card-collapsible.collapsed .card-body-custom { display: none; }
     .card-collapsible .card-header-custom .chevron i { transition: transform .25s var(--ease); }
     .card-collapsible:not(.collapsed) .card-header-custom .chevron i { transform: rotate(180deg); }
+
+    /* ===== Peta alamat Qualify Lead (pola index leadModal) ===== */
+    .lead-addr-map-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+    }
+    .lead-addr-map-toolbar .map-coords {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-left: auto;
+    }
+    .lead-addr-map {
+        width: 100%;
+        height: 260px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--card-border);
+        background: #f1f5f9;
+        z-index: 1;
+    }
+    .lead-addr-map-status {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin: 6px 0;
+        min-height: 16px;
+    }
+    .lead-addr-map-status.loading { color: #2563eb; }
+    .lead-addr-map-status.error { color: #b91c1c; }
+    .lead-addr-map-preview {
+        display: none;
+        border: 1px solid var(--accent-soft);
+        background: #fff;
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        margin-top: 8px;
+    }
+    .lead-addr-map-preview-title {
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--accent);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .lead-addr-map-preview-body {
+        font-size: 12px;
+        color: var(--text-primary);
+        line-height: 1.5;
+        margin-bottom: 8px;
+        white-space: pre-line;
+    }
+    .lead-addr-map-preview-actions {
+        display: flex;
+        gap: 8px;
+    }
 </style>
 @endsection
 
@@ -672,7 +729,7 @@
         </button>
 
         @endif
-        <a href="{{ route('leads-management.index') }}" class="btn-ghost">
+        <a href="{{ url()->previous() }}" class="btn-ghost">
             <i class="fa fa-arrow-left"></i><span>Kembali</span>
         </a>
     </div>
@@ -693,8 +750,8 @@
             <div class="card-body-custom">
                 <div class="lead-header">
                     <div class="lead-header__identity">
-                        @if($lead->accountContact?->icon)
-                            <img src="{{ $lead->accountContact->icon }}" class="avatar-circle" alt="" style="background:transparent">
+                        @if($lead->accountContact?->icon_url)
+                            <img src="{{ $lead->accountContact->icon_url }}" class="avatar-circle" alt="" style="background:transparent">
                         @else
                             <div class="avatar-circle" style="font-size:15px">
                                 {{ strtoupper(substr($lead->accountContact?->full_name ?? '?', 0, 2)) }}
@@ -1270,7 +1327,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Leads</label>
-                    <input type="text" value="{{ $lead->lead_title ?? '—' }}" readonly>
+                    <input type="text" id="cl-opportunity-title" value="{{ $lead->lead_title ?? '—' }}">
                     <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Lead akan dikonversi menjadi Opportunity.</div>
                 </div>
                 <br>
@@ -1513,6 +1570,28 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="lead-addr-map-group" id="qual-addr-map-group">
+                                <div class="lead-addr-map-toolbar">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="qualAddrMapPickLocation()">
+                                        <i class="fa fa-map-marker-alt me-1"></i> Pilih Titik di Peta
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="qualAddrMapUseMyLocation()">
+                                        <i class="fa fa-location-crosshairs me-1"></i> Lokasi Saya
+                                    </button>
+                                    <span class="map-coords" id="qual-addr-map-coords">Belum ada titik.</span>
+                                </div>
+                                <div class="lead-addr-map" id="qual-addr-map"></div>
+                                <div class="lead-addr-map-status" id="qual-addr-map-status"></div>
+                                <div class="lead-addr-map-preview" id="qual-addr-map-preview">
+                                    <div class="lead-addr-map-preview-title"><i class="fa fa-map-pin me-1"></i>Alamat dari Peta</div>
+                                    <div class="lead-addr-map-preview-body" id="qual-addr-map-preview-body"></div>
+                                    <div class="lead-addr-map-preview-actions">
+                                        <button type="button" class="btn btn-primary btn-sm" id="qual-addr-map-apply" disabled onclick="qualAddrMapApply()">
+                                            <i class="fa fa-check me-1"></i> Gunakan Alamat Ini
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
                                     <label>Address Street <span class="text-danger">*</span></label>
@@ -1520,10 +1599,10 @@
                                 </div>
                             </div>
                             <div class="lead-form-row">
-                                <div class="form-group"><label>City <span class="text-danger">*</span></label><input type="text" id="qual-addr-city" value="{{ $lead->accountCompany?->address_billing_city }}" required></div>
-                                <div class="form-group"><label>Province <span class="text-danger">*</span></label><input type="text" id="qual-addr-province" value="{{ $lead->accountCompany?->address_billing_province }}" required></div>
+                                <div class="form-group"><label>City <span class="text-danger">*</span></label><input type="text" id="qual-addr-city" value="{{ $lead->accountCompany?->address_billing_city }}" list="qual-city-suggestions" required></div>
+                                <div class="form-group"><label>Province <span class="text-danger">*</span></label><input type="text" id="qual-addr-province" value="{{ $lead->accountCompany?->address_billing_province }}" list="qual-province-suggestions" required></div>
                                 <div class="form-group small"><label>Zip <span class="text-danger">*</span></label><input type="text" id="qual-addr-zip" value="{{ $lead->accountCompany?->address_billing_postal_code }}" required></div>
-                                <div class="form-group"><label>Country <span class="text-danger">*</span></label><input type="text" id="qual-addr-country" value="{{ $lead->accountCompany?->address_billing_country }}" required></div>
+                                <div class="form-group"><label>Country <span class="text-danger">*</span></label><input type="text" id="qual-addr-country" value="{{ $lead->accountCompany?->address_billing_country }}" list="qual-country-suggestions" required></div>
                             </div>
                             <div class="lead-form-row">
                                 <div class="form-group">
@@ -1538,6 +1617,21 @@
                             </div>
                         </div>
                     </div>
+                    <datalist id="qual-city-suggestions">
+                        @foreach($accountCities as $city)
+                        <option value="{{ $city }}"></option>
+                        @endforeach
+                    </datalist>
+                    <datalist id="qual-province-suggestions">
+                        @foreach($accountProvinces as $province)
+                        <option value="{{ $province }}"></option>
+                        @endforeach
+                    </datalist>
+                    <datalist id="qual-country-suggestions">
+                        @foreach($accountCountries as $country)
+                        <option value="{{ $country }}"></option>
+                        @endforeach
+                    </datalist>
                 </form>
             </div>
             <div class="modal-footer">
@@ -2470,9 +2564,176 @@ $(document).on('change input', '#unqualified-reason', function() {
 });
 
 // ── Qualified Modal ──
+const qualAddrReadonlyMap = [
+    { id: '#qual-addr-street', list: '' },
+    { id: '#qual-addr-city', list: 'qual-city-suggestions' },
+    { id: '#qual-addr-province', list: 'qual-province-suggestions' },
+    { id: '#qual-addr-zip', list: '' },
+    { id: '#qual-addr-country', list: 'qual-country-suggestions' },
+];
+
+// Saat company sudah ada (terpilih): field account & alamat dikunci mengikuti
+// data company. Saat company baru (newTag/clear): field bisa diisi.
+function qualSetAccountLocked(locked) {
+    ['#qual-field-type', '#qual-segmentation', '#qual-biz-entity', '#qual-biz-value'].forEach(function(sel) {
+        $(sel).prop('disabled', !!locked);
+    });
+
+    qualAddrReadonlyMap.forEach(function(f) {
+        const $el = $(f.id);
+        $el.prop('readonly', !!locked);
+        if (locked) {
+            $el.removeAttr('list');
+        } else if (f.list) {
+            $el.attr('list', f.list);
+        }
+    });
+
+    $('#qual-addr-map-group').toggle(!locked);
+    if (locked) {
+        qualAddrMapReset();
+    } else {
+        setTimeout(function() { qualAddrMapInvalidate(); }, 150);
+    }
+}
+
+// ── Peta alamat Qualify Lead (Leaflet + OSM) ──
+let qualAddrMap = null;
+let qualAddrMarker = null;
+let qualAddrResolved = null;
+let qualAddrClickTimer = null;
+
+function qualAddrMapEnsure() {
+    if (qualAddrMap) return;
+    qualAddrMap = L.map('qual-addr-map', {
+        center: [-6.2088, 106.8456],
+        zoom: 12,
+        zoomControl: true,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap',
+    }).addTo(qualAddrMap);
+    qualAddrMap.on('click', function(e) {
+        qualAddrMapOnPick(e.latlng.lat, e.latlng.lng);
+    });
+}
+
+function qualAddrMapInvalidate() {
+    if (qualAddrMap) qualAddrMap.invalidateSize();
+}
+
+function qualAddrMapReset() {
+    if (qualAddrMarker && qualAddrMap) {
+        qualAddrMap.removeLayer(qualAddrMarker);
+        qualAddrMarker = null;
+    }
+    qualAddrResolved = null;
+    if (qualAddrClickTimer) {
+        clearTimeout(qualAddrClickTimer);
+        qualAddrClickTimer = null;
+    }
+    $('#qual-addr-map-coords').text('Belum ada titik.');
+    $('#qual-addr-map-status').attr('class', 'lead-addr-map-status').text('');
+    $('#qual-addr-map-preview').hide();
+    $('#qual-addr-map-apply').prop('disabled', true);
+}
+
+function qualAddrMapPickLocation() {
+    const section = $('#qual-addr-map').closest('.lead-form-section');
+    if (section.length && !section.hasClass('open')) {
+        section.addClass('open');
+    }
+    qualAddrMapEnsure();
+    setTimeout(function() { qualAddrMapInvalidate(); }, 150);
+    toastr.info('Klik pada peta untuk memilih titik alamat.');
+}
+
+function qualAddrMapUseMyLocation() {
+    if (!navigator.geolocation) {
+        toastr.error('Geolocation tidak didukung browser.');
+        return;
+    }
+    qualAddrMapEnsure();
+    setTimeout(function() { qualAddrMapInvalidate(); }, 150);
+    const status = $('#qual-addr-map-status');
+    status.attr('class', 'lead-addr-map-status loading').text('Mendapatkan lokasi Anda...');
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            qualAddrMap.setView([pos.coords.latitude, pos.coords.longitude], 15);
+            qualAddrMapOnPick(pos.coords.latitude, pos.coords.longitude);
+        },
+        function() {
+            status.attr('class', 'lead-addr-map-status error').text('Gagal mendapatkan lokasi. Berikan izin lalu coba lagi.');
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+function qualAddrMapOnPick(lat, lng) {
+    if (qualAddrMarker) qualAddrMap.removeLayer(qualAddrMarker);
+    qualAddrMarker = L.marker([lat, lng]).addTo(qualAddrMap);
+    qualAddrMap.setView([lat, lng], 15);
+    $('#qual-addr-map-coords').text(lat.toFixed(6) + ', ' + lng.toFixed(6));
+    const status = $('#qual-addr-map-status');
+    status.attr('class', 'lead-addr-map-status loading').text('Mengambil alamat dari titik...');
+    if (qualAddrClickTimer) clearTimeout(qualAddrClickTimer);
+    qualAddrClickTimer = setTimeout(function() { qualAddrMapReverseGeocode(lat, lng); }, 600);
+}
+
+function qualAddrMapReverseGeocode(lat, lng) {
+    const status = $('#qual-addr-map-status');
+    const url = 'https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json&addressdetails=1&accept-language=id';
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data || data.error) {
+                throw new Error(data && data.error ? data.error : 'Alamat tidak ditemukan');
+            }
+            const addr = data.address || {};
+            const street = [addr.road, addr.house_number].filter(Boolean).join(' ') || [addr.neighbourhood, addr.suburb, addr.pedestrian].filter(Boolean).join(', ') || '';
+            const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+            const province = addr.state || addr.region || addr.county || '';
+            const postal = addr.postcode || '';
+            const country = addr.country || '';
+
+            qualAddrResolved = {
+                street: street,
+                city: city,
+                province: province,
+                postal_code: postal,
+                country: country,
+                display: [street, city, province, postal, country].filter(Boolean).join('\n'),
+            };
+
+            $('#qual-addr-map-preview-body').text(qualAddrResolved.display || 'Alamat tidak lengkap.');
+            $('#qual-addr-map-preview').show();
+            status.attr('class', 'lead-addr-map-status').text('Alamat ditemukan. Klik "Gunakan Alamat Ini" untuk mengisi form.');
+            $('#qual-addr-map-apply').prop('disabled', false);
+        })
+        .catch(function(err) {
+            qualAddrResolved = null;
+            status.attr('class', 'lead-addr-map-status error').text('Gagal mengambil alamat: ' + (err.message || 'coba lagi.'));
+            $('#qual-addr-map-preview').hide();
+            $('#qual-addr-map-apply').prop('disabled', true);
+        });
+}
+
+function qualAddrMapApply() {
+    if (!qualAddrResolved) return;
+    const r = qualAddrResolved;
+    if (r.street) $('#qual-addr-street').val(r.street);
+    if (r.city) $('#qual-addr-city').val(r.city);
+    if (r.province) $('#qual-addr-province').val(r.province);
+    if (r.postal_code) $('#qual-addr-zip').val(r.postal_code);
+    if (r.country) $('#qual-addr-country').val(r.country);
+    toastr.success('Alamat diisi dari peta.');
+}
+
 function openQualifiedModal() {
     initQualCompanySelect2();
     new bootstrap.Modal(document.getElementById('qualifiedModal')).show();
+    qualSetAccountLocked(!!$('#qual-company-id').val());
 }
 
 function initQualCompanySelect2() {
@@ -2501,6 +2762,17 @@ function initQualCompanySelect2() {
             var c = e.params.data;
             if (c.newTag) {
                 $qualCompanyId.val('');
+                $('#qual-field-type').val('');
+                $('#qual-segmentation').val('');
+                $('#qual-biz-entity').val('');
+                $('#qual-biz-value').val('');
+                $('#qual-interaction').val('');
+                $('#qual-addr-street').val('');
+                $('#qual-addr-city').val('');
+                $('#qual-addr-province').val('');
+                $('#qual-addr-zip').val('');
+                $('#qual-addr-country').val('');
+                qualSetAccountLocked(false);
             } else {
                 $qualCompanyId.val(c.id);
                 if (c.segmentation_id) $('#qual-segmentation').val(c.segmentation_id);
@@ -2514,9 +2786,21 @@ function initQualCompanySelect2() {
                 if (c.address_billing_province) $('#qual-addr-province').val(c.address_billing_province);
                 if (c.address_billing_postal_code) $('#qual-addr-zip').val(c.address_billing_postal_code);
                 if (c.address_billing_country) $('#qual-addr-country').val(c.address_billing_country);
+                qualSetAccountLocked(true);
             }
         }).on('select2:clear', function() {
             $qualCompanyId.val('');
+            $('#qual-field-type').val('');
+            $('#qual-segmentation').val('');
+            $('#qual-biz-entity').val('');
+            $('#qual-biz-value').val('');
+            $('#qual-interaction').val('');
+            $('#qual-addr-street').val('');
+            $('#qual-addr-city').val('');
+            $('#qual-addr-province').val('');
+            $('#qual-addr-zip').val('');
+            $('#qual-addr-country').val('');
+            qualSetAccountLocked(false);
         });
 
         var existingId = $qualCompanyId.val();
@@ -2633,6 +2917,14 @@ $(document).on('click', '#btn-save-convert', function() {
     const $btn = $(this);
     $('#cl-division').removeClass('is-invalid');
 
+    const opportunityTitle = $('#cl-opportunity-title').val().trim();
+    if (!opportunityTitle) {
+        $('#cl-opportunity-title').addClass('is-invalid');
+        toastr.error('Opportunity Title wajib diisi.');
+        return;
+    }
+
+
     const divisionId = $('#cl-division').val();
     if (!divisionId) {
         $('#cl-division').addClass('is-invalid');
@@ -2644,7 +2936,7 @@ $(document).on('click', '#btn-save-convert', function() {
     $.ajax({
         url: '{{ route("leads-management.converted", $lead->id) }}',
         type: 'POST',
-        data: { _token: '{{ csrf_token() }}', division_id: divisionId },
+        data: { _token: '{{ csrf_token() }}', opportunity_title: opportunityTitle, division_id: divisionId },
         success: function(res) {
             bootstrap.Modal.getInstance('#convertLeadModal').hide();
             toastr.success(res.message || 'Lead successfully converted to Opportunity.');

@@ -817,7 +817,7 @@
         </button>
         @endif
 
-        <a href="{{ route('opportunity-management.index') }}" class="btn-ghost">
+        <a href="{{ url()->previous() }}" class="btn-ghost">
             <i class="fa fa-arrow-left"></i><span>Kembali</span>
         </a>
     </div>
@@ -830,8 +830,8 @@
             <div class="card-body-custom">
                 <div class="opp-header">
                     <div class="opp-header__identity">
-                        @if($opportunity->accountCompany?->icon)
-                            <img src="{{ $opportunity->accountCompany->icon }}" class="avatar-circle" alt="" style="background:transparent">
+                        @if($opportunity->accountCompany?->icon_url)
+                            <img src="{{ $opportunity->accountCompany->icon_url }}" class="avatar-circle" alt="" style="background:transparent">
                         @else
                             <div class="avatar-circle" style="font-size:15px">
                                 {{ strtoupper(substr($opportunity->accountCompany?->account_name ?? '?', 0, 2)) }}

@@ -579,7 +579,7 @@ function initContactsTable() {
                         html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
                     if (contactsCanDelete) {
-                        html += ' <button type="button" class="btn-icon danger btn-delete-contact" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-contact" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;

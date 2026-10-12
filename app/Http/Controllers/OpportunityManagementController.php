@@ -105,7 +105,7 @@ class OpportunityManagementController extends Controller
 
         $recordsFiltered = $query->count();
 
-        $orderColumnIndex = $request->input('order.0.column', 1);
+        $orderColumnIndex = (int) $request->input('order.0.column', 0);
         $orderDirection = $request->input('order.0.dir', 'desc');
 
         $columnOrderMap = [
@@ -117,7 +117,9 @@ class OpportunityManagementController extends Controller
             7 => 'users.full_name',
         ];
 
+        $sorted = false;
         if (isset($columnOrderMap[$orderColumnIndex])) {
+            $sorted = true;
             $sortField = $columnOrderMap[$orderColumnIndex];
             if ($sortField === 'account_companies.account_name') {
                 $query->leftJoin('account_companies', 'opportunities.account_companies_id', '=', 'account_companies.id')
@@ -137,6 +139,11 @@ class OpportunityManagementController extends Controller
                 $query->orderBy($sortField, $orderDirection);
             }
         }
+
+        if (! $sorted) {
+            // Default (tanpa sorting user) → data terbaru di atas.
+            $query->orderBy('opportunities.created_at', 'desc');
+        }
         $query->orderBy('opportunities.id', $orderDirection === 'desc' ? 'desc' : 'asc');
 
         $start = (int) $request->input('start', 0);
@@ -152,6 +159,7 @@ class OpportunityManagementController extends Controller
                 'opportunity_name' => $opp->opportunity_name ?? '—',
                 'account_name' => $opp->accountCompany?->account_name ?? '—',
                 'company_initials' => strtoupper(substr($opp->accountCompany?->account_name ?? '?', 0, 2)),
+                'company_icon' => $opp->accountCompany?->icon_url,
                 'stage_name' => $opp->stage?->stage_name ?? '—',
                 'division_name' => $opp->division?->division_name ?? '—',
                 'close_date' => $opp->close_date?->format('d M Y') ?? '—',

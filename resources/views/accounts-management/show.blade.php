@@ -575,6 +575,13 @@
                 <span class="account-meta-chip"><i class="fa fa-sitemap"></i> Parent:
                     {{ $account->parentAccount->account_name }}</span>
             @endif
+
+            <span style="margin-left:auto"></span>
+            @if ($canCreate)
+                <button type="button" class="btn-accent btn-sm" onclick="openAccountContactModal()">
+                    <i class="fa fa-plus"></i> Add Contact
+                </button>
+            @endif
         </div>
     </div>
 
@@ -753,14 +760,6 @@
                 </div>
 
                 <div class="tab-pane fade" id="tab-contact" role="tabpanel">
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--card-border)">
-                        <strong style="font-size:13px">Contacts</strong>
-                        @if ($canCreate)
-                            <button type="button" class="btn-accent btn-sm" onclick="openAccountContactModal()">
-                                <i class="fa fa-plus"></i> Add Contact
-                            </button>
-                        @endif
-                    </div>
                     @if ($account->contacts->isEmpty())
                         <div class="empty-state contact-empty">
                             <i class="fa fa-address-book"></i>
@@ -1061,8 +1060,8 @@
                     <i class="fa fa-save me-1"></i> Save
                 </button>
             </div>
-        </div>
-    </div>
+</div>
+</div>
 </div>
 @endpush
 

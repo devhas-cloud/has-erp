@@ -303,6 +303,10 @@
         <span style="margin-left:auto"></span>
 
         @if($canCreate)
+            <button type="button" class="btn btn-sm btn-accent" onclick="openContactActivityTaskModal()">
+                        <i class="fa fa-plus"></i> Add Activity
+            </button>
+
             <button type="button" class="btn btn-sm btn-accent" onclick="openNewLeadModal()">
                 <i class="fa fa-bolt"></i> New Lead
             </button>
@@ -321,6 +325,12 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-contact" type="button" role="tab">
                     <i class="fa fa-user me-1"></i> Contact Information
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-activity" type="button" role="tab">
+                    <i class="fa fa-chart-line me-1"></i> Activity
+                    <span class="account-tab-badge">{{ $activityTasks->count() }}</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -406,6 +416,57 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-activity" role="tabpanel">
+                @if($activityTasks->isEmpty())
+                    <div class="empty-state contact-empty">
+                        <i class="fa fa-chart-line"></i>
+                        <p>Belum ada activity/task pada kontak ini.</p>
+                    </div>
+                @else
+                    <div class="table-responsive">
+                        <table id="activityTaskTable" class="table table-custom align-middle mb-0" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th style="width:50px">#</th>
+                                    <th>Task</th>
+                                    <th>Opportunity</th>
+                                    <th>Category</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                    <th>Assignees</th>
+                                    <th>Created</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($activityTasks as $i => $t)
+                                <tr>
+                                    <td>{{ $i + 1 }}</td>
+                                    <td><strong style="color:var(--text-primary);font-weight:600">{{ $t->title ?? '—' }}</strong></td>
+                                    <td>{{ $t->opportunity?->opportunity_name ?? '—' }}</td>
+                                    <td>{{ $t->category?->name ?? '—' }}</td>
+                                    <td>{{ $t->due_date?->format('d M Y') ?? '—' }}</td>
+                                    <td><span class="status-badge" style="background:#e2e8f0;color:#475569">{{ ucfirst($t->status ?? '—') }}</span></td>
+                                    <td>{{ $t->assignees->pluck('display_name')->implode(', ') ?: '—' }}</td>
+                                    <td>{{ $t->created_at?->format('d M Y') ?? '—' }}</td>
+                                    <td>
+                                        <a href="{{ route('task-planner.show', $t->id) }}?back=contact-{{ $contact->id }}" class="btn-icon" title="View">
+                                            <i class="fa fa-eye"></i>
+                                        </a>
+                                        @if($canDelete)
+                                        <button type="button" class="btn btn-sm btn-ghost text-danger" title="Delete" onclick="deleteActivityTask({{ $t->id }})">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                        @endif
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
             </div>
 
             <div class="tab-pane fade" id="tab-lead" role="tabpanel">
@@ -602,6 +663,61 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="contactActivityTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa fa-chart-line me-1" style="color:var(--accent)"></i> Add Activity (Task)</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="contact-activity-task-form" autocomplete="off">
+                    <div class="form-group">
+                        <label>Title <span class="text-danger">*</span></label>
+                        <input type="text" id="cat-title" placeholder="Judul task">
+                    </div>
+                    <div class="form-group">
+                        <label>Category <span class="text-danger">*</span></label>
+                        <select id="cat-category">
+                            <option value="">— Pilih —</option>
+                            @foreach($taskCategories as $tc)
+                            <option value="{{ $tc->id }}">{{ $tc->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Due Date <span class="text-danger">*</span></label>
+                        <input type="date" id="cat-due-date">
+                    </div>
+                    <div class="form-group">
+                        <label>Time</label>
+                        <input type="time" id="cat-time">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="cat-description" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Assign To</label>
+                        <select id="cat-assignees" multiple style="width:100%">
+                            @foreach($users as $u)
+                            <option value="{{ $u->id }}">{{ $u->display_name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-contact-task">
+                    <i class="fa fa-save me-1"></i> Save Task
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @endpush
 
 @endsection
@@ -610,6 +726,20 @@
 <script>
 const contactStoreLeadUrl = '{{ route('contact-management.leads.store', ['contact_management' => '__ID__']) }}';
 const contactId = {{ $contact->id }};
+
+// ── Pertahankan tab aktif di URL (hash): browser-back kembali ke tab yang sama ──
+function restoreContactTabFromHash() {
+    const h = window.location.hash;
+    if (h && $('[data-bs-target="' + h + '"]').length) {
+        $('[data-bs-target="' + h + '"]').tab('show');
+    }
+}
+$(document).on('shown.bs.tab', '.nav-tabs a[data-bs-toggle="tab"]', function() {
+    if (history.replaceState) {
+        history.replaceState(null, '', this.hash || window.location.pathname + window.location.search);
+    }
+});
+$(restoreContactTabFromHash);
 
 function openNewLeadModal() {
     $('#newLeadModal .is-invalid').removeClass('is-invalid');
@@ -734,6 +864,108 @@ $(document).on('click', '#btn-save-new-opportunity', function() {
         },
         complete: function() {
             $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save Opportunity');
+        }
+    });
+});
+
+// ── Tab Activity: datatable task + popup "Add Activity" ──
+if ($('#activityTaskTable').length) {
+    $('#activityTaskTable').DataTable({
+        order: [[7, 'desc']],
+        pageInfo: false,
+        lengthChange: false,
+    });
+}
+
+function deleteActivityTask(id) {
+    Swal.fire({
+        title: 'Sure to delete this task?',
+        text: 'This action cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: '{{ route("contact-management.tasks.destroy", ["contact_management" => $contact->id, "task" => "__ID__"]) }}'.replace('__ID__', id),
+            type: 'DELETE',
+            data: { _token: '{{ csrf_token() }}' },
+            success: function(res) {
+                toastr.success(res.message);
+                setTimeout(function() { location.reload(); }, 400);
+            },
+            error: function(xhr) {
+                toastr.error(xhr.responseJSON?.message || 'Failed to delete task.');
+            }
+        });
+    });
+}
+
+let contactActivityTaskModalInstance = null;
+
+function openContactActivityTaskModal() {
+    document.getElementById('contact-activity-task-form').reset();
+    $('#contact-activity-task-form .is-invalid').removeClass('is-invalid');
+    $('#cat-assignees').val(null).trigger('change');
+    if (!contactActivityTaskModalInstance) {
+        contactActivityTaskModalInstance = new bootstrap.Modal(document.getElementById('contactActivityTaskModal'));
+    }
+    contactActivityTaskModalInstance.show();
+}
+
+$(document).on('shown.bs.modal', '#contactActivityTaskModal', function() {
+    if ($('#cat-assignees').hasClass('select2-hidden-accessible')) return;
+    $('#cat-assignees').select2({
+        theme: 'bootstrap-5',
+        placeholder: '— Pilih user —',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#contactActivityTaskModal')
+    });
+});
+
+$(document).on('change input', '#contact-activity-task-form .is-invalid', function() {
+    $(this).removeClass('is-invalid');
+});
+
+$(document).on('click', '#btn-save-contact-task', function() {
+    const $btn = $(this);
+    $('#contact-activity-task-form .is-invalid').removeClass('is-invalid');
+    let first = null;
+    if (!$('#cat-title').val().trim()) { $('#cat-title').addClass('is-invalid'); first = first || 'Title wajib diisi.'; }
+    if (!$('#cat-category').val()) { $('#cat-category').addClass('is-invalid'); first = first || 'Category wajib dipilih.'; }
+    if (!$('#cat-due-date').val()) { $('#cat-due-date').addClass('is-invalid'); first = first || 'Due Date wajib diisi.'; }
+    if (first) { toastr.error(first); return; }
+
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+    const payload = {
+        _token: '{{ csrf_token() }}',
+        title: $('#cat-title').val().trim(),
+        category_id: $('#cat-category').val(),
+        description: $('#cat-description').val().trim(),
+        due_date: $('#cat-due-date').val(),
+        time: $('#cat-time').val(),
+        assignees: $('#cat-assignees').val() || []
+    };
+    $.ajax({
+        url: '{{ route("contact-management.tasks.store", ["contact_management" => $contact->id]) }}',
+        type: 'POST',
+        data: payload,
+        success: function(res) {
+            bootstrap.Modal.getInstance('#contactActivityTaskModal').hide();
+            toastr.success(res.message);
+            setTimeout(function() { location.reload(); }, 600);
+        },
+        error: function(xhr) {
+            const errs = xhr.responseJSON?.errors;
+            toastr.error(errs ? Object.values(errs)[0][0] : (xhr.responseJSON?.message || 'Gagal menyimpan task.'));
+        },
+        complete: function() {
+            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save Task');
         }
     });
 });

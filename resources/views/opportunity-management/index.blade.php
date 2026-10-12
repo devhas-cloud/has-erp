@@ -606,9 +606,11 @@ function initOpportunityTable() {
             {
                 data: 'account_name', orderable: true, searchable: true,
                 render: function(data, type, row) {
-                    var initials = row.company_initials || '?';
+                    var avatar = row.company_icon
+                        ? '<img src="' + row.company_icon + '" class="avatar-circle" alt="" style="background:transparent">'
+                        : '<div class="avatar-circle">' + (row.company_initials || '?') + '</div>';
                     return '<div style="display:flex;align-items:center;gap:10px">' +
-                        '<div class="avatar-circle">' + initials + '</div>' +
+                        avatar +
                         '<span style="color:var(--text-primary);font-weight:500">' + (data || '—') + '</span>' +
                         '</div>';
                 }
@@ -646,14 +648,13 @@ function initOpportunityTable() {
                         html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
                     if (oppCanDelete) {
-                        html += ' <button type="button" class="btn-icon danger btn-delete-opportunity" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-opportunity" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;
                 }
             }
         ],
-        order: [[1, 'asc']],
         pageLength: 10,
         lengthMenu: [10, 15, 25, 50, 100],
         // Filter, urutan, pencarian & halaman tetap saat kembali dari halaman detail (per tab browser)
