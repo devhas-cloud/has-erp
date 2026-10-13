@@ -6,14 +6,13 @@ use App\Models\Currency;
 use App\Models\Division;
 use App\Models\Log;
 use App\Models\MasterProduct;
-use App\Models\Module;
 use App\Models\Quotation;
 use App\Models\QuoteConfiguration;
 use App\Models\QuoteConfigurationItem;
 use App\Models\Task;
 use App\Models\User;
-use App\Models\UserAccessControl;
 use App\Support\ConfigurationTemplateHandling;
+use App\Support\ModuleAccess;
 use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -67,7 +66,6 @@ class IhConfigurationController extends Controller
     {
         return Division::where('division_name', 'IH')->value('id');
     }
-
 
     /**
      * Daftar task bertipe Quote (kategori yang mengaktifkan divisi penanganan),
@@ -490,7 +488,7 @@ class IhConfigurationController extends Controller
 
             Log::record(
                 'update_ih_configuration',
-                "Quote Configuration  diupdate",
+                'Quote Configuration  diupdate',
                 self::MODULE_CODE,
                 $quotation
             );
@@ -531,7 +529,7 @@ class IhConfigurationController extends Controller
 
         Log::record(
             'delete_ih_configuration',
-            "Quote Configuration  dihapus",
+            'Quote Configuration  dihapus',
             self::MODULE_CODE,
             $quotation
         );
@@ -719,12 +717,12 @@ class IhConfigurationController extends Controller
             $quotation,
             'quotation_rejected',
             'Quote Configuration Ditolak',
-            "Quote Configuration  ditolak oleh ".Auth::user()->display_name.'. Alasan: '.$validated['approval_note']
+            'Quote Configuration  ditolak oleh '.Auth::user()->display_name.'. Alasan: '.$validated['approval_note']
         );
 
         Log::record(
             'reject_ih_configuration',
-            "Quote Configuration  ditolak oleh ".Auth::user()->display_name,
+            'Quote Configuration  ditolak oleh '.Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -780,7 +778,7 @@ class IhConfigurationController extends Controller
 
         Log::record(
             'unlock_ih_configuration',
-            "Quote Configuration  dibuka kunci oleh ".Auth::user()->display_name,
+            'Quote Configuration  dibuka kunci oleh '.Auth::user()->display_name,
             self::MODULE_CODE,
             $quotation
         );
@@ -976,20 +974,12 @@ class IhConfigurationController extends Controller
      */
     private function notifyApprovers(QuoteConfiguration $quotation): void
     {
-        $module = Module::where('module_code', self::MODULE_CODE)->first();
-        if (! $module) {
-            return;
-        }
-
         $creator = $quotation->creator;
         if (! $creator || ! $creator->division_id) {
             return;
         }
 
-        $uacUserIds = UserAccessControl::where('module_id', $module->id)
-            ->where('can_approve', true)
-            ->pluck('user_id')
-            ->toArray();
+        $uacUserIds = ModuleAccess::approverUserIds(self::MODULE_CODE);
 
         $approvers = User::where('division_id', $creator->division_id)
             ->where('id', '!=', $creator->id)

@@ -723,6 +723,6 @@ class ProfitEstimateController extends Controller
      */
     public static function userCanRead(): bool
     {
-        return ModuleAccess::for()->module(self::MODULE_CODE)->canRead();
+        return ModuleAccess::crossModuleCanRead(self::MODULE_CODE);
     }
 }

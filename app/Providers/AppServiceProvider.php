@@ -45,8 +45,13 @@ class AppServiceProvider extends ServiceProvider
             $baseName = null;
 
             if ($routeName) {
-                $lastDot = strrpos($routeName, '.');
-                $baseName = $lastDot !== false ? substr($routeName, 0, $lastDot) : $routeName;
+                // Modul = segmen PERTAMA route name (sama dengan middleware
+                // CheckAccessControl). Split di titik pertama, bukan terakhir —
+                // route bertingkat seperti water-configuration.template-edit
+                // harus dipetakan ke modul water-configuration, bukan ke
+                // "water-configuration.template" yang tidak ada di tabel modules.
+                $firstDot = strpos($routeName, '.');
+                $baseName = $firstDot !== false ? substr($routeName, 0, $firstDot) : $routeName;
             }
 
             $isAdmin = Auth::user()->role === 'Admin';

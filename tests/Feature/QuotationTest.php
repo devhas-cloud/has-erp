@@ -310,7 +310,8 @@ class QuotationTest extends TestCase
             'date' => '2026-08-11',
             'quotation_number' => '001/HAS/QT-T/VIII/2026',
             'to_name' => 'PT Maju Bersama',
-            'status' => Quotation::STATUS_DRAFT,
+            // Hanya quotation Approved/Finish yang jadi template isian item (templateList()).
+            'status' => Quotation::STATUS_APPROVED,
             'created_by' => $this->admin->id,
         ]);
         $quotation->items()->create(['description' => 'Multiparameter Sensor', 'qty' => 1, 'selling_price' => 123100000]);

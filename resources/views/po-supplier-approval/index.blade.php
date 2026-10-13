@@ -42,6 +42,7 @@ let poSupplierApprovalTable = null;
 
 const poSupplierApprovalApproveUrl = '{{ route("po-supplier-approval.approve", "__ID__") }}';
 const quotationShowUrl = '{{ route("quotation.show", "__ID__") }}';
+const psaCanApprove = {{ $canApprove ? 'true' : 'false' }};
 
 function escapeHtmlPsa(text) {
     if (text === null || text === undefined) return '';
@@ -96,7 +97,7 @@ function initPoSupplierApprovalTable() {
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1 flex-wrap">';
                     btn += '<a href="' + quotationShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
-                    if (row.can_approve && !row.ready_for_supplier_po && !row.already_approved_by_me) {
+                    if (psaCanApprove && !row.ready_for_supplier_po && !row.already_approved_by_me) {
                         btn += '<button class="btn-icon" title="Approve PO Supplier" onclick="approvePoSupplier(' + data + ')"><i class="fa fa-check"></i></button>';
                     }
                     btn += '</div>';

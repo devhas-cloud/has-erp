@@ -2589,7 +2589,7 @@ const oppStageData = {!! json_encode([
 
 const inReviewUrl = '{{ route('opportunity-management.in-review', ['opportunity' => '__ID__']) }}';
 const negotiationUrl = '{{ route('opportunity-management.negotiation', ['opportunity' => '__ID__']) }}';
-const approveNegotiationUrl = '{{ route('opportunity-management.approve-negotiation', ['opportunity' => '__ID__']) }}';
+const approveNegotiationUrl = '{{ route('opportunity-management.negotiation.approve', ['opportunity' => '__ID__']) }}';
 const closeLossUrl = '{{ route('opportunity-management.close-loss', ['opportunity' => '__ID__']) }}';
 const approveCloseLossUrl = '{{ route('opportunity-management.approve', ['opportunity' => '__ID__']) }}';
 const nextStepUrl = '{{ route('opportunity-management.next-step', ['opportunity' => '__ID__']) }}';

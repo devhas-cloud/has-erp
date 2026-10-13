@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Quotation;
 use App\Models\QuotationPoSupplierApproval;
-use App\Support\ModuleAccess;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,8 +18,6 @@ use Illuminate\Support\Facades\Auth;
  */
 class PoSupplierApprovalController extends Controller
 {
-    private const MODULE_CODE = 'MOD_PO_SUPPLIER_APPROVAL';
-
     public function index()
     {
         return view('po-supplier-approval.index');
@@ -50,7 +47,6 @@ class PoSupplierApprovalController extends Controller
         $quotations = $query->orderBy('id', 'desc')->offset($start)->limit($length)->get();
 
         $userId = Auth::id();
-        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
 
         $data = [];
         foreach ($quotations as $i => $quotation) {
@@ -71,7 +67,6 @@ class PoSupplierApprovalController extends Controller
                     'approved_at' => $a->approved_at?->format('d/m/Y H:i'),
                 ])->values(),
                 'already_approved_by_me' => $approvals->contains('user_id', $userId),
-                'can_approve' => $canApprove,
             ];
         }
 

@@ -13,7 +13,6 @@ use App\Models\QuotationCostItem;
 use App\Models\QuotationItem;
 use App\Models\QuoteConfiguration;
 use App\Models\Task;
-use App\Support\ModuleAccess;
 use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -784,9 +783,6 @@ class QuotationController extends Controller
 
         $quotations = $query->offset($start)->limit($length)->get();
 
-        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
-        $canUpdate = ModuleAccess::for()->module(self::MODULE_CODE)->canUpdate();
-
         $data = [];
         foreach ($quotations as $i => $quotation) {
             $data[] = [
@@ -807,10 +803,8 @@ class QuotationController extends Controller
                 'status_label' => $quotation->status_label,
                 'status_badge' => $quotation->statusBadgeHtml(),
                 'locked' => $quotation->isLocked(),
-                'can_approve' => $canApprove,
                 'can_revise' => ($quotation->status === Quotation::STATUS_REJECTED
                     || ($quotation->status === Quotation::STATUS_APPROVED && $quotation->unlocked_at)),
-                'can_upload_po' => $quotation->status === Quotation::STATUS_APPROVED && $canUpdate,
                 'is_creator' => (int) $quotation->created_by === (int) Auth::id(),
                 'task_title' => $quotation->task?->title ?? '—',
                 'source_config' => $quotation->configurations->isNotEmpty()

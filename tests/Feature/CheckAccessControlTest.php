@@ -144,6 +144,44 @@ class CheckAccessControlTest extends TestCase
     }
 
     /**
+     * Route approval negotiation (opportunity-management.negotiation.approve)
+     * harus ter-gate can_approve — bukan can_create. Sebelum rename route,
+     * lastSegment "approve-negotiation" tidak ada di daftar verb approval
+     * middleware, sehingga terpetakan ke can_create; pengaman tambahan
+     * isTransitionApprover() di controller (sekarang dihapus) yang menutupnya.
+     */
+    public function test_negotiation_approve_requires_can_approve_not_can_create(): void
+    {
+        Module::create(['module_code' => 'MOD_OPPORTUNITY_MANAGEMENT', 'module_name' => 'Opportunity', 'route_name' => 'opportunity-management', 'icon' => 'fa', 'group' => 'CRM']);
+
+        $company = AccountCompany::create([
+            'account_name' => 'PT Maju Bersama',
+            'address_billing_street' => 'Jl. Industri No. 1',
+            'address_billing_city' => 'Jakarta',
+            'address_billing_province' => 'DKI Jakarta',
+            'status' => 'Active',
+        ]);
+        $admin = User::create(['username' => 'admin', 'email' => 'admin@has.com', 'password' => bcrypt('secret'), 'division_id' => $this->division->id, 'role' => 'Admin']);
+        $opportunity = Opportunity::create(['opportunity_name' => 'Test', 'account_companies_id' => $company->id, 'owner_id' => $admin->id, 'probability' => 50]);
+
+        // User hanya can_create — tidak boleh approve negotiation (403 dari middleware).
+        $creatorOnly = $this->makeUser('creatoronly');
+        $this->grant($creatorOnly, 'MOD_OPPORTUNITY_MANAGEMENT', ['can_create' => true]);
+
+        $this->actingAs($creatorOnly)
+            ->postJson(route('opportunity-management.negotiation.approve', $opportunity->id))
+            ->assertStatus(403);
+
+        // User can_approve — lolos middleware (harus sampai ke controller).
+        $approver = $this->makeUser('approver');
+        $this->grant($approver, 'MOD_OPPORTUNITY_MANAGEMENT', ['can_approve' => true]);
+
+        $this->actingAs($approver)
+            ->postJson(route('opportunity-management.negotiation.approve', $opportunity->id))
+            ->assertStatus(422);
+    }
+
+    /**
      * GET ke endpoint JSON (data/fetch-*) yang tidak diizinkan membalas 403
      * JSON (bukan redirect HTML) agar client bisa memproses error; request
      * biasa (tanpa Accept JSON) tetap di-redirect 302 seperti sebelumnya.

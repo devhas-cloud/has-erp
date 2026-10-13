@@ -7,12 +7,11 @@ use App\Models\AccountContact;
 use App\Models\Activity;
 use App\Models\ActivityAttachment;
 use App\Models\Division;
-use App\Models\HandlingGroup;
 use App\Models\Forecast;
+use App\Models\HandlingGroup;
 use App\Models\Lead;
 use App\Models\Log;
 use App\Models\LossReason;
-use App\Models\Module;
 use App\Models\Notification;
 use App\Models\Opportunity;
 use App\Models\Source;
@@ -21,9 +20,9 @@ use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
-use App\Models\UserAccessControl;
 use App\Services\MentionParser;
 use App\Services\WhatsAppService;
+use App\Support\ModuleAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -206,9 +205,9 @@ class OpportunityManagementController extends Controller
         $validated['owner_id'] = Auth::id();
 
         // jika stage_id tidak di isi, maka set 1 = new
-         if (empty($validated['stage_id'])){
-            $validated['stage_id'] = 1 ; // new
-         }
+        if (empty($validated['stage_id'])) {
+            $validated['stage_id'] = 1; // new
+        }
 
         // Jika close_date tidak di isi, maka set close_date menjadi 3 bulan tanggal sekarang
         if (empty($validated['close_date'])) {
@@ -273,8 +272,8 @@ class OpportunityManagementController extends Controller
         }
 
         $query->where(function ($qry) use ($q) {
-                $qry->where('full_name', 'like', "%{$q}%");
-            });
+            $qry->where('full_name', 'like', "%{$q}%");
+        });
 
         if ($companyId) {
             $query->where('account_companies_id', $companyId);
@@ -437,13 +436,6 @@ class OpportunityManagementController extends Controller
     {
         $opportunity = Opportunity::with('owner')->findOrFail($id);
 
-        if (! $this->isTransitionApprover()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki izin untuk approve.',
-            ], 403);
-        }
-
         if ($opportunity->negotiation_status !== 'pending') {
             return response()->json([
                 'success' => false,
@@ -546,34 +538,8 @@ class OpportunityManagementController extends Controller
         ]);
     }
 
-    private function isTransitionApprover(): bool
-    {
-        $user = Auth::user();
-
-        if ($user->role === 'Admin') {
-            return true;
-        }
-
-        $module = Module::where('route_name', 'opportunity-management')->first();
-
-        if (! $module) {
-            return false;
-        }
-
-        return UserAccessControl::where('user_id', $user->id)
-            ->where('module_id', $module->id)
-            ->where('can_approve', true)
-            ->exists();
-    }
-
     private function notifyTransitionApprovers(Opportunity $opportunity, string $type): void
     {
-        $module = Module::where('route_name', 'opportunity-management')->first();
-
-        if (! $module) {
-            return;
-        }
-
         $titles = [
             'negotiation' => 'Approval Negotiation Diperlukan',
             'close_loss' => 'Approval Close Loss Diperlukan',
@@ -581,14 +547,11 @@ class OpportunityManagementController extends Controller
 
         $title = $titles[$type] ?? 'Approval Diperlukan';
 
-        $approverIds = UserAccessControl::where('module_id', $module->id)
-            ->where('can_approve', true)
-            ->where('user_id', '!=', Auth::id())
-            ->pluck('user_id');
+        $approverIds = ModuleAccess::approverUserIds('MOD_OPPORTUNITY_MANAGEMENT', Auth::id());
 
         $adminIds = User::where('role', 'Admin')->where('id', '!=', Auth::id())->pluck('id');
 
-        $userIds = $approverIds->merge($adminIds)->unique();
+        $userIds = collect($approverIds)->merge($adminIds)->unique();
 
         foreach (User::whereIn('id', $userIds)->get() as $approver) {
             Notification::create([
@@ -1019,8 +982,6 @@ class OpportunityManagementController extends Controller
                     $notifiedAssignees[] = $assignee;
                 }
             }
-
-
 
             Activity::create([
                 'opportunity_id' => $opportunity->id,

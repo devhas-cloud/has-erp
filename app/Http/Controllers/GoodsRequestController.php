@@ -5,9 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\GoodsRequest;
 use App\Models\GoodsRequestItem;
 use App\Models\MasterProduct;
-use App\Models\QuoteConfiguration;
 use App\Models\Quotation;
-use App\Support\ModuleAccess;
+use App\Models\QuoteConfiguration;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,8 +28,6 @@ use Illuminate\Support\Facades\DB;
  */
 class GoodsRequestController extends Controller
 {
-    private const MODULE_CODE = 'MOD_GOODS_REQUEST';
-
     public function index()
     {
         return view('goods-request.index');
@@ -59,8 +57,6 @@ class GoodsRequestController extends Controller
 
         $requests = $query->orderBy('id', 'desc')->offset($start)->limit($length)->get();
 
-        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
-
         $data = [];
         foreach ($requests as $i => $gr) {
             $data[] = [
@@ -75,7 +71,6 @@ class GoodsRequestController extends Controller
                 'status' => $gr->status,
                 'status_label' => $gr->status_label,
                 'status_badge' => $gr->statusBadgeHtml(),
-                'can_approve' => $canApprove && $gr->status === GoodsRequest::STATUS_WAITING_APPROVAL,
                 'is_creator' => (int) $gr->created_by === (int) Auth::id(),
             ];
         }
@@ -145,8 +140,6 @@ class GoodsRequestController extends Controller
 
         return view('goods-request.show', [
             'goodsRequest' => $goodsRequest,
-            'canApprove' => ModuleAccess::for()->module(self::MODULE_CODE)->canApprove(),
-            'canUpdate' => ModuleAccess::for()->module(self::MODULE_CODE)->canManage(),
         ]);
     }
 
@@ -362,7 +355,7 @@ class GoodsRequestController extends Controller
      * Quotation yang boleh diajukan Permintaan Barang: status Finish dan
      * kuorum PO Supplier Approval (2 approver berbeda) sudah terpenuhi.
      */
-    private function eligibleQuotations(): \Illuminate\Database\Eloquent\Collection
+    private function eligibleQuotations(): Collection
     {
         return Quotation::with(['poSupplierApprovals', 'opportunity'])
             ->where('status', Quotation::STATUS_FINISH)

@@ -54,6 +54,7 @@ const poEditUrl = '{{ route("purchase-order.edit", "__ID__") }}';
 const poDeleteUrl = '{{ route("purchase-order.destroy", "__ID__") }}';
 const poSubmitUrl = '{{ route("purchase-order.submit", "__ID__") }}';
 const poApproveUrl = '{{ route("purchase-order.approve", "__ID__") }}';
+const poCanApprove = {{ $canApprove ? 'true' : 'false' }};
 
 function initPoTable() {
     if (poTable) poTable.destroy();
@@ -84,7 +85,7 @@ function initPoTable() {
                         btn += '<button class="btn-icon" title="Submit Approval" onclick="submitPo(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
                         btn += '<button class="btn-icon text-danger" title="Hapus" onclick="deletePo(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
-                    if (row.can_approve) {
+                    if (poCanApprove && row.status === 'waiting_approval') {
                         btn += '<button class="btn-icon" title="Approve" onclick="approvePo(' + data + ')"><i class="fa fa-check"></i></button>';
                     }
                     btn += '</div>';

@@ -9,11 +9,11 @@ use App\Models\MasterProduct;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
-use App\Support\ModuleAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -29,8 +29,6 @@ use Illuminate\Support\Facades\DB;
  */
 class PurchaseOrderController extends Controller
 {
-    private const MODULE_CODE = 'MOD_PURCHASE_ORDER';
-
     public function index()
     {
         return view('purchase-order.index');
@@ -58,8 +56,6 @@ class PurchaseOrderController extends Controller
 
         $orders = $query->orderBy('id', 'desc')->offset($start)->limit($length)->get();
 
-        $canApprove = ModuleAccess::for()->module(self::MODULE_CODE)->canApprove();
-
         $data = [];
         foreach ($orders as $i => $po) {
             $data[] = [
@@ -74,7 +70,6 @@ class PurchaseOrderController extends Controller
                 'status' => $po->status,
                 'status_label' => $po->status_label,
                 'status_badge' => $po->statusBadgeHtml(),
-                'can_approve' => $canApprove && $po->status === PurchaseOrder::STATUS_WAITING_APPROVAL,
                 'is_creator' => (int) $po->created_by === (int) Auth::id(),
             ];
         }
@@ -138,8 +133,6 @@ class PurchaseOrderController extends Controller
         return view('purchase-order.show', [
             'purchaseOrder' => $purchaseOrder,
             'poGroups' => $purchaseOrder->hierarchyGroups(),
-            'canApprove' => ModuleAccess::for()->module(self::MODULE_CODE)->canApprove(),
-            'canUpdate' => ModuleAccess::for()->module(self::MODULE_CODE)->canManage(),
         ]);
     }
 
@@ -536,7 +529,7 @@ class PurchaseOrderController extends Controller
      *
      * @return array{currency: ?string, selling_price_currency: ?float, selling_price: ?float, purchase_price_currency: float}
      */
-    private function pricingForItem(array $item, \Illuminate\Support\Collection $products, string $baseCurrency): array
+    private function pricingForItem(array $item, Collection $products, string $baseCurrency): array
     {
         $productId = $item['master_product_id'] ?? null;
         $product = $productId ? $products->get($productId) : null;

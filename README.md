@@ -180,6 +180,7 @@ Test feature tersedia untuk: `WaterConfigurationApprovalTest`, `ImsConfiguration
 
 ## Documentasi Lain
 
+- `PANDUAN_MODUL.md` — aturan baku menambah modul baru (route naming, gate middleware, flag UI composer, approval workflow) supaya konsisten.
 - `NOTIFICATION_SYSTEM.md` — dokumentasi teknis sistem notifikasi.
 - `desaindatabases.md` — skema database lengkap (34+ tabel, relasi, dan log types).
 - `NOTIFICATION_QUICK_TEST.md` — panduan test cepat notifikasi.

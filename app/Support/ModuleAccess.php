@@ -76,6 +76,36 @@ class ModuleAccess
         return $this->canCreate() || $this->canUpdate();
     }
 
+    /**
+     * Flag akses modul di luar modul route yang sedang dirender (tombol
+     * lintas-modul, mis. "Estimasi PL" pada halaman Quotation). View composer
+     * hanya menghitung flag modul route berjalan, jadi kebutuhan lintas-modul
+     * lewat helper ini.
+     */
+    public static function crossModuleCanRead(string $moduleCode): bool
+    {
+        return (new self)->module($moduleCode)->canRead();
+    }
+
+    /**
+     * Daftar user_id yang punya can_approve pada modul — target notifikasi
+     * approver. Bukan gerbang akses; hanya data untuk notifikasi.
+     */
+    public static function approverUserIds(string $moduleCode, ?int $exceptUserId = null): array
+    {
+        $module = Module::where('module_code', $moduleCode)->first();
+
+        if (! $module) {
+            return [];
+        }
+
+        return UserAccessControl::where('module_id', $module->id)
+            ->where('can_approve', true)
+            ->when($exceptUserId, fn ($q) => $q->where('user_id', '!=', $exceptUserId))
+            ->pluck('user_id')
+            ->toArray();
+    }
+
     private function has(string $field): bool
     {
         if (! $this->user) {

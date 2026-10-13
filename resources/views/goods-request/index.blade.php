@@ -54,6 +54,7 @@ const grEditUrl = '{{ route("goods-request.edit", "__ID__") }}';
 const grDeleteUrl = '{{ route("goods-request.destroy", "__ID__") }}';
 const grSubmitUrl = '{{ route("goods-request.submit", "__ID__") }}';
 const grApproveUrl = '{{ route("goods-request.approve", "__ID__") }}';
+const grCanApprove = {{ $canApprove ? 'true' : 'false' }};
 
 function initGrTable() {
     if (grTable) grTable.destroy();
@@ -86,7 +87,7 @@ function initGrTable() {
                         btn += '<button class="btn-icon" title="Submit Approval" onclick="submitGr(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
                         btn += '<button class="btn-icon text-danger" title="Hapus" onclick="deleteGr(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
-                    if (row.can_approve) {
+                    if (grCanApprove && row.status === 'waiting_approval') {
                         btn += '<button class="btn-icon" title="Approve" onclick="approveGr(' + data + ')"><i class="fa fa-check"></i></button>';
                     }
                     btn += '</div>';

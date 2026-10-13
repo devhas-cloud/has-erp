@@ -176,6 +176,6 @@ class TaskPlannerQuoteGateTest extends TestCase
 
         $response->assertOk()
             ->assertViewHas('finalQuotation', null)
-            ->assertSee('Final quotation akan tampil setelah quotation di-approve dan task di-complete.');
+            ->assertSee('Final quotation akan tampil setelah task di-complete.');
     }
 }

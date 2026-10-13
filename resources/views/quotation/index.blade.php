@@ -119,6 +119,7 @@ const quotationUnlockUrl = '{{ route("quotation.unlock", "__ID__") }}';
 const quotationReviseUrl = '{{ route("quotation.revise", "__ID__") }}';
 const quotationVersionsUrl = '{{ route("quotation.versions", "__ID__") }}';
 const quotationPdfUrl = '{{ route("quotation.pdf", "__ID__") }}';
+const quotationCanApprove = {{ $canApprove ? 'true' : 'false' }};
 
 function initQuotationTable() {
     if (quotationTable) {
@@ -161,7 +162,7 @@ function initQuotationTable() {
                         btn += '<button class="btn-icon" title="Submit Approval" onclick="submitQuotation(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
                         btn += '<button class="btn-icon" title="Hapus" onclick="deleteQuotation(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
-                    if (row.status === 'waiting_approval' && row.can_approve) {
+                    if (row.status === 'waiting_approval' && quotationCanApprove) {
                         btn += '<button class="btn-icon" title="Approve" onclick="approveQuotation(' + data + ')"><i class="fa fa-check"></i></button>';
                         btn += '<button class="btn-icon text-danger" title="Reject" onclick="openQtReject(' + data + ')"><i class="fa fa-xmark"></i></button>';
                     }
