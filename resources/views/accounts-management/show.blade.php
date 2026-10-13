@@ -773,8 +773,7 @@
                                         && strtolower(Auth::user()->hierarchyRole?->role_name) === 'staff';
                                 @endphp
                                 @foreach ($account->contacts as $c)
-                                    <div class="contact-card"
-                                        data-href="{{ route('contact-management.show', ['contact_management' => $c->id]) }}">
+                                    <div class="contact-card" data-href="{{ ! ($contactRowsIsSalesStaff && Auth::id() !== $c->contact_owner_id) ? route('contact-management.show', ['contact_management' => $c->id]) : '' }}">
                                         <div class="contact-card__top">
                                             <div class="contact-card__avatar">
                                                 {{ strtoupper(substr($c->full_name ?? '?', 0, 2)) }}</div>
