@@ -311,7 +311,7 @@ class IhConfigurationController extends Controller
                 TaskWorkflowLogger::forTask(
                     $quotation->task,
                     'create_ih_configuration',
-                    "Quote Configuration {$divisionName}  dibuat untuk Task #{$quotation->task_id} (Draft)"
+                    "Quote Configuration {$divisionName}  dibuat untuk Task {$quotation->task?->title} (Draft)"
                 );
             }
 

@@ -311,7 +311,7 @@ class GasConfigurationController extends Controller
                 TaskWorkflowLogger::forTask(
                     $quotation->task,
                     'create_gas_configuration',
-                    "Quote Configuration {$divisionName}  dibuat untuk Task #{$quotation->task_id} (Draft)"
+                    "Quote Configuration {$divisionName}  dibuat untuk Task {$quotation->task?->title} (Draft)"
                 );
             }
 

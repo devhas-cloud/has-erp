@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Log;
 use App\Models\Quotation;
 use App\Models\QuotationPoSupplierApproval;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Modul "PO Supplier Approval": menandai quotation berstatus Finish (PO dari
@@ -115,10 +117,16 @@ class PoSupplierApprovalController extends Controller
         // jika sudah 2 approver maka update oppertunity yang terhubung dengan quotation menjadi status "Close Won"
         if ($quotation->isReadyForSupplierPo() && $quotation->opportunity) {
             $opportunity = $quotation->opportunity;
+            $oldStageName = $opportunity->stage?->stage_name ?? '—';
             $opportunity->stage_id = 5; // Assuming stage_id 5 is the "Close Won" stage
             $opportunity->close_won_date = now()->format('Y-m-d');
             $opportunity->close_date = now()->format('Y-m-d');
             $opportunity->save();
+
+            // update opportunity log
+            DB::beginTransaction();
+            Log::record('update_opportunity_stage', "Stage diubah dari {$oldStageName} ke Close Won", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+            DB::commit();
         }
 
         return response()->json([

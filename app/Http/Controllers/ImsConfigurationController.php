@@ -305,7 +305,7 @@ class ImsConfigurationController extends Controller
                 TaskWorkflowLogger::forTask(
                     $quotation->task,
                     'create_ims_configuration',
-                    "Quote Configuration {$divisionName}  dibuat untuk Task #{$quotation->task_id} (Draft)"
+                    "Quote Configuration {$divisionName}  dibuat untuk Task {$quotation->task?->title} (Draft)"
                 );
             }
 

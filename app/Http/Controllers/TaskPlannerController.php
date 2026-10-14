@@ -18,6 +18,7 @@ use App\Models\WhatsAppGroup;
 use App\Services\MentionParser;
 use App\Services\TaskExportService;
 use App\Services\TaskImportService;
+use App\Services\TaskWhatsAppNotifier;
 use App\Services\TaskXlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -330,6 +331,7 @@ class TaskPlannerController extends Controller
         $task->assignees()->sync($assigneeIds);
 
         $task->load('creator');
+        $notifiedAssignees = [];
         foreach ($otherAssignees as $assigneeId) {
             $assignee = User::find($assigneeId);
             if ($assignee) {
@@ -342,8 +344,12 @@ class TaskPlannerController extends Controller
                     'notifiable_id' => $task->id,
                     'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
                 ]);
+                $notifiedAssignees[] = $assignee;
             }
         }
+
+        // Notifikasi WhatsApp: penanganan -> grup WA, tanpa penanganan -> personal.
+        app(TaskWhatsAppNotifier::class)->notifyNewTask($task, $notifiedAssignees);
 
         Log::record('create_task', " {$task->title}", 'MOD_TASK_PLANNER', $task);
 
@@ -407,8 +413,31 @@ class TaskPlannerController extends Controller
         $otherAssignees = array_values(array_diff($assigneeIds, [$task->creator_id]));
         $validated['requires_approval'] = ! empty($otherAssignees);
 
+        $oldAssigneeIds = $task->assignees()->pluck('user_id')->all();
+
         $task->update($validated);
         $task->assignees()->sync($assigneeIds);
+
+        // Assignee yang baru ditambahkan saat edit: notif in-app + WhatsApp personal.
+        $addedIds = array_values(array_diff($assigneeIds, $oldAssigneeIds, [$task->creator_id]));
+        $addedAssignees = User::whereIn('id', $addedIds)->get();
+
+        if ($addedAssignees->isNotEmpty()) {
+            $task->loadMissing('creator');
+            foreach ($addedAssignees as $assignee) {
+                Notification::create([
+                    'user_id' => $assignee->id,
+                    'type' => 'task_assigned',
+                    'title' => "Tugas baru: {$task->title}",
+                    'body' => "{$task->creator->display_name} menugaskan Anda",
+                    'notifiable_type' => Task::class,
+                    'notifiable_id' => $task->id,
+                    'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
+                ]);
+            }
+
+            app(TaskWhatsAppNotifier::class)->notifyAssigneesAdded($task, $addedAssignees->all());
+        }
 
         Log::record('update_task', " {$task->title}", 'MOD_TASK_PLANNER', $task);
 

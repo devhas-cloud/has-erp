@@ -924,7 +924,7 @@
                                         <div class="activity-post-body">
                                             <div class="activity-post-header">
                                                 <span class="activity-post-author">{{ $log->user?->display_name ?? 'System' }}</span>
-                                                <span class="activity-post-time">{{ $log->created_at->diffForHumans() }}</span>
+                                                <span class="activity-post-time">{{ $log->created_at->format('d M Y H:i') }}</span>
                                             </div>
                                             <div class="activity-post-content">{{ $log->description }}</div>
                                         </div>
@@ -1969,7 +1969,8 @@ function leadAvatarHtml(user, cls) {
 
 function renderActivity(a) {
     var avatar = leadAvatarHtml(a.user, 'activity-post-avatar');
-    var time = a.created_at ? moment(a.created_at).fromNow() : '—';
+    //var time = a.created_at ? moment(a.created_at).fromNow() : '—'; // untuk menampilkan waktu relatif (misal: 2 jam lalu)
+    var time = a.created_at ? moment(a.created_at).format('DD MMM YYYY HH:mm') : '—'; // untuk menampilkan waktu absolut (misal: 12 Mar 2024 14:30)
     var attachmentsHtml = '';
     if (a.attachments && a.attachments.length > 0) {
         a.attachments.forEach(function(at) {

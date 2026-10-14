@@ -923,9 +923,9 @@
                         <span class="opp-meta-group__label">Readiness</span>
                         <div class="opp-meta-chip-row">
                             <span class="opp-meta-chip">{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Quote Ready</span>
-                            <span class="opp-meta-chip">{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Budget</span>
+                            {{-- <span class="opp-meta-chip">{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Budget</span>
                             <span class="opp-meta-chip">{!! $opportunity->authorize ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Authorize</span>
-                            <span class="opp-meta-chip">{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Timeline</span>
+                            <span class="opp-meta-chip">{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Timeline</span> --}}
                         </div>
                     </div>
                     <div class="opp-meta-group opp-meta-group--date">
@@ -1091,7 +1091,7 @@
                                         <div class="activity-post-body">
                                             <div class="activity-post-header">
                                                 <span class="activity-post-author">{{ $log->user?->display_name ?? 'System' }}</span>
-                                                <span class="activity-post-time">{{ $log->created_at->diffForHumans() }}</span>
+                                                <span class="activity-post-time">{{ $log->created_at->format('d M Y H:i') }}</span>
                                             </div>
                                             <div class="activity-post-content">{{ $log->description }}</div>
                                         </div>
@@ -2079,7 +2079,9 @@ function oppAvatarHtml(user, cls) {
 
 function renderActivity(a) {
     var avatar = oppAvatarHtml(a.user, 'activity-post-avatar');
-    var time = a.created_at ? moment(a.created_at).fromNow() : '—';
+    //var time = a.created_at ? moment(a.created_at).fromNow() : '—'; // untuk menampilkan waktu relatif (misal: 2 jam lalu)
+    var time = a.created_at ? moment(a.created_at).format('DD MMM YYYY HH:mm') : '—'; // untuk menampilkan waktu absolut (misal: 12 Mar 2024 14:30)
+
     var attachmentsHtml = '';
     if (a.attachments && a.attachments.length > 0) {
         a.attachments.forEach(function(at) {

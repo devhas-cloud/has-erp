@@ -71,6 +71,7 @@ class ConfigurationController extends Controller
                 'rules' => [
                     'name' => 'required|string|max:100',
                     'division_id' => 'nullable|exists:divisions,id',
+                    'whatsapp_group_id' => 'nullable|string|max:100',
                     'user_ids' => 'nullable|array',
                     'user_ids.*' => 'exists:users,id',
                 ],
@@ -82,6 +83,10 @@ class ConfigurationController extends Controller
                         'source_key' => 'division_name',
                         'default' => 'Internal',
                         'filter' => ['type' => 'Internal'],
+                    ],
+                    'whatsapp_group_id' => [
+                        'label' => 'WhatsApp Group ID',
+                        'type' => 'text',
                     ],
                     'user_ids' => [
                         'label' => 'Anggota',
@@ -436,6 +441,7 @@ class ConfigurationController extends Controller
             $group = HandlingGroup::create([
                 'name' => $validated['name'],
                 'division_id' => $validated['division_id'] ?? null,
+                'whatsapp_group_id' => $validated['whatsapp_group_id'] ?? null,
             ]);
             $group->users()->sync($validated['user_ids'] ?? []);
 
@@ -470,6 +476,7 @@ class ConfigurationController extends Controller
             $group->update([
                 'name' => $validated['name'],
                 'division_id' => $validated['division_id'] ?? null,
+                'whatsapp_group_id' => $validated['whatsapp_group_id'] ?? null,
             ]);
             $group->users()->sync($validated['user_ids'] ?? []);
 

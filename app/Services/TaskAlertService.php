@@ -9,8 +9,13 @@ class TaskAlertService
 {
     public function sendAlerts(): array
     {
-        $tasks = Task::with(['creator', 'assignees', 'whatsappGroup'])
-            ->whereIn('due_date', [today()->format('Y-m-d'), today()->addDay()->format('Y-m-d')])
+        $tasks = Task::with(['creator', 'assignees', 'whatsappGroup', 'handlingGroup'])
+            // whereDate, bukan whereIn: due_date bertipe datetime, jadi whereIn
+            // dengan 'Y-m-d' cuma cocok kalau jamnya persis 00:00:00.
+            ->where(function ($q) {
+                $q->whereDate('due_date', today())
+                    ->orWhereDate('due_date', today()->addDay());
+            })
             ->whereNotIn('status', ['done'])
             ->where('alert_type', '!=', 'none')
             // ->where('is_alert_sent', false)
@@ -27,9 +32,9 @@ class TaskAlertService
 
         foreach ($tasks as $task) {
             $message = $this->buildMessage($task);
-            $recipients = $this->resolveRecipients($task);
+            $targets = $this->resolveTargets($task);
 
-            if (empty($recipients)) {
+            if (empty($targets['personal']) && empty($targets['groups'])) {
                 Log::info('Task alert skipped — no recipients', ['task_id' => $task->id]);
                 $skipped++;
 
@@ -37,12 +42,26 @@ class TaskAlertService
             }
 
             $allSent = true;
-            foreach ($recipients as $i => $number) {
+
+            foreach ($targets['personal'] as $i => $number) {
                 if ($i > 0) {
                     sleep(5);
                 }
 
                 if ($whatsapp->sendText($number, $message)) {
+                    $sent++;
+                } else {
+                    $failed++;
+                    $allSent = false;
+                }
+            }
+
+            foreach ($targets['groups'] as $i => $groupJid) {
+                if ($i > 0) {
+                    sleep(5);
+                }
+
+                if ($whatsapp->sendToGroup($groupJid, $message)) {
                     $sent++;
                 } else {
                     $failed++;
@@ -58,7 +77,8 @@ class TaskAlertService
                 'task_id' => $task->id,
                 'title' => $task->title,
                 'due_date' => $task->due_date->format('Y-m-d'),
-                'recipients' => $recipients,
+                'recipients' => $targets['personal'],
+                'groups' => $targets['groups'],
                 'all_sent' => $allSent,
             ]);
         }
@@ -78,30 +98,56 @@ class TaskAlertService
         ];
     }
 
-    private function resolveRecipients(Task $task): array
+    /**
+     * Pisahkan target personal (nomor, dikirim via sendText) dari grup
+     * (JID "xxxx@g.us", dikirim via sendToGroup — JID tidak boleh dinormalisasi).
+     *
+     * Dua kategori, sama seperti notifikasi task baru:
+     * - task dengan penanganan -> hanya grup WA penanganan (alert_target diabaikan)
+     * - task tanpa penanganan  -> ikut alert_target seperti biasa
+     */
+    private function resolveTargets(Task $task): array
     {
-        $recipients = [];
+        $personal = [];
+        $groups = [];
+
+        if ($task->handling_group_id) {
+            $groupJid = $task->handlingGroup?->whatsapp_group_id;
+            if ($groupJid) {
+                $groups[] = trim($groupJid);
+            } else {
+                Log::info('Task alert: penanganan tanpa WA Group ID — dilewati', [
+                    'task_id' => $task->id,
+                    'handling_group_id' => $task->handling_group_id,
+                ]);
+            }
+
+            return ['personal' => [], 'groups' => array_values(array_unique($groups))];
+        }
 
         if (in_array($task->alert_target, ['personal', 'both'])) {
             if ($task->creator?->phone_number) {
-                $recipients[] = $this->normalizeNumber($task->creator->phone_number);
+                $personal[] = $this->normalizeNumber($task->creator->phone_number);
             }
 
             foreach ($task->assignees as $assignee) {
                 if ($assignee->phone_number) {
-                    $recipients[] = $this->normalizeNumber($assignee->phone_number);
+                    $personal[] = $this->normalizeNumber($assignee->phone_number);
                 }
             }
         }
 
         if (in_array($task->alert_target, ['group', 'both'])) {
-            $groupId = $task->whatsappGroup?->group_id;
-            if ($groupId) {
-                $recipients[] = $this->normalizeNumber($groupId);
+            $groupJid = $task->whatsappGroup?->group_id;
+            if ($groupJid) {
+                $groups[] = trim($groupJid);
             }
         }
 
-        return array_unique($recipients);
+        return [
+            'personal' => array_values(array_unique($personal)),
+            'groups' => array_values(array_unique($groups)),
+        ];
     }
 
     private function normalizeNumber(string $raw): string

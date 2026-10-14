@@ -311,7 +311,7 @@ class EnviroConfigurationController extends Controller
                 TaskWorkflowLogger::forTask(
                     $quotation->task,
                     'create_enviro_configuration',
-                    "Quote Configuration {$divisionName}  dibuat untuk Task #{$quotation->task_id} (Draft)"
+                    "Quote Configuration {$divisionName}  dibuat untuk Task {$quotation->task?->title} (Draft)"
                 );
             }
 

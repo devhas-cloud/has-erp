@@ -21,7 +21,7 @@ use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Services\MentionParser;
-use App\Services\WhatsAppService;
+use App\Services\TaskWhatsAppNotifier;
 use App\Support\ModuleAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -292,7 +292,7 @@ class OpportunityManagementController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $opportunity = Opportunity::findOrFail($id);
-
+        $oldStageName = $opportunity->stage?->stage_name ?? '—';
         $validated = $request->validate([
             'opportunity_name' => 'required|string|max:150',
             'account_companies_id' => 'required|exists:account_companies,id',
@@ -318,9 +318,15 @@ class OpportunityManagementController extends Controller
 
         DB::beginTransaction();
         try {
-            $opportunity->update($validated);
 
-            Log::record('update_opportunity', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name}", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+            $opportunity->update($validated);
+            // jika update stage_id berubah, maka log perubahan stage_id
+            if ($opportunity->wasChanged('stage_id')) {
+                $newStage = Stage::find($opportunity->stage_id);
+                Log::record('update_opportunity_stage', "Stage diubah dari {$oldStageName} ke {$newStage?->stage_name}", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
+            }
+
+            //Log::record('update_opportunity', "Opportunity #{$opportunity->id}: {$opportunity->opportunity_name}", 'MOD_OPPORTUNITY_MANAGEMENT', $opportunity);
 
             DB::commit();
 
@@ -995,7 +1001,7 @@ class OpportunityManagementController extends Controller
             // Kirim WhatsApp SETELAH commit (bukan di dalam transaksi) — panggilan
             // HTTP ke gateway WA lambat & tidak boleh membuat task creation yang
             // sudah berhasil ikut ter-rollback kalau pengiriman gagal.
-            $this->notifyAssigneesOnWhatsApp($task, $notifiedAssignees);
+            app(TaskWhatsAppNotifier::class)->notifyNewTask($task, $notifiedAssignees);
 
             $task->load(['creator', 'assignees']);
 
@@ -1012,49 +1018,6 @@ class OpportunityManagementController extends Controller
                 'message' => 'Failed to create task: '.$e->getMessage(),
             ], 500);
         }
-    }
-
-    /**
-     * Kirim notifikasi WhatsApp ke assignee (selain pembuat) saat task baru
-     * berhasil dibuat. Kegagalan kirim WA tidak pernah menggagalkan response
-     * storeTask() — WhatsAppService sendiri sudah tidak pernah throw.
-     */
-    private function notifyAssigneesOnWhatsApp(Task $task, array $assignees): void
-    {
-        if (empty($assignees)) {
-            return;
-        }
-
-        $whatsapp = app(WhatsAppService::class);
-        if (! $whatsapp->isConfigured()) {
-            return;
-        }
-
-        $message = $this->buildTaskCreatedMessage($task);
-
-        foreach ($assignees as $i => $assignee) {
-            if (! $assignee->phone_number) {
-                continue;
-            }
-            if ($i > 0) {
-                sleep(1);
-            }
-            $whatsapp->sendText($assignee->phone_number, $message);
-        }
-    }
-
-    private function buildTaskCreatedMessage(Task $task): string
-    {
-        $lines = [
-            '*Tugas Baru*',
-            '',
-            '*Judul:* '.$task->title,
-            '*Kategori:* '.($task->category?->name ?? '—'),
-            '*Tenggal:* '.$task->due_date->format('d M Y'),
-            '*Dari:* '.($task->creator?->display_name ?? 'Sistem'),
-        ];
-
-        return implode("\n", $lines);
     }
 
     public function searchUsers(Request $request): JsonResponse

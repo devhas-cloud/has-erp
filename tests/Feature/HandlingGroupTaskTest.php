@@ -188,12 +188,13 @@ class HandlingGroupTaskTest extends TestCase
 
         $store = $this->actingAs($this->admin)->postJson(
             route('configuration.store', 'handling-groups'),
-            ['name' => 'Water+IMS', 'user_ids' => [$this->maidin->id]]
+            ['name' => 'Water+IMS', 'user_ids' => [$this->maidin->id], 'whatsapp_group_id' => '120363000000000000@g.us']
         );
 
         $store->assertOk();
 
         $newGroup = HandlingGroup::where('name', 'Water+IMS')->firstOrFail();
+        $this->assertSame('120363000000000000@g.us', $newGroup->whatsapp_group_id);
         $this->assertSame(
             [$this->maidin->id],
             $newGroup->users()->pluck('users.id')->all()
@@ -205,6 +206,7 @@ class HandlingGroupTaskTest extends TestCase
         );
 
         $update->assertOk();
+        $this->assertNull($newGroup->fresh()->whatsapp_group_id);
         $this->assertSame(
             [$this->maidin->id, $this->maya->id],
             $newGroup->fresh()->users()->pluck('users.id')->all()

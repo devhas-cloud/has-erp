@@ -13,6 +13,7 @@ class HandlingGroup extends Model
         'name',
         'description',
         'division_id',
+        'whatsapp_group_id',
     ];
 
     public function division(): BelongsTo

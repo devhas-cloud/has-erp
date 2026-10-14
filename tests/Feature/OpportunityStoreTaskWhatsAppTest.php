@@ -93,6 +93,7 @@ class OpportunityStoreTaskWhatsAppTest extends TestCase
             'title' => 'Follow up client',
             'category_id' => $this->category->id,
             'due_date' => now()->addDays(2)->toDateString(),
+            'alert_type' => 'whatsapp',
             'alert_target' => 'personal',
             'assignees' => [$this->assigneeWithPhone->id, $this->assigneeWithoutPhone->id],
         ], $overrides);
@@ -150,6 +151,21 @@ class OpportunityStoreTaskWhatsAppTest extends TestCase
         );
 
         Http::assertNothingSent();
+    }
+
+    public function test_store_task_kirim_whatsapp_walau_alert_type_none(): void
+    {
+        Http::fake([
+            'wa.example.test/api/send' => Http::response(['success' => true, 'id' => 'MSG1'], 200),
+        ]);
+
+        $this->actingAs($this->creator)->postJson(
+            route('opportunity-management.tasks.store', $this->opportunity->id),
+            $this->payload(['alert_type' => 'none'])
+        );
+
+        // Alert Settings hanya untuk reminder; notif create selalu dikirim.
+        Http::assertSent(fn ($request) => $request['to'] === '6281234567890');
     }
 
     public function test_store_task_still_succeeds_when_wabaileys_not_configured(): void

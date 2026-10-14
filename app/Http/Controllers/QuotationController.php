@@ -921,7 +921,7 @@ class QuotationController extends Controller
 
             Log::record(
                 'create_quotation',
-                "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuat dari Task #{$task->id}",
+                "Quotation ({$quotation->quotation_number}) dibuat dari Task ",
                 self::MODULE_CODE,
                 $quotation
             );
@@ -930,7 +930,7 @@ class QuotationController extends Controller
                 TaskWorkflowLogger::forTask(
                     $quotation->task,
                     'create_quotation',
-                    "Quotation #{$quotation->id} ({$quotation->quotation_number}) dibuat dari Task #{$task->id} (Draft)"
+                    "Quotation ({$quotation->quotation_number}) dibuat dari Task (Draft)"
                 );
             }
 

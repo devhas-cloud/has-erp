@@ -28,6 +28,7 @@ use App\Models\TypesAccountsCompany;
 use App\Models\User;
 use App\Services\LeadImportService;
 use App\Services\MentionParser;
+use App\Services\TaskWhatsAppNotifier;
 use App\Services\XlsxTemplateGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -1226,6 +1227,7 @@ class LeadsManagementController extends Controller
         $validated['requires_approval'] = ! empty($otherAssignees);
 
         DB::beginTransaction();
+        $notifiedAssignees = [];
         try {
             $validated['lead_id'] = $lead->id;
             $task = Task::create($validated);
@@ -1244,6 +1246,7 @@ class LeadsManagementController extends Controller
                         'notifiable_id' => $task->id,
                         'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
                     ]);
+                    $notifiedAssignees[] = $assignee;
                 }
             }
 
@@ -1255,6 +1258,11 @@ class LeadsManagementController extends Controller
             ]);
 
             DB::commit();
+
+            // Kirim WhatsApp SETELAH commit (bukan di dalam transaksi) — panggilan
+            // HTTP ke gateway WA lambat & tidak boleh membuat task creation yang
+            // sudah berhasil ikut ter-rollback kalau pengiriman gagal.
+            app(TaskWhatsAppNotifier::class)->notifyNewTask($task, $notifiedAssignees);
 
             $task->load(['creator', 'assignees']);
 

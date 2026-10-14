@@ -774,7 +774,7 @@
                                                     <span
                                                         class="activity-post-author">{{ $log->user?->display_name ?? 'System' }}</span>
                                                     <span
-                                                        class="activity-post-time">{{ $log->created_at->diffForHumans() }}</span>
+                                                        class="activity-post-time">{{ $log->created_at->format('d M Y H:i') }}</span>
                                                 </div>
                                                 <div class="activity-post-content">{{ $log->description }}</div>
                                             </div>
@@ -1064,6 +1064,8 @@
                             @if(strtolower(auth()->user()->division->division_name ?? '') === 'gas')
                             <li><a class="dropdown-item" href="{{ route('gas-configuration.create', ['task_id' => $task->id]) }}">Gas Config</a></li>
                             @endif
+
+
                             @if ($hasApprovedConfig && strtolower(auth()->user()->division->division_name ?? '') === 'admin')
                             <li><hr class="dropdown-divider"></li>
                             <li>
