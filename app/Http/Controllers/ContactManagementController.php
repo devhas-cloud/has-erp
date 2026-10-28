@@ -62,7 +62,7 @@ class ContactManagementController extends Controller
         ]);
 
         // Jika divisi sales dan bukan manager, filter hanya kontak yang dimiliki oleh user saat ini
-        if (strtolower(Auth::user()->division?->division_name) === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
+        if (strtolower(Auth::user()->division?->division_name) === 'sales' && strtolower(Auth::user()->taskRole?->role_name) !== 'manager') {
             $query->where(function ($q) {
                 $q->where('assigned_to_id', Auth::id())
                     ->orWhere('contact_owner_id', Auth::id());
