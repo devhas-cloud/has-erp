@@ -252,7 +252,7 @@
         </tr>
         <tr>
             <td class="k">Address</td>
-            <td>{!! nl2br(e($quotation->address ?? '—')) !!}</td>
+            <td style="width: 45%;">{!! nl2br(e($quotation->address ?? '—')) !!}</td>
             <td class="kr">Date</td>
             <td class="right">{{ $quotation->date?->format('d F Y') ?? '—' }}</td>
         </tr>
@@ -287,7 +287,7 @@
         Thank you for your inquiry &amp; we are pleased to quote as follow :
         <br>
         <br>
-        <h4>Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringa (SPARING) <br> Sesuai PERMENLHK Nomor P.80/MENLHK/SETJEN/KUM.1/10/2019</h4>
+        <h4>Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING) <br> Sesuai PERMENLHK Nomor P.80/MENLHK/SETJEN/KUM.1/10/2019</h4>
         <h4>Parameter : {{ $quotation->parameter_note }} </h4>
     </div>
 
