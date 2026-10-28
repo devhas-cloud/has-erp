@@ -96,9 +96,15 @@
         }
 
         .salutation {
-            margin: 10px 0 8px;
-            font-size: 10.5px;
+            margin-top: 15px;
+            font-size: 11px;
+            line-height: 1.5;
         }
+
+        .salutation p {
+            margin: 0 0 8px;
+        }
+
 
         table.parts {
             width: 100%;
@@ -243,53 +249,101 @@
          database hanya dipakai kalau view dirender di luar controller itu. --}}
     @php $totalPages = (int) ($pageCount ?? $quotation->no_of_pages ?? 1); @endphp
 
-    <table class="info">
-        <tr>
-            <td class="k">To</td>
-            <td>{{ $quotation->to_name ?? '—' }}</td>
-            <td class="kr">From</td>
-            <td class="right">{{ $quotation->from_name ?? '—' }}</td>
-        </tr>
-        <tr>
-            <td class="k">Address</td>
-            <td style="width: 45%;">{!! nl2br(e($quotation->address ?? '—')) !!}</td>
-            <td class="kr">Date</td>
-            <td class="right">{{ $quotation->date?->format('d F Y') ?? '—' }}</td>
-        </tr>
-        <tr>
-            <td class="k">Attn.</td>
-            <td>{{ $quotation->attn_name ?? '—' }}</td>
-            <td class="kr">Our Ref</td>
-            <td class="right">{{ $quotation->quotation_number ?? '—' }}</td>
-        </tr>
-        <tr>
-            <td class="k">Telp</td>
-            <td>{{ $quotation->attn_phone ?? '—' }}</td>
-            <td class="kr">Currency</td>
-            <td class="right">{{ $quotation->currency ?? 'Rupiah' }}</td>
-        </tr>
-        <tr>
-            <td class="k">Email</td>
-            <td>{{ $quotation->attn_email ?? '—' }}</td>
-            <td class="kr">Your Ref</td>
-            <td class="right">{{ $quotation->your_ref ?? '' }}</td>
-        </tr>
-        <tr>
-            <td class="k"></td>
-            <td></td>
-            <td class="kr">No of Pages</td>
-            <td class="right">{{ $totalPages }} {{ $totalPages > 1 ? 'Pages' : 'Page' }}</td>
-        </tr>
-    </table>
 
-    <div class="salutation">
-        Dear Customer,<br>
-        Thank you for your inquiry &amp; we are pleased to quote as follow :
+<table class="info">
+    <tr>
+        {{-- Informasi penerima --}}
+        <td class="info-left" style="width: 65%">
+            <table class="info-detail">
+                <tr>
+                    <td class="k">To</td>
+                    <td>{{ $quotation->to_name ?? '—' }}</td>
+                </tr>
+                <tr>
+                    <td class="k">Address</td>
+                    <td style="width:45%">{!! nl2br(e($quotation->address ?? '—')) !!}</td>
+                </tr>
+                <tr>
+                    <td class="k">Attn.</td>
+                    <td>{{ $quotation->attn_name ?? '—' }}</td>
+                </tr>
+                <tr>
+                    <td class="k">Telp</td>
+                    <td>{{ $quotation->attn_phone ?? '—' }}</td>
+                </tr>
+                <tr>
+                    <td class="k">Email</td>
+                    <td>{{ $quotation->attn_email ?? '—' }}</td>
+                </tr>
+            </table>
+        </td>
+
+        {{-- Detail quotation --}}
+        <td class="info-right" style="width: 35%">
+            <table class="info-detail">
+                <tr>
+                    <td class="kr">From</td>
+                    <td class="right">
+                        {{ $quotation->from_name ?? '—' }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="kr">Date</td>
+                    <td class="right">
+                        {{ $quotation->date?->format('d F Y') ?? '—' }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="kr">Our Ref</td>
+                    <td class="right">
+                        {{ $quotation->quotation_number ?? '—' }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="kr">Currency</td>
+                    <td class="right">
+                        {{ $quotation->currency ?? 'Rupiah' }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="kr">Your Ref</td>
+                    <td class="right">
+                        {{ $quotation->your_ref ?: '—' }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="kr">No. of Pages</td>
+                    <td class="right">
+                        {{ $totalPages }}
+                        {{ $totalPages > 1 ? 'Pages' : 'Page' }}
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<div class="salutation">
+    <p>Dear Customer,</p>
+
+    <p>
+        Thank you for your inquiry, and we are pleased to
+        quote as follows:
+    </p>
+
+    <h4 class="quotation-title">
+        Sistem Pemantauan Kualitas Air Secara Terus Menerus
+        dan Dalam Jaringan (SPARING)
         <br>
-        <br>
-        <h4>Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringan (SPARING) <br> Sesuai PERMENLHK Nomor P.80/MENLHK/SETJEN/KUM.1/10/2019</h4>
-        <h4>Parameter : {{ $quotation->parameter_note }} </h4>
-    </div>
+        Sesuai PERMENLHK Nomor
+        P.80/MENLHK/SETJEN/KUM.1/10/2019
+    </h4>
+
+    <h4 class="parameter-title">
+        Parameter: {{ $quotation->parameter_note ?? '—' }}
+    </h4>
+</div>
+
 
 
     @php $rows = $quotation->flattenTree(); @endphp
