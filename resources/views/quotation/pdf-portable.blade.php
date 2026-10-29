@@ -121,6 +121,12 @@
             font-size: 10px;
             vertical-align: top;
         }
+        /* tbody: tanpa garis horizontal — hanya garis kiri & kanan tiap kolom.
+           th (header) dan tfoot tetap ber-border penuh. */
+        table.parts tbody td {
+            border-top: none;
+            border-bottom: none;
+        }
         .cat-row td {
             background: #f2f2f2;
             font-weight: 700;

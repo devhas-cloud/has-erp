@@ -389,11 +389,21 @@
                                         $fxQty = isset($item['formula']['qty']) ? ' data-fx="'.e($item['formula']['qty']).'"' : '';
                                         $fxPrice = isset($item['formula']['price']) ? ' data-fx="'.e($item['formula']['price']).'"' : '';
                                         $rawSyncSource = $item['cost_sync_source'] ?? null;
-                                        $syncSource = ($rawSyncSource === 'biaya' || preg_match('/^config:\d+:.+$/', (string) $rawSyncSource)) ? $rawSyncSource : '';
+                                        if (is_string($rawSyncSource)) {
+                                            $decodedSources = json_decode($rawSyncSource, true);
+                                            $syncSources = is_array($decodedSources)
+                                                ? $decodedSources
+                                                : (preg_match('/^(biaya|config:\d+:.+)$/', $rawSyncSource) ? [$rawSyncSource] : []);
+                                        } elseif (is_array($rawSyncSource)) {
+                                            $syncSources = $rawSyncSource;
+                                        } else {
+                                            $syncSources = [];
+                                        }
+                                        $syncSources = array_values(array_filter(array_map('strval', $syncSources)));
                                         echo '<tr data-key="'.$key.'"'
                                             .' data-parent="'.$parentKey.'"'
                                             .' data-depth="'.$depth.'"'
-                                            .' data-cost-sync-source="'.e($syncSource).'">';
+                                            .' data-sync-sources="'.e(json_encode($syncSources)).'">';
                                         echo '<td class="text-center qt-row-col qt-row-num"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-no" value="'.e($item['item_no'] ?? '').'" placeholder="1 / 1.1"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-pn" value="'.e($item['part_number'] ?? '').'" placeholder="Part No"></td>';
@@ -406,7 +416,7 @@
                                         echo '</div></div></td>';
                                         echo '<td><input type="text" inputmode="decimal" min="0" class="form-control form-control-sm qt-qty" data-fx-table="items"'.$fxQty.' value="'.($item['qty'] ?? '').'"></td>';
                                         echo '<td><input type="text" class="form-control form-control-sm qt-unit" value="'.e($item['unit'] ?? '').'"></td>';
-                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end'.($syncSource ? ' qt-price-synced' : '').'" data-fx-table="items"'.$fxPrice.($syncSource ? ' readonly' : '').' value="'.($item['selling_price'] ?? '').'"></td>';
+                                        echo '<td><input type="text" inputmode="decimal" min="0" step="any" class="form-control form-control-sm qt-price text-end'.($syncSources ? ' qt-price-synced' : '').'" data-fx-table="items"'.$fxPrice.($syncSources ? ' readonly' : '').' value="'.($item['selling_price'] ?? '').'"></td>';
                                         echo '<td class="qt-amount text-end"></td>';
                                         echo '<td class="text-center">';
                                         echo '<button type="button" class="btn-icon" title="Add Item dari Config" onclick="openQtItemPicker(this)"><i class="fa fa-cart-plus"></i></button>';
@@ -438,7 +448,7 @@
                 </div>
                 <div class="tab-pane fade" id="qt-tab-configs" role="tabpanel">
                     <div id="qt-config-change-actions" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:13px"></div>
-                    <small style="color:var(--text-muted);display:block;margin-bottom:6px">Tiap baris "Subtotal &lt;kategori&gt;" di bawah bisa disinkronkan ke satu item di tab "List Item Quotation" lewat dropdown di kolom Aksi.</small>
+                    <small style="color:var(--text-muted);display:block;margin-bottom:6px">Tiap baris "Subtotal &lt;kategori&gt;" di bawah bisa disinkronkan ke satu item di tab "List Item Quotation" lewat dropdown di kolom Aksi. Beberapa sumber (dari tab ini maupun tab Biaya) boleh menarget baris yang sama — harga baris menjadi <strong>jumlah</strong> semua sumbernya.</small>
                     <div id="qt-config-lists"></div>
                     <div class="config-card-empty" id="qt-configs-empty">
                         <i class="fa-solid fa-inbox"></i> Belum ada list configuration. Pilih task di atas untuk menampilkan configuration yang terikat.
@@ -545,7 +555,7 @@
                             <option value="">— Tidak Disinkronkan —</option>
                         </select>
                     </div>
-                    <small style="color:var(--text-muted);display:block;text-align:right">Bila dipilih, harga item tersebut di tab "List Item Quotation" otomatis mengikuti Total Price Biaya (field harga terkunci).</small>
+                    <small style="color:var(--text-muted);display:block;text-align:right">Bila dipilih, harga item tersebut di tab "List Item Quotation" otomatis mengikuti Total Price Biaya (field harga terkunci). Bila ada sumber lain menarget baris sama, harga jadi jumlah semua sumber.</small>
                     <div class="d-flex justify-content-end mt-2">
                         <table class="table table-custom align-middle mb-0" style="max-width:340px">
                             <tr>
@@ -729,8 +739,9 @@ function fxSetReadonly($input) {
     // Field harga item yang sedang dikunci sinkron (Biaya / subtotal kategori
     // Configuration) harus tetap readonly, terlepas dari ada/tidaknya formula
     // — kalau tidak, akan terbuka lagi begitu fxInitWraps() jalan (mis. saat
-    // halaman edit pertama kali dimuat).
-    if ($input.closest('tr').attr('data-cost-sync-source')) {
+    // halaman edit pertama kali dimuat). Baris terkunci bila ada sumber yang
+    // menargetnya (bisa lebih dari satu — harga = jumlah).
+    if (qtRowSources($input.closest('tr').attr('data-key')).length) {
         $input.prop('readonly', true);
         return;
     }
@@ -1059,7 +1070,7 @@ function addQtRow(item, parentKey) {
         depth = (parseInt(parentRow.attr('data-depth')) || 0) + 1;
     }
 
-    var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '" data-cost-sync-source="">';
+    var html = '<tr data-key="' + key + '" data-parent="' + (parentKey || '') + '" data-depth="' + depth + '">';
     html += '<td class="text-center qt-row-col qt-row-num"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-no" value="' + (item.item_no || '') + '" placeholder="1 / 1.1"></td>';
     html += '<td><input type="text" class="form-control form-control-sm qt-pn" value="' + (item.part_number || '') + '" placeholder="Part No"></td>';
@@ -1164,7 +1175,7 @@ function qtCollectItems() {
             description: $(this).find('.qt-desc').html(),
             qty: qtToRaw($qty.val()),
             selling_price: qtToRaw($price.val()),
-            cost_sync_source: $(this).attr('data-cost-sync-source') || null,
+            cost_sync_source: qtRowSources($(this).attr('data-key')),
             unit: $(this).find('.qt-unit').val(),
             formula: formula
         });
@@ -1852,10 +1863,11 @@ function qtCostRecalc() {
 }
 
 // ── Sinkronisasi salah satu total (Total Price Biaya, atau Subtotal per
-//    kategori di tab List Configuration) ke satu item pada tab "List Item
+//    kategori di tab List Configuration) ke item pada tab "List Item
 //    Quotation". Setiap sumber punya identitas unik ('biaya', atau
-//    'config:<configId>:<kategori>' — lihat qcRecalcBlock()); satu item hanya
-//    boleh mengikuti SATU sumber pada satu waktu.
+//    'config:<configId>:<kategori>' — lihat qcRecalcBlock()).
+//    BANYAK sumber boleh menarget BARIS YANG SAMA; harga baris = JUMLAH semua
+//    total sumber yang menargetnya. Satu sumber tetap hanya menarget satu baris.
 
 function qtEscHtml(str) {
     return String(str == null ? '' : str)
@@ -1866,24 +1878,44 @@ function qtEscHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-function qtRowsWithSource(source) {
-    return $('#qt-items-body tr').filter(function() {
-        return $(this).attr('data-cost-sync-source') === source;
+// Peta sumber -> baris target. Sumber tunggal kebenaran (row attr dihapus
+// setelah hydrate agar tidak ganda). Isi awal dibaca dari data-sync-sources
+// (JSON array) yang dirender blade pada mode edit.
+let qtSyncMap = {};
+
+function qtInitSyncMap() {
+    qtSyncMap = {};
+    $('#qt-items-body tr[data-sync-sources]').each(function() {
+        var key = $(this).attr('data-key');
+        var raw = $(this).attr('data-sync-sources');
+        var arr = [];
+        try { arr = JSON.parse(raw) || []; } catch (e) { arr = []; }
+        if (!Array.isArray(arr)) arr = arr ? [String(arr)] : [];
+        arr.forEach(function(src) {
+            if (typeof src === 'string' && src) qtSyncMap[src] = key;
+        });
     });
+    $('#qt-items-body tr[data-sync-sources]').removeAttr('data-sync-sources');
 }
 
-// Lepas item yang sumbernya sudah tidak punya dropdown lagi (mis. kategori
-// atau configuration-nya dihapus) supaya tidak terkunci permanen tanpa jalan keluar.
+// Daftar sumber yang menarget baris dengan data-key = key.
+function qtRowSources(key) {
+    var out = [];
+    Object.keys(qtSyncMap).forEach(function(src) {
+        if (qtSyncMap[src] === key) out.push(src);
+    });
+    return out;
+}
+
+// Lepas entri sumber yang dropdown-nya sudah tidak ada (mis. kategori atau
+// configuration-nya dihapus) supaya tidak terkunci permanen tanpa jalan keluar.
 function qtReleaseOrphanedSyncRows() {
     var validSources = {};
     $('.qt-sync-select').each(function() {
         validSources[$(this).attr('data-source')] = true;
     });
-    $('#qt-items-body tr').each(function() {
-        var src = $(this).attr('data-cost-sync-source');
-        if (src && !validSources[src]) {
-            qtReleaseSyncRow($(this));
-        }
+    Object.keys(qtSyncMap).forEach(function(src) {
+        if (!validSources[src]) delete qtSyncMap[src];
     });
 }
 
@@ -1891,17 +1923,11 @@ function qtRefreshSyncOptions($select) {
     var source = $select.attr('data-source');
     if (!source) return;
 
-    var currentKey = qtRowsWithSource(source).first().attr('data-key') || '';
-
     $select.empty();
     $select.append($('<option>').val('').text('— Tidak Disinkronkan —'));
 
     $('#qt-items-body tr').each(function(i) {
         var key = $(this).attr('data-key');
-        var rowSource = $(this).attr('data-cost-sync-source');
-        // Item yang sedang dikendalikan sumber LAIN tidak ditawarkan di dropdown ini.
-        if (rowSource && rowSource !== source) return;
-
         var no = ($(this).find('.qt-no').val() || '').trim();
         var desc = $(this).find('.qt-desc').text().trim();
         if (desc.length > 40) desc = desc.slice(0, 40) + '…';
@@ -1909,64 +1935,67 @@ function qtRefreshSyncOptions($select) {
         $select.append($('<option>').val(key).text(label));
     });
 
-    $select.val(currentKey);
+    // Baris sama boleh jadi pilihan di semua dropdown; ubah sini tidak melepas
+    // sumber lain yang menarget baris itu.
+    $select.val(qtSyncMap[source] || '');
 }
 
 function qtRefreshAllSyncOptions() {
     qtReleaseOrphanedSyncRows();
+    // Buang entri yang target barisnya sudah tidak ada (baris dihapus).
+    var liveKeys = {};
+    $('#qt-items-body tr').each(function() { liveKeys[$(this).attr('data-key')] = true; });
+    Object.keys(qtSyncMap).forEach(function(src) {
+        if (!liveKeys[qtSyncMap[src]]) delete qtSyncMap[src];
+    });
     $('.qt-sync-select').each(function() {
         qtRefreshSyncOptions($(this));
     });
 }
 
-function qtReleaseSyncRow($row) {
-    $row.attr('data-cost-sync-source', '');
-    $row.find('.qt-price').prop('readonly', false).removeClass('qt-price-synced');
+// Baris terkunci + highlight hanya bila minimal satu sumber menargetnya.
+function qtUpdateRowSyncState($row) {
+    var has = qtRowSources($row.attr('data-key')).length > 0;
+    $row.find('.qt-price').prop('readonly', has).toggleClass('qt-price-synced', has);
 }
 
 function qtApplySyncTarget(key, source) {
-    // Lepas baris lain yang sebelumnya memegang sumber ini (hanya 1 baris per sumber).
-    qtRowsWithSource(source).each(function() {
-        if ($(this).attr('data-key') !== key) {
-            qtReleaseSyncRow($(this));
-        }
-    });
-
     if (key) {
-        var $row = $('#qt-items-body tr[data-key="' + key + '"]');
-        var prevSource = $row.attr('data-cost-sync-source');
-        if (prevSource && prevSource !== source) {
-            // Item ini sedang dikendalikan sumber lain -> lepas dari sana (dropdown
-            // sumber itu ikut ter-reset otomatis lewat qtRefreshAllSyncOptions()).
-            qtReleaseSyncRow($row);
-        }
-        $row.attr('data-cost-sync-source', source);
-        $row.find('.qt-price').prop('readonly', true).addClass('qt-price-synced');
+        qtSyncMap[source] = key;
+    } else {
+        delete qtSyncMap[source];
     }
-
+    $('#qt-items-body tr').each(function() { qtUpdateRowSyncState($(this)); });
     qtRefreshAllSyncOptions();
     qtPushAllSyncValues();
 }
 
-function qtPushSyncValue(source, rawTotal) {
-    var $target = qtRowsWithSource(source);
-    if (!$target.length) return;
-    var $price = $target.find('.qt-price');
-    if ($price.hasClass('fx-editing')) return;
-    $price.val(qtFormatInput(rawTotal.toFixed(2)));
-    var $qty = $target.find('.qt-qty');
-    if (!qtToRaw($qty.val())) {
-        $qty.val('1');
-    }
+// Harga baris target = jumlah raw total seluruh sumber yang menarget baris itu.
+function qtPushAllSyncValues() {
+    var sums = {};
+    $('.qt-sync-select').each(function() {
+        var source = $(this).attr('data-source');
+        var key = qtSyncMap[source];
+        if (!key) return;
+        var raw = parseFloat($(this).attr('data-total-raw')) || 0;
+        sums[key] = (sums[key] || 0) + raw;
+    });
+    Object.keys(sums).forEach(function(key) {
+        var $row = $('#qt-items-body tr[data-key="' + qtEscAttrSel(key) + '"]');
+        if (!$row.length) return;
+        var $price = $row.find('.qt-price');
+        if ($price.hasClass('fx-editing')) return;
+        $price.val(qtFormatInput(sums[key].toFixed(2)));
+        var $qty = $row.find('.qt-qty');
+        if (!qtToRaw($qty.val())) {
+            $qty.val('1');
+        }
+    });
     qtRecalc();
 }
 
-function qtPushAllSyncValues() {
-    $('.qt-sync-select').each(function() {
-        var source = $(this).attr('data-source');
-        var raw = parseFloat($(this).attr('data-total-raw')) || 0;
-        qtPushSyncValue(source, raw);
-    });
+function qtEscAttrSel(str) {
+    return String(str == null ? '' : str).replace(/"/g, '\\"');
 }
 
 $(document).on('change', '.qt-sync-select', function() {
@@ -2098,6 +2127,10 @@ function qtFillFormKeepItems(data) {
 }
 
 $(document).ready(function() {
+    // Hydrate peta sinkron (source -> baris target) dari render blade agar
+    // recalc/refresh pertama di bawah sudah tahu baris mana yang terkunci.
+    qtInitSyncMap();
+
     // Ringkasan Harga hanya tampil saat tab "List Item Quotation" aktif.
     $(document).on('shown.bs.tab', 'button[data-bs-toggle="tab"]', function(e) {
         $('#qt-price-summary').toggle($(e.target).attr('data-bs-target') === '#qt-tab-items');
