@@ -288,8 +288,7 @@
         Thank you for your inquiry &amp; we are pleased to quote as follow :
         <br>
         <br>
-        <h4>Sistem Pemantauan Kualitas Air Secara Terus Menerus dan Dalam Jaringa (SPARING) <br> Sesuai PERMENLHK Nomor P.80/MENLHK/SETJEN/KUM.1/10/2019</h4>
-        <h4>Parameter : {{ $quotation->parameter_note }} </h4>
+        <h4>{!! $quotation->parameter_note ? \App\Models\Quotation::renderDescription($quotation->parameter_note) : '—' !!} </h4>
     </div>
 
 

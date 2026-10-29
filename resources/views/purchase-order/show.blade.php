@@ -33,7 +33,7 @@
     <div>
         <h1 class="page-header-title">Purchase Order #{{ $purchaseOrder->id }}</h1>
         <p class="page-header-sub">
-            {{ $purchaseOrder->po_number ?: 'Belum ada No. PO' }} &middot; {{ $purchaseOrder->supplier_name }}
+            {{ $purchaseOrder->po_number ?: 'Belum ada No. PO' }} &middot; {{ $purchaseOrder->type_label }} &middot; {{ $purchaseOrder->supplier_name }}
         </p>
     </div>
     <div class="page-header-actions">
@@ -47,7 +47,7 @@
 </div>
 
 <div class="qt-action-bar">
-    <span>{!! $purchaseOrder->statusBadgeHtml() !!}</span>
+    <span>{!! $purchaseOrder->statusBadgeHtml() !!} {!! $purchaseOrder->typeBadgeHtml() !!}</span>
     <div class="spacer"></div>
     @if($purchaseOrder->status === 'draft' && (auth()->id() === $purchaseOrder->created_by || auth()->user()->role === 'Admin'))
         <a href="{{ route('purchase-order.edit', $purchaseOrder->id) }}" class="btn btn-secondary btn-sm">
@@ -102,12 +102,24 @@
                 <td>{{ $purchaseOrder->po_number ?: '—' }}</td>
             </tr>
             <tr>
+                <td>Jenis PO</td>
+                <td>{{ $purchaseOrder->type_label }}</td>
+            </tr>
+            <tr>
                 <td>Tanggal</td>
                 <td>{{ $purchaseOrder->date?->format('d/m/Y') ?? '—' }}</td>
             </tr>
             <tr>
                 <td>Terms</td>
                 <td>{{ $purchaseOrder->terms ?: '—' }}</td>
+            </tr>
+            <tr>
+                <td>Delivery</td>
+                <td>{{ $purchaseOrder->delivery ?: '—' }}</td>
+            </tr>
+            <tr>
+                <td>Your Ref</td>
+                <td>{{ $purchaseOrder->your_ref ?: '—' }}</td>
             </tr>
             @php($divisionNames = $purchaseOrder->divisionNames())
             <tr>
@@ -156,7 +168,7 @@
                         <th class="text-center">Qty</th>
                         <th>Unit</th>
                         <th class="text-end">Harga Satuan</th>
-                        <th class="text-end">Subtotal (Rp)</th>
+                        <th class="text-end">Subtotal ({{ $purchaseOrder->currencyCode() }})</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -187,7 +199,7 @@
                                         —
                                     @endif
                                 </td>
-                                <td class="text-end">{{ number_format($item->amount(), 0, ',', '.') }}</td>
+                                <td class="text-end">{{ number_format($item->amount(), 2, ',', '.') }}</td>
                             </tr>
                         @endforeach
                     @empty
@@ -197,9 +209,30 @@
                     @endforelse
                 </tbody>
                 <tfoot>
+                    @php($poTotals = $purchaseOrder->totalsFrom($purchaseOrder->grandTotal()))
                     <tr>
-                        <td colspan="7" class="text-end fw-bold">Grand Total</td>
-                        <td class="text-end fw-bold">{{ number_format($purchaseOrder->grandTotal(), 0, ',', '.') }}</td>
+                        <td colspan="7" class="text-end">Sub Total</td>
+                        <td class="text-end fw-semibold">{{ number_format($poTotals['subtotal'], 2, ',', '.') }}</td>
+                    </tr>
+                    @if($poTotals['discount'] > 0)
+                    <tr>
+                        <td colspan="7" class="text-end">Diskon {{ rtrim(rtrim(number_format($purchaseOrder->discount_percent, 2, ',', '.'), '0'), ',') }}%</td>
+                        <td class="text-end fw-semibold text-danger">- {{ number_format($poTotals['discount'], 2, ',', '.') }}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="7" class="text-end">Sub Total 1</td>
+                        <td class="text-end fw-semibold">{{ number_format($poTotals['after_discount'], 2, ',', '.') }}</td>
+                    </tr>
+                    @endif
+                    @if($poTotals['ppn'] > 0)
+                    <tr>
+                        <td colspan="7" class="text-end">PPN {{ rtrim(rtrim(number_format($purchaseOrder->ppn_percent, 2, ',', '.'), '0'), ',') }}%</td>
+                        <td class="text-end fw-semibold">{{ number_format($poTotals['ppn'], 2, ',', '.') }}</td>
+                    </tr>
+                    @endif
+                    <tr>
+                        <td colspan="7" class="text-end fw-bold">Grand Total ({{ $purchaseOrder->currencyCode() }})</td>
+                        <td class="text-end fw-bold">{{ number_format($poTotals['total'], 2, ',', '.') }}</td>
                     </tr>
                 </tfoot>
             </table>

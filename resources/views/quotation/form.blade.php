@@ -26,6 +26,8 @@
         content: attr(data-placeholder);
         color: #999;
     }
+    .qt-judul-wrap { margin-top: 2px; }
+    .qt-judul-wrap .qt-desc { min-height: 60px; padding-top: 26px; }
     .qt-desc-wrap { position: relative; }
     .qt-price-synced {
         background: #f0fdf4 !important;
@@ -273,25 +275,38 @@
                     <label class="form-label">Address</label>
                     <textarea class="form-control" rows="2" id="qt-address" name="address">{{ $quotation?->address }}</textarea>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Attn (PIC)</label>
                     <input type="text" class="form-control" id="qt-attn" name="attn_name" value="{{ $quotation?->attn_name }}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Telp</label>
                     <input type="text" class="form-control" id="qt-phone" name="attn_phone" value="{{ $quotation?->attn_phone }}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Email</label>
                     <input type="text" class="form-control" id="qt-email" name="attn_email" value="{{ $quotation?->attn_email }}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Contact Person Phone</label>
                     <input type="text" class="form-control" id="qt-contact-phone" name="contact_phone" value="{{ $quotation?->contact_phone }}">
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Parameter</label>
-                    <input type="text" class="form-control" id="qt-parameter" name="parameter_note" value="{{ $quotation?->parameter_note }}">
+                <div class="col-md-12">
+                    <label class="form-label">Judul</label>
+                    @php
+                        $judulHtml = \App\Models\Quotation::renderDescription($quotation?->parameter_note);
+                        if ($judulHtml === '') {
+                            $judulHtml = '<b>Sistem Pemantauan Kualitas Air Secara Terus Menerus<br>dan Dalam Jaringan (SPARING)<br>Sesuai PERMENLHK Nomor P.80/MENLHK/SETJEN/KUM.1/10/2019 <br> Parameter : pH, TSS, Nh3n, Debit</b>';
+                        }
+                    @endphp
+                    <div class="qt-desc-wrap qt-judul-wrap">
+                        <div class="qt-desc" id="qt-parameter" contenteditable="true" data-placeholder="Judul..." style="font-size:18px">{!! $judulHtml !!}</div>
+                        <div class="qt-desc-toolbar">
+                            <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+                            <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+                            <button type="button" data-cmd="underline" title="Underline"><u>U</u></button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2345,7 +2360,7 @@ $(document).ready(function() {
                     attn_email: $('#qt-email').val(),
                     from_name: $('#qt-from').val(),
                     contact_phone: $('#qt-contact-phone').val(),
-                    parameter_note: $('#qt-parameter').val(),
+                    parameter_note: $('#qt-parameter').html(),
                     notes: $('#qt-notes').val(),
                     terms: $('#qt-terms').val(),
                     discount_percent: $('#qt-disc-pct').val(),

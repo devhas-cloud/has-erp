@@ -278,7 +278,7 @@ class QuotationController extends Controller
                     'config_label' => $c->division?->division_name ?? '',
                     'category' => $item->category,
                     'part_number' => $item->part_number,
-                    'description' => $item->description,
+                    'description' => $item->name ?? $item->description,
                     'qty' => $item->qty,
                     'selling_price' => $item->selling_price,
                     'selling_price_currency' => $item->selling_price_currency ?? $item->selling_price,
@@ -1613,66 +1613,8 @@ class QuotationController extends Controller
     }
 
     /**
-     * Upload dokumen PO sebagai bukti penawaran selesai/deal, menandai
-     * quotation menjadi Finish. Boleh dilakukan dari status Approved
-     * (upload pertama) maupun Finish (re-upload/koreksi dokumen PO).
-     */
-    public function uploadPo(Request $request, $id): JsonResponse
-    {
-        $quotation = Quotation::findOrFail($id);
-
-        if (! in_array($quotation->status, [Quotation::STATUS_APPROVED, Quotation::STATUS_FINISH], true)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya quotation berstatus Approved atau Finish yang bisa diupload PO-nya.',
-            ], 422);
-        }
-
-        $request->validate([
-            'po_document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
-        ], [
-            'po_document.mimes' => 'File PO harus berformat PDF, JPG, atau PNG.',
-            'po_document.max' => 'Ukuran file tidak boleh lebih dari 10MB.',
-        ]);
-
-        $file = $request->file('po_document');
-        $path = $file->store('quotation-po', 'public');
-
-        if ($quotation->po_document_path && Storage::disk('public')->exists($quotation->po_document_path)) {
-            Storage::disk('public')->delete($quotation->po_document_path);
-        }
-
-        $quotation->update([
-            'po_document_path' => $path,
-            'po_document_name' => $file->getClientOriginalName(),
-            'po_uploaded_by' => Auth::id(),
-            'po_uploaded_at' => now(),
-            'status' => Quotation::STATUS_FINISH,
-        ]);
-
-        Log::record(
-            'upload_po_quotation',
-            "PO untuk Quotation #{$quotation->id} ({$quotation->quotation_number}) diupload oleh ".Auth::user()->display_name,
-            self::MODULE_CODE,
-            $quotation
-        );
-
-        if ($quotation->task) {
-            TaskWorkflowLogger::forTask(
-                $quotation->task,
-                'upload_po_quotation',
-                "PO diupload, Quotation #{$quotation->id} ({$quotation->quotation_number}) -> Finish"
-            );
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'PO berhasil diupload. Quotation berstatus Finish.',
-        ]);
-    }
-
-    /**
-     * Tampilkan/unduh dokumen PO yang sudah diupload.
+     * Tampilkan/unduh dokumen PO lama yang tersimpan di quotation (data
+     * historis sebelum PO dipindahkan ke modul Project).
      */
     public function viewPo($id)
     {
@@ -1811,7 +1753,7 @@ class QuotationController extends Controller
             'attn_email' => 'nullable|email|max:150',
             'from_name' => 'nullable|string|max:150',
             'contact_phone' => 'nullable|string|max:50',
-            'parameter_note' => 'nullable|string|max:255',
+            'parameter_note' => 'nullable|string|max:2000',
             'notes' => 'nullable|string',
             'cost_notes' => 'nullable|string',
             'terms' => 'nullable|string',

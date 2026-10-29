@@ -331,16 +331,8 @@
         quote as follows:
     </p>
 
-    <h4 class="quotation-title">
-        Sistem Pemantauan Kualitas Air Secara Terus Menerus
-        dan Dalam Jaringan (SPARING)
-        <br>
-        Sesuai PERMENLHK Nomor
-        P.80/MENLHK/SETJEN/KUM.1/10/2019
-    </h4>
-
     <h4 class="parameter-title">
-        Parameter: {{ $quotation->parameter_note ?? '—' }}
+        {!! $quotation->parameter_note ? \App\Models\Quotation::renderDescription($quotation->parameter_note) : '—' !!}
     </h4>
 </div>
 
