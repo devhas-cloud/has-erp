@@ -247,9 +247,9 @@
                                 echo '</div></div></td>';
                                 echo '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">'.$item->qty.'</div></td>';
                                 echo '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">'.e($item->unit).'</div></td>';
-                                echo '<td><input type="hidden" class="wc-price" value="'.e($price).'">';
-                                echo '<input type="hidden" class="wc-purchase-price" value="'.e($purchasePrice).'">';
-                                echo '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="'.($price ? number_format($price, 0, '.', ',') : '').'" placeholder="0"></td>';
+                                echo '<td><input type="hidden" class="wc-price" value="'.e($price).'" readonly>';
+                                echo '<input type="hidden" class="wc-purchase-price" value="'.e($purchasePrice).'" readonly>';
+                                echo '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="'.($price ? number_format($price, 0, '.', ',') : '').'" placeholder="0" readonly></td>';
                                 echo '<td class="text-center">';
                                 echo '<div class="d-flex justify-content-center gap-1">';
                                 echo '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
@@ -477,9 +477,9 @@ function addItemRow(item, parentKey) {
     html += '</div></div></td>';
     html += '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">' + (item.qty != null && item.qty !== '' ? item.qty : 1) + '</div></td>';
     html += '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">' + (item.unit || '') + '</div></td>';
-    html += '<td><input type="hidden" class="wc-price" value="' + priceRaw + '">';
-    html += '<input type="hidden" class="wc-purchase-price" value="' + purchaseRaw + '">';
-    html += '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="' + (priceRaw !== '' ? priceDisplayOf(priceRaw) : '') + '" placeholder="0"></td>';
+    html += '<td><input type="hidden" class="wc-price" value="' + priceRaw + '" readonly>';
+    html += '<input type="hidden" class="wc-purchase-price" value="' + purchaseRaw + '" readonly>';
+    html += '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="' + (priceRaw !== '' ? priceDisplayOf(priceRaw) : '') + '" placeholder="0" readonly></td>';
     html += '<td class="text-center"><div class="d-flex justify-content-center gap-1">';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-up" title="Naik"><i class="fa fa-chevron-up"></i></button>';
     html += '<button type="button" class="btn btn-sm btn-soft wc-move-down" title="Turun"><i class="fa fa-chevron-down"></i></button>';

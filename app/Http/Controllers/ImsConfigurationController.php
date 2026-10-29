@@ -407,7 +407,7 @@ class ImsConfigurationController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
-            'selling_price' => $product->selling_price,
+            'selling_price' => $product->purchase_price,
             'purchase_price' => $product->purchase_price,
         ])->all();
 
