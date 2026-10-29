@@ -52,9 +52,12 @@ class CheckAccessControl
         $lastDot = strrpos($action, '.');
         $lastSegment = $lastDot !== false ? substr($action, $lastDot + 1) : $action;
 
-        $approveVerb = in_array($lastSegment, ['approve', 'reject', 'unlock', 'settle', 'pay', 'revise', 'finalize'], true);
+        $approveVerb = in_array($lastSegment, ['approve', 'reject', 'unlock', 'settle', 'pay', 'finalize'], true);
 
         $permissionField = match (true) {
+            // Revise = membuat draft revisi (bukan approval) -> butuh can_update.
+            // Sender approve/tolak versi revisinya nanti yang butuh can_approve.
+            $lastSegment === 'revise' => 'can_update',
             $approveVerb => 'can_approve',
             $method === 'POST' => 'can_create',
             $method === 'PUT', $method === 'PATCH' => 'can_update',
