@@ -6,14 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Approval "boleh lanjut PO ke supplier" (kuorum 2 user berbeda), terpisah
- * dari approval quotation itu sendiri (Quotation::STATUS_WAITING_APPROVAL ->
- * STATUS_APPROVED, lihat Quotation::finalChecker()).
+ * Satu approval Permintaan Barang oleh satu user can_approve. Permintaan
+ * menjadi Approved (boleh diproses PO) setelah GoodsRequest::REQUIRED_APPROVALS
+ * user berbeda menyetujui.
  */
-class QuotationPoSupplierApproval extends Model
+class GoodsRequestApproval extends Model
 {
     protected $fillable = [
-        'quotation_id',
+        'goods_request_id',
         'user_id',
         'approved_at',
     ];
@@ -25,9 +25,9 @@ class QuotationPoSupplierApproval extends Model
         ];
     }
 
-    public function quotation(): BelongsTo
+    public function goodsRequest(): BelongsTo
     {
-        return $this->belongsTo(Quotation::class);
+        return $this->belongsTo(GoodsRequest::class);
     }
 
     public function user(): BelongsTo

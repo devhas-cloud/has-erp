@@ -77,6 +77,7 @@ class PurchaseOrderItem extends Model
 
     public function amount(): float
     {
-        return (float) ($this->qty ?? 0) * (float) ($this->selling_price ?? 0);
+        // Dalam mata uang item (tanpa konversi kurs).
+        return (float) ($this->qty ?? 0) * (float) ($this->selling_price_currency ?? $this->selling_price ?? 0);
     }
 }

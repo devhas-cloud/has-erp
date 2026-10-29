@@ -56,7 +56,6 @@ class CheckAccessControl
 
         $permissionField = match (true) {
             $approveVerb => 'can_approve',
-            $action === 'upload-po' => 'can_update',
             $method === 'POST' => 'can_create',
             $method === 'PUT', $method === 'PATCH' => 'can_update',
             $method === 'DELETE' => 'can_delete',

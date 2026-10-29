@@ -14,6 +14,7 @@ use App\Http\Controllers\GasConfigurationController;
 use App\Http\Controllers\GoodsRequestController;
 use App\Http\Controllers\IhConfigurationController;
 use App\Http\Controllers\ImsConfigurationController;
+use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\LoanController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\PoSupplierApprovalController;
 use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfitEstimateController;
+use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\SupplierController;
@@ -275,9 +277,30 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('quotation/{id}/pdf', [QuotationController::class, 'pdf'])->name('quotation.pdf');
     Route::get('quotation/{id}/pdf-cost', [QuotationController::class, 'pdfCost'])->name('quotation.pdf-cost');
     Route::put('quotation/{id}/update-notes', [QuotationController::class, 'updateNotes'])->name('quotation.update-notes');
-    Route::post('quotation/{id}/upload-po', [QuotationController::class, 'uploadPo'])->name('quotation.upload-po');
     Route::get('quotation/{id}/view-po', [QuotationController::class, 'viewPo'])->name('quotation.view-po');
     Route::resource('quotation', QuotationController::class);
+
+    Route::get('project/data', [ProjectController::class, 'data'])->name('project.data');
+    Route::get('project/fetch-quotation', [ProjectController::class, 'fetchQuotation'])->name('project.fetch-quotation');
+    Route::get('project/search-companies', [ProjectController::class, 'searchCompanies'])->name('project.search-companies');
+    Route::get('project/search-sales', [ProjectController::class, 'searchSales'])->name('project.search-sales');
+    Route::get('project/achievements-data', [ProjectController::class, 'achievementsData'])->name('project.achievements-data');
+    Route::get('project/{id}/achievements', [ProjectController::class, 'achievementForm'])->name('project.achievements');
+    Route::put('project/{id}/achievements', [ProjectController::class, 'saveAchievements'])->name('project.achievements.update');
+    Route::get('project/{id}/po', [ProjectController::class, 'viewPo'])->name('project.po');
+    Route::resource('project', ProjectController::class);
+
+    Route::get('invoice/data', [InvoiceController::class, 'data'])->name('invoice.data');
+    Route::get('invoice/search-projects', [InvoiceController::class, 'searchProjects'])->name('invoice.search-projects');
+    Route::get('invoice/search-products', [InvoiceController::class, 'searchProducts'])->name('invoice.search-products');
+    Route::get('invoice/{id}/pdf', [InvoiceController::class, 'pdf'])->name('invoice.pdf');
+    Route::get('invoice/{id}/fetch-project', [InvoiceController::class, 'fetchProject'])->name('invoice.fetch-project');
+    Route::post('invoice/{id}/submit', [InvoiceController::class, 'submit'])->name('invoice.submit');
+    Route::post('invoice/{id}/approve', [InvoiceController::class, 'approve'])->name('invoice.approve');
+    Route::post('invoice/{id}/reject', [InvoiceController::class, 'reject'])->name('invoice.reject');
+    Route::post('invoice/{id}/pay', [InvoiceController::class, 'pay'])->name('invoice.pay');
+    Route::post('invoice/{id}/cancel', [InvoiceController::class, 'cancel'])->name('invoice.cancel');
+    Route::resource('invoice', InvoiceController::class);
 
     Route::get('po-supplier-approval/data', [PoSupplierApprovalController::class, 'data'])->name('po-supplier-approval.data');
     Route::post('po-supplier-approval/{id}/approve', [PoSupplierApprovalController::class, 'approve'])->name('po-supplier-approval.approve');

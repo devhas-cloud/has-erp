@@ -135,6 +135,7 @@
     .qt-picker-table td { font-size:13px; line-height:1.45; }
     .qt-picker-table tr.qt-item-picker-row:hover td { background:#f1f5f9; }
     #qt-config-diff-body tr td { user-select:text; }
+    .qt-picker-name { display:block; font-weight:700; }
     .qt-picker-prev { display:block; font-size:11px; color:#92400e; margin-top:2px; }
     .qt-picker-fx { display:block; font-size:11px; color:var(--text-muted); }
     #qt-item-picker-body td {
@@ -1256,7 +1257,7 @@ function buildConfigBlockHtml(configId, label, items, divisionId) {
         html += '<td class="qc-idr text-end"></td>';
         html += '<td class="qc-amount text-end"></td>';
         html += '<td class="text-center">';
-        html += '<button type="button" class="btn-icon" title="Tambah Item dari Produk (child)" onclick="openQtConfigProductPicker(this)"><i class="fa fa-plus"></i></button>';
+        html += '<button type="button" class="btn-icon" title="Tambah Item dari Produk (child)" onclick="openQtConfigProductPicker(this)"><i class="fa fa-cart-plus"></i></button>';
         html += '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="removeQtConfigRow(this)"><i class="fa fa-trash"></i></button>';
         html += '</td></tr>';
     };
@@ -1476,6 +1477,20 @@ function qtConfigNewKey() {
     return 'config-new-' + (++qtConfigKeySeq);
 }
 
+// Isi kolom baris qc-item yang sudah ada dengan data produk picker
+// (Part Number, Deskripsi, Currency, Harga, Harga Beli).
+function applyProductToQcRow($row, p) {
+    $row.find('.qc-pn').val(p.code || '');
+    $row.find('.qc-desc').html(qtRenderDesc(p.description || p.name || ''));
+    if (p.currency) {
+        var $cur = $row.find('.qc-currency');
+        if ($cur.find('option[value="' + p.currency + '"]').length) $cur.val(p.currency);
+    }
+    $row.find('.qc-price').val(p.selling_price_currency != null ? p.selling_price_currency : (p.selling_price || ''));
+    $row.find('.qc-purchase-price').val(p.purchase_price_currency || '');
+    if (!qtToRaw($row.find('.qc-qty').val())) $row.find('.qc-qty').val('1');
+}
+
 function qcRowHtml(configId, item, parentKey, key, cat) {
     var depth = 0;
     if (parentKey) {
@@ -1500,7 +1515,7 @@ function qcRowHtml(configId, item, parentKey, key, cat) {
     html += '<td class="qc-idr text-end"></td>';
     html += '<td class="qc-amount text-end"></td>';
     html += '<td class="text-center">';
-    html += '<button type="button" class="btn-icon" title="Tambah Item dari Produk (child)" onclick="openQtConfigProductPicker(this)"><i class="fa fa-plus"></i></button>';
+    html += '<button type="button" class="btn-icon" title="Tambah Item dari Produk (child)" onclick="openQtConfigProductPicker(this)"><i class="fa fa-cart-plus"></i></button>';
     html += '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="removeQtConfigRow(this)"><i class="fa fa-trash"></i></button>';
     html += '</td></tr>';
     return html;
@@ -1802,8 +1817,42 @@ $(document).ready(function() {
             return;
         }
         var beforeTotal = $(qtcfgBlock).find('.qc-total');
+        var configId = qtcfgBlock.attr('data-config');
+
+        // Picker dibuka dari baris qc-item: produk pertama mengisi BARIS TERSEBUT
+        // (bukan membuat baris baru); sisanya (jika multi-select) tetap jadi child.
+        if (qtcfgTargetParentKey) {
+            var $row = $(qtcfgBlock).find('tr.qc-item[data-key="' + qtEscAttrSel(qtcfgTargetParentKey) + '"]');
+            if ($row.length) {
+                selected.forEach(function(p, i) {
+                    if (i === 0) {
+                        applyProductToQcRow($row, p);
+                    } else {
+                        var key = qtConfigNewKey();
+                        var html = qcRowHtml(configId, {
+                            part_number: p.code || '',
+                            description: p.description || p.name || '',
+                            qty: 1,
+                            selling_price: p.selling_price,
+                            selling_price_currency: p.selling_price_currency != null ? p.selling_price_currency : p.selling_price,
+                            purchase_price_currency: p.purchase_price_currency,
+                            currency: p.currency
+                        }, qtcfgTargetParentKey, key);
+                        insertQcRowAfter(qtcfgTargetParentKey, html);
+                    }
+                });
+                qcRecalcBlock(qtcfgBlock);
+                qtFormatAllNumeric();
+                qtRenumberRows();
+                toastr.success(selected.length > 1
+                    ? 'Product diterapkan ke baris terpilih + ' + (selected.length - 1) + ' child baru.'
+                    : 'Product diterapkan ke baris terpilih.');
+                if (qtcfgModal) qtcfgModal.hide();
+                return;
+            }
+        }
+
         selected.forEach(function(p) {
-            var configId = qtcfgBlock.attr('data-config');
             var key = qtConfigNewKey();
             var item = {
                 part_number: p.code || '',
@@ -2720,11 +2769,12 @@ function qtBuildConfigPicker(container, $legend, clickable) {
 
     var addPoolRow = function(partNumber, desc, qty, price, indent, it) {
         var idx = pool.length;
-        pool.push({ part_number: partNumber, description: desc, qty: qty, price: price });
+        var name = it && it.name ? String(it.name) : '';
+        pool.push({ part_number: partNumber, description: desc, qty: qty, price: price, name: name });
         var removed = it && it.change_status === 'dihapus';
         rowBuffer += '<tr class="' + (clickable ? 'qt-item-picker-row' : '') + (removed ? ' qt-picker-removed' : '') + '" style="' + rowStyle + '" data-idx="' + idx + '">';
         rowBuffer += '<td style="padding-left:' + (8 + indent * 18) + 'px"><code>' + $('<div>').text(partNumber).html() + '</code></td>';
-        rowBuffer += '<td>' + changeBadge(it) + (it && it.change_status && it.change_status !== 'sama' ? ' ' : '') + qtRenderDesc(desc) + prevLine(it) + '</td>';
+        rowBuffer += '<td>' + changeBadge(it) + (it && it.change_status && it.change_status !== 'sama' ? ' ' : '') + (name ? '<span class="qt-picker-name">' + $('<div>').text(name).html() + '</span>' : '') + qtRenderDesc(desc) + prevLine(it) + '</td>';
         rowBuffer += '<td class="text-center">' + $('<div>').text(qty == null ? '' : qty).html() + '</td>';
         rowBuffer += '<td class="text-end" style="white-space:nowrap">' + (price ? 'Rp ' + qtFmtPrice(price) : '') + fxLine(it) + '</td>';
         rowBuffer += '</tr>';
@@ -2871,7 +2921,7 @@ function openQtItemPicker(btn) {
         if (!target.length) return;
         var pn = item.part_number && item.part_number !== '-' ? item.part_number : '';
         target.find('.qt-pn').val(pn);
-        target.find('.qt-desc').html(qtRenderDesc(item.description));
+        target.find('.qt-desc').html(qtRenderDesc(item.name || item.description));
         target.find('.qt-qty').val(item.qty || '');
         target.find('.qt-price').val(item.price || '');
         target.find('.qt-desc-wrap').removeClass('qt-locked');

@@ -188,6 +188,8 @@ class QuotationController extends Controller
      */
     private function configItemsForPrefill($configs): array
     {
+        $configs->load('items.product');
+
         $items = [];
         $base = Currency::baseName();
 
@@ -200,6 +202,7 @@ class QuotationController extends Controller
                     'parent_id' => $item->parent_id,
                     'category' => $item->category,
                     'part_number' => $item->part_number,
+                    'name' => $item->product?->name,
                     'description' => $item->description,
                     'qty' => $item->qty,
                     // selling_price = IDR sesudah kurs; selling_price_currency + currency = snapshot sebelum kurs.
@@ -278,7 +281,7 @@ class QuotationController extends Controller
                     'config_label' => $c->division?->division_name ?? '',
                     'category' => $item->category,
                     'part_number' => $item->part_number,
-                    'description' => $item->name ?? $item->description,
+                    'description' => $item->product?->name ?? $item->description,
                     'qty' => $item->qty,
                     'selling_price' => $item->selling_price,
                     'selling_price_currency' => $item->selling_price_currency ?? $item->selling_price,
@@ -453,6 +456,15 @@ class QuotationController extends Controller
         };
 
         $removed = [];
+        // Nama produk untuk item snapshot yang dihapus: ambil dari item live yang
+        // cocok (kunci sama = part_number/description), snapshot tidak menyimpan
+        // product_id.
+        $nameByKey = [];
+        foreach ($liveItems as $item) {
+            $k = $this->itemKey($item['part_number'] ?? null, $item['description'] ?? null);
+            if (! $k || empty($item['name'])) continue;
+            $nameByKey[$k] = $item['name'];
+        }
         foreach ($snapshotByGroup as $g => $byKey) {
             foreach ($byKey as $key => $rows) {
                 if (! empty($matched[$g][$key])) {
@@ -466,6 +478,7 @@ class QuotationController extends Controller
                         'parent_id' => $removedParentId($si),
                         'category' => $si->category,
                         'part_number' => $si->part_number,
+                        'name' => $nameByKey[$this->itemKey($si->part_number, $si->description)] ?? null,
                         'description' => $si->description,
                         'qty' => $si->qty,
                         'selling_price' => $si->selling_price,
@@ -985,6 +998,11 @@ class QuotationController extends Controller
             }
         }
 
+        // Snapshot config item tidak menyimpan nama produk; ambil dari master
+        // product memakai part_number == code produk.
+        $productNames = MasterProduct::whereIn('code', $quotation->configItems->pluck('part_number')->filter()->unique())
+            ->pluck('name', 'code');
+
         return view('quotation.form', [
             'quotation' => $quotation,
             'tasks' => $tasks,
@@ -1000,17 +1018,21 @@ class QuotationController extends Controller
                 'description' => $item->description,
                 'qty' => $item->qty,
                 'selling_price' => $item->selling_price,
-                'cost_sync_source' => $item->cost_sync_source,
+                'cost_sync_source' => $item->cost_sync_source
+                    ? (json_decode($item->cost_sync_source, true) ?: $item->cost_sync_source)
+                    : null,
                 'unit' => $item->unit,
                 'formula' => $item->formula,
             ])->all(),
-            'configItems' => $quotation->configItems->map(fn ($item) => [
+            'configItems' => $quotation->configItems->map(function ($item) use ($productNames) {
+                return [
                 'id' => $item->id,
                 'quote_configuration_id' => $item->quote_configuration_id,
                 'item_no' => $item->item_no,
                 'parent_id' => $item->parent_id,
                 'category' => $item->category,
                 'part_number' => $item->part_number,
+                'name' => $item->part_number ? ($productNames[$item->part_number] ?? null) : null,
                 'description' => $item->description,
                 'qty' => $item->qty,
                 'selling_price' => $item->selling_price,
@@ -1019,7 +1041,8 @@ class QuotationController extends Controller
                 'currency' => $item->currency,
                 'unit' => $item->unit,
                 'formula' => $item->formula,
-            ])->all(),
+                ];
+            })->all(),
             'costItems' => $quotation->costItems->map(fn ($item) => [
                 'id' => $item->id,
                 'parent_id' => $item->parent_id,
@@ -1776,7 +1799,8 @@ class QuotationController extends Controller
             'items.*.selling_price' => 'nullable|numeric|min:0',
             // 'biaya', atau 'config:<quote_configuration_id>:<kategori>' (subtotal
             // satu kategori pada tab List Configuration — lihat syncItems()).
-            'items.*.cost_sync_source' => ['nullable', 'string', 'max:191', 'regex:/^(biaya|config:\d+:.+)$/'],
+            'items.*.cost_sync_source' => ['nullable', 'array'],
+            'items.*.cost_sync_source.*' => ['string', 'max:191', 'regex:/^(biaya|config:\d+:.+)$/'],
             'items.*.unit' => 'nullable|string|max:50',
             'items.*.formula' => 'nullable|array',
             'items.*.formula.qty' => 'nullable|string|max:255',
@@ -1838,7 +1862,9 @@ class QuotationController extends Controller
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
                 'selling_price' => $item['selling_price'] ?? null,
-                'cost_sync_source' => $item['cost_sync_source'] ?? null,
+                'cost_sync_source' => !empty($item['cost_sync_source']) && is_array($item['cost_sync_source'])
+                    ? json_encode(array_values($item['cost_sync_source']))
+                    : null,
                 'unit' => $item['unit'] ?? null,
                 'formula' => isset($item['formula']) && is_array($item['formula']) ? json_encode(array_filter($item['formula'])) : null,
                 'sort_order' => $i + 1,

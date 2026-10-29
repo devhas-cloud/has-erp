@@ -3,15 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\AccountCompany;
+use App\Models\Currency;
 use App\Models\Division;
 use App\Models\GoodsRequest;
 use App\Models\MasterProduct;
 use App\Models\Module;
 use App\Models\Opportunity;
+use App\Models\Project;
+use App\Models\ProjectPoSupplierApproval;
+use App\Models\Quotation;
 use App\Models\QuoteConfiguration;
 use App\Models\QuoteConfigurationItem;
-use App\Models\Quotation;
-use App\Models\QuotationPoSupplierApproval;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -106,80 +108,123 @@ class GoodsRequestTest extends TestCase
         ]);
     }
 
-    /**
-     * Quotation Finish dengan kuorum PO Supplier Approval (2 approver
-     * berbeda) terpenuhi dan terikat pada satu opportunity — eligible untuk
-     * diajukan Permintaan Barang.
-     */
-    private function createEligibleQuotation(?Opportunity $opportunity = null): Quotation
+    private function createQuotation(?Opportunity $opportunity = null): Quotation
     {
         $opportunity ??= $this->createOpportunity();
 
-        $quotation = Quotation::create([
+        return Quotation::create([
             'opportunity_id' => $opportunity->id,
             'status' => Quotation::STATUS_FINISH,
             'created_by' => $this->admin->id,
             'quotation_number' => '001/HAS/QT-T/VIII/2026',
             'to_name' => 'PT Maju Bersama',
         ]);
-
-        QuotationPoSupplierApproval::create(['quotation_id' => $quotation->id, 'user_id' => $this->admin->id, 'approved_at' => now()]);
-        QuotationPoSupplierApproval::create(['quotation_id' => $quotation->id, 'user_id' => $this->creator->id, 'approved_at' => now()]);
-
-        return $quotation->fresh();
     }
 
-    public function test_create_page_only_lists_eligible_quotations(): void
+    private function createProject(?Quotation $quotation = null, string $poNumber = 'PO-CUST-001'): Project
     {
-        $eligible = $this->createEligibleQuotation();
+        static $seq = 0;
+        $seq++;
+
+        return Project::create([
+            'project_number' => now()->format('ym').str_pad((string) $seq, 4, '0', STR_PAD_LEFT),
+            'project_name' => 'Project SPARING '.$seq,
+            'quotation_id' => $quotation?->id,
+            'company_id' => $this->company->id,
+            'po_number_company' => $poNumber === 'PO-CUST-001' ? 'PO-CUST-001-'.$seq : $poNumber,
+            'po_date' => '2026-10-01',
+            'po_date_received' => '2026-10-02',
+            'po_due_date' => '2026-11-01',
+            'total_sale_amount' => 1000000,
+            'net_sale_amount' => 900000,
+            'status' => Project::STATUS_ACTIVE,
+            'created_by' => $this->admin->id,
+        ]);
+    }
+
+    private function approveProject(Project $project, int $count = 2): Project
+    {
+        $users = array_slice([$this->admin->id, $this->creator->id, $this->approver->id], 0, $count);
+        foreach ($users as $userId) {
+            ProjectPoSupplierApproval::create(['project_id' => $project->id, 'user_id' => $userId, 'approved_at' => now()]);
+        }
+
+        return $project->fresh();
+    }
+
+    /**
+     * Project aktif dengan kuorum PO Supplier Approval (2 approver berbeda)
+     * terpenuhi dan terikat quotation ber-opportunity — eligible untuk
+     * diajukan Permintaan Barang.
+     */
+    private function createEligibleProject(?Opportunity $opportunity = null): Project
+    {
+        return $this->approveProject($this->createProject($this->createQuotation($opportunity)));
+    }
+
+    public function test_create_page_only_lists_eligible_projects(): void
+    {
+        $eligible = $this->createEligibleProject();
 
         $opportunity2 = $this->createOpportunity('Opportunity Lain');
-        $notFinished = Quotation::create(['opportunity_id' => $opportunity2->id, 'status' => Quotation::STATUS_APPROVED, 'created_by' => $this->admin->id, 'quotation_number' => '002', 'to_name' => 'Belum Finish']);
+        $notReady = $this->approveProject($this->createProject($this->createQuotation($opportunity2)), 1);
 
-        $notReady = Quotation::create(['opportunity_id' => $opportunity2->id, 'status' => Quotation::STATUS_FINISH, 'created_by' => $this->admin->id, 'quotation_number' => '003', 'to_name' => 'Baru 1 Approver']);
-        QuotationPoSupplierApproval::create(['quotation_id' => $notReady->id, 'user_id' => $this->admin->id, 'approved_at' => now()]);
+        $inactive = $this->approveProject($this->createProject($this->createQuotation($opportunity2)));
+        $inactive->update(['status' => Project::STATUS_COMPLETED]);
 
         $response = $this->actingAs($this->creator)->get(route('goods-request.create'));
         $response->assertOk();
-        $response->assertSee($eligible->quotation_number);
-        $response->assertDontSee('Belum Finish');
-        $response->assertDontSee('Baru 1 Approver');
+        $response->assertSee($eligible->project_name);
+        $response->assertDontSee($notReady->project_name);
+        $response->assertDontSee($inactive->project_name);
     }
 
-    public function test_store_rejects_ineligible_quotation(): void
+    public function test_store_rejects_ineligible_project(): void
     {
-        $opportunity = $this->createOpportunity();
-        $quotation = Quotation::create(['opportunity_id' => $opportunity->id, 'status' => Quotation::STATUS_APPROVED, 'created_by' => $this->admin->id]);
+        $project = $this->createProject($this->createQuotation());
 
         $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
             'items' => [],
         ])->assertStatus(422);
 
         $this->assertSame(0, GoodsRequest::count());
     }
 
-    public function test_store_rejects_quotation_without_opportunity(): void
+    public function test_store_allows_project_without_quotation_with_manual_items(): void
     {
-        // Finish + kuorum 2/2 terpenuhi, tapi tidak terikat opportunity manapun.
-        $quotation = Quotation::create(['status' => Quotation::STATUS_FINISH, 'created_by' => $this->admin->id]);
-        QuotationPoSupplierApproval::create(['quotation_id' => $quotation->id, 'user_id' => $this->admin->id, 'approved_at' => now()]);
-        QuotationPoSupplierApproval::create(['quotation_id' => $quotation->id, 'user_id' => $this->creator->id, 'approved_at' => now()]);
+        // Project retail: tanpa quotation/opportunity, item hanya dari baris manual.
+        $project = $this->approveProject($this->createProject());
 
-        $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
-            'quotation_id' => $quotation->id,
-            'items' => [],
-        ])->assertStatus(422);
+        $response = $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
+            'project_id' => $project->id,
+            'items' => [
+                ['part_number' => 'PN-MANUAL', 'description' => 'Barang manual', 'qty' => 1, 'unit' => 'Unit'],
+            ],
+        ])->assertOk();
 
-        $this->assertSame(0, GoodsRequest::count());
+        $gr = GoodsRequest::findOrFail($response->json('id'));
+        $this->assertSame($project->id, $gr->project_id);
+        $this->assertNull($gr->quotation_id);
+        $this->assertNull($gr->opportunity_id);
+        $this->assertSame('PN-MANUAL', $gr->items->first()->part_number);
+    }
+
+    public function test_create_page_lists_eligible_project_without_quotation(): void
+    {
+        $project = $this->approveProject($this->createProject());
+
+        $this->actingAs($this->creator)->get(route('goods-request.create'))
+            ->assertOk()
+            ->assertSee($project->project_name);
     }
 
     public function test_store_persists_request_with_opportunity_items_and_creator_division(): void
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
 
         $response = $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
             'notes' => 'Mohon segera diproses',
             'items' => [
                 ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
@@ -188,8 +233,9 @@ class GoodsRequestTest extends TestCase
         ])->assertOk();
 
         $gr = GoodsRequest::findOrFail($response->json('id'));
-        $this->assertSame($quotation->id, $gr->quotation_id);
-        $this->assertSame($quotation->opportunity_id, $gr->opportunity_id);
+        $this->assertSame($project->id, $gr->project_id);
+        $this->assertSame($project->quotation_id, $gr->quotation_id);
+        $this->assertSame($project->quotation->opportunity_id, $gr->opportunity_id);
         $this->assertSame($this->division->id, $gr->division_id);
         $this->assertSame(GoodsRequest::STATUS_DRAFT, $gr->status);
         $this->assertSame('Mohon segera diproses', $gr->notes);
@@ -200,10 +246,10 @@ class GoodsRequestTest extends TestCase
 
     public function test_store_rejected_for_user_without_module_access(): void
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
 
         $this->actingAs($this->userWithoutApprove)->postJson(route('goods-request.store'), [
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
             'items' => [],
         ])->assertStatus(403);
     }
@@ -218,17 +264,18 @@ class GoodsRequestTest extends TestCase
         $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
         $updateOnlyUser = $this->makeUser('updateonly', $module, ['can_update' => true]);
 
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
             'division_id' => $this->division->id,
             'status' => GoodsRequest::STATUS_DRAFT,
             'created_by' => $this->creator->id,
         ]);
 
         $this->actingAs($updateOnlyUser)->putJson(route('goods-request.update', $gr->id), [
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
             'notes' => 'Update oleh user can_update-only',
             'items' => [],
         ])->assertOk();
@@ -245,10 +292,10 @@ class GoodsRequestTest extends TestCase
         $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
         $updateOnlyUser = $this->makeUser('updateonly', $module, ['can_update' => true]);
 
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
 
         $this->actingAs($updateOnlyUser)->postJson(route('goods-request.store'), [
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
             'items' => [],
         ])->assertStatus(403);
 
@@ -265,10 +312,11 @@ class GoodsRequestTest extends TestCase
         $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
         $updateOnlyUser = $this->makeUser('updateonly', $module, ['can_update' => true]);
 
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
             'division_id' => $this->division->id,
             'status' => GoodsRequest::STATUS_DRAFT,
             'created_by' => $this->creator->id,
@@ -290,10 +338,11 @@ class GoodsRequestTest extends TestCase
         $module = Module::where('module_code', 'MOD_GOODS_REQUEST')->first();
         $deleteOnlyUser = $this->makeUser('deleteonly', $module, ['can_delete' => true]);
 
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
             'division_id' => $this->division->id,
             'status' => GoodsRequest::STATUS_DRAFT,
             'created_by' => $this->creator->id,
@@ -306,10 +355,11 @@ class GoodsRequestTest extends TestCase
 
     public function test_submit_requires_at_least_one_item(): void
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
             'division_id' => $this->division->id,
             'status' => GoodsRequest::STATUS_DRAFT,
             'created_by' => $this->creator->id,
@@ -323,38 +373,130 @@ class GoodsRequestTest extends TestCase
         $this->assertSame(GoodsRequest::STATUS_WAITING_APPROVAL, $gr->fresh()->status);
     }
 
-    public function test_approve_requires_can_approve_permission_regardless_of_division(): void
+    private function waitingRequest(?int $divisionId = null): GoodsRequest
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
-            'division_id' => $this->division->id,
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
+            'division_id' => $divisionId ?? $this->division->id,
             'status' => GoodsRequest::STATUS_WAITING_APPROVAL,
             'created_by' => $this->creator->id,
         ]);
         $gr->items()->create(['description' => 'Item', 'qty' => 1]);
 
-        // approver bukan dari divisi yang sama dengan pemohon, tetap boleh approve
-        // karena approval modul ini hanya berdasarkan permission can_approve.
-        $otherDivision = Division::create(['division_name' => 'IMS', 'description' => 'IMS', 'type' => 'Internal', 'status' => 'Active']);
-        $this->approver->update(['division_id' => $otherDivision->id]);
+        return $gr;
+    }
+
+    private function otherDivision(): Division
+    {
+        return Division::firstOrCreate(['division_name' => 'IMS'], ['description' => 'IMS', 'type' => 'Internal', 'status' => 'Active']);
+    }
+
+    public function test_request_is_approved_after_two_different_approvers(): void
+    {
+        $gr = $this->waitingRequest();
+        $secondApprover = $this->makeUser('approver2', Module::where('module_code', GoodsRequest::MODULE_CODE)->first(), ['can_approve' => true]);
 
         $this->actingAs($this->userWithoutApprove)->postJson(route('goods-request.approve', $gr->id))->assertStatus(403);
 
-        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))->assertOk();
+        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))
+            ->assertOk()
+            ->assertJsonPath('approval_count', 1)
+            ->assertJsonPath('approved', false);
+        $this->assertSame(GoodsRequest::STATUS_WAITING_APPROVAL, $gr->fresh()->status);
+
+        // User yang sama tidak terhitung dua kali.
+        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))->assertStatus(422);
+        $this->assertSame(1, $gr->approvals()->count());
+
+        $this->actingAs($secondApprover)->postJson(route('goods-request.approve', $gr->id))
+            ->assertOk()
+            ->assertJsonPath('approval_count', 2)
+            ->assertJsonPath('approved', true);
 
         $fresh = $gr->fresh();
         $this->assertSame(GoodsRequest::STATUS_APPROVED, $fresh->status);
-        $this->assertSame($this->approver->id, $fresh->final_checked_by);
+        $this->assertSame($secondApprover->id, $fresh->final_checked_by);
+        $this->assertNotNull($fresh->approved_at);
+        $this->assertEqualsCanonicalizing([$this->approver->id, $secondApprover->id], $fresh->approvals->pluck('user_id')->all());
+
+        $this->actingAs($secondApprover)->get(route('goods-request.show', $gr->id))
+            ->assertOk()
+            ->assertSee('approver')
+            ->assertSee('approver2');
+    }
+
+    private function financeDivision(): Division
+    {
+        return Division::firstOrCreate(['division_name' => 'Finance'], ['description' => 'Finance', 'type' => 'Internal', 'status' => 'Active']);
+    }
+
+    public function test_non_finance_approver_cannot_approve_other_division_request(): void
+    {
+        $gr = $this->waitingRequest($this->otherDivision()->id);
+        $gr->update(['created_by' => $this->admin->id]);
+
+        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))->assertNotFound();
+        $this->assertSame(0, $gr->approvals()->count());
+
+        $this->approver->update(['division_id' => $this->financeDivision()->id]);
+        $this->actingAs($this->approver->fresh())->postJson(route('goods-request.approve', $gr->id))->assertOk();
+        $this->assertSame(1, $gr->approvals()->count());
+    }
+
+    public function test_reject_after_first_approval_stops_the_request(): void
+    {
+        $gr = $this->waitingRequest();
+        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))->assertOk();
+
+        $this->actingAs($this->admin)->postJson(route('goods-request.reject', $gr->id), [
+            'approval_note' => 'Anggaran belum tersedia',
+        ])->assertOk();
+        $this->assertSame(GoodsRequest::STATUS_REJECTED, $gr->fresh()->status);
+
+        $this->actingAs($this->admin)->postJson(route('goods-request.approve', $gr->id))->assertStatus(422);
+    }
+
+    public function test_only_finance_approvers_see_all_divisions(): void
+    {
+        $own = $this->waitingRequest();
+        $other = $this->waitingRequest($this->otherDivision()->id);
+        $other->update(['created_by' => $this->admin->id]);
+
+        $ids = fn (User $user) => collect($this->actingAs($user->fresh())->getJson(route('goods-request.data'))->assertOk()->json('data'))->pluck('id')->all();
+
+        // Tanpa can_approve -> hanya divisinya.
+        $this->assertSame([$own->id], $ids($this->userWithoutApprove));
+        $this->actingAs($this->userWithoutApprove)->get(route('goods-request.show', $other->id))->assertNotFound();
+
+        // can_approve tapi bukan Finance -> tetap hanya divisinya.
+        $this->assertSame([$own->id], $ids($this->approver));
+
+        // Divisi Finance + can_approve -> semua divisi (nama dicocokkan case-insensitive).
+        $finance = Division::create(['division_name' => 'FINANCE', 'description' => 'Finance', 'type' => 'Internal', 'status' => 'Active']);
+        $this->approver->update(['division_id' => $finance->id]);
+        $this->assertEqualsCanonicalizing([$own->id, $other->id], $ids($this->approver));
+
+        // Divisi Finance tanpa can_approve -> hanya divisinya (Finance), tidak ada permintaan.
+        $this->userWithoutApprove->update(['division_id' => $finance->id]);
+        $this->assertSame([], $ids($this->userWithoutApprove));
+
+        $this->assertEqualsCanonicalizing([$own->id, $other->id], $ids($this->admin));
+
+        // User tanpa divisi hanya melihat permintaan buatannya sendiri.
+        $this->creator->update(['division_id' => null]);
+        $this->assertSame([$own->id], $ids($this->creator));
     }
 
     public function test_reject_requires_approval_note(): void
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
             'division_id' => $this->division->id,
             'status' => GoodsRequest::STATUS_WAITING_APPROVAL,
             'created_by' => $this->creator->id,
@@ -378,8 +520,8 @@ class GoodsRequestTest extends TestCase
      */
     public function test_fetch_config_items_filters_by_opportunity_and_approved_status(): void
     {
-        $quotation = $this->createEligibleQuotation();
-        $opportunity = $quotation->opportunity;
+        $project = $this->createEligibleProject();
+        $opportunity = $project->quotation->opportunity;
 
         $config = QuoteConfiguration::create([
             'division_id' => $this->division->id,
@@ -458,8 +600,8 @@ class GoodsRequestTest extends TestCase
      */
     public function test_fetch_config_items_orders_parent_before_children_with_depth(): void
     {
-        $quotation = $this->createEligibleQuotation();
-        $opportunity = $quotation->opportunity;
+        $project = $this->createEligibleProject();
+        $opportunity = $project->quotation->opportunity;
 
         $config = QuoteConfiguration::create([
             'division_id' => $this->division->id,
@@ -524,12 +666,17 @@ class GoodsRequestTest extends TestCase
         MasterProduct::create(['name' => 'Flow Meter', 'code' => 'FM-200', 'division_id' => $this->division->id, 'selling_price' => 2000000, 'status' => 'Active']);
         MasterProduct::create(['name' => 'Nonaktif', 'code' => 'OFF-1', 'division_id' => $this->division->id, 'selling_price' => 1000, 'status' => 'Inactive']);
 
+        // Produk divisi lain tetap muncul — katalog tidak dibatasi divisi user.
+        $otherDivision = Division::create(['division_name' => 'IMS', 'description' => 'IMS', 'type' => 'Internal', 'status' => 'Active']);
+        MasterProduct::create(['name' => 'Dosing Pump', 'code' => 'DP-300', 'division_id' => $otherDivision->id, 'status' => 'Active']);
+
         $response = $this->actingAs($this->creator)
             ->getJson(route('goods-request.search-products'))
             ->assertOk();
 
         $data = collect($response->json('data'));
-        $this->assertSame(2, $data->count());
+        $this->assertSame(3, $data->count());
+        $this->assertContains('DP-300', $data->pluck('code')->all());
         $this->assertArrayNotHasKey('price', $data->first());
 
         $filtered = $this->actingAs($this->creator)
@@ -540,13 +687,47 @@ class GoodsRequestTest extends TestCase
         $this->assertSame('PH-100', $filtered[0]['code']);
     }
 
+    public function test_search_products_supports_paging_and_category_division_filters(): void
+    {
+        $otherDivision = Division::create(['division_name' => 'IMS', 'description' => 'IMS', 'type' => 'Internal', 'status' => 'Active']);
+        foreach (range(1, 12) as $i) {
+            MasterProduct::create([
+                'name' => sprintf('Sensor %02d', $i),
+                'code' => 'S-'.$i,
+                'category' => $i <= 4 ? 'Sensor pH' : 'Sensor DO',
+                'division_id' => $i <= 4 ? $otherDivision->id : $this->division->id,
+                'status' => 'Active',
+            ]);
+        }
+
+        $page2 = $this->actingAs($this->creator)
+            ->getJson(route('goods-request.search-products', ['per_page' => 5, 'page' => 2, 'with_filters' => 1]))
+            ->assertOk()
+            ->assertJsonPath('meta.total', 12)
+            ->assertJsonPath('meta.last_page', 3)
+            ->assertJsonPath('meta.from', 6)
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('data.0.name', 'Sensor 06');
+        $this->assertSame(['Sensor DO', 'Sensor pH'], $page2->json('filters.categories'));
+        $this->assertCount(2, $page2->json('filters.divisions'));
+
+        $this->actingAs($this->creator)
+            ->getJson(route('goods-request.search-products', ['category' => 'Sensor pH']))
+            ->assertJsonPath('meta.total', 4)
+            ->assertJsonMissingPath('filters');
+
+        $this->actingAs($this->creator)
+            ->getJson(route('goods-request.search-products', ['division_id' => $this->division->id, 'q' => 'Sensor 1']))
+            ->assertJsonPath('meta.total', 3); // Sensor 10, 11, 12
+    }
+
     public function test_store_persists_master_product_traceability_on_item(): void
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $product = MasterProduct::create(['name' => 'pH Sensor', 'code' => 'PH-100', 'division_id' => $this->division->id, 'status' => 'Active']);
 
         $response = $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
             'items' => [
                 ['master_product_id' => $product->id, 'part_number' => $product->code, 'description' => $product->name, 'qty' => 3, 'unit' => 'Unit'],
             ],
@@ -564,13 +745,13 @@ class GoodsRequestTest extends TestCase
      */
     public function test_store_sanitizes_item_description_but_keeps_safe_html(): void
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
 
         $richDescription = 'Range <br>- pH : 0-14<br>- Conductivity : 0-200.000 uS/cm<br>- TDS : 0-130 ppt<br>- Salinity : 0-180 PSU<br>- Temperature : -5 - 70°C';
         $withScript = $richDescription.'<script>alert(1)</script>';
 
         $response = $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
             'items' => [
                 ['description' => $withScript, 'qty' => 1, 'unit' => 'Unit'],
             ],
@@ -592,8 +773,8 @@ class GoodsRequestTest extends TestCase
      */
     public function test_fetch_config_items_and_search_products_render_description_line_breaks(): void
     {
-        $quotation = $this->createEligibleQuotation();
-        $opportunity = $quotation->opportunity;
+        $project = $this->createEligibleProject();
+        $opportunity = $project->quotation->opportunity;
 
         $config = QuoteConfiguration::create([
             'division_id' => $this->division->id,
@@ -617,7 +798,7 @@ class GoodsRequestTest extends TestCase
         $configResponse = $this->actingAs($this->creator)
             ->getJson(route('goods-request.fetch-config-items', ['opportunity_id' => $opportunity->id]))
             ->assertOk();
-        $this->assertSame("Range<br>- pH : 0-14<br>- TDS : 0-130 ppt", $configResponse->json('data.0.description'));
+        $this->assertSame('Range<br>- pH : 0-14<br>- TDS : 0-130 ppt', $configResponse->json('data.0.description'));
 
         MasterProduct::create([
             'name' => 'pH Sensor',
@@ -635,10 +816,11 @@ class GoodsRequestTest extends TestCase
 
     public function test_index_and_show_pages_render(): void
     {
-        $quotation = $this->createEligibleQuotation();
+        $project = $this->createEligibleProject();
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
             'division_id' => $this->division->id,
             'status' => GoodsRequest::STATUS_DRAFT,
             'created_by' => $this->creator->id,
@@ -646,5 +828,84 @@ class GoodsRequestTest extends TestCase
 
         $this->actingAs($this->creator)->get(route('goods-request.index'))->assertOk();
         $this->actingAs($this->creator)->get(route('goods-request.show', $gr->id))->assertOk();
+    }
+
+    public function test_data_filters_by_status_and_returns_counts_without_quotation_column(): void
+    {
+        $project = $this->createEligibleProject();
+        $make = fn (string $status) => GoodsRequest::create([
+            'project_id' => $project->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'quotation_id' => $project->quotation_id,
+            'division_id' => $this->division->id,
+            'status' => $status,
+            'created_by' => $this->creator->id,
+        ]);
+        $draft = $make(GoodsRequest::STATUS_DRAFT);
+        $draft->items()->createMany([
+            ['description' => 'A', 'qty' => 2, 'sort_order' => 1],
+            ['description' => 'B', 'qty' => 3, 'sort_order' => 2],
+        ]);
+        $make(GoodsRequest::STATUS_APPROVED);
+        $make(GoodsRequest::STATUS_APPROVED);
+
+        $all = $this->actingAs($this->creator)->getJson(route('goods-request.data'))
+            ->assertOk()
+            ->assertJsonPath('recordsFiltered', 3)
+            ->assertJsonPath('status_counts.draft', 1)
+            ->assertJsonPath('status_counts.approved', 2)
+            ->assertJsonPath('status_counts.rejected', 0);
+        $this->assertArrayNotHasKey('quotation_number', $all->json('data.0'));
+
+        $this->actingAs($this->creator)->getJson(route('goods-request.data', ['status' => 'draft']))
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.item_count', 2)
+            ->assertJsonPath('data.0.total_qty', 5)
+            ->assertJsonPath('status_counts.approved', 2);
+    }
+
+    public function test_item_currency_is_locked_to_source_and_manual_rows_can_choose(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
+        $eur = Currency::create(['name' => 'EUR', 'symbol' => '€', 'rate' => 18000, 'is_base' => false, 'status' => 'Active']);
+
+        $project = $this->createEligibleProject();
+        $config = QuoteConfiguration::create([
+            'division_id' => $this->division->id,
+            'opportunity_id' => $project->quotation->opportunity_id,
+            'group_id' => 1,
+            'version' => 1,
+            'is_current' => true,
+            'status' => QuoteConfiguration::STATUS_APPROVED,
+            'created_by' => $this->admin->id,
+        ]);
+        $configItem = QuoteConfigurationItem::create(['quote_configuration_id' => $config->id, 'part_number' => 'C-1', 'description' => 'Config', 'qty' => 1, 'currency' => 'usd', 'sort_order' => 1]);
+        $blankConfigItem = QuoteConfigurationItem::create(['quote_configuration_id' => $config->id, 'part_number' => 'C-2', 'description' => 'Config tanpa mata uang', 'qty' => 1, 'sort_order' => 2]);
+        $product = MasterProduct::create(['name' => 'Valve', 'code' => 'V-1', 'division_id' => $this->division->id, 'currency_id' => $eur->id, 'status' => 'Active']);
+
+        // Picker configuration & katalog membawa mata uang sumbernya.
+        $this->actingAs($this->creator)->getJson(route('goods-request.fetch-config-items', ['opportunity_id' => $project->quotation->opportunity_id]))
+            ->assertJsonPath('data.0.currency', 'USD')
+            ->assertJsonPath('data.1.currency', 'IDR');
+        $this->actingAs($this->creator)->getJson(route('goods-request.search-products', ['q' => 'V-1']))
+            ->assertJsonPath('data.0.currency', 'EUR');
+
+        $id = $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
+            'project_id' => $project->id,
+            'items' => [
+                // Mata uang dari client diabaikan untuk item bersumber configuration / katalog.
+                ['quote_configuration_item_id' => $configItem->id, 'description' => 'Config', 'qty' => 1, 'currency' => 'IDR'],
+                ['quote_configuration_item_id' => $blankConfigItem->id, 'description' => 'Config tanpa mata uang', 'qty' => 1],
+                ['master_product_id' => $product->id, 'description' => 'Valve', 'qty' => 1, 'currency' => 'USD'],
+                // Baris manual boleh memilih; kode tidak dikenal jatuh ke IDR.
+                ['description' => 'Manual USD', 'qty' => 1, 'currency' => 'usd'],
+                ['description' => 'Manual aneh', 'qty' => 1, 'currency' => 'XYZ'],
+            ],
+        ])->assertOk()->json('id');
+
+        $this->assertSame(['USD', 'IDR', 'EUR', 'USD', 'IDR'], GoodsRequest::findOrFail($id)->items->pluck('currency')->all());
+        $this->actingAs($this->creator)->get(route('goods-request.show', $id))->assertOk()->assertSee('EUR');
+        $this->actingAs($this->creator)->get(route('goods-request.edit', $id))->assertOk();
     }
 }

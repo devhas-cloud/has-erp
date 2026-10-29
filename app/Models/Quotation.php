@@ -179,15 +179,6 @@ class Quotation extends Model
         return $this->belongsTo(User::class, 'po_uploaded_by');
     }
 
-    /**
-     * Approval "boleh lanjut PO ke supplier" (modul PO Supplier Approval),
-     * BUKAN approval quotation itu sendiri (lihat finalChecker() untuk itu).
-     */
-    public function poSupplierApprovals(): HasMany
-    {
-        return $this->hasMany(QuotationPoSupplierApproval::class);
-    }
-
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
@@ -222,15 +213,9 @@ class Quotation extends Model
     }
 
     /**
-     * Purchasing boleh lanjut PO barang ke supplier = kuorum 2 approver
-     * berbeda di modul PO Supplier Approval sudah terpenuhi. Tidak mengubah
-     * status quotation (tetap 'finish').
+     * Purchasing boleh lanjut PO barang ke supplier mengikuti approval di
+     * project (Project::isReadyForSupplierPo()).
      */
-    public function isReadyForSupplierPo(): bool
-    {
-        return $this->poSupplierApprovals()->count() >= 2;
-    }
-
     public function nextVersion(): int
     {
         return ((int) $this->groupVersions()->max('version')) + 1;

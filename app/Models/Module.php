@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\SidebarMenu;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -14,6 +16,7 @@ class Module extends Model
         'route_name',
         'icon',
         'group',
+        'sort_order',
     ];
 
     public function accessControls(): HasMany
@@ -22,26 +25,29 @@ class Module extends Model
     }
 
     /**
+     * Modul bertaut route yang boleh dibaca user (Admin: semua). Urutannya
+     * diatur modules.sort_order lalu module_name.
+     */
+    public function scopeAccessibleFor(Builder $query, User $user): Builder
+    {
+        $query->whereNotNull('route_name')->where('route_name', '!=', '');
+
+        if ($user->role !== 'Admin') {
+            $query->whereIn('id', UserAccessControl::where('user_id', $user->id)
+                ->where('can_read', true)
+                ->pluck('module_id'));
+        }
+
+        return $query;
+    }
+
+    /**
      * Modul pertama yang boleh dibaca user, urut sama seperti sidebar
-     * (group lalu module_name). Admin dianggap boleh membaca semua modul.
-     * Dipakai sebagai halaman awal universal setelah login (bukan hardcode
-     * ke satu modul tertentu), karena tiap akun bisa punya modul berbeda.
-     * Null bila user tidak punya akses can_read ke modul manapun.
+     * (lihat \App\Support\SidebarMenu). Admin dianggap boleh membaca semua
+     * modul. Null bila user tidak punya akses can_read ke modul manapun.
      */
     public static function firstAccessibleFor(User $user): ?self
     {
-        $query = static::query()
-            ->whereNotNull('route_name')
-            ->where('route_name', '!=', '');
-
-        if ($user->role !== 'Admin') {
-            $accessibleIds = UserAccessControl::where('user_id', $user->id)
-                ->where('can_read', true)
-                ->pluck('module_id');
-
-            $query->whereIn('id', $accessibleIds);
-        }
-
-        return $query->orderBy('group')->orderBy('module_name')->first();
+        return SidebarMenu::firstModuleFor($user);
     }
 }

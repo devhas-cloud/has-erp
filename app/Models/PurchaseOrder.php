@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\NumberSequence;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,6 +16,30 @@ class PurchaseOrder extends Model
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_REJECTED = 'rejected';
+
+    public const TYPE_MANUFACTURE = 'manufacture';
+
+    public const TYPE_LOCAL = 'local';
+
+    public const TYPE_CALIBRATION = 'calibration';
+
+    public const TYPE_LABELS = [
+        self::TYPE_MANUFACTURE => 'Manufacture',
+        self::TYPE_LOCAL => 'Local',
+        self::TYPE_CALIBRATION => 'Calibration',
+    ];
+
+    /**
+     * Suffix nomor PO per jenis. Urutan angka dipakai bersama lintas jenis,
+     * sehingga nomor tetap unik walau suffix diabaikan.
+     */
+    public const TYPE_SUFFIXES = [
+        self::TYPE_MANUFACTURE => '',
+        self::TYPE_LOCAL => '-L',
+        self::TYPE_CALIBRATION => '-C',
+    ];
+
+    public const DEFAULT_PPN_PERCENT = 11;
 
     public const STATUS_LABELS = [
         self::STATUS_DRAFT => 'Draft',
@@ -31,8 +56,13 @@ class PurchaseOrder extends Model
         'supplier_fax',
         'supplier_attn',
         'po_number',
+        'po_type',
         'date',
         'terms',
+        'delivery',
+        'your_ref',
+        'discount_percent',
+        'ppn_percent',
         'status',
         'notes',
         'request_by_name',
@@ -49,6 +79,8 @@ class PurchaseOrder extends Model
     {
         return [
             'date' => 'date',
+            'discount_percent' => 'float',
+            'ppn_percent' => 'float',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
         ];
@@ -74,6 +106,52 @@ class PurchaseOrder extends Model
         return $this->belongsTo(User::class, 'final_checked_by');
     }
 
+    /**
+     * Nomor PO baru: YYMM + 4 digit (reset tiap tahun, acuan tanggal dibuat)
+     * ditambah suffix jenis.
+     */
+    public static function generatePoNumber(string $type, ?string $date = null): string
+    {
+        return NumberSequence::make('purchase_orders', 'po_number', $date, true).(self::TYPE_SUFFIXES[$type] ?? '');
+    }
+
+    /**
+     * Ganti jenis hanya mengganti suffix; bagian angka nomor tetap.
+     */
+    public static function numberWithType(string $number, string $type): string
+    {
+        return preg_replace('/-[A-Z]+$/', '', $number).(self::TYPE_SUFFIXES[$type] ?? '');
+    }
+
+    public function getTypeLabelAttribute(): string
+    {
+        return self::TYPE_LABELS[$this->po_type] ?? ucfirst((string) $this->po_type);
+    }
+
+    public function typeBadgeHtml(): string
+    {
+        $style = match ($this->po_type) {
+            self::TYPE_LOCAL => 'background:#dcfce7;color:#166534;',
+            self::TYPE_CALIBRATION => 'background:#ede9fe;color:#5b21b6;',
+            default => 'background:#dbeafe;color:#1e40af;',
+        };
+
+        return '<span class="status-badge" style="'.$style.'">'.e($this->type_label).'</span>';
+    }
+
+    /**
+     * Label grup "project" untuk item: nama project Permintaan Barang asal,
+     * cadangan nama opportunity (permintaan lama tanpa project), lalu "Stock"
+     * untuk baris manual.
+     */
+    public static function projectLabelFor(PurchaseOrderItem $item): string
+    {
+        $goodsRequest = $item->goodsRequest;
+
+        return $goodsRequest?->project?->project_name
+            ?: ($goodsRequest?->opportunity?->opportunity_name ?: 'Stock');
+    }
+
     public function getStatusLabelAttribute(): string
     {
         return self::STATUS_LABELS[$this->status] ?? ucfirst($this->status);
@@ -91,11 +169,56 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Total nilai PO (IDR, hasil qty x selling_price per baris).
+     * Total nilai item PO dalam mata uang PO (qty x harga satuan), tanpa
+     * konversi kurs. PO lama yang belum punya harga asli jatuh ke selling_price.
      */
     public function grandTotal(): float
     {
-        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0) * (float) ($item->selling_price ?? 0));
+        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0)
+            * (float) ($item->selling_price_currency ?? $item->selling_price ?? 0));
+    }
+
+    /**
+     * Kode mata uang PO (satu PO satu mata uang); PO kosong -> mata uang dasar.
+     */
+    public function currencyCode(): string
+    {
+        return $this->printCurrency() ?? Currency::baseName();
+    }
+
+    /**
+     * Rincian total dari sub total item: Diskon (persen) -> Sub Total 1
+     * (setelah diskon) -> PPN (persen dari Sub Total 1) -> Total.
+     */
+    public function totalsFrom(float $subtotal): array
+    {
+        $discount = round($subtotal * (float) $this->discount_percent / 100, 2);
+        $afterDiscount = round($subtotal - $discount, 2);
+        $ppn = round($afterDiscount * (float) $this->ppn_percent / 100, 2);
+
+        return [
+            'subtotal' => round($subtotal, 2),
+            'discount' => $discount,
+            'after_discount' => $afterDiscount,
+            'ppn' => $ppn,
+            'total' => round($afterDiscount + $ppn, 2),
+        ];
+    }
+
+    /**
+     * Total akhir PO dalam mata uang PO (setelah diskon & PPN).
+     */
+    public function netTotal(): float
+    {
+        return $this->totalsFrom($this->grandTotal())['total'];
+    }
+
+    /**
+     * Rincian total untuk dicetak, dalam mata uang cetak (lihat printTotal()).
+     */
+    public function printTotals(): array
+    {
+        return $this->totalsFrom($this->printTotal());
     }
 
     /**
@@ -124,7 +247,7 @@ class PurchaseOrder extends Model
     /**
      * Item dikelompokkan per "project" untuk dicetak di dokumen PO (label
      * per grup, seperti pada contoh dokumen) — labelnya diambil dari nama
-     * opportunity milik Permintaan Barang asal item tersebut. Item tanpa
+     * project Permintaan Barang asal item tersebut (projectLabelFor()). Item tanpa
      * Permintaan Barang (baris manual) masuk grup "Stock". Urutan grup
      * mengikuti urutan kemunculan pertama item terkait (bukan alfabetis).
      */
@@ -137,7 +260,7 @@ class PurchaseOrder extends Model
                 continue;
             }
 
-            $label = $item->goodsRequest?->opportunity?->opportunity_name ?: 'Stock';
+            $label = self::projectLabelFor($item);
 
             if (! isset($groups[$label])) {
                 $groups[$label] = [];
@@ -194,7 +317,7 @@ class PurchaseOrder extends Model
 
         $byProject = [];
         foreach ($leftover as $item) {
-            $label = $item->goodsRequest?->opportunity?->opportunity_name ?: 'Stock';
+            $label = self::projectLabelFor($item);
             $byProject[$label][] = $item;
         }
 
@@ -221,7 +344,9 @@ class PurchaseOrder extends Model
      */
     public function printCurrency(): ?string
     {
-        $currencies = $this->items->pluck('currency')->filter()->unique()->values();
+        // Baris group (kategori) diabaikan: PO lama sempat menyimpan mata uang dasar di sana.
+        $currencies = $this->items->reject(fn (PurchaseOrderItem $item) => $item->isHeader())
+            ->pluck('currency')->filter()->unique()->values();
 
         if ($currencies->count() === 0) {
             return Currency::baseName();

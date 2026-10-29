@@ -171,9 +171,9 @@ class TaskWhatsAppNotifier
         $lines = [
             $heading,
             '',
-            'Halo, rekan-rekan! 👋',
+            'INFORMASI TUGAS BARU',
             '',
-            'Ada tugas yang perlu diperhatikan dan ditindaklanjuti, ya.',
+            'Ada tugas yang perlu diperhatikan dan ditindaklanjuti.',
             '',
             '*Judul:* ' . $title,
             '*Kategori:* ' . $category,
@@ -186,7 +186,7 @@ class TaskWhatsAppNotifier
             'Jika ada hal yang perlu dikoordinasikan, '
                 . 'silakan didiskusikan bersama.',
             '',
-            'Terima kasih atas kerja sama dan bantuannya! 🙏',
+            'Terima kasih atas kerja sama dan bantuannya!',
         ];
 
         return implode("\n", $lines);

@@ -1128,6 +1128,11 @@ class IhConfigurationController extends Controller
      *
      * @return array{currency: ?string, selling_price_currency: float, selling_price: float, purchase_price_currency: float}
      */
+    /**
+     * Harga item dari master product. Qty <= 0 atau tanpa produk -> harga 0.00
+     *
+     * @return array{currency: ?string, selling_price_currency: float, selling_price: float, purchase_price_currency: float}
+     */
     private function pricingFromProduct(?MasterProduct $product, int $qty, string $baseCurrency): array
     {
         if (! $product) {

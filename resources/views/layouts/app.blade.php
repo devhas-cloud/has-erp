@@ -2460,20 +2460,8 @@
             </div>
             <nav class="sidebar-nav">
                 @php
-                    $user = Auth::user();
-                    $accessibleModuleIds = \App\Models\UserAccessControl::where('user_id', $user->id)
-                        ->where('can_read', true)
-                        ->pluck('module_id')
-                        ->toArray();
-                    $modules = \App\Models\Module::orderBy('group')
-                        ->orderBy('module_name')
-                        ->get()
-                        ->filter(fn($m) => in_array($m->id, $accessibleModuleIds) || $user->role === 'Admin');
-                @endphp
-
-                @php
+                    $groupedModules = \App\Support\SidebarMenu::forUser(Auth::user());
                     $activeRouteName = request()->route() ? request()->route()->getName() : '';
-                    $groupedModules = $modules->groupBy('group');
                 @endphp
                 @foreach ($groupedModules as $groupName => $groupModules)
                     @php

@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">PO Supplier Approval</h1>
-        <p class="page-header-sub">Menandai quotation yang sudah Finish (PO dari customer terupload) boleh dilanjutkan ke proses PO barang ke supplier oleh purchasing — memerlukan approval dari 2 orang berbeda</p>
+        <p class="page-header-sub">Menandai project yang PO customer-nya sudah diupload boleh dilanjutkan ke proses PO barang ke supplier oleh purchasing — memerlukan approval dari 2 orang berbeda</p>
     </div>
 </div>
 
@@ -21,10 +21,11 @@
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
-                        <th>Nomor Quotation</th>
-                        <th>To (Company)</th>
-                        <th>TOP DP</th>
-                        <th class="text-end">Total</th>
+                        <th>No Project</th>
+                        <th>Nama Project</th>
+                        <th>Company</th>
+                        <th>No PO Customer</th>
+                        <th class="text-end">Net Sale</th>
                         <th>Dibuat Oleh</th>
                         <th>Approval PO Supplier</th>
                         <th class="text-center" style="width:140px">Aksi</th>
@@ -41,7 +42,7 @@
 let poSupplierApprovalTable = null;
 
 const poSupplierApprovalApproveUrl = '{{ route("po-supplier-approval.approve", "__ID__") }}';
-const quotationShowUrl = '{{ route("quotation.show", "__ID__") }}';
+const projectShowUrl = '{{ route("project.show", "__ID__") }}';
 const psaCanApprove = {{ $canApprove ? 'true' : 'false' }};
 
 function escapeHtmlPsa(text) {
@@ -66,14 +67,15 @@ function initPoSupplierApprovalTable() {
         order: [],
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
-            { data: 'quotation_number', orderable: false, searchable: true,
+            { data: 'project_number', orderable: false, searchable: true,
                 render: function(data) { return '<strong style="color:var(--text-primary)">' + escapeHtmlPsa(data) + '</strong>'; }
             },
-            { data: 'to_name', orderable: false, searchable: true,
+            { data: 'project_name', orderable: false, searchable: true,
                 render: function(data) { return data ? escapeHtmlPsa(data) : '<span style="color:var(--text-muted)">—</span>'; }
             },
-            { data: 'requires_dp', orderable: false, searchable: false, className: 'text-center' },
-            { data: 'grand_total_label', orderable: false, searchable: false, className: 'text-end' },
+            { data: 'company_name', orderable: false, searchable: true },
+            { data: 'po_number_company', orderable: false, searchable: true },
+            { data: 'net_sale_label', orderable: false, searchable: false, className: 'text-end' },
             { data: 'creator_name', orderable: false, searchable: true },
             {
                 data: 'approval_count', orderable: false, searchable: false,
@@ -96,7 +98,7 @@ function initPoSupplierApprovalTable() {
                 data: 'id', orderable: false, searchable: false, className: 'text-center',
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1 flex-wrap">';
-                    btn += '<a href="' + quotationShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
+                    btn += '<a href="' + projectShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
                     if (psaCanApprove && !row.ready_for_supplier_po && !row.already_approved_by_me) {
                         btn += '<button class="btn-icon" title="Approve PO Supplier" onclick="approvePoSupplier(' + data + ')"><i class="fa fa-check"></i></button>';
                     }

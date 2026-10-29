@@ -3,12 +3,49 @@
 namespace Database\Seeders;
 
 use App\Models\Module;
+use App\Models\ModuleGroup;
 use Illuminate\Database\Seeder;
 
 class ModulesTableSeeder extends Seeder
 {
+    /**
+     * Urutan grup sidebar. Grup di luar daftar ini tampil paling akhir.
+     */
+    private const GROUP_ORDER = [
+        'Dashboard',
+        'CRM',
+        'Master Data',
+        'Admin',
+        'Purchasing',
+        'Employee Relations',
+        'Water',
+        'IMS',
+        'Enviro',
+        'IH',
+        'Gas',
+    ];
+
+    /**
+     * Urutan modul di dalam grup Admin (alur bisnis: quotation -> PL ->
+     * project -> invoice -> approval PO supplier).
+     */
+    private const ADMIN_ORDER = [
+        'MOD_QUOTATION',
+        'MOD_PROFIT_ESTIMATE',
+        'MOD_PROJECT',
+        'MOD_INVOICE',
+        'MOD_PO_SUPPLIER_APPROVAL',
+    ];
+
     public function run(): void
     {
+        foreach (self::GROUP_ORDER as $i => $name) {
+            ModuleGroup::updateOrCreate(
+                ['group_name' => $name],
+                ['sort_order' => ($i + 1) * 10]
+            );
+        }
+
         $modules = [
             [
                 'module_code' => 'MOD_USER_MANAGEMENT',
@@ -156,6 +193,22 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Admin',
             ],
             [
+                'module_code' => 'MOD_PROJECT',
+                'module_name' => 'Project',
+                'description' => 'Menu pengelolaan project dari quotation yang sudah deal — PO customer, rincian achievement per device, dan pembagian achievement sales',
+                'route_name' => 'project',
+                'icon' => 'fa fa-diagram-project',
+                'group' => 'Admin',
+            ],
+            [
+                'module_code' => 'MOD_INVOICE',
+                'module_name' => 'Invoice',
+                'description' => 'Menu pembuatan invoice project — item, termin pembayaran, PPN persen, dan status pembayaran',
+                'route_name' => 'invoice',
+                'icon' => 'fa fa-file-invoice-dollar',
+                'group' => 'Admin',
+            ],
+            [
                 'module_code' => 'MOD_PROFIT_ESTIMATE',
                 'module_name' => 'Estimasi PL',
                 'description' => 'Menu Estimasi Perhitungan Pendapatan (profit & loss) per quotation',
@@ -237,11 +290,18 @@ class ModulesTableSeeder extends Seeder
             ],
         ];
 
+        $seq = 0;
         foreach ($modules as $module) {
-            Module::firstOrCreate(
+            $module['sort_order'] = ++$seq * 10;
+            Module::updateOrCreate(
                 ['module_code' => $module['module_code']],
                 $module
             );
+        }
+
+        // Admin: urutan bisnis eksplisit, bukan urutan daftar di atas.
+        foreach (self::ADMIN_ORDER as $i => $code) {
+            Module::where('module_code', $code)->update(['sort_order' => ($i + 1) * 10]);
         }
     }
 }

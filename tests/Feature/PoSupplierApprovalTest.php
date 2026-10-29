@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountCompany;
 use App\Models\Division;
 use App\Models\Module;
+use App\Models\Opportunity;
+use App\Models\Project;
+use App\Models\ProjectPoSupplierApproval;
 use App\Models\Quotation;
-use App\Models\QuotationPoSupplierApproval;
+use App\Models\Stage;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,6 +31,8 @@ class PoSupplierApprovalTest extends TestCase
 
     private User $userWithoutApprove;
 
+    private AccountCompany $company;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -44,6 +50,14 @@ class PoSupplierApprovalTest extends TestCase
             'password' => bcrypt('secret'),
             'division_id' => $this->division->id,
             'role' => 'Admin',
+        ]);
+
+        $this->company = AccountCompany::create([
+            'account_name' => 'PT Maju Bersama',
+            'address_billing_street' => 'Jl. Industri No. 1',
+            'address_billing_city' => 'Jakarta',
+            'address_billing_province' => 'DKI Jakarta',
+            'status' => 'Active',
         ]);
 
         $module = Module::create([
@@ -83,104 +97,161 @@ class PoSupplierApprovalTest extends TestCase
         return $user;
     }
 
-    private function createFinishedQuotation(): Quotation
+    private function createProject(?Quotation $quotation = null, string $status = Project::STATUS_ACTIVE, string $poNumber = 'PO-CUST-001'): Project
     {
+        static $seq = 0;
+        $seq++;
+
+        return Project::create([
+            'project_number' => now()->format('ym').str_pad((string) $seq, 4, '0', STR_PAD_LEFT),
+            'project_name' => 'Project SPARING '.$seq,
+            'quotation_id' => $quotation?->id,
+            'company_id' => $this->company->id,
+            'po_number_company' => $poNumber.'-'.$seq,
+            'po_date' => '2026-10-01',
+            'po_date_received' => '2026-10-02',
+            'po_due_date' => '2026-11-01',
+            'total_sale_amount' => 1000000,
+            'net_sale_amount' => 900000,
+            'status' => $status,
+            'created_by' => $this->admin->id,
+        ]);
+    }
+
+    private function createOpportunityWithQuotation(string $name = 'SPARING Kawasan Industri Gresik'): Quotation
+    {
+        // stage_id 5 = "Close Won" (hardcode di PoSupplierApprovalController).
+        $openStage = Stage::create(['stage_name' => 'New', 'status' => 'Active', 'probability' => 10]);
+        foreach ([1, 2, 3, 4] as $i) {
+            Stage::create(['stage_name' => 'Stage '.$i, 'status' => 'Active', 'probability' => $i * 10]);
+        }
+        Stage::create(['stage_name' => 'Close Won', 'status' => 'Active', 'probability' => 100]);
+
+        $opportunity = Opportunity::create([
+            'stage_id' => $openStage->id,
+            'opportunity_name' => $name,
+            'account_companies_id' => $this->company->id,
+            'owner_id' => $this->admin->id,
+            'probability' => 70,
+        ]);
+
         return Quotation::create([
+            'opportunity_id' => $opportunity->id,
             'status' => Quotation::STATUS_FINISH,
             'created_by' => $this->admin->id,
-            'po_document_path' => 'quotation-po/dummy.pdf',
-            'po_document_name' => 'dummy.pdf',
-            'po_uploaded_by' => $this->admin->id,
-            'po_uploaded_at' => now(),
+            'quotation_number' => '001/HAS/QT-T/VIII/2026',
+            'to_name' => 'PT Maju Bersama',
         ]);
     }
 
     public function test_first_approval_does_not_mark_ready_for_supplier_po(): void
     {
-        $quotation = $this->createFinishedQuotation();
+        $project = $this->createProject();
 
         $response = $this->actingAs($this->approver1)
-            ->postJson(route('po-supplier-approval.approve', $quotation->id))
+            ->postJson(route('po-supplier-approval.approve', $project->id))
             ->assertOk();
 
         $this->assertFalse($response->json('ready_for_supplier_po'));
-        $this->assertSame(1, QuotationPoSupplierApproval::count());
+        $this->assertSame(1, ProjectPoSupplierApproval::count());
     }
 
     public function test_second_distinct_approval_marks_ready_for_supplier_po_without_changing_status(): void
     {
-        $quotation = $this->createFinishedQuotation();
+        $project = $this->createProject();
 
         $this->actingAs($this->approver1)
-            ->postJson(route('po-supplier-approval.approve', $quotation->id))
+            ->postJson(route('po-supplier-approval.approve', $project->id))
             ->assertOk();
 
         $response = $this->actingAs($this->approver2)
-            ->postJson(route('po-supplier-approval.approve', $quotation->id))
+            ->postJson(route('po-supplier-approval.approve', $project->id))
             ->assertOk();
 
         $this->assertTrue($response->json('ready_for_supplier_po'));
-        $this->assertSame(2, QuotationPoSupplierApproval::count());
-        $this->assertTrue($quotation->fresh()->isReadyForSupplierPo());
+        $this->assertSame(2, ProjectPoSupplierApproval::count());
+        $this->assertTrue($project->fresh()->isReadyForSupplierPo());
 
-        // Status quotation TIDAK berubah lagi setelah kuorum terpenuhi.
-        $this->assertSame(Quotation::STATUS_FINISH, $quotation->fresh()->status);
+        // Status project TIDAK berubah setelah kuorum terpenuhi.
+        $this->assertSame(Project::STATUS_ACTIVE, $project->fresh()->status);
+    }
+
+    public function test_quorum_sets_opportunity_of_project_quotation_to_close_won(): void
+    {
+        $quotation = $this->createOpportunityWithQuotation();
+        $project = $this->createProject($quotation);
+
+        $this->actingAs($this->approver1)->postJson(route('po-supplier-approval.approve', $project->id))->assertOk();
+        $this->actingAs($this->approver2)->postJson(route('po-supplier-approval.approve', $project->id))->assertOk();
+
+        $opportunity = $quotation->fresh()->opportunity;
+        $this->assertSame(5, (int) $opportunity->stage_id);
+        $this->assertNotNull($opportunity->close_won_date);
     }
 
     public function test_same_user_cannot_approve_twice(): void
     {
-        $quotation = $this->createFinishedQuotation();
+        $project = $this->createProject();
 
         $this->actingAs($this->approver1)
-            ->postJson(route('po-supplier-approval.approve', $quotation->id))
+            ->postJson(route('po-supplier-approval.approve', $project->id))
             ->assertOk();
 
         $this->actingAs($this->approver1)
-            ->postJson(route('po-supplier-approval.approve', $quotation->id))
+            ->postJson(route('po-supplier-approval.approve', $project->id))
             ->assertStatus(422);
 
-        $this->assertSame(1, QuotationPoSupplierApproval::count());
+        $this->assertSame(1, ProjectPoSupplierApproval::count());
+    }
+
+    public function test_approval_is_per_project_not_per_quotation(): void
+    {
+        $quotation = $this->createOpportunityWithQuotation();
+        $first = $this->createProject($quotation);
+        $second = $this->createProject($quotation);
+
+        $this->actingAs($this->approver1)->postJson(route('po-supplier-approval.approve', $first->id))->assertOk();
+        $this->actingAs($this->approver2)->postJson(route('po-supplier-approval.approve', $first->id))->assertOk();
+
+        $this->assertTrue($first->fresh()->isReadyForSupplierPo());
+        $this->assertFalse($second->fresh()->isReadyForSupplierPo());
     }
 
     public function test_user_without_can_approve_is_rejected(): void
     {
-        $quotation = $this->createFinishedQuotation();
+        $project = $this->createProject();
 
         $this->actingAs($this->userWithoutApprove)
-            ->postJson(route('po-supplier-approval.approve', $quotation->id))
+            ->postJson(route('po-supplier-approval.approve', $project->id))
             ->assertStatus(403);
 
-        $this->assertSame(0, QuotationPoSupplierApproval::count());
+        $this->assertSame(0, ProjectPoSupplierApproval::count());
     }
 
-    public function test_approve_rejects_when_status_not_finish(): void
+    public function test_approve_rejects_inactive_project(): void
     {
-        $quotation = Quotation::create([
-            'status' => Quotation::STATUS_APPROVED,
-            'created_by' => $this->admin->id,
-        ]);
+        $project = $this->createProject(null, Project::STATUS_COMPLETED);
 
         $this->actingAs($this->approver1)
-            ->postJson(route('po-supplier-approval.approve', $quotation->id))
+            ->postJson(route('po-supplier-approval.approve', $project->id))
             ->assertStatus(422);
 
-        $this->assertSame(0, QuotationPoSupplierApproval::count());
+        $this->assertSame(0, ProjectPoSupplierApproval::count());
     }
 
-    public function test_data_listing_only_shows_finish_status(): void
+    public function test_data_listing_only_shows_active_projects(): void
     {
-        $finish1 = $this->createFinishedQuotation();
-        $finish2 = $this->createFinishedQuotation();
-
-        Quotation::create(['status' => Quotation::STATUS_DRAFT, 'created_by' => $this->admin->id]);
-        Quotation::create(['status' => Quotation::STATUS_APPROVED, 'created_by' => $this->admin->id]);
-        Quotation::create(['status' => Quotation::STATUS_REJECTED, 'created_by' => $this->admin->id]);
+        $active1 = $this->createProject();
+        $active2 = $this->createProject();
+        $this->createProject(null, Project::STATUS_COMPLETED);
+        $this->createProject(null, Project::STATUS_CANCELLED);
 
         $response = $this->actingAs($this->approver1)
             ->getJson(route('po-supplier-approval.data'))
             ->assertOk();
 
         $ids = collect($response->json('data'))->pluck('id')->all();
-        $this->assertEqualsCanonicalizing([$finish1->id, $finish2->id], $ids);
+        $this->assertEqualsCanonicalizing([$active1->id, $active2->id], $ids);
+        $this->assertSame($active2->project_number, $response->json('data.0.project_number'));
     }
 }

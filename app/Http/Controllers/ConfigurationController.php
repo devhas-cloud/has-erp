@@ -62,11 +62,12 @@ class ConfigurationController extends Controller
                 'model' => HandlingGroup::class,
                 'label' => 'Penanganan',
                 'slug' => 'handling-groups',
-                'columns' => ['name', 'division_name', 'members'],
+                'columns' => ['name', 'division_name', 'members', 'whatsapp_group_id'],
                 'column_labels' => [
                     'name' => 'Nama',
                     'division_name' => 'Division',
                     'members' => 'Anggota',
+                    'whatsapp_group_id' => 'WhatsApp Group ID',
                 ],
                 'rules' => [
                     'name' => 'required|string|max:100',

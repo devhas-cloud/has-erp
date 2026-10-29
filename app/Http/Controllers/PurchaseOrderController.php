@@ -26,6 +26,16 @@ use Illuminate\Support\Facades\DB;
  * purchase_order_items, plus dicek ulang di controller). Harga baru muncul
  * di modul ini — sesuai keputusan bahwa Permintaan Barang tidak perlu tahu
  * harga, harga ditentukan saat PO ke supplier.
+ *
+ * Nomor PO dibuat otomatis saat PO pertama kali disimpan (YYMM + 4 digit,
+ * urutan bersama lintas jenis, acuan tanggal dibuat) dengan suffix jenis:
+ * manufacture tanpa suffix, local "-L", calibration "-C". Ganti jenis selama
+ * Draft hanya mengganti suffix.
+ *
+ * Mata uang: satu PO satu mata uang, mengikuti mata uang item Permintaan
+ * Barang (dikunci) atau master product, TANPA konversi kurs — semua harga dan
+ * total dalam mata uang PO. Harga otomatis dari harga beli (purchase_price)
+ * master product.
  */
 class PurchaseOrderController extends Controller
 {
@@ -63,9 +73,11 @@ class PurchaseOrderController extends Controller
                 'id' => $po->id,
                 'supplier_name' => $po->supplier_name,
                 'po_number' => $po->po_number ?: '—',
+                'po_type' => $po->po_type,
+                'type_badge' => $po->typeBadgeHtml(),
                 'date' => $po->date?->format('d/m/Y') ?? '—',
                 'item_count' => $po->items_count,
-                'grand_total_label' => number_format($po->grandTotal(), 0, '.', ','),
+                'grand_total_label' => $po->currencyCode().' '.number_format($po->netTotal(), 2, '.', ','),
                 'creator_name' => $po->creator?->display_name ?? '—',
                 'status' => $po->status,
                 'status_label' => $po->status_label,
@@ -95,7 +107,7 @@ class PurchaseOrderController extends Controller
     {
         $validated = $this->validatePurchaseOrder($request);
 
-        $purchaseOrder = DB::transaction(function () use ($validated) {
+        $purchaseOrder = $this->createWithNumber(fn () => DB::transaction(function () use ($validated) {
             $po = PurchaseOrder::create([
                 'supplier_name' => $validated['supplier_name'],
                 'supplier_id' => $validated['supplier_id'] ?? null,
@@ -103,9 +115,14 @@ class PurchaseOrderController extends Controller
                 'supplier_phone' => $validated['supplier_phone'] ?? null,
                 'supplier_fax' => $validated['supplier_fax'] ?? null,
                 'supplier_attn' => $validated['supplier_attn'] ?? null,
-                'po_number' => $validated['po_number'] ?? null,
+                'po_number' => PurchaseOrder::generatePoNumber($validated['po_type']),
+                'po_type' => $validated['po_type'],
                 'date' => $validated['date'] ?? null,
                 'terms' => $validated['terms'] ?? null,
+                'delivery' => $validated['delivery'] ?? null,
+                'your_ref' => $validated['your_ref'] ?? null,
+                'discount_percent' => $validated['discount_percent'] ?? null,
+                'ppn_percent' => $validated['ppn_percent'] ?? null,
                 'status' => PurchaseOrder::STATUS_DRAFT,
                 'notes' => $validated['notes'] ?? null,
                 'request_by_name' => $validated['request_by_name'] ?? null,
@@ -117,18 +134,19 @@ class PurchaseOrderController extends Controller
             $this->syncItems($po, $validated['items'] ?? []);
 
             return $po;
-        });
+        }));
 
         return response()->json([
             'success' => true,
-            'message' => 'Purchase order berhasil dibuat.',
+            'message' => 'Purchase order '.$purchaseOrder->po_number.' berhasil dibuat.',
             'id' => $purchaseOrder->id,
+            'po_number' => $purchaseOrder->po_number,
         ]);
     }
 
     public function show($id)
     {
-        $purchaseOrder = PurchaseOrder::with(['items.goodsRequest.division', 'items.goodsRequest.opportunity', 'items.goodsRequest.quotation', 'supplier', 'creator', 'finalChecker'])->findOrFail($id);
+        $purchaseOrder = PurchaseOrder::with(['items.goodsRequest.division', 'items.goodsRequest.opportunity', 'items.goodsRequest.project', 'items.goodsRequest.quotation', 'supplier', 'creator', 'finalChecker'])->findOrFail($id);
 
         return view('purchase-order.show', [
             'purchaseOrder' => $purchaseOrder,
@@ -173,6 +191,7 @@ class PurchaseOrderController extends Controller
         $purchaseOrder = PurchaseOrder::with([
             'items.goodsRequest.division',
             'items.goodsRequest.opportunity',
+            'items.goodsRequest.project',
             'supplier',
             'creator',
         ])->findOrFail($id);
@@ -206,9 +225,16 @@ class PurchaseOrderController extends Controller
                 'supplier_phone' => $validated['supplier_phone'] ?? null,
                 'supplier_fax' => $validated['supplier_fax'] ?? null,
                 'supplier_attn' => $validated['supplier_attn'] ?? null,
-                'po_number' => $validated['po_number'] ?? null,
+                'po_number' => $purchaseOrder->po_number
+                    ? PurchaseOrder::numberWithType($purchaseOrder->po_number, $validated['po_type'])
+                    : PurchaseOrder::generatePoNumber($validated['po_type'], $purchaseOrder->created_at?->toDateString()),
+                'po_type' => $validated['po_type'],
                 'date' => $validated['date'] ?? null,
                 'terms' => $validated['terms'] ?? null,
+                'delivery' => $validated['delivery'] ?? null,
+                'your_ref' => $validated['your_ref'] ?? null,
+                'discount_percent' => $validated['discount_percent'] ?? null,
+                'ppn_percent' => $validated['ppn_percent'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'request_by_name' => $validated['request_by_name'] ?? null,
                 'finance_name' => $validated['finance_name'] ?? null,
@@ -298,9 +324,11 @@ class PurchaseOrderController extends Controller
 
     /**
      * Item dari SEMUA Permintaan Barang berstatus Approved yang belum pernah
-     * dipakai di Purchase Order manapun — lintas divisi/opportunity, untuk
-     * modal "Ambil dari Permintaan Barang". Dikelompokkan per Permintaan
-     * Barang saat dikirim balik supaya jelas asalnya.
+     * dipakai di Purchase Order manapun — lintas project/divisi, untuk modal
+     * "Ambil dari Permintaan Barang". Dikelompokkan per Permintaan Barang dan
+     * diberi identitas project (acuan grup item & label PROJECT di PDF).
+     * Filter opsional project_id; daftar project yang tersedia ikut dikirim
+     * untuk dropdown filter.
      */
     public function fetchAvailableItems(Request $request): JsonResponse
     {
@@ -314,30 +342,49 @@ class PurchaseOrderController extends Controller
             if (! empty($excludeGoodsRequestItemIds)) {
                 $q->whereNotIn('id', $excludeGoodsRequestItemIds);
             }
-        }, 'division', 'opportunity', 'quotation'])
+        }, 'division', 'opportunity', 'project'])
             ->where('status', GoodsRequest::STATUS_APPROVED)
+            ->orderByDesc('id')
             ->get()
             ->filter(fn (GoodsRequest $gr) => $gr->items->isNotEmpty())
             ->values();
 
-        $data = $requests->map(fn (GoodsRequest $gr) => [
-            'goods_request_id' => $gr->id,
-            'division_name' => $gr->division?->division_name,
-            'opportunity_name' => $gr->opportunity?->opportunity_name,
-            'quotation_number' => $gr->quotation?->quotation_number,
-            'items' => $gr->items->map(fn (GoodsRequestItem $item) => [
-                'goods_request_item_id' => $item->id,
-                'quote_configuration_item_id' => $item->quote_configuration_item_id,
-                'master_product_id' => $item->master_product_id,
-                'project_name' => $gr->opportunity?->opportunity_name,
-                'part_number' => $item->part_number,
-                'description' => Quotation::renderDescription($item->description),
-                'qty' => $item->qty,
-                'unit' => $item->unit,
-            ])->values(),
-        ])->values();
+        $projects = $requests->map(fn (GoodsRequest $gr) => $gr->project)->filter()->unique('id')
+            ->sortBy('project_number')
+            ->map(fn ($project) => [
+                'id' => $project->id,
+                'text' => $project->project_number.' — '.$project->project_name,
+            ])->values();
 
-        return response()->json(['success' => true, 'data' => $data]);
+        if ($request->filled('project_id')) {
+            $requests = $requests->where('project_id', (int) $request->input('project_id'))->values();
+        }
+
+        $data = $requests->map(function (GoodsRequest $gr) {
+            $projectName = $gr->project?->project_name ?: ($gr->opportunity?->opportunity_name ?: 'Stock');
+
+            return [
+                'goods_request_id' => $gr->id,
+                'project_id' => $gr->project_id,
+                'project_number' => $gr->project?->project_number,
+                'project_name' => $projectName,
+                'division_name' => $gr->division?->division_name,
+                'opportunity_name' => $gr->opportunity?->opportunity_name,
+                'items' => $gr->items->map(fn (GoodsRequestItem $item) => [
+                    'goods_request_item_id' => $item->id,
+                    'quote_configuration_item_id' => $item->quote_configuration_item_id,
+                    'master_product_id' => $item->master_product_id,
+                    'project_name' => $projectName,
+                    'part_number' => $item->part_number,
+                    'description' => Quotation::renderDescription($item->description),
+                    'qty' => $item->qty,
+                    'unit' => $item->unit,
+                    'currency' => GoodsRequestItem::normalizeCurrency($item->currency),
+                ])->values(),
+            ];
+        })->values();
+
+        return response()->json(['success' => true, 'data' => $data, 'projects' => $projects]);
     }
 
     /**
@@ -371,6 +418,8 @@ class PurchaseOrderController extends Controller
             'brand' => $product->brand,
             'category' => $product->category,
             'description' => $product->description,
+            // Harga PO ke supplier = harga beli master product (mata uang produk, tanpa kurs).
+            'price' => (float) $product->purchase_price,
             'selling_price' => (float) $product->selling_price,
             'purchase_price_currency' => (float) $product->purchase_price,
             'currency' => $product->currency && ! $product->currency->isBase() ? strtoupper($product->currency->name) : $base,
@@ -382,16 +431,20 @@ class PurchaseOrderController extends Controller
 
     private function validatePurchaseOrder(Request $request): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'supplier_name' => 'required|string|max:200',
             'supplier_id' => 'nullable|integer|exists:suppliers,id',
             'supplier_address' => 'nullable|string',
             'supplier_phone' => 'nullable|string|max:50',
             'supplier_fax' => 'nullable|string|max:50',
             'supplier_attn' => 'nullable|string|max:150',
-            'po_number' => 'nullable|string|max:50',
+            'po_type' => 'nullable|in:'.implode(',', array_keys(PurchaseOrder::TYPE_LABELS)),
             'date' => 'nullable|date',
             'terms' => 'nullable|string|max:100',
+            'delivery' => 'nullable|string|max:150',
+            'your_ref' => 'nullable|string|max:100',
+            'discount_percent' => 'nullable|numeric|min:0|max:100',
+            'ppn_percent' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
             'request_by_name' => 'nullable|string|max:150',
             'finance_name' => 'nullable|string|max:150',
@@ -412,6 +465,29 @@ class PurchaseOrderController extends Controller
             'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
             'items.*.currency' => 'nullable|string|max:10',
         ]);
+
+        $validated['po_type'] ??= PurchaseOrder::TYPE_MANUFACTURE;
+
+        return $validated;
+    }
+
+    /**
+     * Buat PO dengan nomor otomatis. Bila dua request mendapat nomor yang sama
+     * bersamaan, unique index po_number menolak salah satunya — dicoba ulang
+     * dengan nomor berikutnya.
+     */
+    private function createWithNumber(callable $create, int $attempts = 3): PurchaseOrder
+    {
+        for ($i = 1; ; $i++) {
+            try {
+                return $create();
+            } catch (QueryException $e) {
+                $duplicateNumber = str_contains($e->getMessage(), 'po_number');
+                if (! $duplicateNumber || $i >= $attempts) {
+                    throw $e;
+                }
+            }
+        }
     }
 
     /**
@@ -448,9 +524,9 @@ class PurchaseOrderController extends Controller
             }
         }
 
-        $purchaseOrder->items()->delete();
-
         if (empty($items)) {
+            $purchaseOrder->items()->delete();
+
             return;
         }
 
@@ -460,6 +536,9 @@ class PurchaseOrderController extends Controller
             ->get(['id', 'selling_price', 'purchase_price', 'currency_id'])
             ->keyBy('id');
         $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
+        // Item dari Permintaan Barang wajib memakai mata uang item Permintaan Barang-nya.
+        $goodsRequestCurrencies = GoodsRequestItem::whereIn('id', collect($items)->pluck('goods_request_item_id')->filter())
+            ->pluck('currency', 'id');
 
         $now = now();
         $keyMap = [];
@@ -469,7 +548,17 @@ class PurchaseOrderController extends Controller
             $key = $item['_key'] ?? 'row-'.$i;
             $keyMap[$key] = $i;
 
-            $pricing = $this->pricingForItem($item, $products, $baseCurrency);
+            $isHeader = ($item['category'] ?? '') !== '';
+            // Baris group (kategori) tidak punya harga/mata uang — supaya tidak
+            // terhitung sebagai mata uang lain saat cek satu mata uang per PO.
+            $pricing = $isHeader
+                ? ['currency' => null, 'selling_price_currency' => null, 'selling_price' => null, 'purchase_price_currency' => null]
+                : $this->pricingForItem($item, $products, $baseCurrency);
+
+            $goodsRequestItemId = $item['goods_request_item_id'] ?? null;
+            if (! $isHeader && $goodsRequestItemId && isset($goodsRequestCurrencies[$goodsRequestItemId])) {
+                $pricing['currency'] = GoodsRequestItem::normalizeCurrency($goodsRequestCurrencies[$goodsRequestItemId]);
+            }
 
             $payload[] = [
                 'purchase_order_id' => $purchaseOrder->id,
@@ -491,6 +580,17 @@ class PurchaseOrderController extends Controller
                 'updated_at' => $now,
             ];
         }
+
+        // Satu PO hanya boleh satu mata uang (mis. tidak boleh campur IDR dan USD).
+        $currencies = collect($payload)->pluck('currency')->filter()->unique()->values();
+        if ($currencies->count() > 1) {
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Semua item dalam satu PO harus memakai mata uang yang sama. Ditemukan: '.$currencies->implode(', ').'. Pisahkan ke PO berbeda.',
+            ], 422));
+        }
+
+        $purchaseOrder->items()->delete();
 
         try {
             PurchaseOrderItem::insert($payload);
@@ -522,10 +622,11 @@ class PurchaseOrderController extends Controller
     }
 
     /**
-     * Harga item: bila ada master_product_id dan user belum mengirim
-     * selling_price_currency/currency, diisi dari master product (currency + harga asli
-     * sebelum kurs + harga IDR sesudah kurs). purchase_price_currency di-snapshot dari master
-     * product. Nilai yang dikirim user (hasil edit/negosiasi) tetap dipakai.
+     * Harga item dalam mata uang item, TANPA konversi kurs. Bila ada
+     * master_product_id dan user belum mengirim harga, harga diisi dari harga
+     * beli (purchase_price) master product beserta mata uangnya — tetap bisa
+     * diedit/negosiasi supplier. selling_price disamakan dengan harga satuan
+     * (bukan lagi hasil kurs ke Rupiah) karena total PO dihitung dalam mata uang PO.
      *
      * @return array{currency: ?string, selling_price_currency: ?float, selling_price: ?float, purchase_price_currency: float}
      */
@@ -533,28 +634,19 @@ class PurchaseOrderController extends Controller
     {
         $productId = $item['master_product_id'] ?? null;
         $product = $productId ? $products->get($productId) : null;
+        $productCurrency = $product && $product->currency && ! $product->currency->isBase()
+            ? strtoupper($product->currency->name)
+            : $baseCurrency;
 
-        $rawPriceCurrency = $item['selling_price_currency'] ?? null;
-        $hasPriceCurrency = $rawPriceCurrency !== null && $rawPriceCurrency !== '';
+        $rawPrice = $item['selling_price_currency'] ?? null;
+        $hasPrice = $rawPrice !== null && $rawPrice !== '';
 
-        if ($product && ! $hasPriceCurrency) {
-            $priceCurrency = round((float) $product->selling_price, 2);
-            $currency = $product->currency && ! $product->currency->isBase()
-                ? strtoupper($product->currency->name)
-                : $baseCurrency;
+        if ($product && ! $hasPrice) {
+            $price = round((float) $product->purchase_price, 2);
+            $currency = $productCurrency;
         } else {
-            $priceCurrency = $hasPriceCurrency ? (float) $rawPriceCurrency : null;
-            $currency = ($item['currency'] ?? '') !== '' ? $item['currency'] : ($product && $product->currency && ! $product->currency->isBase() ? strtoupper($product->currency->name) : $baseCurrency);
-        }
-
-        $rate = 1.0;
-        if ($currency && $currency !== $baseCurrency) {
-            $rate = (float) (Currency::where('name', $currency)->value('rate') ?? 1);
-        }
-
-        $price = $item['selling_price'] ?? null;
-        if (($price === null || $price === '') && $priceCurrency !== null) {
-            $price = round($priceCurrency * $rate, 2);
+            $price = $hasPrice ? round((float) $rawPrice, 2) : null;
+            $currency = ($item['currency'] ?? '') !== '' ? strtoupper($item['currency']) : ($product ? $productCurrency : $baseCurrency);
         }
 
         $purchasePrice = $item['purchase_price_currency'] ?? null;
@@ -564,8 +656,8 @@ class PurchaseOrderController extends Controller
 
         return [
             'currency' => $currency,
-            'selling_price_currency' => $priceCurrency,
-            'selling_price' => $price !== null && $price !== '' ? round((float) $price, 2) : null,
+            'selling_price_currency' => $price,
+            'selling_price' => $price,
             'purchase_price_currency' => round((float) $purchasePrice, 2),
         ];
     }

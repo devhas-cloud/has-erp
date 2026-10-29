@@ -16,8 +16,19 @@ class GoodsRequestItem extends Model
         'description',
         'qty',
         'unit',
+        'currency',
         'sort_order',
     ];
+
+    /**
+     * Kode mata uang item (huruf besar); kosong -> mata uang dasar (IDR).
+     */
+    public static function normalizeCurrency(?string $currency): string
+    {
+        $currency = strtoupper(trim((string) $currency));
+
+        return $currency !== '' ? $currency : once(fn () => Currency::baseName());
+    }
 
     protected function casts(): array
     {

@@ -30,6 +30,7 @@
                     <tr>
                         <th style="width:50px">#</th>
                         <th>No. PO</th>
+                        <th>Jenis</th>
                         <th>Supplier</th>
                         <th>Tanggal</th>
                         <th class="text-center">Jml Item</th>
@@ -66,7 +67,10 @@ function initPoTable() {
         order: [],
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
-            { data: 'po_number', orderable: false, searchable: true },
+            { data: 'po_number', orderable: false, searchable: true,
+                render: function(data) { return '<strong style="color:var(--text-primary);font-variant-numeric:tabular-nums">' + data + '</strong>'; }
+            },
+            { data: 'type_badge', orderable: false, searchable: false },
             { data: 'supplier_name', orderable: false, searchable: true,
                 render: function(data) { return '<strong style="color:var(--text-primary)">' + data + '</strong>'; }
             },

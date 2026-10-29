@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Division;
-use App\Models\Module;
 use App\Models\TaskRole;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use App\Support\SidebarMenu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class UserManagementController extends Controller
 {
@@ -90,7 +91,7 @@ class UserManagementController extends Controller
     {
         $divisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
         $taskRoles = TaskRole::all();
-        $modules = Module::get()->groupBy('group');
+        $modules = SidebarMenu::forUser(Auth::user());
 
         return view('user-management.create', compact('divisions', 'taskRoles', 'modules'));
     }
@@ -144,7 +145,7 @@ class UserManagementController extends Controller
         $user = User::with('accessControls')->findOrFail($id);
         $divisions = Division::where('status', 'Active')->get();
         $taskRoles = TaskRole::all();
-        $modules = Module::get()->groupBy('group');
+        $modules = SidebarMenu::forUser(Auth::user());
 
         $userPermissions = $user->accessControls->keyBy('module_id');
 
