@@ -109,7 +109,9 @@
                         <th>Kategori</th>
                         <th>Tipe</th>
                         <th>Divisi</th>
+                        @if($canViewPrice)
                         <th>Harga Jual</th>
+                        @endif
                         <th>Status</th>
                         <th class="text-center" style="width:130px">Aksi</th>
                     </tr>
@@ -185,18 +187,22 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Harga Jual <span style="color:var(--danger)">*</span></label>
-                                <input type="number" id="product-selling-price" class="form-control" min="0" step="0.01" placeholder="0.00" required>
-                            </div>
-                        </div>
+                        @if($canViewPrice)
+
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Harga Beli</label>
                                 <input type="number" id="product-purchase-price" class="form-control" min="0" step="0.01" placeholder="0.00">
+                                <div style="padding:9px 10px;background:var(--bg,#f8f9fa);border:1px dashed var(--card-border,#ced4da);border-radius:.35rem;font-size:12.5px;line-height:1.55">
+                                    <i class="fa-solid fa-circle-info me-1" style="color:var(--accent)"></i>
+                                    Harga jual dihitung otomatis dari <strong>harga beli</strong>:<br>
+                                    &bull; IDR / base: harga beli &times; 2 (IDR)<br>
+                                    &bull; Currency lain: harga beli &divide; 0.43 &times; kurs (IDR), dibulatkan ke atas kelipatan 500.000 (di bawah 10 juta) / 1.000.000.
+                                </div>
                             </div>
                         </div>
+
+                        @endif
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Currency</label>
@@ -328,14 +334,16 @@
                                 <td>Divisi</td>
                                 <td id="pd-division">—</td>
                             </tr>
-                            <tr>
-                                <td>Harga Jual</td>
-                                <td><strong id="pd-selling-price">—</strong><div id="pd-price-equivalent"></div></td>
-                            </tr>
+                            @if($canViewPrice)
                             <tr>
                                 <td>Harga Beli</td>
                                 <td><strong id="pd-purchase-price">—</strong></td>
                             </tr>
+                            <tr>
+                                <td>Harga Jual</td>
+                                <td><strong id="pd-selling-price">—</strong><div id="pd-price-equivalent"></div></td>
+                            </tr>
+                            @endif
                             <tr>
                                 <td>Status</td>
                                 <td id="pd-status">—</td>
@@ -453,11 +461,14 @@ function initProductTable() {
             { data: 'division_name', orderable: false, searchable: true, width: '9%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
+            @if($canViewPrice)
             { data: 'selling_price_formatted', orderable: true, searchable: false, className: 'text-end', width: '15%',
+                // Harga jual table = hasil formulasi, selalu IDR (base).
                 render: function(data, type, row) {
-                    return '<strong>' + row.currency_symbol + ' ' + data + '</strong>';
+                    return '<strong>' + (row.base_currency_symbol || 'Rp') + ' ' + data + '</strong>';
                 }
             },
+            @endif
             { data: 'status', orderable: true, searchable: false, width: '9%',
                 render: function(data) {
                     if (data === 'Active') {
@@ -534,7 +545,6 @@ function openEditModal(id) {
         $('#product-type').val(p.type || '');
         $('#product-parameter').val(p.parameter || '');
         $('#product-division').val(p.division_id || '');
-        $('#product-selling-price').val(p.selling_price || '');
         $('#product-purchase-price').val(p.purchase_price || '');
         $('#product-currency').val(p.currency_id || '');
         $('#product-status').val(p.status || 'Active');
@@ -563,22 +573,17 @@ function openDetailModal(id) {
         $('#pd-type').text(p.type || '—');
         $('#pd-parameter').text(p.parameter || '—');
         $('#pd-division').text(p.division_name || '—');
-        $('#pd-selling-price').text((p.currency_symbol || p.currency_name || 'Rp') + ' ' + Number(p.selling_price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
-        $('#pd-purchase-price').text((p.currency_symbol || p.currency_name || 'Rp') + ' ' + Number(p.purchase_price || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
-
-        var eqWrap = $('#pd-price-equivalent');
-        if (!p.currency_is_base) {
-            var rate = parseFloat(p.currency_rate || 1);
-            var equivalent = Number(p.selling_price) * rate;
-            var baseSym = p.base_currency_symbol || p.base_currency_name || 'Rp';
-            var rateFmt = Number(rate).toLocaleString('en-US', { maximumFractionDigits: 2 });
-            var priceFmt = Number(equivalent).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-            eqWrap.html('<div style="font-size:12px;color:var(--text-muted);font-weight:500;margin-top:4px;line-height:1.4">' +
-                '≈ ' + baseSym + ' ' + priceFmt + ' &nbsp;·&nbsp; 1 ' + (p.currency_name || '') + ' = ' + baseSym + ' ' + rateFmt +
-                '</div>');
-        } else {
-            eqWrap.empty();
-        }
+        // Harga jual = hasil formulasi dari harga beli (selalu IDR). Harga beli
+        // ditampilkan apa adanya di mata uang produk. Non-Admin: harga dikirim
+        // null di server -> tampil '-'.
+        function fmtPrice(v) { return v == null || v === '' ? null : v; }
+        var sellingPrice = fmtPrice(p.selling_price_formula);
+        var purchasePrice = fmtPrice(p.purchase_price);
+        $('#pd-selling-price').text(sellingPrice == null ? '—'
+            : (p.base_currency_symbol || p.base_currency_name || 'Rp') + ' ' + Number(sellingPrice).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+        $('#pd-purchase-price').text(purchasePrice == null ? '—'
+            : ((p.currency_symbol || p.currency_name || 'Rp') + ' ' + Number(purchasePrice).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })));
+        $('#pd-price-equivalent').empty();
         $('#pd-status').html(p.status === 'Active'
             ? '<span class="status-badge status-active">Active</span>'
             : '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Inactive</span>');
@@ -620,12 +625,10 @@ $('#btn-detail-edit').on('click', function() {
 $(document).on('click', '#btn-save-product', function() {
     var name = $('#product-name').val().trim();
     var code = $('#product-code').val().trim();
-    var price = $('#product-selling-price').val();
     var purchasePrice = $('#product-purchase-price').val();
     var status = $('#product-status').val();
 
     if (!code) { toastr.error('Code produk wajib diisi.'); $('#product-code').addClass('is-invalid'); return; }
-    if (price === '' || isNaN(parseFloat(price))) { toastr.error('Harga jual wajib diisi.'); $('#product-selling-price').addClass('is-invalid'); return; }
     if (!status) { toastr.error('Status wajib diisi.'); return; }
 
     var id = $('#product-edit-id').val();
@@ -640,8 +643,9 @@ $(document).on('click', '#btn-save-product', function() {
     fd.append('parameter', $('#product-parameter').val().trim());
     fd.append('division_id', $('#product-division').val());
     fd.append('description', $('#product-description').val().trim());
-    fd.append('selling_price', price);
+    @if($canViewPrice)
     fd.append('purchase_price', purchasePrice);
+    @endif
     fd.append('currency_id', $('#product-currency').val());
     fd.append('status', status);
     var imageFile = $('#product-image')[0].files[0];
@@ -677,7 +681,6 @@ $(document).on('click', '#btn-save-product', function() {
                 msg = xhr.responseJSON.errors[firstKey][0];
                 var fieldMap = {
                     code: 'product-code',
-                    selling_price: 'product-selling-price',
                     purchase_price: 'product-purchase-price',
                     currency_id: 'product-currency',
                     status: 'product-status',

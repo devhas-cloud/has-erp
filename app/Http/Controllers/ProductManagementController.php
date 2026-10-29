@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Currency;
 use App\Models\Division;
+use Illuminate\Support\Facades\Auth;
 use App\Models\MasterProduct;
 use App\Services\ProductExportService;
 use App\Services\ProductImportService;
@@ -59,9 +60,28 @@ class ProductManagementController extends Controller
 
         $products = $query->offset($start)->limit($length)->get();
 
+        if ($this->isAdmin()) {
+            $baseSymbol = Currency::where('is_base', true)->first()?->symbol ?: 'Rp';
+            $withPrices = true;
+        } else {
+            $baseSymbol = null;
+            $withPrices = false;
+        }
+
         $data = [];
         foreach ($products as $i => $product) {
             $currency = $product->currency;
+            if ($withPrices) {
+                $selling = $this->formula_selling_price($product->currency_id, $product->purchase_price);
+                $purchase = round((float) $product->purchase_price, 2);
+                $purchaseFormatted = number_format($purchase, 2, '.', ',');
+                $sellingFormatted = number_format($selling);
+            } else {
+                $selling = null;
+                $purchase = null;
+                $purchaseFormatted = null;
+                $sellingFormatted = null;
+            }
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $product->id,
@@ -74,13 +94,14 @@ class ProductManagementController extends Controller
                 'type' => $product->type ?? '—',
                 'parameter' => $product->parameter ?? '—',
                 'division_name' => $product->division?->division_name ?? '—',
-                'selling_price' => $product->selling_price,
-                'selling_price_formatted' => number_format((float) $product->selling_price, 2, '.', ','),
-                'purchase_price' => $product->purchase_price,
-                'purchase_price_formatted' => number_format((float) $product->purchase_price, 2, '.', ','),
+                'purchase_price' => $purchase,
+                'purchase_price_formatted' => $purchaseFormatted,
+                'selling_price' => $selling,
+                'selling_price_formatted' => $sellingFormatted,
+                'base_currency_symbol' => $baseSymbol,
                 'currency_id' => $product->currency_id,
                 'currency_name' => $currency?->name ?? '—',
-                'currency_symbol' => $currency?->symbol ?: ($currency?->name ?? ''),
+                'currency_symbol' => '',
                 'status' => $product->status ?? 'Active',
                 'image_url' => $product->image_url,
             ];
@@ -94,6 +115,26 @@ class ProductManagementController extends Controller
         ]);
     }
 
+    public function formula_selling_price($currencyId, $purchasePrice): float
+    {
+        $currency = Currency::where('id', $currencyId)->first();
+        $isBase   = ! $currency || $currency->is_base;           // 1. tanpa currency = base
+        $purchase = (float) $purchasePrice;
+        if ($purchase <= 0) return 0.0;
+
+        $rate = $isBase ? 1.0 : (float) $currency->rate;
+        // satuan: /0.43 (non-base) / x2 (base)
+        $priceCurrency = $isBase ? $purchase * 2 : $purchase / 0.43;
+        $raw = $priceCurrency * $rate;
+
+        if (! $isBase) {                                          // ceil hanya non-base
+            $step = $raw < 10000000 ? 500000 : 1000000;
+            return (int) (ceil($raw / $step) * $step);
+        }
+        return round($raw, 2);
+    }
+
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -106,13 +147,14 @@ class ProductManagementController extends Controller
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
-            'selling_price' => 'required|numeric|min:0',
+            'selling_price' => 'nullable|numeric|min:0',
             'purchase_price' => 'nullable|numeric|min:0',
             'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
 
         $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
+        $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price']);
 
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('product-images', 'public');
@@ -137,11 +179,23 @@ class ProductManagementController extends Controller
         $data['image_url'] = $product->image_url;
         $data['division_name'] = $product->division?->division_name;
         $data['currency_name'] = $currency?->name;
-        $data['currency_symbol'] = $currency?->symbol ?: ($currency?->name ?? '');
+        $data['currency_symbol'] = $currency?->symbol ?: ($currency?->name ?? '—');
         $data['currency_rate'] = $currency ? (float) $currency->rate : 1.0;
         $data['currency_is_base'] = $currency ? (bool) $currency->is_base : true;
         $data['base_currency_name'] = $baseCurrency?->name ?? 'IDR';
         $data['base_currency_symbol'] = $baseCurrency?->symbol ?: ($baseCurrency?->name ?? 'IDR');
+
+        // Harga jual selalu ditampilkan hasil formulasi dari harga beli (IDR).
+        $data['selling_price_formula'] = $this->formula_selling_price($product->currency_id, $product->purchase_price);
+        $data['selling_price_formula_formatted'] = number_format($data['selling_price_formula'], 2, '.', ',');
+
+        if (! $this->isAdmin()) {
+            // Harga hanya untuk role Admin divisi Admin.
+            $data['selling_price'] = null;
+            $data['purchase_price'] = null;
+            $data['selling_price_formula'] = null;
+            $data['selling_price_formula_formatted'] = null;
+        }
 
         return response()->json([
             'success' => true,
@@ -171,13 +225,20 @@ class ProductManagementController extends Controller
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
-            'selling_price' => 'required|numeric|min:0',
+            'selling_price' => 'nullable|numeric|min:0',
             'purchase_price' => 'nullable|numeric|min:0',
             'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
 
         $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
+        // Harga hanya bisa diubah role Admin divisi Admin. Non-Admin tidak
+        // mengirim harga -> harga DB tetap.
+        if ($this->isAdmin()) {
+            $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price']);
+        } else {
+            unset($validated['selling_price'], $validated['purchase_price']);
+        }
 
         if ($request->hasFile('image')) {
             if ($product->image) {
@@ -218,13 +279,29 @@ class ProductManagementController extends Controller
 
         $products = $query->orderBy('id', 'desc')->get();
 
-        $headers = [
-            'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
-            'Description', 'Selling Price', 'Purchase Price', 'Currency', 'Status',
-        ];
+        $withPrices = $this->isAdmin();
+
+        // Selling Price pada export = hasil formulasi dari harga beli.
+        if ($withPrices) {
+            foreach ($products as $product) {
+                $product->selling_price = $this->formula_selling_price($product->currency_id, $product->purchase_price);
+            }
+        }
+
+        if ($withPrices) {
+            $headers = [
+                'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
+                'Description', 'Currency', 'Purchase Price', 'Selling Price', 'Status',
+            ];
+        } else {
+            $headers = [
+                'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
+                'Description', 'Currency', 'Status',
+            ];
+        }
 
         $service = new ProductExportService;
-        $filePath = $service->export($products, $headers);
+        $filePath = $service->export($products, $headers, $withPrices);
 
         return response()->download($filePath, 'products-export-'.date('Y-m-d').'.xlsx')
             ->deleteFileAfterSend(true);
@@ -280,6 +357,18 @@ class ProductManagementController extends Controller
                 unlink($fullPath);
             }
         }
+    }
+
+    /**
+     * Harga beli/jual hanya dilihat role Admin yang berdivisi Admin.
+     */
+    private function isAdmin(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null
+            && $user->role === 'Admin'
+            && strcasecmp($user->division?->division_name ?? '', 'Admin') === 0;
     }
 
     /**

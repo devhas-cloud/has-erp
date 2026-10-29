@@ -6,6 +6,8 @@ use ZipArchive;
 
 class ProductExportService
 {
+    private bool $withPrices = true;
+
     public function export($products, array $headers): string
     {
         $filePath = storage_path('app/temp/product-export-'.uniqid().'.xlsx');
@@ -165,6 +167,21 @@ class ProductExportService
 
     private function extractRow(object $product): array
     {
+        if (! $this->withPrices) {
+            return [
+                $product->name ?? '',
+                $product->code ?? '',
+                $product->brand ?? '',
+                $product->category ?? '',
+                $product->type ?? '',
+                $product->parameter ?? '',
+                $product->division?->division_name ?? '',
+                $product->description ?? '',
+                $product->currency?->name ?? '',
+                $product->status ?? 'Active',
+            ];
+        }
+
         return [
             $product->name ?? '',
             $product->code ?? '',
@@ -174,9 +191,9 @@ class ProductExportService
             $product->parameter ?? '',
             $product->division?->division_name ?? '',
             $product->description ?? '',
-            $product->selling_price ?? 0,
-            $product->purchase_price ?? 0,
             $product->currency?->name ?? '',
+            number_format($product->purchase_price ?? 0, 2),
+            number_format($product->selling_price ?? 0, 2),
             $product->status ?? 'Active',
         ];
     }
