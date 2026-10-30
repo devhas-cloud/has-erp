@@ -9,6 +9,7 @@ use App\Models\MasterProduct;
 use App\Services\ProductExportService;
 use App\Services\ProductImportService;
 use App\Services\ProductXlsxTemplateGenerator;
+use App\Support\ProductPricing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -117,21 +118,7 @@ class ProductManagementController extends Controller
 
     public function formula_selling_price($currencyId, $purchasePrice): float
     {
-        $currency = Currency::where('id', $currencyId)->first();
-        $isBase   = ! $currency || $currency->is_base;           // 1. tanpa currency = base
-        $purchase = (float) $purchasePrice;
-        if ($purchase <= 0) return 0.0;
-
-        $rate = $isBase ? 1.0 : (float) $currency->rate;
-        // satuan: /0.43 (non-base) / x2 (base)
-        $priceCurrency = $isBase ? $purchase * 2 : $purchase / 0.43;
-        $raw = $priceCurrency * $rate;
-
-        if (! $isBase) {                                          // ceil hanya non-base
-            $step = $raw < 10000000 ? 500000 : 1000000;
-            return (int) (ceil($raw / $step) * $step);
-        }
-        return round($raw, 2);
+        return ProductPricing::price($currencyId, $purchasePrice)['price_idr'];
     }
 
 

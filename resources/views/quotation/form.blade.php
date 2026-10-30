@@ -138,6 +138,9 @@
     .qt-picker-name { display:block; font-weight:700; }
     .qt-picker-prev { display:block; font-size:11px; color:#92400e; margin-top:2px; }
     .qt-picker-fx { display:block; font-size:11px; color:var(--text-muted); }
+
+    /* Modal lebih lebar untuk tabel dengan kolom harga */
+    .modal-dialog.modal-2xl { max-width: min(1400px, 95vw); }
     #qt-item-picker-body td {
         white-space: pre-wrap;
         word-break: break-word;
@@ -449,7 +452,7 @@
                 </div>
                 <div class="tab-pane fade" id="qt-tab-configs" role="tabpanel">
                     <div id="qt-config-change-actions" class="alert alert-warning py-2 px-3 mb-2" style="display:none;font-size:13px"></div>
-                    <small style="color:var(--text-muted);display:block;margin-bottom:6px">Tiap baris "Subtotal &lt;kategori&gt;" di bawah bisa disinkronkan ke satu item di tab "List Item Quotation" lewat dropdown di kolom Aksi. Beberapa sumber (dari tab ini maupun tab Biaya) boleh menarget baris yang sama — harga baris menjadi <strong>jumlah</strong> semua sumbernya.</small>
+                    <small style="color:var(--text-muted);display:block;margin-bottom:6px">Tiap baris "Subtotal &lt;kategori&gt;" di bawah bisa disinkronkan ke satu item di tab "List Item Quotation" lewat dropdown di kolom Aksi. Beberapa sumber (dari tab ini maupun tab Biaya) boleh menarget baris yang sama — harga baris menjadi <strong>jumlah</strong> semua sumbernya. Harga IDR dibulatkan ke atas (kelipatan 0,5 / 1 juta) untuk mata uang asing — sama dengan aturan formulasi saat disimpan.</small>
                     <div id="qt-config-lists"></div>
                     <div class="config-card-empty" id="qt-configs-empty">
                         <i class="fa-solid fa-inbox"></i> Belum ada list configuration. Pilih task di atas untuk menampilkan configuration yang terikat.
@@ -1303,7 +1306,16 @@ function qtRateOf(code) {
     return 1;
 }
 function qtToIdr(amount, code) {
-    return Math.round((Number(amount) || 0) * qtRateOf(code) * 100) / 100;
+    // Samakan aturan server: pembulatan ke atas kelipatan 500rb (<10jt) / 1jt
+    // untuk mata uang asing, supaya tampilan = nilai tersimpan.
+    var v = (Number(amount) || 0) * qtRateOf(code);
+    for (var i = 0; i < qtCurrencies.length; i++) {
+        if (qtCurrencies[i].name === code && !qtCurrencies[i].is_base) {
+            var step = v < 10000000 ? 500000 : 1000000;
+            v = Math.ceil(v / step) * step;
+        }
+    }
+    return Math.round(v * 100) / 100;
 }
 function qtCurrencySelect(selected) {
     var base = qtCurrencies.length ? qtCurrencies[0].name : 'IDR';
@@ -1763,6 +1775,23 @@ $(document).ready(function() {
                     if (!data) return '<span style="color:var(--text-muted)">—</span>';
                     var escaped = $('<div>').text(data).html();
                     return escaped.replace(/\n/g, '<br>');
+                }
+            },
+            { data: 'purchase_price_currency', orderable: false, searchable: false, className: 'text-end',
+                render: function(data, type, row) {
+                    if (data == null || data === '') return '<span style="color:var(--text-muted)">—</span>';
+                    var sym = row.currency && row.currency !== 'IDR' ? qtCurrencySymbol(row.currency) : 'Rp';
+                    return sym + ' ' + qtFmtPrice(data);
+                }
+            },
+            { data: 'selling_price', orderable: false, searchable: false, className: 'text-end',
+                render: function(data, type, row) {
+                    if (data == null || data === '') return '<span style="color:var(--text-muted)">—</span>';
+                    var html = 'Rp ' + qtFmtPrice(data);
+                    if (row.currency && row.currency !== 'IDR' && row.selling_price_currency != null) {
+                        html += ' <small style="color:var(--text-muted)">(' + qtCurrencySymbol(row.currency) + ' ' + qtFmtPrice(row.selling_price_currency) + ')</small>';
+                    }
+                    return html;
                 }
             }
         ]
@@ -2750,6 +2779,14 @@ function qtBuildConfigPicker(container, $legend, clickable) {
         return '<span class="qt-picker-prev"><i class="fa fa-clock-rotate-left me-1"></i>Sebelumnya: qty ' + (p.qty == null ? '-' : p.qty) + ', harga Rp ' + harga + '</span>';
     };
     // Harga sebelum kurs (mata uang asing) sebagai keterangan kecil di bawah harga Rp.
+    // Harga beli (mata uang produk) sebagai kolom tersendiri — dari master product.
+    var purchaseLine = function(it) {
+        var v = it ? Number(it.purchase_price_currency) : 0;
+        if (!v || v <= 0) return '<span style="color:var(--text-muted)">—</span>';
+        var cur = it.purchase_currency || it.currency;
+        var sym = cur && cur !== 'IDR' ? qtCurrencySymbol(cur) : 'Rp';
+        return '<span class="qt-picker-fx">' + sym + ' ' + qtFmtPrice(v) + '</span>';
+    };
     var fxLine = function(it) {
         if (!it || !it.currency || it.currency === 'IDR' || it.selling_price_currency == null) return '';
         return '<span class="qt-picker-fx">' + $('<div>').text(qtCurrencySymbol(it.currency) + ' ' + qtFmtPrice(it.selling_price_currency)).html() + '</span>';
@@ -2758,7 +2795,8 @@ function qtBuildConfigPicker(container, $legend, clickable) {
         '<th style="width:170px">Part Number</th>' +
         '<th>Deskripsi</th>' +
         '<th style="width:70px" class="text-center">Qty</th>' +
-        '<th style="width:190px" class="text-end">Harga</th>' +
+        '<th style="width:150px" class="text-end">Harga Beli</th>' +
+        '<th style="width:190px" class="text-end">Harga Jual</th>' +
         '</tr></thead>';
 
     // >1 config divisi -> tiap divisi jadi tabel sendiri dengan header yang bisa
@@ -2776,6 +2814,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
         rowBuffer += '<td style="padding-left:' + (8 + indent * 18) + 'px"><code>' + $('<div>').text(partNumber).html() + '</code></td>';
         rowBuffer += '<td>' + changeBadge(it) + (it && it.change_status && it.change_status !== 'sama' ? ' ' : '') + (name ? '<span class="qt-picker-name">' + $('<div>').text(name).html() + '</span>' : '') + qtRenderDesc(desc) + prevLine(it) + '</td>';
         rowBuffer += '<td class="text-center">' + $('<div>').text(qty == null ? '' : qty).html() + '</td>';
+        rowBuffer += '<td class="text-end" style="white-space:nowrap">' + purchaseLine(it) + '</td>';
         rowBuffer += '<td class="text-end" style="white-space:nowrap">' + (price ? 'Rp ' + qtFmtPrice(price) : '') + fxLine(it) + '</td>';
         rowBuffer += '</tr>';
     };
@@ -2811,7 +2850,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
 
         catOrder.forEach(function(cat) {
             rowBuffer += '<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)">' +
-                '<td colspan="4"><i class="fa fa-tag me-1"></i>Category : ' + $('<div>').text(cat).html() + '</td></tr>';
+                '<td colspan="5"><i class="fa fa-tag me-1"></i>Category : ' + $('<div>').text(cat).html() + '</td></tr>';
             (catMap[cat] || []).forEach(function(root) {
                 renderedAny = true;
                 var desc = root.description || root.name || '';
@@ -2844,7 +2883,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
                 return (a.change_status === 'dihapus' ? 1 : 0) - (b.change_status === 'dihapus' ? 1 : 0);
             });
             rowBuffer += '<tr style="background:#f1f5f9;font-weight:700;font-size:12px;color:var(--accent)">' +
-                '<td colspan="4"><i class="fa fa-tag me-1"></i>Category : Lain-lain</td></tr>';
+                '<td colspan="5"><i class="fa fa-tag me-1"></i>Category : Lain-lain</td></tr>';
             lainLain.forEach(function(root) {
                 renderedAny = true;
                 addPoolRow(
@@ -2865,7 +2904,7 @@ function qtBuildConfigPicker(container, $legend, clickable) {
             var idx = pool.length;
             pool.push({ part_number: '', description: configNotes[cid], qty: '', price: '' });
             rowBuffer += '<tr' + rowClass + ' style="' + rowStyle + '" data-idx="' + idx + '">' +
-                '<td colspan="4" class="text-start" style="padding:6px 8px;font-style:italic;color:var(--text-muted);font-size:12px">' +
+                '<td colspan="5" class="text-start" style="padding:6px 8px;font-style:italic;color:var(--text-muted);font-size:12px">' +
                 '<i class="fa-solid fa-note-sticky me-1"></i><strong>Catatan :</strong> ' + qtRenderDesc(configNotes[cid]) +
                 '</td></tr>';
         }
@@ -2963,7 +3002,7 @@ function openQtItemPicker(btn) {
     </div>
 </div>
 <div class="modal fade" id="qtItemPickerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-2xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title"><i class="fa-solid fa-cart-plus me-2" style="color:var(--accent)"></i>Add item Configuration
@@ -2981,7 +3020,7 @@ function openQtItemPicker(btn) {
     </div>
 </div>
 <div class="modal fade" id="qtcfgProductPickerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-2xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Pilih Product
@@ -3002,6 +3041,8 @@ function openQtItemPicker(btn) {
                                 <th>Brand</th>
                                 <th>Category</th>
                                 <th>Deskripsi</th>
+                                <th style="width:140px" class="text-end">Harga Beli</th>
+                                <th style="width:170px" class="text-end">Harga Jual</th>
                             </tr>
                         </thead>
                     </table>

@@ -13,6 +13,7 @@ use App\Models\QuotationCostItem;
 use App\Models\QuotationItem;
 use App\Models\QuoteConfiguration;
 use App\Models\Task;
+use App\Support\ProductPricing;
 use App\Support\TaskWorkflowLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -188,13 +189,21 @@ class QuotationController extends Controller
      */
     private function configItemsForPrefill($configs): array
     {
-        $configs->load('items.product');
+        $configs->load('items.product.currency');
 
         $items = [];
         $base = Currency::baseName();
 
         foreach ($configs as $config) {
             foreach ($config->items as $item) {
+                // Harga jual = formulasi dari harga beli master product;
+                // harga beli yang ditampilkan juga dari master product.
+                $mp = $item->product;
+                $hasMasterPurchase = $mp && (float) ($mp->purchase_price ?? 0) > 0;
+                $pricing = $hasMasterPurchase
+                    ? ProductPricing::price($mp->currency_id, $mp->purchase_price)
+                    : null;
+
                 $items[] = [
                     'id' => $item->id,
                     'quote_configuration_id' => $config->id,
@@ -205,10 +214,17 @@ class QuotationController extends Controller
                     'name' => $item->product?->name,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    // selling_price = IDR sesudah kurs; selling_price_currency + currency = snapshot sebelum kurs.
-                    'selling_price' => $item->selling_price,
-                    'selling_price_currency' => $item->selling_price_currency ?? $item->selling_price,
-                    'purchase_price_currency' => $item->purchase_price_currency,
+                    // selling_price = IDR hasil formulasi; selling_price_currency = sebelum kurs.
+                    'selling_price' => $pricing ? $pricing['price_idr'] : $item->selling_price,
+                    'selling_price_currency' => $pricing
+                        ? $pricing['price_currency']
+                        : ($item->selling_price_currency ?? $item->selling_price),
+                    'purchase_price_currency' => $hasMasterPurchase
+                        ? (float) $mp->purchase_price
+                        : $item->purchase_price_currency,
+                    'purchase_currency' => $hasMasterPurchase
+                        ? strtoupper($mp->currency?->name ?: $base)
+                        : strtoupper($item->currency ?: $base),
                     'currency' => strtoupper($item->currency ?: $base),
                     'unit' => $item->unit,
                 ];
@@ -276,6 +292,14 @@ class QuotationController extends Controller
                     continue;
                 }
                 $seen[$key] = true;
+
+                // Harga jual & harga beli = dari master product.
+                $mp = $item->product;
+                $hasMasterPurchase = $mp && (float) ($mp->purchase_price ?? 0) > 0;
+                $pricing = $hasMasterPurchase
+                    ? ProductPricing::price($mp->currency_id, $mp->purchase_price)
+                    : null;
+
                 $products[] = [
                     'quote_configuration_id' => $c->id,
                     'config_label' => $c->division?->division_name ?? '',
@@ -283,9 +307,16 @@ class QuotationController extends Controller
                     'part_number' => $item->part_number,
                     'description' => $item->product?->name ?? $item->description,
                     'qty' => $item->qty,
-                    'selling_price' => $item->selling_price,
-                    'selling_price_currency' => $item->selling_price_currency ?? $item->selling_price,
-                    'purchase_price_currency' => $item->purchase_price_currency,
+                    'selling_price' => $pricing ? $pricing['price_idr'] : $item->selling_price,
+                    'selling_price_currency' => $pricing
+                        ? $pricing['price_currency']
+                        : ($item->selling_price_currency ?? $item->selling_price),
+                    'purchase_price_currency' => $hasMasterPurchase
+                        ? (float) $mp->purchase_price
+                        : $item->purchase_price_currency,
+                    'purchase_currency' => $hasMasterPurchase
+                        ? strtoupper($mp->currency?->name ?: $base)
+                        : strtoupper($item->currency ?: $base),
                     'currency' => strtoupper($item->currency ?: $base),
                     'unit' => $item->unit,
                 ];
@@ -631,18 +662,23 @@ class QuotationController extends Controller
             ->take($length)
             ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'selling_price', 'purchase_price', 'currency_id']);
 
-        $data = $products->map(fn ($product) => [
-            'id' => $product->id,
-            'name' => $product->name,
-            'code' => $product->code,
-            'brand' => $product->brand,
-            'category' => $product->category,
-            'description' => $product->description,
-            'selling_price' => $product->sellingPriceInBase(),
-            'selling_price_currency' => (float) $product->selling_price,
-            'purchase_price_currency' => (float) $product->purchase_price,
-            'currency' => strtoupper($product->currency?->name ?: Currency::baseName()),
-        ])->all();
+        $data = $products->map(function ($product) {
+            // Harga jual = formulasi dari harga beli master product.
+            $pricing = ProductPricing::price($product->currency_id, $product->purchase_price);
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'code' => $product->code,
+                'brand' => $product->brand,
+                'category' => $product->category,
+                'description' => $product->description,
+                'selling_price' => $pricing['price_idr'],
+                'selling_price_currency' => $pricing['price_currency'],
+                'purchase_price_currency' => (float) $product->purchase_price,
+                'currency' => strtoupper($product->currency?->name ?: Currency::baseName()),
+            ];
+        })->all();
 
         return response()->json([
             'draw' => (int) $request->input('draw'),
@@ -917,7 +953,7 @@ class QuotationController extends Controller
                 $this->syncCostItems($quotation, $validated['cost_items'] ?? []);
 
                 $totals = Quotation::calculateTotals(
-                    $validated['items'],
+                    $this->applyFormulatedPrices($validated['items']),
                     isset($validated['discount_percent']) && $validated['discount_percent'] !== '' ? (float) $validated['discount_percent'] : null,
                     isset($validated['discount_amount']) && $validated['discount_amount'] !== '' ? (float) $validated['discount_amount'] : null,
                     isset($validated['ppn_percent']) && $validated['ppn_percent'] !== '' ? (float) $validated['ppn_percent'] : null,
@@ -1138,7 +1174,7 @@ class QuotationController extends Controller
                 $this->syncCostItems($quotation, $validated['cost_items'] ?? []);
 
                 $totals = Quotation::calculateTotals(
-                    $validated['items'],
+                    $this->applyFormulatedPrices($validated['items']),
                     isset($validated['discount_percent']) && $validated['discount_percent'] !== '' ? (float) $validated['discount_percent'] : null,
                     isset($validated['discount_amount']) && $validated['discount_amount'] !== '' ? (float) $validated['discount_amount'] : null,
                     isset($validated['ppn_percent']) && $validated['ppn_percent'] !== '' ? (float) $validated['ppn_percent'] : null,
@@ -1842,9 +1878,37 @@ class QuotationController extends Controller
      * Simpan item hierarki: pass 1 insert semua baris (tanpa parent_id)
      * lalu pass 2 pasang parent_id berdasarkan parent_key.
      */
+    /**
+     * Paksa harga jual baris produk (part_number == code master) = formulasi
+     * dari harga beli master product. Baris manual (tanpa part_number /
+     * tanpa match) tidak disentuh. Dipakai syncItems() & calculateTotals()
+     * supaya quotation_items dan totals selalu konsisten dengan formulasi.
+     */
+    private function applyFormulatedPrices(array $items): array
+    {
+        $masterByCode = MasterProduct::whereIn('code', collect($items)->pluck('part_number')->filter()->unique())
+            ->get(['id', 'code', 'purchase_price', 'currency_id'])
+            ->keyBy('code');
+
+        foreach ($items as &$item) {
+            $master = isset($item['part_number']) && $item['part_number'] !== ''
+                ? ($masterByCode[$item['part_number']] ?? null)
+                : null;
+
+            if ($master && (float) $master->purchase_price > 0) {
+                $item['selling_price'] = ProductPricing::price($master->currency_id, $master->purchase_price)['price_idr'];
+            }
+        }
+        unset($item);
+
+        return $items;
+    }
+
     private function syncItems(Quotation $quotation, array $items, array $configIdMap = []): void
     {
         $quotation->items()->delete();
+
+        $items = $this->applyFormulatedPrices($items);
 
         $keyMap = [];
         $payload = [];
@@ -1922,30 +1986,68 @@ class QuotationController extends Controller
         $keyMap = [];
         $payload = [];
 
-        // Skema harga (sama dengan quote_configuration_items):
+        // Skema harga (formulasi dari harga beli master product):
         //   currency               = kode mata uang (currencies.name), base bila kosong
-        //   selling_price_currency = harga satuan sebelum kurs (input user)
-        //   selling_price          = harga satuan IDR = selling_price_currency x rate (dihitung server)
-        //   purchase_price_currency = snapshot harga beli (mata uang produk) dari master product
-        // Payload lama tanpa selling_price_currency: selling_price dianggap sudah IDR.
+        //   purchase_price_currency = harga beli (mata uang produk)
+        //   selling_price_currency = purchase / 0.43 (non-base) atau x 2 (base) — dihitung server
+        //   selling_price          = selling_price_currency x rate + ceil (non-base) — dihitung server
+        // Baris tanpa purchase (manual) fallback: pakai harga dari client seperti semula.
         $currencies = Currency::active()->get()->keyBy(fn ($c) => strtoupper($c->name));
         $base = Currency::baseName();
+
+        // Harga beli authoritative dari master product (part_number == code).
+        $masterByCode = MasterProduct::whereIn('code', collect($configItems)->pluck('part_number')->filter()->unique())
+            ->get(['id', 'code', 'purchase_price', 'currency_id'])
+            ->keyBy('code');
 
         foreach (array_values($configItems) as $i => $item) {
             $keyMap[$item['_key']] = $i;
 
-            $hasPriceCurrency = isset($item['selling_price_currency']) && $item['selling_price_currency'] !== '';
+            $master = isset($item['part_number']) && $item['part_number'] !== ''
+                ? ($masterByCode[$item['part_number']] ?? null)
+                : null;
 
-            if ($hasPriceCurrency) {
+            if ($master && (float) $master->purchase_price > 0) {
+                // Formulasi: harga jual dihitung server dari harga beli master product,
+                // angka jual dari client diabaikan.
+                $price = $master->currency_id
+                    ? ProductPricing::price($master->currency_id, $master->purchase_price)
+                    : null;
                 $code = strtoupper(trim((string) ($item['currency'] ?? ''))) ?: $base;
                 $currency = $currencies[$code] ?? null;
-                $rate = $currency && ! $currency->is_base ? (float) $currency->rate : 1.0;
-                $priceCurrency = round((float) $item['selling_price_currency'], 2);
-                $price = round($priceCurrency * $rate, 2);
+                $priceCurrency = $price['price_currency'] ?? null;
+                $price = $price['price_idr'] ?? null;
             } else {
-                $code = $base;
-                $price = isset($item['selling_price']) && $item['selling_price'] !== '' ? round((float) $item['selling_price'], 2) : null;
-                $priceCurrency = $price;
+                $price = $priceCurrency = null;
+            }
+
+            if ($priceCurrency === null) {
+                $purchase = (float) ($item['purchase_price_currency'] ?? 0);
+
+                if ($purchase > 0) {
+                    // Snapshot harga beli dari master (tanpa match part_number) — tetap formulasi.
+                    $code = strtoupper(trim((string) ($item['currency'] ?? ''))) ?: $base;
+                    $currency = $currencies[$code] ?? null;
+                    $pricing = ProductPricing::price($currency, $purchase);
+                    $priceCurrency = $pricing['price_currency'];
+                    $price = $pricing['price_idr'];
+                } elseif (isset($item['selling_price_currency']) && $item['selling_price_currency'] !== '') {
+                    $code = strtoupper(trim((string) ($item['currency'] ?? ''))) ?: $base;
+                    $currency = $currencies[$code] ?? null;
+                    $rate = $currency && ! $currency->is_base ? (float) $currency->rate : 1.0;
+                    $priceCurrency = round((float) $item['selling_price_currency'], 2);
+                    $price = $priceCurrency * $rate;
+                    // Sama dengan tampilan (qtToIdr): ceil kelipatan 500rb (<10jt) / 1jt untuk non-base.
+                    if ($currency && ! $currency->is_base) {
+                        $step = $price < 10000000 ? 500000 : 1000000;
+                        $price = ceil($price / $step) * $step;
+                    }
+                    $price = round($price, 2);
+                } else {
+                    $code = $base;
+                    $price = isset($item['selling_price']) && $item['selling_price'] !== '' ? round((float) $item['selling_price'], 2) : null;
+                    $priceCurrency = $price;
+                }
             }
 
             $configId = isset($item['quote_configuration_id']) && $item['quote_configuration_id'] !== '' ? (int) $item['quote_configuration_id'] : null;
