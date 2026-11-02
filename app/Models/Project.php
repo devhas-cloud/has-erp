@@ -4,12 +4,16 @@ namespace App\Models;
 
 use App\Support\NumberSequence;
 use App\Traits\Loggable;
+use App\Traits\Notifiable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Project extends Model
 {
+    use Notifiable;
+
     use Loggable;
 
     public const STATUS_ACTIVE = 'active';
@@ -102,6 +106,52 @@ class Project extends Model
     public function salesAchievements(): HasMany
     {
         return $this->hasMany(SalesAchievement::class)->orderBy('id');
+    }
+
+    public function billingTerms(): HasMany
+    {
+        return $this->hasMany(ProjectBillingTerm::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * Dokumen kontrak/perjanjian project (PO tetap di kolom po_document_*).
+     */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable')->orderBy('id');
+    }
+
+    /**
+     * Dokumen milik project ini: kontrak project atau dokumen pendukung termin project.
+     */
+    public function ownsDocument(Document $document): bool
+    {
+        if ($document->documentable_type === $this->getMorphClass()) {
+            return (int) $document->documentable_id === (int) $this->id;
+        }
+
+        return $document->documentable_type === (new ProjectBillingTerm)->getMorphClass()
+            && ProjectBillingTerm::whereKey($document->documentable_id)->where('project_id', $this->id)->exists();
+    }
+
+    /**
+     * Dasar persentase penagihan: nilai penawaran sebelum PPN (sub total - diskon
+     * quotation); project tanpa quotation memakai total sale.
+     */
+    public function billingBaseAmount(): float
+    {
+        $quotation = $this->quotation;
+
+        if (! $quotation) {
+            return (float) $this->total_sale_amount;
+        }
+
+        $subtotal = (float) $quotation->subtotal;
+        $discount = (float) $quotation->discount_percent > 0
+            ? round($subtotal * (float) $quotation->discount_percent / 100, 2)
+            : round((float) $quotation->discount_amount, 2);
+
+        return round($subtotal - $discount, 2);
     }
 
     public function invoices(): HasMany

@@ -40,6 +40,24 @@
     .pj-amount-box.secondary { background: transparent; border: 1px solid var(--card-border); }
     .pj-amount-box.secondary input, .pj-amount-box.secondary .prefix { font-size: 16px; color: var(--text-primary); }
 
+    /* Rincian nilai project dari Estimasi PL */
+    .pj-breakdown { width: 100%; font-size: 13px; border-collapse: collapse; }
+    .pj-breakdown td { padding: 5px 2px; vertical-align: middle; }
+    .pj-breakdown td.k { color: var(--text-muted); }
+    .pj-breakdown td.v { text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .pj-breakdown td.op { width: 16px; color: var(--text-muted); font-weight: 700; text-align: center; }
+    .pj-breakdown tr.minus td.v { color: var(--danger); font-weight: 500; }
+    .pj-breakdown tr.sub td { border-top: 1px dashed var(--card-border); }
+    .pj-breakdown tr.sub td.k { color: var(--text-primary); font-weight: 600; }
+    .pj-breakdown tr.start td.k { color: var(--text-primary); font-weight: 600; }
+    .pj-breakdown tr.start td .tag, .pj-breakdown tr.final td .tag {
+        display: block; font-size: 10.5px; font-weight: 500; color: var(--text-muted);
+    }
+    .pj-breakdown tr.final td { background: var(--accent-soft); color: var(--accent); font-weight: 700; padding-top: 9px; padding-bottom: 9px; }
+    .pj-breakdown tr.final td:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); padding-left: 8px; }
+    .pj-breakdown tr.final td:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding-right: 8px; font-size: 15px; }
+    .pj-breakdown-source { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; display: flex; justify-content: space-between; gap: 8px; }
+
     .pj-split-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
     .pj-split-item + .pj-split-item { border-top: 1px dashed var(--card-border); }
     .pj-split-avatar {
@@ -57,6 +75,36 @@
         font-size: 13px; padding: 6px 10px; border: 1px solid var(--card-border); border-radius: var(--radius-sm);
     }
     .pj-file-current i { color: var(--danger); }
+
+    /* Kontrak / perjanjian */
+    .pj-doc-list { display: flex; flex-direction: column; gap: 6px; }
+    .pj-doc-row {
+        display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+        border: 1px solid var(--card-border); border-radius: var(--radius-sm); font-size: 13px;
+    }
+    .pj-doc-row > i { color: var(--danger); font-size: 16px; }
+    .pj-doc-row .meta { font-size: 11.5px; color: var(--text-muted); }
+    .pj-doc-row .name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pj-doc-row.pending { border-style: dashed; background: var(--accent-subtle); }
+
+    /* Timeline penagihan */
+    .pj-term-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .pj-term-progress .pj-bar-track { flex: 1; height: 8px; border-radius: 999px; background: var(--card-border); overflow: hidden; }
+    .pj-term-progress .pj-bar-fill { height: 100%; border-radius: 999px; background: #f59e0b; transition: width .2s; }
+    .pj-term-progress.full .pj-bar-fill { background: #16a34a; }
+    .pj-term-progress.over .pj-bar-fill { background: var(--danger); }
+    .pj-term-total { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+    #pj-term-table td { vertical-align: top; }
+    #pj-term-table .pj-term-num { padding-top: 14px; color: var(--text-muted); font-weight: 600; }
+    #pj-term-table .pj-term-amount { padding-top: 14px; font-size: 12.5px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #pj-term-table tr.locked { background: var(--accent-subtle); }
+    .pj-term-lock { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .pj-template-chip {
+        display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+        padding: 3px 10px; border-radius: 999px; font-size: 12px;
+        border: 1px dashed var(--card-border); color: var(--text-muted); background: transparent;
+    }
+    .pj-template-chip:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 @endsection
 
@@ -180,6 +228,84 @@
                 </div>
             </div>
         </div>
+
+        {{-- 3. Kontrak / perjanjian --}}
+        <div class="card-custom fade-in mt-3">
+            <div class="card-header-custom">
+                <span><i class="fa-solid fa-file-signature me-2" style="color:var(--accent)"></i>Dokumen Pendukung <span class="pj-hint ms-1">opsional, bisa lebih dari satu</span></span>
+            </div>
+            <div class="card-body-custom">
+                <div class="pj-doc-list mb-2" id="pj-agreement-list">
+                    @foreach($agreements as $doc)
+                        <div class="pj-doc-row" data-doc-id="{{ $doc['id'] }}">
+                            <i class="fa {{ $doc['icon'] }}"></i>
+                            <div style="min-width:0;flex:1">
+                                <div class="name">{{ $doc['file_name'] }}</div>
+                                <div class="meta">{{ $doc['notes'] ? $doc['notes'].' · ' : '' }}{{ $doc['size'] }} · {{ $doc['uploaded_by'] ?? '—' }}, {{ $doc['uploaded_at'] }}</div>
+                            </div>
+                            <a href="{{ $doc['view_url'] }}" target="_blank" class="btn-icon" title="Lihat"><i class="fa fa-eye"></i></a>
+                            @if(($canDelete ?? false) && $doc['delete_url'])
+                                <button type="button" class="btn-icon text-danger" title="Hapus" onclick="pjDeleteAgreement(this, '{{ $doc['delete_url'] }}')"><i class="fa fa-trash"></i></button>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-7">
+                        <input type="file" id="pj-agreement-files" class="form-control" accept=".pdf,.jpg,.jpeg,.png" multiple>
+                        <div class="pj-hint mt-1">PDF, JPG, atau PNG, maksimal 10MB per file. Bisa pilih beberapa file sekaligus.</div>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" id="pj-agreement-notes" class="form-control" maxlength="255" placeholder="Keterangan, mis. Kontrak induk / Addendum 1">
+                    </div>
+                </div>
+                <div class="pj-doc-list mt-2" id="pj-agreement-pending"></div>
+            </div>
+        </div>
+
+        {{-- 4. Timeline penagihan --}}
+        <div class="card-custom fade-in mt-3">
+            <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span><i class="fa-solid fa-timeline me-2" style="color:var(--accent)"></i>Timeline Penagihan <span class="pj-hint ms-1">opsional, bisa dilengkapi nanti</span></span>
+                <span class="pj-term-total" id="pj-term-total-label">0% terjadwal</span>
+            </div>
+            <div class="card-body-custom">
+                <div class="pj-hint mb-2">
+                    Bagi nilai penawaran sebelum PPN (<strong id="pj-billing-base-label">Rp 0</strong>) menjadi beberapa tahap pembayaran.
+                    Invoice nantinya dibuat langsung dari tiap baris, dan persentasenya mengikuti baris tersebut.
+                </div>
+                <div class="pj-term-progress" id="pj-term-progress">
+                    <div class="pj-bar-track"><div class="pj-bar-fill" id="pj-term-bar" style="width:0%"></div></div>
+                    <span class="pj-term-total" id="pj-term-remaining"></span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0" id="pj-term-table">
+                        <thead>
+                            <tr>
+                                <th style="width:36px" class="text-center">#</th>
+                                <th style="width:24%">Nama Pembayaran <span class="text-danger">*</span></th>
+                                <th style="width:96px">% <span class="text-danger">*</span></th>
+                                <th style="width:15%">≈ Nominal</th>
+                                <th>Keterangan</th>
+                                <th style="width:150px">Target Tagih</th>
+                                <th style="width:40px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="pj-term-body"></tbody>
+                    </table>
+                </div>
+                <div class="pj-empty" id="pj-term-empty">
+                    <i class="fa-solid fa-timeline me-1"></i> Belum ada timeline penagihan. Gunakan contoh di bawah atau tambah baris sendiri.
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                    <button type="button" class="btn btn-soft btn-sm" onclick="pjAddTerm()"><i class="fa fa-plus me-1"></i> Tambah Pembayaran</button>
+                    <span class="pj-hint ms-1">Contoh cepat:</span>
+                    <button type="button" class="pj-template-chip" onclick="pjApplyTermTemplate('dp2')">DP · Termin 1 · Termin 2</button>
+                    <button type="button" class="pj-template-chip" onclick="pjApplyTermTemplate('dp1')">DP · Pelunasan</button>
+                    <button type="button" class="pj-template-chip" onclick="pjApplyTermTemplate('full')">Sekali Bayar</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- 3. Ringkasan: nilai, klasifikasi, sales --}}
@@ -190,13 +316,26 @@
                     <span><i class="fa-solid fa-coins me-2" style="color:var(--accent)"></i>Nilai &amp; Klasifikasi</span>
                 </div>
                 <div class="card-body-custom">
+                    {{-- Project dari quotation: rincian langkah demi langkah dari Estimasi PL --}}
+                    <div id="pj-value-breakdown" class="mb-3" style="display:none">
+                        <table class="pj-breakdown">
+                            <tbody id="pj-breakdown-body"></tbody>
+                        </table>
+                        <div class="pj-breakdown-source">
+                            <span><i class="fa fa-lock me-1"></i><span id="pj-breakdown-note">Read-only dari Estimasi PL.</span></span>
+                            <a href="#" target="_blank" id="pj-breakdown-link" class="text-decoration-none">Lihat Estimasi PL <i class="fa fa-arrow-up-right-from-square ms-1" style="font-size:10px"></i></a>
+                        </div>
+                    </div>
+
+                    {{-- Project tanpa quotation: nilai diisi manual --}}
+                    <div id="pj-value-manual">
                     <div class="pj-amount-box mb-2">
                         <div class="lbl">Net Sale Amount <span class="text-danger">*</span></div>
                         <div class="d-flex align-items-center">
                             <span class="prefix">Rp</span>
                             <input type="text" inputmode="decimal" autocomplete="off" id="pj-net-sale" class="form-control pj-number pj-readonly text-end" value="{{ $project ? \App\Models\Project::formatNumber($project->net_sale_amount) : '' }}" placeholder="0" readonly>
                         </div>
-                        <div class="pj-hint">Dari Profit Estimate (real project value).</div>
+                        <div class="pj-hint">Nilai riil project, dasar pembagian achievement sales.</div>
                     </div>
                     <div class="pj-amount-box secondary mb-3">
                         <div class="lbl">Total Sale Amount <span class="text-danger">*</span></div>
@@ -205,6 +344,7 @@
                             <input type="text" inputmode="decimal" autocomplete="off" id="pj-total-sale" class="form-control pj-number pj-readonly text-end" value="{{ $project ? \App\Models\Project::formatNumber($project->total_sale_amount) : '' }}" placeholder="0" readonly>
                         </div>
                         <div class="pj-hint" id="pj-sync-note">Diisi manual bila tanpa quotation.</div>
+                    </div>
                     </div>
 
                     <label class="form-label">Retensi <span class="text-danger">*</span></label>
@@ -265,6 +405,171 @@ const pjMaxFileSize = 10 * 1024 * 1024;
 const pjInitialSales = @json($salesOptions);
 const pjInitialCompanyId = @json($initialCompanyId);
 const pjInitialCompanyName = @json($initialCompanyName);
+const pjInitialTerms = @json($billingTerms);
+let pjBillingBase = {{ (float) $billingBase }};
+let pjTermSeq = 0;
+
+// ── Timeline penagihan ──
+
+const pjTermTemplates = {
+    dp2: [
+        { name: 'DP', percent: 30, description: 'Ditagih untuk proses' },
+        { name: 'Termin 1', percent: 50, description: 'Ditagih saat barang akan dikirim' },
+        { name: 'Termin 2', percent: 20, description: 'Ditagih saat proses instalasi' }
+    ],
+    dp1: [
+        { name: 'DP', percent: 30, description: 'Ditagih untuk proses' },
+        { name: 'Pelunasan', percent: 70, description: 'Ditagih setelah pekerjaan selesai' }
+    ],
+    full: [
+        { name: 'Pembayaran Penuh', percent: 100, description: 'Ditagih setelah pekerjaan selesai' }
+    ]
+};
+
+function pjTermRowHtml(term) {
+    term = term || {};
+    // Termin yang sudah ditagih: persen terkunci & tidak bisa dihapus.
+    var locked = !!term.billed;
+    var key = 'term-' + (++pjTermSeq);
+    var html = '<tr data-key="' + key + '" data-id="' + (term.id || '') + '"' + (locked ? ' class="locked" data-locked="1"' : '') + '>';
+    html += '<td class="text-center pj-term-num"></td>';
+    html += '<td><input type="text" class="form-control form-control-sm pj-term-name" maxlength="100" placeholder="mis. DP, Termin 1" value="' + pjEsc(term.name || '') + '">';
+    if (locked) {
+        html += '<div class="pj-term-lock"><i class="fa fa-lock me-1"></i>Sudah ditagih: ' + pjEsc(term.invoice_number || '') + '</div>';
+    }
+    html += '</td>';
+    html += '<td><div class="input-group input-group-sm"><input type="number" class="form-control pj-term-percent text-end" min="0" max="100" step="any" placeholder="0" value="' + (term.percent != null ? term.percent : '') + '"' + (locked ? ' readonly title="Terkunci karena sudah ada invoice"' : '') + '></div></td>';
+    html += '<td class="pj-term-amount">—</td>';
+    html += '<td><input type="text" class="form-control form-control-sm pj-term-desc" maxlength="255" placeholder="mis. Ditagih saat barang dikirim" value="' + pjEsc(term.description || '') + '"></td>';
+    html += '<td><input type="date" class="form-control form-control-sm pj-term-date" value="' + pjEsc(term.target_date || '') + '"></td>';
+    html += '<td class="text-center">' + (locked
+        ? '<span class="btn-icon" style="opacity:.35;cursor:not-allowed" title="Tidak bisa dihapus karena sudah ada invoice"><i class="fa fa-lock"></i></span>'
+        : '<button type="button" class="btn-icon text-danger" title="Hapus baris" onclick="pjRemoveTerm(this)"><i class="fa fa-trash"></i></button>') + '</td>';
+    html += '</tr>';
+    return html;
+}
+
+function pjAddTerm(term) {
+    var $row = $(pjTermRowHtml(term));
+    $('#pj-term-body').append($row);
+    pjRecalcTerms();
+    if (!term) $row.find('.pj-term-name').trigger('focus');
+}
+
+function pjRemoveTerm(btn) {
+    $(btn).closest('tr').remove();
+    pjRecalcTerms();
+}
+
+function pjApplyTermTemplate(name) {
+    if ($('#pj-term-body tr[data-locked]').length) {
+        toastr.warning('Timeline sudah punya termin yang ditagih, contoh cepat tidak bisa dipakai. Tambah baris secara manual.');
+        return;
+    }
+    var apply = function() {
+        $('#pj-term-body').empty();
+        pjTermTemplates[name].forEach(function(t) { pjAddTerm($.extend({}, t)); });
+        toastr.info('Contoh diterapkan. Sesuaikan nama, persentase, dan keterangan bila perlu.');
+    };
+    if (!$('#pj-term-body tr').length) { apply(); return; }
+    Swal.fire({
+        title: 'Ganti timeline?',
+        text: 'Baris timeline yang sudah diisi akan diganti dengan contoh.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Ganti',
+        cancelButtonText: 'Batal'
+    }).then(function(r) { if (r.isConfirmed) apply(); });
+}
+
+function pjCurrentBillingBase() {
+    // Tanpa quotation: dasar penagihan = total sale yang diisi manual.
+    return $('#pj-quotation-id').val() ? pjBillingBase : (parseFloat(pjToRaw($('#pj-total-sale').val())) || 0);
+}
+
+function pjRecalcTerms() {
+    var base = pjCurrentBillingBase();
+    var total = 0;
+    var $rows = $('#pj-term-body tr');
+
+    $rows.each(function(i) {
+        var $row = $(this);
+        var pct = parseFloat($row.find('.pj-term-percent').val()) || 0;
+        total += pct;
+        $row.find('.pj-term-num').text(i + 1);
+        $row.find('.pj-term-amount').text(base > 0 && pct > 0 ? pjFormatMoney(Math.round(base * pct) / 100) : '—');
+    });
+
+    total = Math.round(total * 100) / 100;
+    var remaining = Math.round((100 - total) * 100) / 100;
+    var $progress = $('#pj-term-progress');
+
+    $('#pj-term-empty').toggle($rows.length === 0);
+    $('#pj-term-table').toggle($rows.length > 0);
+    $progress.toggle($rows.length > 0).toggleClass('full', total === 100).toggleClass('over', total > 100);
+    $('#pj-term-bar').css('width', Math.min(total, 100) + '%');
+    $('#pj-billing-base-label').text(pjFormatMoney(base));
+    $('#pj-term-total-label').text(pjFormatNumber(total) + '% terjadwal');
+
+    var text;
+    if (total > 100) {
+        text = '<span class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>Lebih ' + pjFormatNumber(-remaining) + '%</span>';
+    } else if (total === 100) {
+        text = '<span style="color:#16a34a"><i class="fa fa-circle-check me-1"></i>Lengkap 100%</span>';
+    } else {
+        text = '<span style="color:#b45309">Sisa ' + pjFormatNumber(remaining) + '% belum dijadwalkan</span>';
+    }
+    $('#pj-term-remaining').html(text);
+}
+
+function pjCollectTerms() {
+    return $('#pj-term-body tr').map(function() {
+        var $row = $(this);
+        return {
+            id: $row.attr('data-id') || '',
+            name: $.trim($row.find('.pj-term-name').val()),
+            percent: $row.find('.pj-term-percent').val(),
+            description: $.trim($row.find('.pj-term-desc').val()),
+            target_date: $row.find('.pj-term-date').val()
+        };
+    }).get();
+}
+
+// ── Kontrak / perjanjian ──
+
+function pjRenderPendingAgreements() {
+    var files = document.getElementById('pj-agreement-files').files;
+    var html = '';
+    for (var i = 0; i < files.length; i++) {
+        var kb = files[i].size / 1024;
+        html += '<div class="pj-doc-row pending"><i class="fa fa-cloud-arrow-up" style="color:var(--accent)"></i>'
+            + '<div style="min-width:0;flex:1"><div class="name">' + pjEsc(files[i].name) + '</div>'
+            + '<div class="meta">' + (kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(kb)) + ' KB') + ' · akan diupload saat disimpan</div></div></div>';
+    }
+    $('#pj-agreement-pending').html(html);
+}
+
+function pjDeleteAgreement(btn, url) {
+    Swal.fire({
+        title: 'Hapus dokumen?',
+        text: 'File kontrak/perjanjian ini akan dihapus permanen.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#dc2626'
+    }).then(function(r) {
+        if (!r.isConfirmed) return;
+        $.ajax({ url: url, method: 'DELETE', data: { _token: '{{ csrf_token() }}' } })
+            .done(function(res) {
+                $(btn).closest('.pj-doc-row').remove();
+                toastr.success(res.message || 'Dokumen dihapus.');
+            })
+            .fail(function(xhr) {
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus dokumen.');
+            });
+    });
+}
 
 function pjEsc(value) {
     return String(value == null ? '' : value)
@@ -336,6 +641,37 @@ function pjLockAmounts(locked) {
     $('#pj-total-sale, #pj-net-sale').prop('readonly', locked).toggleClass('pj-readonly', locked);
 }
 
+// Rincian nilai project dari Estimasi PL (urutan sama dengan halaman Estimasi PL).
+function pjRenderBreakdown(d) {
+    var b = d && d.breakdown;
+    if (!b) {
+        $('#pj-value-breakdown').hide();
+        $('#pj-value-manual').show();
+        return;
+    }
+
+    var row = function(cls, op, label, value, tag) {
+        return '<tr class="' + cls + '"><td class="op">' + op + '</td><td class="k">' + label
+            + (tag ? '<span class="tag">' + tag + '</span>' : '') + '</td><td class="v">' + value + '</td></tr>';
+    };
+    var minus = function(v) { return '− ' + pjFormatMoney(v); };
+
+    var html = '';
+    html += row('start', '', 'Nilai Awal', pjFormatMoney(b.nilai_awal), 'Total Sale Amount (nilai quotation)');
+    html += row('minus', '−', 'PPN', minus(b.ppn_amount));
+    html += row('sub', '=', 'Sub Total I', pjFormatMoney(b.subtotal_1));
+    html += row('minus', '−', 'Discount', minus(b.discount_amount));
+    html += row('sub', '=', 'Sub Total II', pjFormatMoney(b.subtotal_2));
+    html += row('minus', '−', 'Referen ' + pjFormatNumber(b.referral_percent) + '%', minus(b.referral_amount));
+    html += row('final', '=', 'Nilai Real Project', pjFormatMoney(b.real_project_value), 'Net Sale Amount');
+
+    $('#pj-breakdown-body').html(html);
+    $('#pj-breakdown-link').attr('href', b.profit_estimate_url || '#').toggle(!!b.profit_estimate_url);
+    $('#pj-breakdown-note').text('Read-only dari Estimasi PL ' + (d.quotation_number || '') + '.');
+    $('#pj-value-manual').hide();
+    $('#pj-value-breakdown').show();
+}
+
 function pjRenderQuotationInfo(d) {
     if (!d) { $('#pj-quotation-info').hide().empty(); return; }
 
@@ -350,7 +686,8 @@ function pjRenderQuotationInfo(d) {
 function pjApplyQuotation(id) {
     if (!id) {
         pjLockAmounts(false);
-        pjRenderQuotationInfo(null);
+        pjRenderBreakdown(null);
+        //pjRenderQuotationInfo(null);
         $('#pj-company').prop('disabled', false).trigger('change.select2');
         $('#pj-company-hint').text('Pilih company secara manual (tanpa quotation).');
         $('#pj-sync-note').text('Diisi manual bila tanpa quotation.');
@@ -371,7 +708,10 @@ function pjApplyQuotation(id) {
             }
             pjSetCompany(d.company_id, d.company_name, true);
             pjLockAmounts(true);
-            pjRenderQuotationInfo(d);
+            pjBillingBase = parseFloat(d.billing_base_amount) || 0;
+            pjRenderBreakdown(d);
+            pjRecalcTerms();
+            //pjRenderQuotationInfo(d);
             $('#pj-sync-note').html('<i class="fa fa-lock me-1"></i> Read-only dari quotation ' + pjEsc(d.quotation_number || ('#' + id)) + '.');
             pjRenderSalesSplit();
         })
@@ -491,6 +831,25 @@ function pjValidate() {
 
     if (($('#pj-sales').val() || []).length === 0) return pjFail('#pj-sales', 'Pilih minimal satu sales.');
 
+    var agreementFiles = document.getElementById('pj-agreement-files').files;
+    if (agreementFiles.length > 10) return pjFail('#pj-agreement-files', 'Maksimal 10 file kontrak sekali upload.');
+    for (var f = 0; f < agreementFiles.length; f++) {
+        if (agreementFiles[f].size > pjMaxFileSize) return pjFail('#pj-agreement-files', 'File "' + agreementFiles[f].name + '" lebih dari 10MB.');
+    }
+
+    var termTotal = 0;
+    var $termRows = $('#pj-term-body tr');
+    for (var t = 0; t < $termRows.length; t++) {
+        var $row = $termRows.eq(t);
+        if (!$.trim($row.find('.pj-term-name').val())) return pjFail($row.find('.pj-term-name'), 'Nama pembayaran baris ' + (t + 1) + ' wajib diisi.');
+        var pct = parseFloat($row.find('.pj-term-percent').val());
+        if (!(pct > 0)) return pjFail($row.find('.pj-term-percent'), 'Persentase baris ' + (t + 1) + ' harus lebih dari 0.');
+        termTotal += pct;
+    }
+    if (Math.round(termTotal * 100) / 100 > 100) {
+        return pjFail($termRows.last().find('.pj-term-percent'), 'Total persentase timeline penagihan melebihi 100%.');
+    }
+
     return true;
 }
 
@@ -530,6 +889,14 @@ function pjSave() {
 
     var file = document.getElementById('pj-po-file').files[0];
     if (file) fd.append('po_document', file);
+
+    pjCollectTerms().forEach(function(term, i) {
+        Object.keys(term).forEach(function(k) { fd.append('billing_terms[' + i + '][' + k + ']', term[k]); });
+    });
+
+    var agreementFiles = document.getElementById('pj-agreement-files').files;
+    for (var a = 0; a < agreementFiles.length; a++) fd.append('agreement_files[' + a + ']', agreementFiles[a]);
+    fd.append('agreement_notes', $('#pj-agreement-notes').val());
 
     pjSetSaving(true);
 
@@ -581,6 +948,13 @@ $(document).ready(function() {
 
     pjUpdateDueHint();
     pjRenderSalesSplit();
+
+    (pjInitialTerms || []).forEach(function(t) { pjAddTerm(t); });
+    pjRecalcTerms();
+    $(document).on('input', '.pj-term-percent', pjRecalcTerms);
+    $(document).on('input', '#pj-total-sale', pjRecalcTerms);
+    $(document).on('input', '.pj-term-name, .pj-term-percent', function() { $(this).removeClass('is-invalid'); });
+    $('#pj-agreement-files').on('change', pjRenderPendingAgreements);
 });
 </script>
 @endsection

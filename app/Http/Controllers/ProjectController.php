@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\AccountCompany;
 use App\Models\Division;
+use App\Models\Document;
 use App\Models\Log;
+use App\Models\MasterProduct;
 use App\Models\Project;
 use App\Models\ProjectAchievement;
+use App\Models\ProjectBillingTerm;
 use App\Models\Quotation;
 use App\Models\SalesAchievement;
 use App\Models\User;
@@ -22,9 +25,15 @@ use Illuminate\Validation\Rule;
 /**
  * Modul Project: kelanjutan quotation yang sudah deal. Pembuatan project
  * menggantikan upload PO pada quotation — project menyimpan dokumen PO dan
- * menandai quotation Finish. Satu quotation boleh punya lebih dari satu
- * project (tidak unique). Sinkronisasi total/net read-only saat quotation
+ * menandai quotation Finish. Form hanya menawarkan quotation yang belum
+ * punya project (selectableQuotations()); di tingkat data quotation_id tidak
+ * unique. Sinkronisasi total/net read-only saat quotation
  * dipilih; project lama boleh tanpa quotation dengan nilai manual.
+ *
+ * Timeline penagihan (project_billing_terms) disusun di form project — boleh
+ * saat dibuat atau menyusul — dan menjadi sumber invoice per termin. Kontrak /
+ * perjanjian disimpan sebagai Document project (disk private); dokumen
+ * pendukung termin di-upload dari halaman detail project / invoice.
  *
  * Gate akses hanya middleware access.control (tidak ada query UAC di sini).
  */
@@ -103,6 +112,9 @@ class ProjectController extends Controller
             'preselected' => $preselected,
             'salesIds' => [],
             'salesOptions' => [],
+            'billingTerms' => [],
+            'billingBase' => 0,
+            'agreements' => [],
         ]);
     }
 
@@ -115,6 +127,7 @@ class ProjectController extends Controller
         }
 
         $validated = $this->validateProject($request, null);
+        $terms = $this->validatedBillingTerms($validated['billing_terms'] ?? [], null);
 
         if ($quotation && ! $request->hasFile('po_document')) {
             return response()->json([
@@ -135,7 +148,7 @@ class ProjectController extends Controller
             $path = $file->store('project-po', 'public');
         }
 
-        $project = DB::transaction(function () use ($validated, $quotation, $total, $net, $file, $path) {
+        $project = DB::transaction(function () use ($validated, $quotation, $total, $net, $file, $path, $terms, $request) {
             $project = Project::create([
                 'project_number' => (new Project)->generateProjectNumber(),
                 'project_name' => $validated['project_name'],
@@ -160,6 +173,8 @@ class ProjectController extends Controller
             ]);
 
             $this->syncSalesAchievements($project, $validated['sales'], $net);
+            $this->syncBillingTerms($project, $terms);
+            $this->storeAgreements($project, $request);
 
             if ($quotation && $quotation->status !== Quotation::STATUS_FINISH) {
                 $quotation->update(['status' => Quotation::STATUS_FINISH]);
@@ -187,6 +202,7 @@ class ProjectController extends Controller
         $project = Project::with([
             'company', 'quotation.opportunity', 'creator', 'updater', 'poUploader',
             'achievements.division', 'salesAchievements.salesPerson', 'invoices',
+            'documents.uploader', 'billingTerms.invoices', 'billingTerms.documents.uploader', 'billingTerms.unlocker',
         ])->findOrFail($id);
 
         $user = Auth::user();
@@ -195,15 +211,139 @@ class ProjectController extends Controller
             ->where('can_create', true)
             ->exists();
 
+        $billingBase = $project->billingBaseAmount();
+
         return view('project.show', [
             'project' => $project,
             'canCreateInvoice' => $canCreateInvoice,
+            'billingBase' => $billingBase,
+            'termDocuments' => $project->billingTerms->mapWithKeys(fn (ProjectBillingTerm $term) => [
+                $term->id => $term->documents->map(fn (Document $doc) => $this->documentItem($project, $doc, $term))->values(),
+            ]),
+            'agreements' => $project->documents->where('type', Document::TYPE_AGREEMENT)
+                ->map(fn (Document $doc) => $this->documentItem($project, $doc))->values(),
         ]);
+    }
+
+    /**
+     * Upload dokumen: kontrak/perjanjian project, atau dokumen pendukung termin
+     * bila billing_term_id dikirim. Bisa beberapa file sekaligus.
+     */
+    public function uploadDocument(Request $request, $id): JsonResponse
+    {
+        $project = Project::findOrFail($id);
+
+        $validated = $request->validate([
+            'billing_term_id' => ['nullable', 'integer', Rule::exists('project_billing_terms', 'id')->where('project_id', $project->id)],
+            'files' => 'required|array|min:1|max:'.Document::MAX_FILES,
+            'files.*' => Document::VALIDATION_RULE,
+            'notes' => 'nullable|string|max:255',
+        ], $this->documentMessages());
+
+        $owner = isset($validated['billing_term_id'])
+            ? ProjectBillingTerm::findOrFail($validated['billing_term_id'])
+            : $project;
+        $type = $owner instanceof ProjectBillingTerm ? Document::TYPE_SUPPORT : Document::TYPE_AGREEMENT;
+
+        $documents = DB::transaction(fn () => collect($request->file('files'))
+            ->map(fn ($file) => Document::storeFor($owner, $file, $type, $validated['notes'] ?? null)));
+
+        $term = $owner instanceof ProjectBillingTerm ? $owner : null;
+
+        return response()->json([
+            'success' => true,
+            'message' => $documents->count().' dokumen berhasil diupload.',
+            'documents' => $owner->documents()->with('uploader')->get()
+                ->map(fn (Document $doc) => $this->documentItem($project, $doc, $term))->values(),
+        ]);
+    }
+
+    /**
+     * Gerbang tagihan termin (hak can_update Project, PATCH): buka (Open, boleh
+     * dibuatkan invoice) atau kunci lagi selama belum ada invoice aktif.
+     * Membuka termin mengirim notifikasi ke pembuat invoice (can_create Invoice).
+     * Route sengaja tidak berakhiran "unlock" — middleware memetakan verb itu ke can_approve.
+     */
+    public function updateTermAccess(Request $request, $id, $termId): JsonResponse
+    {
+        $project = Project::findOrFail($id);
+        $term = $project->billingTerms()->with('invoices')->findOrFail($termId);
+
+        $validated = $request->validate(['locked' => 'required|boolean']);
+        $lock = (bool) $validated['locked'];
+
+        if ($lock && $term->hasActiveInvoice()) {
+            return response()->json([
+                'success' => false,
+                'message' => '"'.$term->name.'" tidak bisa dikunci karena sudah ditagih lewat invoice '.$term->activeInvoice()->invoice_number.'.',
+            ], 422);
+        }
+
+        if ($lock === ! $term->isUnlocked()) {
+            return response()->json([
+                'success' => true,
+                'message' => '"'.$term->name.'" sudah '.($lock ? 'terkunci' : 'terbuka').'.',
+            ]);
+        }
+
+        $term->update([
+            'unlocked_at' => $lock ? null : now(),
+            'unlocked_by' => $lock ? null : Auth::id(),
+        ]);
+
+        $actor = Auth::user()->display_name;
+        Log::record(
+            $lock ? 'lock_billing_term' : 'unlock_billing_term',
+            'Termin "'.$term->name.'" project '.$project->project_number.' '.($lock ? 'dikunci' : 'dibuka untuk ditagih').' oleh '.$actor,
+            'MOD_PROJECT',
+            $project
+        );
+
+        if (! $lock) {
+            $this->notifyTermUnlocked($project, $term, $actor);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $lock
+                ? '"'.$term->name.'" dikunci kembali.'
+                : '"'.$term->name.'" dibuka untuk ditagih. Tim invoice sudah diberi notifikasi.',
+        ]);
+    }
+
+    public function viewDocument($id, $documentId)
+    {
+        $project = Project::findOrFail($id);
+        $document = Document::findOrFail($documentId);
+
+        abort_unless($project->ownsDocument($document), 404);
+
+        return $document->inlineResponse();
+    }
+
+    public function deleteDocument($id, $documentId): JsonResponse
+    {
+        $project = Project::findOrFail($id);
+        $document = Document::findOrFail($documentId);
+
+        abort_unless($project->ownsDocument($document), 404);
+
+        $owner = $document->documentable;
+        if ($owner instanceof ProjectBillingTerm && ! $owner->documentsDeletable()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dokumen tidak bisa dihapus karena invoice termin ini sudah Approved. Dokumen hanya bisa ditambah.',
+            ], 422);
+        }
+
+        $document->delete();
+
+        return response()->json(['success' => true, 'message' => 'Dokumen dihapus.']);
     }
 
     public function edit($id)
     {
-        $project = Project::with(['salesAchievements', 'company', 'quotation'])->findOrFail($id);
+        $project = Project::with(['salesAchievements', 'company', 'quotation', 'billingTerms.invoices', 'documents.uploader'])->findOrFail($id);
 
         $quotations = $this->selectableQuotations();
         if ($project->quotation && ! $quotations->contains('id', $project->quotation_id)) {
@@ -222,6 +362,19 @@ class ProjectController extends Controller
             'preselected' => $project->quotation,
             'salesIds' => $salesIds,
             'salesOptions' => $salesOptions,
+            'billingTerms' => $project->billingTerms->map(fn (ProjectBillingTerm $term) => [
+                'id' => $term->id,
+                'name' => $term->name,
+                'percent' => $term->percent,
+                'description' => $term->description,
+                'target_date' => $term->target_date?->toDateString(),
+                // billed: sudah ada invoice aktif -> persen terkunci & tidak bisa dihapus.
+                'billed' => $term->hasActiveInvoice(),
+                'invoice_number' => $term->activeInvoice()?->invoice_number,
+            ])->values()->all(),
+            'billingBase' => $project->billingBaseAmount(),
+            'agreements' => $project->documents->where('type', Document::TYPE_AGREEMENT)
+                ->map(fn (Document $doc) => $this->documentItem($project, $doc))->values()->all(),
         ]);
     }
 
@@ -238,6 +391,7 @@ class ProjectController extends Controller
         }
 
         $validated = $this->validateProject($request, $project->id);
+        $terms = $this->validatedBillingTerms($validated['billing_terms'] ?? [], $project);
 
         $total = $quotation ? (float) $quotation->grand_total : (float) $validated['total_sale_amount'];
         $net = $quotation
@@ -250,7 +404,7 @@ class ProjectController extends Controller
             $newPath = $file->store('project-po', 'public');
         }
 
-        DB::transaction(function () use ($project, $validated, $total, $net, $newPath, $request) {
+        DB::transaction(function () use ($project, $validated, $total, $net, $newPath, $request, $terms) {
             $fields = [
                 'project_name' => $validated['project_name'],
                 'project_description' => $validated['project_description'] ?? null,
@@ -279,6 +433,8 @@ class ProjectController extends Controller
             $project->update($fields);
 
             $this->syncSalesAchievements($project, $validated['sales'], $net);
+            $this->syncBillingTerms($project, $terms);
+            $this->storeAgreements($project, $request);
         });
 
         Log::record(
@@ -308,6 +464,11 @@ class ProjectController extends Controller
         if ($project->po_document_path && Storage::disk('public')->exists($project->po_document_path)) {
             Storage::disk('public')->delete($project->po_document_path);
         }
+
+        // Dokumen polimorfik tidak ikut cascade: hapus satu per satu agar file ikut terhapus.
+        $project->load('documents', 'billingTerms.documents');
+        $project->documents->each->delete();
+        $project->billingTerms->each(fn (ProjectBillingTerm $term) => $term->documents->each->delete());
 
         $project->delete();
 
@@ -371,6 +532,19 @@ class ProjectController extends Controller
                 'company_name' => $company->account_name,
                 'total_sale_amount' => (float) $quotation->grand_total,
                 'net_sale_amount' => (float) $estimate->real_project_value,
+                'billing_base_amount' => (new Project)->setRelation('quotation', $quotation)->billingBaseAmount(),
+                // Rincian dari Estimasi PL: Nilai Awal -> PPN -> Discount -> Referen -> Nilai Real Project.
+                'breakdown' => [
+                    'nilai_awal' => (float) $estimate->nilai_awal,
+                    'ppn_amount' => (float) $estimate->ppn_amount,
+                    'subtotal_1' => (float) $estimate->subtotal_1,
+                    'discount_amount' => (float) $estimate->discount_amount,
+                    'subtotal_2' => (float) $estimate->subtotal_2,
+                    'referral_percent' => (float) $estimate->referral_percent,
+                    'referral_amount' => (float) $estimate->referral_amount,
+                    'real_project_value' => (float) $estimate->real_project_value,
+                    'profit_estimate_url' => route('profit-estimate.show', $estimate->id),
+                ],
             ],
         ]);
     }
@@ -398,7 +572,7 @@ class ProjectController extends Controller
             ->where(function ($query) use ($q) {
                 $query->where('username', 'like', "%{$q}%")
                     ->orWhere('full_name', 'like', "%{$q}%");
-            })
+            })->where('division_id',6) // Hanya menampilkan user dengan division_id = 6 (Sales)
             ->orderBy('full_name')
             ->limit(20)
             ->get();
@@ -484,13 +658,15 @@ class ProjectController extends Controller
         return view('project.achievements', [
             'project' => $project,
             'divisions' => Division::where('status', 'Active')->where('type', 'Internal')->orderBy('division_name')->get(),
-            'deviceNames' => ProjectAchievement::query()
-                ->whereNotNull('device_name')
-                ->where('device_name', '!=', '')
-                ->distinct()
-                ->orderBy('device_name')
-                ->pluck('device_name'),
+            'deviceNames' => $this->achievementSuggestions('device_name'),
+            'principals' => $this->achievementSuggestions('principal'),
+            // Brand: yang pernah dipakai di rincian + brand master produk.
+            'brands' => $this->achievementSuggestions('brand')
+                ->merge(MasterProduct::whereNotNull('brand')->where('brand', '!=', '')->distinct()->pluck('brand'))
+                ->map(fn ($brand) => trim($brand))->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values(),
             'achievements' => $project->achievements->map(fn ($row) => [
+                'principal' => $row->principal,
+                'brand' => $row->brand,
                 'device_name' => $row->device_name,
                 'qty' => $row->qty,
                 'unit' => $row->unit,
@@ -506,6 +682,8 @@ class ProjectController extends Controller
 
         $validated = $request->validate([
             'achievements' => 'required|array|min:1',
+            'achievements.*.principal' => 'nullable|string|max:150',
+            'achievements.*.brand' => 'nullable|string|max:150',
             'achievements.*.device_name' => 'required|string|max:255',
             'achievements.*.qty' => 'required|numeric|min:0',
             'achievements.*.unit' => 'nullable|string|max:50',
@@ -542,11 +720,17 @@ class ProjectController extends Controller
             ?: ($quotation->to_name ?: ($quotation->opportunity?->accountCompany?->account_name ?? ''));
     }
 
+    /**
+     * Quotation yang bisa dipilih di form project: Approved/Finish dan belum
+     * pernah dibuatkan project. Halaman edit menambahkan kembali quotation milik
+     * project yang sedang diedit (lihat edit()).
+     */
     private function selectableQuotations()
     {
         return Quotation::with(['opportunity.accountCompany', 'profitEstimate'])
             ->whereIn('status', [Quotation::STATUS_APPROVED, Quotation::STATUS_FINISH])
             ->whereNotNull('opportunity_id')
+            ->whereNotIn('id', Project::whereNotNull('quotation_id')->select('quotation_id'))
             ->orderByDesc('id')
             ->get();
     }
@@ -613,12 +797,154 @@ class ProjectController extends Controller
             'po_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
             'sales' => 'required|array|min:1',
             'sales.*' => 'required|integer|distinct|exists:users,id',
-        ], [
+            'billing_terms' => 'nullable|array|max:20',
+            'billing_terms.*.id' => 'nullable|integer',
+            'billing_terms.*.name' => 'required|string|max:100',
+            'billing_terms.*.percent' => 'required|numeric|gt:0|max:100',
+            'billing_terms.*.description' => 'nullable|string|max:255',
+            'billing_terms.*.target_date' => 'nullable|date',
+            'agreement_files' => 'nullable|array|max:'.Document::MAX_FILES,
+            'agreement_files.*' => Document::VALIDATION_RULE,
+            'agreement_notes' => 'nullable|string|max:255',
+        ], $this->documentMessages('agreement_files') + [
+            'billing_terms.*.name.required' => 'Nama pembayaran pada timeline wajib diisi.',
+            'billing_terms.*.percent.required' => 'Persentase pada timeline wajib diisi.',
+            'billing_terms.*.percent.gt' => 'Persentase pada timeline harus lebih dari 0.',
             'po_number_company.unique' => 'Nomor PO customer sudah dipakai project lain.',
             'po_document.mimes' => 'File PO harus berformat PDF, JPG, atau PNG.',
             'po_document.max' => 'Ukuran file tidak boleh lebih dari 10MB.',
             'sales.required' => 'Pilih minimal satu sales.',
         ]);
+    }
+
+    /**
+     * Cek timeline sebelum disimpan: total <= 100%, termin yang sudah punya
+     * invoice aktif tidak boleh dihapus dan persennya terkunci.
+     */
+    private function validatedBillingTerms(array $rows, ?Project $project): array
+    {
+        $rows = array_values($rows);
+        $fail = fn (string $message) => throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => $message,
+        ], 422));
+
+        $total = round(array_sum(array_map(fn ($row) => (float) $row['percent'], $rows)), 2);
+        if ($total > 100) {
+            $fail('Total persentase timeline penagihan '.Project::formatNumber($total).'% melebihi 100%.');
+        }
+
+        if (! $project) {
+            return array_map(fn ($row) => array_merge($row, ['id' => null]), $rows);
+        }
+
+        $existing = $project->billingTerms()->with('invoices')->get()->keyBy('id');
+        $keptIds = [];
+
+        foreach ($rows as $i => $row) {
+            $termId = isset($row['id']) && $row['id'] !== '' ? (int) $row['id'] : null;
+            if ($termId && ! $existing->has($termId)) {
+                $fail('Termin timeline tidak ditemukan. Muat ulang halaman lalu coba lagi.');
+            }
+
+            $term = $termId ? $existing[$termId] : null;
+            if ($term && $term->hasActiveInvoice() && abs($term->percent - (float) $row['percent']) > 0.001) {
+                $fail('Persentase "'.$term->name.'" terkunci karena sudah ada invoice '.$term->activeInvoice()->invoice_number.'.');
+            }
+
+            $rows[$i]['id'] = $termId;
+            if ($termId) {
+                $keptIds[] = $termId;
+            }
+        }
+
+        foreach ($existing as $term) {
+            if (! in_array($term->id, $keptIds, true) && $term->hasActiveInvoice()) {
+                $fail('"'.$term->name.'" tidak bisa dihapus karena sudah ada invoice '.$term->activeInvoice()->invoice_number.'.');
+            }
+        }
+
+        return $rows;
+    }
+
+    private function syncBillingTerms(Project $project, array $rows): void
+    {
+        $keptIds = [];
+
+        foreach ($rows as $i => $row) {
+            $data = [
+                'sort_order' => $i + 1,
+                'name' => trim($row['name']),
+                'percent' => round((float) $row['percent'], 2),
+                'description' => isset($row['description']) && trim($row['description']) !== '' ? trim($row['description']) : null,
+                'target_date' => $row['target_date'] ?? null,
+            ];
+
+            $term = $row['id']
+                ? tap($project->billingTerms()->findOrFail($row['id']))->update($data)
+                : $project->billingTerms()->create($data);
+
+            $keptIds[] = $term->id;
+        }
+
+        // Termin yang dihapus dari form (sudah dipastikan tidak punya invoice aktif).
+        $project->billingTerms()->whereNotIn('id', $keptIds)->with('documents')->get()
+            ->each(function (ProjectBillingTerm $term) {
+                $term->documents->each->delete();
+                $term->delete();
+            });
+    }
+
+    private function storeAgreements(Project $project, Request $request): void
+    {
+        foreach ((array) $request->file('agreement_files', []) as $file) {
+            Document::storeFor($project, $file, Document::TYPE_AGREEMENT, $request->input('agreement_notes'));
+        }
+    }
+
+    /**
+     * Notifikasi ke pembuat invoice (can_create modul Invoice), kecuali pelaku.
+     */
+    private function notifyTermUnlocked(Project $project, ProjectBillingTerm $term, string $actor): void
+    {
+        $recipientIds = UserAccessControl::where('can_create', true)
+            ->whereHas('module', fn ($q) => $q->where('route_name', 'invoice'))
+            ->where('user_id', '!=', Auth::id())
+            ->pluck('user_id')
+            ->unique();
+
+        User::whereIn('id', $recipientIds)->get()->each(fn (User $user) => $project->notify(
+            $user,
+            'billing_term_unlocked',
+            'Termin siap ditagih',
+            'Termin '.$term->name.' ('.Project::formatNumber($term->percent).'%) project '.$project->project_number.' — '.$project->project_name.' sudah dibuka untuk ditagih oleh '.$actor.'.',
+            [
+                'project_id' => $project->id,
+                'billing_term_id' => $term->id,
+                'group_title' => $project->project_number.' — '.$project->project_name,
+                'url' => route('project.show', $project->id).'#timeline-penagihan',
+            ]
+        ));
+    }
+
+    private function documentItem(Project $project, Document $document, ?ProjectBillingTerm $term = null): array
+    {
+        $deletable = ! $term || $term->documentsDeletable();
+
+        return $document->toListItem(
+            route('project.documents.show', [$project->id, $document->id]),
+            $deletable ? route('project.documents.destroy', [$project->id, $document->id]) : null
+        );
+    }
+
+    private function documentMessages(string $field = 'files'): array
+    {
+        return [
+            $field.'.max' => 'Maksimal '.Document::MAX_FILES.' file sekali upload.',
+            $field.'.*.mimes' => 'Dokumen harus berformat PDF, JPG, atau PNG.',
+            $field.'.*.max' => 'Ukuran setiap file tidak boleh lebih dari 10MB.',
+            $field.'.required' => 'Pilih minimal satu file.',
+        ];
     }
 
     private function achievementTotalMatches(array $rows, float $net): bool
@@ -639,6 +965,19 @@ class ProjectController extends Controller
         ], 422);
     }
 
+    /**
+     * Saran isian (autocomplete) dari nilai yang pernah dipakai di rincian device.
+     */
+    private function achievementSuggestions(string $column)
+    {
+        return ProjectAchievement::query()
+            ->whereNotNull($column)
+            ->where($column, '!=', '')
+            ->distinct()
+            ->orderBy($column)
+            ->pluck($column);
+    }
+
     private function syncAchievements(Project $project, array $rows): void
     {
         ProjectAchievement::where('project_id', $project->id)->delete();
@@ -647,6 +986,8 @@ class ProjectController extends Controller
         foreach (array_values($rows) as $row) {
             $payload[] = [
                 'project_id' => $project->id,
+                'principal' => isset($row['principal']) && trim($row['principal']) !== '' ? trim($row['principal']) : null,
+                'brand' => isset($row['brand']) && trim($row['brand']) !== '' ? trim($row['brand']) : null,
                 'device_name' => $row['device_name'],
                 'qty' => (float) $row['qty'],
                 'unit' => $row['unit'] ?? null,

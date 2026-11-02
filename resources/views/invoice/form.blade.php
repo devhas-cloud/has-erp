@@ -15,6 +15,13 @@
         color: var(--text-muted);
         min-height: 100%;
     }
+    .inv-term-info {
+        display: flex; gap: 10px; align-items: flex-start;
+        padding: 9px 12px; font-size: 13px; border-radius: var(--radius-sm);
+        background: var(--accent-soft); color: var(--text-primary);
+    }
+    .inv-term-info i { color: var(--accent); margin-top: 3px; }
+    .inv-locked { background: var(--accent-subtle) !important; }
     .inv-summary-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 14px; }
     .inv-summary-row + .inv-summary-row { border-top: 1px dashed var(--card-border); }
     .inv-summary-row .lbl { color: var(--text-muted); }
@@ -71,6 +78,12 @@
                     <label class="form-label">Project <span class="text-danger">*</span></label>
                     <select id="inv-project" class="form-select" style="width:100%"></select>
                     <input type="hidden" id="inv-project-id" value="{{ $selectedProject['id'] ?? '' }}">
+                </div>
+                <div class="mb-3" id="inv-term-wrap" style="display:none">
+                    <label class="form-label">Termin Penagihan <span class="inv-section-sub">dari timeline project</span></label>
+                    <select id="inv-term" class="form-select"></select>
+                    <small style="color:var(--text-muted);display:none" id="inv-term-locked-hint"><i class="fa fa-lock me-1"></i>Termin terkunci belum bisa ditagih. Termin dibuka dari detail project oleh pemegang akses edit project.</small>
+                    <div id="inv-term-info" class="inv-term-info mt-2" style="display:none"></div>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -197,6 +210,7 @@
                     <div class="col-md-6">
                         <label class="form-label">Persentase Pembayaran (%)</label>
                         <input type="text" inputmode="decimal" autocomplete="off" id="inv-percent-payment" class="form-control inv-number-input text-end" value="{{ $invoice?->percent_payment ?? \App\Models\Invoice::DEFAULT_PERCENT_PAYMENT }}">
+                        <small style="color:var(--text-muted);display:none" id="inv-percent-lock"><i class="fa fa-lock me-1"></i>Mengikuti termin penagihan.</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">PPN (%)</label>
@@ -287,6 +301,9 @@ const invProjectSearchUrl = '{{ route("invoice.search-projects") }}';
 const invProjectFetchUrl = '{{ route("invoice.fetch-project", "__ID__") }}';
 const invInitialProject = @json($selectedProject);
 const invInitialItems = @json($items);
+const invInvoiceId = {{ $invoice?->id ?? 'null' }};
+let invInitialTermId = @json($selectedTermId ?? null);
+let invTerms = {};
 let invQuoteItems = [];
 let invQuoteModalInstance = null;
 
@@ -387,12 +404,55 @@ function invInitProject() {
             invQuoteItems = [];
             $('#inv-load-quote').prop('disabled', true);
             $('#inv-project-info').text('Pilih project untuk melihat informasi.');
+            invRenderTerms([], null);
         }
     });
 }
 
+// ── Termin penagihan: persen terkunci & keterangan termin dari timeline project ──
+
+function invRenderTerms(terms, selectedId) {
+    invTerms = {};
+    var html = '<option value="">— Tanpa termin (tagihan di luar timeline) —</option>';
+    (terms || []).forEach(function(t) {
+        invTerms[t.id] = t;
+        var label = t.name + ' · ' + invNumber(t.percent) + '%';
+        if (t.invoice_number && !t.available) label += ' — sudah ditagih (' + t.invoice_number + ')';
+        else if (!t.available && !t.unlocked) label += ' — 🔒 terkunci';
+        html += '<option value="' + t.id + '"' + (t.available ? '' : ' disabled') + (String(t.id) === String(selectedId) ? ' selected' : '') + '>' + invEsc(label) + '</option>';
+    });
+    $('#inv-term').html(html);
+    $('#inv-term-wrap').toggle((terms || []).length > 0);
+    $('#inv-term-locked-hint').toggle((terms || []).some(function(t) { return !t.unlocked && !t.invoice_number; }));
+    invApplyTerm(false);
+}
+
+function invApplyTerm(fillNoted) {
+    var t = invTerms[$('#inv-term').val()];
+    var $percent = $('#inv-percent-payment');
+
+    if (!t) {
+        $percent.prop('readonly', false).removeClass('inv-locked');
+        $('#inv-percent-lock').hide();
+        $('#inv-term-info').hide();
+        invRecalc();
+        return;
+    }
+
+    $percent.val(invFormatStored(t.percent)).prop('readonly', true).addClass('inv-locked');
+    $('#inv-percent-lock').show();
+    if (fillNoted) $('#inv-noted').val(t.name);
+
+    var html = '<i class="fa-solid fa-timeline"></i><div><strong>' + invEsc(t.name) + '</strong> · ' + invNumber(t.percent) + '%';
+    if (t.description) html += '<div style="color:var(--text-muted)">' + invEsc(t.description) + '</div>';
+    html += '<div style="color:var(--text-muted)"><i class="fa fa-paperclip me-1" style="color:inherit;margin:0"></i>' + t.document_count + ' dokumen pendukung'
+        + (t.document_count ? '' : ' — bisa diupload dari detail project / invoice') + '</div></div>';
+    $('#inv-term-info').html(html).show();
+    invRecalc();
+}
+
 function invFetchProject(id, fillShipTo) {
-    $.get(invProjectFetchUrl.replace('__ID__', id)).done(function(res) {
+    $.get(invProjectFetchUrl.replace('__ID__', id), { invoice_id: invInvoiceId || '' }).done(function(res) {
         var d = res.data;
         var html = '<strong style="color:var(--text-primary)">' + invEsc(d.project_number) + '</strong> — ' + invEsc(d.project_name);
         html += '<div>' + invEsc(d.company_name || '—') + '</div>';
@@ -411,6 +471,12 @@ function invFetchProject(id, fillShipTo) {
 
         invQuoteItems = d.quotation_items || [];
         $('#inv-load-quote').prop('disabled', invQuoteItems.length === 0);
+
+        // Termin awal hanya dipakai sekali (dari tombol "Buat Invoice" di timeline / data edit).
+        var initialTerm = fillShipTo ? null : invInitialTermId;
+        invInitialTermId = null;
+        invRenderTerms(d.billing_terms || [], initialTerm);
+        if (initialTerm && !invIsEdit) invApplyTerm(true);
     }).fail(function() {
         $('#inv-project-info').text('Gagal memuat informasi project.');
     });
@@ -665,6 +731,7 @@ function invSave() {
     if (invIsEdit) fd.append('_method', 'PUT');
 
     fd.append('project_id', $('#inv-project-id').val());
+    fd.append('billing_term_id', $('#inv-term').val() || '');
     fd.append('invoice_date', $('#inv-date').val());
     fd.append('date_shipped', $('#inv-date-shipped').val());
     fd.append('terms', $('#inv-terms').val());
@@ -716,6 +783,7 @@ $(document).on('input', '.inv-number-input', function() {
 });
 
 $(document).on('input', '#inv-noted', invRecalc);
+$(document).on('change', '#inv-term', function() { invApplyTerm(true); });
 $(document).on('input change', '#inv-date, #inv-terms', invUpdateDuePreview);
 $(document).on('change', '#inv-quote-all', function() {
     $('#inv-quote-body .inv-quote-check').prop('checked', $(this).is(':checked'));

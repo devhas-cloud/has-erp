@@ -49,13 +49,15 @@
             <table class="table table-custom align-middle mb-0">
                 <thead>
                     <tr>
-                        <th style="width:45px">#</th>
+                        <th style="width:40px">#</th>
+                        <th style="width:14%">Principal</th>
+                        <th style="width:13%">Brand</th>
                         <th>Nama Device</th>
-                        <th style="width:9%">Qty</th>
-                        <th style="width:12%">Satuan</th>
-                        <th style="width:17%">Amount</th>
-                        <th style="width:16%">Divisi</th>
-                        <th class="text-center" style="width:60px">Aksi</th>
+                        <th style="width:8%">Qty</th>
+                        <th style="width:9%">Satuan</th>
+                        <th style="width:14%">Amount</th>
+                        <th style="width:13%">Divisi</th>
+                        <th class="text-center" style="width:50px">Aksi</th>
                     </tr>
                 </thead>
                 <tbody id="pj-ach-body"></tbody>
@@ -86,6 +88,8 @@ const pjShowUrl = '{{ route("project.show", $project->id) }}';
 const pjDivisions = @json($divisions->map(fn ($d) => ['id' => $d->id, 'name' => $d->division_name])->values());
 const pjInitialRows = @json($achievements);
 const pjDeviceNames = @json($deviceNames);
+const pjPrincipals = @json($principals);
+const pjBrands = @json($brands);
 
 function pjEsc(value) {
     return String(value == null ? '' : value)
@@ -96,8 +100,9 @@ function pjEsc(value) {
         .replace(/'/g, '&#039;');
 }
 
-function pjDeviceOptions(selected) {
-    var names = (pjDeviceNames || []).slice();
+// Opsi select2 "tags": daftar saran + nilai tersimpan (bila belum ada di saran).
+function pjTagOptions(list, selected) {
+    var names = (list || []).slice();
     var value = selected == null ? '' : String(selected);
 
     if (value !== '' && names.indexOf(value) === -1) {
@@ -113,7 +118,7 @@ function pjDeviceOptions(selected) {
     return opts;
 }
 
-function pjInitDevice($el) {
+function pjInitTagSelect($el, placeholder) {
     if ($el.hasClass('select2-hidden-accessible')) return;
 
     $el.select2({
@@ -121,7 +126,7 @@ function pjInitDevice($el) {
         width: '100%',
         tags: true,
         allowClear: true,
-        placeholder: 'Ketik atau pilih nama device',
+        placeholder: placeholder,
         createTag: function(params) {
             var term = $.trim(params.term || '');
             if (term === '') return null;
@@ -141,7 +146,9 @@ function pjRowHtml(row) {
 
     var html = '<tr>';
     html += '<td class="text-center pj-ach-num"></td>';
-    html += '<td><select class="form-select form-select-sm pj-device">' + pjDeviceOptions(row.device_name) + '</select></td>';
+    html += '<td><select class="form-select form-select-sm pj-principal">' + pjTagOptions(pjPrincipals, row.principal) + '</select></td>';
+    html += '<td><select class="form-select form-select-sm pj-brand">' + pjTagOptions(pjBrands, row.brand) + '</select></td>';
+    html += '<td><select class="form-select form-select-sm pj-device">' + pjTagOptions(pjDeviceNames, row.device_name) + '</select></td>';
     html += '<td><input type="text" inputmode="decimal" autocomplete="off" class="form-control form-control-sm pj-number pj-qty text-end" value="' + pjFormatStored(row.qty) + '"></td>';
     html += '<td><input type="text" class="form-control form-control-sm pj-unit" value="' + pjEsc(row.unit) + '" maxlength="50"></td>';
     html += '<td><input type="text" inputmode="decimal" autocomplete="off" class="form-control form-control-sm pj-number pj-amount text-end" value="' + pjFormatStored(row.amount) + '"></td>';
@@ -154,7 +161,9 @@ function pjRowHtml(row) {
 function pjAddRow(row) {
     var $row = $(pjRowHtml(row));
     $('#pj-ach-body').append($row);
-    pjInitDevice($row.find('.pj-device'));
+    pjInitTagSelect($row.find('.pj-principal'), 'Principal');
+    pjInitTagSelect($row.find('.pj-brand'), 'Brand');
+    pjInitTagSelect($row.find('.pj-device'), 'Ketik atau pilih nama device');
     pjRenumber();
     pjRecalc();
 }
@@ -174,6 +183,8 @@ function pjCollectRows() {
     var rows = [];
     $('#pj-ach-body tr').each(function() {
         rows.push({
+            principal: $(this).find('.pj-principal').val() || '',
+            brand: $(this).find('.pj-brand').val() || '',
             device_name: $(this).find('.pj-device').val() || '',
             qty: pjToRaw($(this).find('.pj-qty').val()),
             unit: $(this).find('.pj-unit').val(),

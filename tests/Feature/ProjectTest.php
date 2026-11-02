@@ -189,6 +189,40 @@ class ProjectTest extends TestCase
         $this->assertSame(450000.0, $project->salesAchievements()->orderBy('id')->firstOrFail()->amount_achieved);
     }
 
+    public function test_fetch_quotation_returns_value_breakdown_from_profit_estimate(): void
+    {
+        $quotation = $this->makeQuotation(1110000, null);
+        $estimate = ProfitEstimate::create([
+            'quotation_id' => $quotation->id,
+            'opportunity_id' => $quotation->opportunity_id,
+            'nilai_awal' => 1110000,
+            'ppn_amount' => 110000,
+            'subtotal_1' => 1000000,
+            'discount_amount' => 50000,
+            'subtotal_2' => 950000,
+            'referral_percent' => 10,
+            'referral_amount' => 95000,
+            'real_project_value' => 855000,
+            'created_by' => $this->admin->id,
+        ]);
+
+        $this->actingAs($this->creator)->getJson(route('project.fetch-quotation', ['quotation_id' => $quotation->id]))
+            ->assertOk()
+            ->assertJsonPath('data.total_sale_amount', 1110000)
+            ->assertJsonPath('data.net_sale_amount', 855000)
+            ->assertJsonPath('data.breakdown.ppn_amount', 110000)
+            ->assertJsonPath('data.breakdown.subtotal_1', 1000000)
+            ->assertJsonPath('data.breakdown.discount_amount', 50000)
+            ->assertJsonPath('data.breakdown.subtotal_2', 950000)
+            ->assertJsonPath('data.breakdown.referral_percent', 10)
+            ->assertJsonPath('data.breakdown.referral_amount', 95000)
+            ->assertJsonPath('data.breakdown.real_project_value', 855000)
+            ->assertJsonPath('data.breakdown.profit_estimate_url', route('profit-estimate.show', $estimate->id));
+
+        $this->actingAs($this->creator)->get(route('project.create', ['quotation_id' => $quotation->id]))
+            ->assertOk()->assertSee('pj-value-breakdown', false);
+    }
+
     public function test_project_name_defaults_to_opportunity_name(): void
     {
         $quotation = $this->makeQuotation();
@@ -222,13 +256,26 @@ class ProjectTest extends TestCase
 
         $this->actingAs($this->creator)->putJson(route('project.achievements.update', $project->id), [
             'achievements' => [
-                ['device_name' => 'RO 1000 LPD', 'qty' => 1, 'unit' => 'unit', 'amount' => 500000, 'division_id' => $this->division->id],
+                ['principal' => ' Hach Company ', 'brand' => 'Hach', 'device_name' => 'RO 1000 LPD', 'qty' => 1, 'unit' => 'unit', 'amount' => 500000, 'division_id' => $this->division->id],
                 ['device_name' => 'Softener', 'qty' => 2, 'unit' => 'unit', 'amount' => 400000, 'division_id' => $this->division->id],
             ],
         ])->assertOk();
 
         $this->assertSame(2, $project->achievements()->count());
         $this->assertSame(900000.0, (float) $project->achievements()->sum('amount'));
+
+        // Principal & brand opsional; disimpan rapi (trim), kosong -> null.
+        [$ro, $softener] = $project->achievements()->orderBy('id')->get()->all();
+        $this->assertSame('Hach Company', $ro->principal);
+        $this->assertSame('Hach', $ro->brand);
+        $this->assertNull($softener->principal);
+        $this->assertNull($softener->brand);
+
+        // Nilai yang pernah dipakai muncul sebagai saran di form, dan tampil di detail project.
+        $this->actingAs($this->creator)->get(route('project.achievements', $project->id))
+            ->assertOk()->assertSee('Principal')->assertSee('Hach Company');
+        $this->actingAs($this->creator)->get(route('project.show', $project->id))
+            ->assertOk()->assertSee('Hach Company');
     }
 
     public function test_separate_achievement_form_rejects_total_mismatch(): void
@@ -291,6 +338,33 @@ class ProjectTest extends TestCase
             ->assertOk();
 
         $this->assertSame(2, Project::where('quotation_id', $quotation->id)->count());
+    }
+
+    public function test_create_form_hides_quotations_that_already_have_a_project(): void
+    {
+        $used = $this->makeQuotation();
+        $free = $this->makeQuotation();
+        $free->update(['quotation_number' => '002/HAS/QT-AB/X/2026']);
+
+        $this->actingAs($this->creator)
+            ->postJson(route('project.store'), $this->payload($used, ['po_number_company' => 'PO-USED']))
+            ->assertOk();
+
+        $this->actingAs($this->creator)->get(route('project.create'))
+            ->assertOk()
+            ->assertSee($free->quotation_number)
+            ->assertDontSee($used->quotation_number);
+
+        // Preselect lewat URL juga tidak berlaku untuk quotation yang sudah dipakai.
+        $this->actingAs($this->creator)->get(route('project.create', ['quotation_id' => $used->id]))
+            ->assertOk()
+            ->assertDontSee($used->quotation_number);
+
+        // Halaman edit tetap menampilkan quotation milik project itu sendiri.
+        $project = Project::where('quotation_id', $used->id)->firstOrFail();
+        $this->actingAs($this->creator)->get(route('project.edit', $project->id))
+            ->assertOk()
+            ->assertSee($used->quotation_number);
     }
 
     public function test_legacy_project_without_quotation_uses_manual_values(): void

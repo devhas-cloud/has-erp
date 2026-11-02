@@ -2855,6 +2855,7 @@
                         if (n.lead_id) dataAttrs += ' data-lead-id="' + n.lead_id + '"';
                         if (n.opportunity_id) dataAttrs += ' data-opportunity-id="' + n.opportunity_id + '"';
                         if (n.activity_id) dataAttrs += ' data-activity-id="' + n.activity_id + '"';
+                        if (n.url) dataAttrs += ' data-url="' + escapeHtml(n.url) + '"';
 
                         html += '<div class="notif-item ' + cls + '" ' + dataAttrs + ' onclick="openNotif(this)" style="cursor:pointer;">';
                         html += '<span class="notif-dot"></span>';
@@ -2912,6 +2913,7 @@
             var leadId = $el.data('lead-id') || null;
             var opportunityId = $el.data('opportunity-id') || null;
             var activityId = $el.data('activity-id') || null;
+            var directUrl = $el.data('url') || null;
 
             $.post('{{ url('/notifications') }}/' + notifId + '/read', {
                 _token: '{{ csrf_token() }}'
@@ -2926,6 +2928,8 @@
                     targetUrl = '{{ url('opportunity-management') }}/' + opportunityId;
                 } else if (taskId) {
                     targetUrl = '{{ url('task-planner') }}/' + taskId;
+                } else if (directUrl) {
+                    targetUrl = directUrl;
                 }
 
                 if (targetUrl && activityId) {

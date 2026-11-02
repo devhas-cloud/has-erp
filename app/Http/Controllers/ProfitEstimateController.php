@@ -690,6 +690,13 @@ class ProfitEstimateController extends Controller
             $purchaseCurrency = (float) ($it->purchase_price_currency ?? 0);
             $rate = $code === ProfitEstimate::BASE_CURRENCY ? 1.0 : (float) ($rates[$code] ?? 1.0);
 
+            // jika purchase_price_currency = 0, bisakemungkinan produk di tambah manual dari configuration
+            // maka ambil nilai selling_price_currency
+
+            if ($purchaseCurrency <= 0) {
+                $purchaseCurrency = (float) ($it->selling_price_currency ?? 0);
+            }
+
             return [
                 'id' => $it->id,
                 'category' => $it->category ?: 'Lainnya',

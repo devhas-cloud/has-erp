@@ -49,6 +49,14 @@
     .inv-items tfoot td { border: 0; padding-top: 6px; padding-bottom: 6px; }
     .inv-items tfoot tr.first td { border-top: 2px solid var(--card-border); padding-top: 12px; }
     .inv-items tfoot tr.grand td { font-size: 15px; font-weight: 800; color: var(--accent); }
+    .inv-term-box { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--accent-soft); height: 100%; }
+    .inv-doc-item {
+        display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+        border: 1px solid var(--card-border); border-radius: var(--radius-sm); font-size: 13px;
+    }
+    .inv-doc-item + .inv-doc-item { margin-top: 6px; }
+    .inv-doc-item > i { color: var(--danger); font-size: 17px; }
+    .inv-doc-item .name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 @endsection
 
@@ -339,6 +347,55 @@
     </div>
 </div>
 
+@if($invoice->billingTerm)
+@php $term = $invoice->billingTerm; @endphp
+<div class="card-custom fade-in mb-3">
+    <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+            <i class="fa-solid fa-timeline me-2" style="color:var(--accent)"></i>Termin Penagihan &amp; Dokumen Pendukung
+        </span>
+        @if($invoice->project)
+            <a href="{{ route('project.show', $invoice->project_id) }}#timeline-penagihan" class="btn btn-secondary btn-sm"><i class="fa fa-timeline me-1"></i> Lihat Timeline Project</a>
+        @endif
+    </div>
+    <div class="card-body-custom">
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="inv-term-box">
+                    <div class="inv-muted">Termin</div>
+                    <div style="font-size:16px;font-weight:700;color:var(--text-primary)">{{ $term->name }}</div>
+                    <div style="font-weight:600;color:var(--accent)">{{ \App\Models\Invoice::formatNumber($term->percent) }}% dari nilai penawaran</div>
+                    @if($term->description)<div class="inv-muted mt-1">{{ $term->description }}</div>@endif
+                    @if($term->target_date)<div class="inv-muted mt-1"><i class="fa fa-calendar me-1"></i>Target tagih {{ $term->target_date->format('d M Y') }}</div>@endif
+                </div>
+            </div>
+            <div class="col-lg-8">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="inv-muted">Dokumen pendukung (<span id="inv-doc-count">{{ count($termDocuments) }}</span>)</span>
+                </div>
+                <div id="inv-doc-list"></div>
+                @if($canCreate ?? false)
+                <div class="mt-2 p-2" style="background:var(--accent-subtle);border-radius:var(--radius-sm)">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-5">
+                            <input type="file" id="inv-doc-files" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png" multiple>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" id="inv-doc-notes" class="form-control form-control-sm" maxlength="255" placeholder="Keterangan (opsional)">
+                        </div>
+                        <div class="col-md-3 d-grid">
+                            <button type="button" class="btn btn-primary btn-sm" id="inv-doc-upload-btn" onclick="invUploadDocs()"><i class="fa fa-upload me-1"></i> Upload</button>
+                        </div>
+                    </div>
+                    <div class="inv-muted mt-1">PDF, JPG, atau PNG, maksimal 10MB per file. Dokumen melekat pada termin dan ikut tampil di timeline project.</div>
+                </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 <div class="card-custom fade-in mb-4">
     <div class="card-header-custom">
         <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item Invoice <span class="inv-muted">({{ $invoice->items->count() }} item)</span></span>
@@ -497,6 +554,87 @@ const invApproveUrl = '{{ route("invoice.approve", $invoice->id) }}';
 const invRejectUrl = '{{ route("invoice.reject", $invoice->id) }}';
 const invPayUrl = '{{ route("invoice.pay", $invoice->id) }}';
 const invCancelUrl = '{{ route("invoice.cancel", $invoice->id) }}';
+const invDocUploadUrl = '{{ route("invoice.documents.store", $invoice->id) }}';
+const invCanDeleteDocs = {{ ($canDelete ?? false) ? 'true' : 'false' }};
+let invDocs = @json($termDocuments);
+
+function invEscHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function invRenderDocs() {
+    $('#inv-doc-count').text(invDocs.length);
+    if (!invDocs.length) {
+        $('#inv-doc-list').html('<div class="inv-doc-item inv-muted"><i class="fa fa-paperclip" style="color:var(--text-muted)"></i> Belum ada dokumen pendukung untuk termin ini.</div>');
+        return;
+    }
+    $('#inv-doc-list').html(invDocs.map(function(doc) {
+        var html = '<div class="inv-doc-item"><i class="fa ' + invEscHtml(doc.icon) + '"></i>';
+        html += '<div style="min-width:0;flex:1"><div class="name">' + invEscHtml(doc.file_name) + '</div>';
+        html += '<div class="inv-muted">' + (doc.notes ? invEscHtml(doc.notes) + ' · ' : '') + invEscHtml(doc.size) + ' · ' + invEscHtml(doc.uploaded_by || '—') + ', ' + invEscHtml(doc.uploaded_at || '') + '</div></div>';
+        html += '<a href="' + doc.view_url + '" target="_blank" class="btn-icon" title="Lihat"><i class="fa fa-eye"></i></a>';
+        if (invCanDeleteDocs && doc.delete_url) {
+            html += '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="invDeleteDoc(\'' + doc.delete_url + '\')"><i class="fa fa-trash"></i></button>';
+        } else if (!doc.delete_url) {
+            html += '<span class="btn-icon" style="opacity:.4" title="Terkunci: invoice sudah Approved"><i class="fa fa-lock"></i></span>';
+        }
+        return html + '</div>';
+    }).join(''));
+}
+
+function invUploadDocs() {
+    var files = document.getElementById('inv-doc-files').files;
+    if (!files.length) { toastr.error('Pilih minimal satu file.'); return; }
+    for (var i = 0; i < files.length; i++) {
+        if (files[i].size > 10 * 1024 * 1024) { toastr.error('File "' + files[i].name + '" lebih dari 10MB.'); return; }
+    }
+    var fd = new FormData();
+    fd.append('_token', '{{ csrf_token() }}');
+    fd.append('notes', $('#inv-doc-notes').val());
+    for (var f = 0; f < files.length; f++) fd.append('files[' + f + ']', files[f]);
+
+    var $btn = $('#inv-doc-upload-btn');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Mengupload...');
+    $.ajax({ url: invDocUploadUrl, method: 'POST', data: fd, processData: false, contentType: false })
+        .done(function(res) {
+            invDocs = res.documents || [];
+            $('#inv-doc-files').val('');
+            $('#inv-doc-notes').val('');
+            invRenderDocs();
+            toastr.success(res.message || 'Dokumen diupload.');
+        })
+        .fail(function(xhr) {
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal mengupload dokumen.');
+        })
+        .always(function() { $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload'); });
+}
+
+function invDeleteDoc(url) {
+    Swal.fire({
+        title: 'Hapus dokumen?',
+        text: 'File akan dihapus permanen.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#dc2626'
+    }).then(function(r) {
+        if (!r.isConfirmed) return;
+        $.ajax({ url: url, method: 'DELETE', data: { _token: '{{ csrf_token() }}' } })
+            .done(function(res) {
+                invDocs = invDocs.filter(function(d) { return d.delete_url !== url; });
+                invRenderDocs();
+                toastr.success(res.message || 'Dokumen dihapus.');
+            })
+            .fail(function(xhr) {
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus dokumen.');
+            });
+    });
+}
+
+$(function() { if ($('#inv-doc-list').length) invRenderDocs(); });
 
 function invOpenModal(id) {
     bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).show();

@@ -65,6 +65,10 @@ class NotificationController extends Controller
             } elseif ($first->group_type === 'opportunity') {
                 $groupTitle = $opportunityTitles->get($first->group_id, 'Opportunity #'.$first->group_id);
                 $groupIcon = 'fa-bullseye';
+            } elseif (! empty($first->data['group_title'])) {
+                // Notifikasi umum (mis. termin project) membawa judul grup sendiri.
+                $groupTitle = $first->data['group_title'];
+                $groupIcon = 'fa-file-invoice-dollar';
             }
 
             $notifications = $items->sortByDesc('created_at')->values()->map(fn ($n) => [
@@ -79,6 +83,7 @@ class NotificationController extends Controller
                 'lead_id' => $n->data['lead_id'] ?? null,
                 'opportunity_id' => $n->data['opportunity_id'] ?? null,
                 'activity_id' => $n->data['activity_id'] ?? null,
+                'url' => $n->data['url'] ?? null,
             ]);
 
             $unreadCount = $notifications->where('read', false)->count();

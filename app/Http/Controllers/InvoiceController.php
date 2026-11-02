@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Document;
 use App\Models\Invoice;
 use App\Models\Log;
 use App\Models\MasterProduct;
 use App\Models\Project;
+use App\Models\ProjectBillingTerm;
 use App\Models\Quotation;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -14,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
@@ -93,16 +96,27 @@ class InvoiceController extends Controller
             }
         }
 
+        // Dibuka dari baris timeline penagihan project: termin langsung terpilih.
+        $selectedTermId = null;
+        if ($selectedProject && $request->filled('billing_term_id')) {
+            // Hanya termin yang sudah dibuka (unlock) yang boleh langsung terpilih.
+            $selectedTermId = ProjectBillingTerm::where('project_id', $selectedProject['id'])
+                ->whereKey($request->integer('billing_term_id'))
+                ->whereNotNull('unlocked_at')
+                ->value('id');
+        }
+
         return view('invoice.form', [
             'invoice' => null,
             'items' => [],
             'selectedProject' => $selectedProject,
+            'selectedTermId' => $selectedTermId,
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $this->validateInvoice($request);
+        $validated = $this->validateInvoice($request, null);
         $totals = $this->calculateTotals(
             $validated['items'],
             (float) $validated['percent_payment'],
@@ -116,6 +130,7 @@ class InvoiceController extends Controller
 
             $invoice = Invoice::create([
                 'project_id' => $validated['project_id'],
+                'billing_term_id' => $validated['billing_term_id'] ?? null,
                 'invoice_number' => Invoice::generateInvoiceNumber($validated['invoice_date']),
                 'invoice_date' => $validated['invoice_date'],
                 'ship_to' => $validated['ship_to'] ?? null,
@@ -161,10 +176,75 @@ class InvoiceController extends Controller
 
     public function show($id)
     {
-        $invoice = Invoice::with(['project.company', 'items.product', 'creator', 'finalChecker', 'payer', 'canceller'])
+        $invoice = Invoice::with(['project.company', 'items.product', 'creator', 'finalChecker', 'payer', 'canceller', 'billingTerm.invoices', 'billingTerm.documents.uploader'])
             ->findOrFail($id);
 
-        return view('invoice.show', ['invoice' => $invoice]);
+        return view('invoice.show', [
+            'invoice' => $invoice,
+            'termDocuments' => $this->termDocumentItems($invoice),
+        ]);
+    }
+
+    /**
+     * Upload dokumen pendukung termin dari halaman invoice (mis. BAST yang
+     * menyusul setelah invoice terbit). Dokumen melekat pada termin penagihan.
+     */
+    public function uploadDocument(Request $request, $id): JsonResponse
+    {
+        $invoice = Invoice::with('billingTerm')->findOrFail($id);
+        $term = $invoice->billingTerm;
+
+        if (! $term) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invoice ini tidak terhubung ke termin penagihan, jadi tidak punya dokumen pendukung.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'files' => 'required|array|min:1|max:'.Document::MAX_FILES,
+            'files.*' => Document::VALIDATION_RULE,
+            'notes' => 'nullable|string|max:255',
+        ], [
+            'files.required' => 'Pilih minimal satu file.',
+            'files.max' => 'Maksimal '.Document::MAX_FILES.' file sekali upload.',
+            'files.*.mimes' => 'Dokumen harus berformat PDF, JPG, atau PNG.',
+            'files.*.max' => 'Ukuran setiap file tidak boleh lebih dari 10MB.',
+        ]);
+
+        $documents = DB::transaction(fn () => collect($request->file('files'))
+            ->map(fn ($file) => Document::storeFor($term, $file, Document::TYPE_SUPPORT, $validated['notes'] ?? null)));
+
+        return response()->json([
+            'success' => true,
+            'message' => $documents->count().' dokumen berhasil diupload.',
+            'documents' => $this->termDocumentItems($invoice->load('billingTerm.invoices', 'billingTerm.documents.uploader')),
+        ]);
+    }
+
+    public function viewDocument($id, $documentId)
+    {
+        $invoice = Invoice::findOrFail($id);
+        $document = $this->invoiceDocument($invoice, $documentId);
+
+        return $document->inlineResponse();
+    }
+
+    public function deleteDocument($id, $documentId): JsonResponse
+    {
+        $invoice = Invoice::with('billingTerm.invoices')->findOrFail($id);
+        $document = $this->invoiceDocument($invoice, $documentId);
+
+        if (! $invoice->billingTerm->documentsDeletable()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dokumen tidak bisa dihapus karena invoice termin ini sudah Approved. Dokumen hanya bisa ditambah.',
+            ], 422);
+        }
+
+        $document->delete();
+
+        return response()->json(['success' => true, 'message' => 'Dokumen dihapus.']);
     }
 
     public function pdf($id)
@@ -205,6 +285,7 @@ class InvoiceController extends Controller
                 'id' => $project->id,
                 'text' => $project->project_number.' — '.$project->project_name,
             ] : null,
+            'selectedTermId' => $invoice->billing_term_id,
         ]);
     }
 
@@ -219,7 +300,7 @@ class InvoiceController extends Controller
             ], 422);
         }
 
-        $validated = $this->validateInvoice($request);
+        $validated = $this->validateInvoice($request, $invoice);
         $totals = $this->calculateTotals(
             $validated['items'],
             (float) $validated['percent_payment'],
@@ -233,6 +314,7 @@ class InvoiceController extends Controller
 
             $invoice->update([
                 'project_id' => $validated['project_id'],
+                'billing_term_id' => $validated['billing_term_id'] ?? null,
                 'invoice_date' => $validated['invoice_date'],
                 'ship_to' => $validated['ship_to'] ?? null,
                 'date_shipped' => $validated['date_shipped'] ?? null,
@@ -511,9 +593,10 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function fetchProject($id): JsonResponse
+    public function fetchProject(Request $request, $id): JsonResponse
     {
-        $project = Project::with(['company', 'quotation.items'])->findOrFail($id);
+        $project = Project::with(['company', 'quotation.items', 'billingTerms.invoices', 'billingTerms.documents'])->findOrFail($id);
+        $currentInvoiceId = $request->integer('invoice_id') ?: null;
         $company = $project->company;
         $quotationTotals = $this->quotationTotals($project);
 
@@ -531,6 +614,22 @@ class InvoiceController extends Controller
                 'net_sale_amount' => (float) $project->net_sale_amount,
                 'quotation_number' => $project->quotation?->quotation_number,
                 'quotation_items' => $this->quotationItems($project),
+                'billing_terms' => $project->billingTerms->map(function (ProjectBillingTerm $term) use ($currentInvoiceId) {
+                    $active = $term->activeInvoice();
+
+                    return [
+                        'id' => $term->id,
+                        'name' => $term->name,
+                        'percent' => $term->percent,
+                        'description' => $term->description,
+                        'document_count' => $term->documents->count(),
+                        'unlocked' => $term->isUnlocked(),
+                        // Tersedia bila sudah dibuka & belum ditagih, atau invoice aktifnya adalah invoice yang sedang diedit.
+                        'available' => ($active && $currentInvoiceId && $active->id === $currentInvoiceId)
+                            || (! $active && $term->isUnlocked()),
+                        'invoice_number' => $active?->invoice_number,
+                    ];
+                })->values(),
             ],
         ]);
     }
@@ -560,10 +659,11 @@ class InvoiceController extends Controller
         ]);
     }
 
-    private function validateInvoice(Request $request): array
+    private function validateInvoice(Request $request, ?Invoice $invoice): array
     {
         $validated = $request->validate([
             'project_id' => 'required|integer|exists:projects,id',
+            'billing_term_id' => ['nullable', 'integer', Rule::exists('project_billing_terms', 'id')->where('project_id', $request->integer('project_id'))],
             'invoice_date' => 'required|date',
             'ship_to' => 'nullable|string',
             'date_shipped' => 'nullable|date',
@@ -586,7 +686,30 @@ class InvoiceController extends Controller
             'items.*.unit_price' => 'required|numeric|min:0',
         ], [
             'items.required' => 'Tambahkan minimal satu item invoice.',
+            'billing_term_id.exists' => 'Termin penagihan tidak sesuai dengan project yang dipilih.',
         ]);
+
+        // Termin penagihan: satu invoice aktif per termin, persen terkunci mengikuti termin.
+        if (! empty($validated['billing_term_id'])) {
+            $term = ProjectBillingTerm::with('invoices')->findOrFail($validated['billing_term_id']);
+            $active = $term->activeInvoice();
+
+            if ($active && (! $invoice || $active->id !== $invoice->id)) {
+                throw ValidationException::withMessages([
+                    'billing_term_id' => '"'.$term->name.'" sudah ditagih lewat invoice '.$active->invoice_number.'.',
+                ]);
+            }
+
+            // Gerbang tagihan: termin harus sudah dibuka oleh pemegang can_update Project
+            // (invoice yang sedang diedit pada termin miliknya tetap boleh disimpan).
+            if (! $term->isUnlocked() && (! $invoice || (int) $invoice->billing_term_id !== (int) $term->id)) {
+                throw ValidationException::withMessages([
+                    'billing_term_id' => '"'.$term->name.'" masih terkunci. Minta pemegang akses project membuka termin ini untuk ditagih.',
+                ]);
+            }
+
+            $validated['percent_payment'] = $term->percent;
+        }
 
         foreach ($validated['items'] as $index => $item) {
             $description = Quotation::sanitizeDescription($item['description'] ?? '');
@@ -699,6 +822,38 @@ class InvoiceController extends Controller
             'discount_percent' => $discountPercent,
             'discount_amount' => $discount,
         ];
+    }
+
+    private function termDocumentItems(Invoice $invoice): array
+    {
+        $term = $invoice->billingTerm;
+        if (! $term) {
+            return [];
+        }
+
+        $deletable = $term->documentsDeletable();
+
+        return $term->documents->map(fn (Document $doc) => $doc->toListItem(
+            route('invoice.documents.show', [$invoice->id, $doc->id]),
+            $deletable ? route('invoice.documents.destroy', [$invoice->id, $doc->id]) : null
+        ))->values()->all();
+    }
+
+    /**
+     * Dokumen hanya bisa dibuka lewat invoice bila milik termin penagihan invoice tsb.
+     */
+    private function invoiceDocument(Invoice $invoice, $documentId): Document
+    {
+        $document = Document::findOrFail($documentId);
+
+        abort_unless(
+            $invoice->billing_term_id
+                && $document->documentable_type === (new ProjectBillingTerm)->getMorphClass()
+                && (int) $document->documentable_id === (int) $invoice->billing_term_id,
+            404
+        );
+
+        return $document;
     }
 
     /**

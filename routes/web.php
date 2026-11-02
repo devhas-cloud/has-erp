@@ -288,12 +288,19 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('project/{id}/achievements', [ProjectController::class, 'achievementForm'])->name('project.achievements');
     Route::put('project/{id}/achievements', [ProjectController::class, 'saveAchievements'])->name('project.achievements.update');
     Route::get('project/{id}/po', [ProjectController::class, 'viewPo'])->name('project.po');
+    Route::patch('project/{id}/billing-terms/{term}/access', [ProjectController::class, 'updateTermAccess'])->name('project.billing-terms.access');
+    Route::post('project/{id}/documents', [ProjectController::class, 'uploadDocument'])->name('project.documents.store');
+    Route::get('project/{id}/documents/{document}', [ProjectController::class, 'viewDocument'])->name('project.documents.show');
+    Route::delete('project/{id}/documents/{document}', [ProjectController::class, 'deleteDocument'])->name('project.documents.destroy');
     Route::resource('project', ProjectController::class);
 
     Route::get('invoice/data', [InvoiceController::class, 'data'])->name('invoice.data');
     Route::get('invoice/search-projects', [InvoiceController::class, 'searchProjects'])->name('invoice.search-projects');
     Route::get('invoice/search-products', [InvoiceController::class, 'searchProducts'])->name('invoice.search-products');
     Route::get('invoice/{id}/pdf', [InvoiceController::class, 'pdf'])->name('invoice.pdf');
+    Route::post('invoice/{id}/documents', [InvoiceController::class, 'uploadDocument'])->name('invoice.documents.store');
+    Route::get('invoice/{id}/documents/{document}', [InvoiceController::class, 'viewDocument'])->name('invoice.documents.show');
+    Route::delete('invoice/{id}/documents/{document}', [InvoiceController::class, 'deleteDocument'])->name('invoice.documents.destroy');
     Route::get('invoice/{id}/fetch-project', [InvoiceController::class, 'fetchProject'])->name('invoice.fetch-project');
     Route::post('invoice/{id}/submit', [InvoiceController::class, 'submit'])->name('invoice.submit');
     Route::post('invoice/{id}/approve', [InvoiceController::class, 'approve'])->name('invoice.approve');

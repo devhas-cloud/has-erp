@@ -9,6 +9,8 @@ class ProjectAchievement extends Model
 {
     protected $fillable = [
         'project_id',
+        'principal',
+        'brand',
         'device_name',
         'qty',
         'unit',
