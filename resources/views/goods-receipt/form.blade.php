@@ -31,14 +31,14 @@
                             @if($purchaseOrders->isNotEmpty())
                                 <optgroup label="Purchase Order (Approved / Diterima Sebagian)">
                                     @foreach($purchaseOrders as $po)
-                                        <option value="po:{{ $po->id }}" {{ $preselect['type'] === 'po' && $preselect['id'] === $po->id ? 'selected' : '' }}>PO {{ $po->po_number ?: '#'.$po->id }} — {{ $po->supplier_name }}</option>
+                                        <option value="po:{{ $po->id }}" {{ $preselect['type'] === 'po' && $preselect['id'] === $po->id ? 'selected' : '' }}>{{ $po->po_number ?: 'PO #'.$po->id }} — {{ $po->supplier_name }}</option>
                                     @endforeach
                                 </optgroup>
                             @endif
                             @if($directPurchases->isNotEmpty())
                                 <optgroup label="Direct Purchase (Approved)">
                                     @foreach($directPurchases as $dp)
-                                        <option value="dp:{{ $dp->id }}" {{ $preselect['type'] === 'dp' && $preselect['id'] === $dp->id ? 'selected' : '' }}>DP {{ $dp->dp_number ?: '#'.$dp->id }} — {{ $dp->supplier_name }} ({{ $dp->purpose_label }})</option>
+                                        <option value="dp:{{ $dp->id }}" {{ $preselect['type'] === 'dp' && $preselect['id'] === $dp->id ? 'selected' : '' }}>{{ $dp->dp_number ?: 'DPO #'.$dp->id }} — {{ $dp->supplier_name }} ({{ $dp->purpose_label }})</option>
                                     @endforeach
                                 </optgroup>
                             @endif

@@ -314,7 +314,7 @@ class GoodsReceiptController extends Controller
             return [[
                 'type' => self::SOURCE_PO,
                 'id' => $po->id,
-                'number' => 'PO '.$po->po_number,
+                'number' => $po->po_number,
                 'supplier_name' => $po->supplier_name,
             ], $lines];
         }
@@ -332,7 +332,7 @@ class GoodsReceiptController extends Controller
         return [[
             'type' => self::SOURCE_DP,
             'id' => $dp->id,
-            'number' => 'DP '.$dp->dp_number,
+            'number' => $dp->dp_number,
             'supplier_name' => $dp->supplier_name,
             'purpose' => $dp->purpose,
         ], $lines];

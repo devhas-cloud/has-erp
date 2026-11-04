@@ -103,8 +103,8 @@ class GoodsReceipt extends Model
     public function sourceNumber(): string
     {
         return $this->purchase_order_id
-            ? 'PO '.($this->purchaseOrder?->po_number ?: '#'.$this->purchase_order_id)
-            : 'DP '.($this->directPurchase?->dp_number ?: '#'.$this->direct_purchase_id);
+            ? ($this->purchaseOrder?->po_number ?: 'PO #'.$this->purchase_order_id)
+            : ($this->directPurchase?->dp_number ?: 'DPO #'.$this->direct_purchase_id);
     }
 
     public function supplierName(): ?string

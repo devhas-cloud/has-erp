@@ -113,7 +113,7 @@ class DeliveryOrderTest extends TestCase
 
         $id = $this->actingAs($this->user)->postJson(route('delivery-order.store'), $this->payload(3))->assertOk()->json('id');
         $order = DeliveryOrder::with('items')->findOrFail($id);
-        $this->assertSame('26110001', $order->do_number);
+        $this->assertSame('DO-26110001', $order->do_number);
         $this->assertSame('Unit', $order->items->first()->unit);
         $this->assertSame(5, StockMovement::balance($this->transit->id, $this->product->id, $this->project->id), 'draft tidak mengurangi stok');
 

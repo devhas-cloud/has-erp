@@ -984,7 +984,7 @@ class GoodsRequestTest extends TestCase
         $first = GoodsRequest::findOrFail($store());
         $second = GoodsRequest::findOrFail($store());
 
-        $prefix = now()->format('ym');
+        $prefix = 'PR-'.now()->format('ym');
         $this->assertSame($prefix.'0001', $first->request_number);
         $this->assertSame($prefix.'0002', $second->request_number);
 

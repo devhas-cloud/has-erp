@@ -195,7 +195,7 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Nomor PO baru: YYMM + 4 digit (reset tiap tahun, acuan tanggal dibuat)
+     * Nomor PO baru: PO-YYMM + 4 digit (reset tiap tahun, acuan tanggal dibuat)
      * ditambah suffix jenis.
      */
     public static function generatePoNumber(string $type, ?string $date = null): string
@@ -207,16 +207,17 @@ class PurchaseOrder extends Model
      * Ganti jenis hanya mengganti suffix; bagian angka nomor tetap.
      */
     /**
-     * Nomor revisi dari PO Rejected: nomor dasar (8 digit) yang sama + REV,
-     * REV2, REV3, ... + suffix jenis. Contoh: 26110005REV, 26110005REV2-L.
+     * Nomor revisi dari PO Rejected: nomor dasar (PO- + 8 digit) yang sama + REV,
+     * REV2, REV3, ... + suffix jenis. Contoh: PO-26110005REV, PO-26110005REV2-L.
      */
     public static function revisionNumber(string $sourceNumber, string $type): string
     {
-        $base = substr($sourceNumber, 0, 8);
+        $prefix = NumberSequence::prefix('purchase_orders');
+        $base = preg_match('/^'.preg_quote($prefix, '/').'\d{8}/', $sourceNumber, $m) ? $m[0] : $prefix.substr(preg_replace('/\D/', '', $sourceNumber), 0, 8);
 
         $last = static::where('po_number', 'like', $base.'REV%')
             ->pluck('po_number')
-            ->map(fn ($number) => preg_match('/^\d{8}REV(\d*)/', $number, $m) ? max(1, (int) $m[1]) : 0)
+            ->map(fn ($number) => preg_match('/^'.preg_quote($base, '/').'REV(\d*)/', $number, $m) ? max(1, (int) $m[1]) : 0)
             ->max() ?? 0;
 
         $next = $last + 1;

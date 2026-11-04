@@ -34,9 +34,9 @@ use Illuminate\Support\Facades\DB;
  * pemegang can_approve, alasan wajib; hanya sisa yang belum diterima dilepas).
  * Barang diterima lewat modul Penerimaan Barang.
  *
- * Nomor PO otomatis (YYMM + 4 digit, urutan bersama lintas jenis) + suffix jenis.
+ * Nomor PO otomatis (PO-YYMM + 4 digit, urutan bersama lintas jenis) + suffix jenis.
  * PO Rejected bisa direvisi: disalin menjadi draft baru bernomor dasar sama +
- * REV (26110005REV, 26110005REV2-L, ...) — lihat revise().
+ * REV (PO-26110005REV, PO-26110005REV2-L, ...) — lihat revise().
  * Satu PO satu mata uang (mengikuti item permintaan, dikunci), tanpa kurs.
  */
 class PurchaseOrderController extends Controller

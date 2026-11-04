@@ -103,7 +103,7 @@
         @if($bill->isAdvance())
         @php $advPo = $bill->purchaseOrder; @endphp
         <div class="card-custom fade-in mb-3">
-            <div class="card-header-custom"><span><i class="fa-solid fa-hand-holding-dollar me-2" style="color:var(--accent)"></i>Uang Muka PO {{ $advPo?->po_number }}</span></div>
+            <div class="card-header-custom"><span><i class="fa-solid fa-hand-holding-dollar me-2" style="color:var(--accent)"></i>Uang Muka {{ $advPo?->po_number }}</span></div>
             <div class="card-body-custom">
                 <p class="mb-2" style="font-size:13px">Pembayaran di muka sebelum barang diterima. Setelah dibayar, nilainya otomatis dipotongkan dari tagihan reguler PO ini; sisa yang tidak terpakai dikembalikan lewat Refund Supplier.</p>
                 @if($advPo)

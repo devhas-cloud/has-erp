@@ -424,8 +424,8 @@ class ProjectTest extends TestCase
         $this->actingAs($this->creator)->postJson(route('project.store'), $this->payload($other, ['po_number_company' => 'PO-CUST-002']))->assertOk();
 
         $numbers = Project::orderBy('id')->pluck('project_number')->all();
-        $this->assertSame(now()->format('ym').'0001', $numbers[0]);
-        $this->assertSame(now()->format('ym').'0002', $numbers[1]);
+        $this->assertSame('PRJ-'.now()->format('ym').'0001', $numbers[0]);
+        $this->assertSame('PRJ-'.now()->format('ym').'0002', $numbers[1]);
     }
 
     public function test_number_format_helpers_use_consistent_format(): void

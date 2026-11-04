@@ -192,7 +192,7 @@ class InvoiceTest extends TestCase
 
         $this->assertSame(Invoice::STATUS_UNPAID, $invoice->status);
         $this->assertSame(Invoice::APPROVAL_DRAFT, $invoice->approval_status);
-        $this->assertSame(now()->format('ym').'0001', $invoice->invoice_number);
+        $this->assertSame('INV-'.now()->format('ym').'0001', $invoice->invoice_number);
         $this->assertSame(1250000.0, $invoice->subtotal);
         $this->assertSame(625000.0, $invoice->amount_payment);
         $this->assertSame(11.0, $invoice->ppn);
@@ -380,8 +380,8 @@ class InvoiceTest extends TestCase
 
         $numbers = Invoice::orderBy('id')->pluck('invoice_number')->all();
 
-        $this->assertSame(now()->format('ym').'0001', $numbers[0]);
-        $this->assertSame(now()->format('ym').'0002', $numbers[1]);
+        $this->assertSame('INV-'.now()->format('ym').'0001', $numbers[0]);
+        $this->assertSame('INV-'.now()->format('ym').'0002', $numbers[1]);
     }
 
     public function test_invoice_number_sequence_resets_each_year(): void
@@ -403,9 +403,9 @@ class InvoiceTest extends TestCase
 
         $numbers = Invoice::orderBy('id')->pluck('invoice_number')->all();
 
-        $this->assertSame('26120001', $numbers[0]);
-        $this->assertSame('27010001', $numbers[1]);
-        $this->assertSame('26110002', $numbers[2]);
+        $this->assertSame('INV-26120001', $numbers[0]);
+        $this->assertSame('INV-27010001', $numbers[1]);
+        $this->assertSame('INV-26110002', $numbers[2]);
     }
 
     public function test_update_recalculates_items_and_keeps_status_under_backend_control(): void

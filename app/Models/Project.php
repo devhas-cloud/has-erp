@@ -263,9 +263,9 @@ class Project extends Model
     }
 
     /**
-     * Nomor project: YYMM + 4 digit urut (format sama dengan invoice).
+     * Nomor project: PRJ-YYMM + 4 digit urut (config/document_numbers.php).
      * Urutan dimulai dari 0001 dan reset setiap tahun.
-     * Contoh: 26100001 untuk project pertama Oktober 2026.
+     * Contoh: PRJ-26100001 untuk project pertama Oktober 2026.
      */
     public function generateProjectNumber(): string
     {

@@ -270,8 +270,8 @@ class SupplierBill extends Model
     public function sourceNumber(): string
     {
         return $this->purchase_order_id
-            ? 'PO '.($this->purchaseOrder?->po_number ?: '#'.$this->purchase_order_id)
-            : 'DP '.($this->directPurchase?->dp_number ?: '#'.$this->direct_purchase_id);
+            ? ($this->purchaseOrder?->po_number ?: 'PO #'.$this->purchase_order_id)
+            : ($this->directPurchase?->dp_number ?: 'DPO #'.$this->direct_purchase_id);
     }
 
     /**
@@ -320,7 +320,7 @@ class SupplierBill extends Model
             'bill_type' => self::TYPE_REGULAR,
             'supplier_id' => $dp->supplier_id,
             'direct_purchase_id' => $dp->id,
-            'supplier_invoice_number' => 'DP '.($dp->dp_number ?: $dp->id),
+            'supplier_invoice_number' => $dp->dp_number ?: 'DPO #'.$dp->id,
             'bill_date' => $billDate,
             'due_date' => Carbon::parse($billDate)->addDays($term)->toDateString(),
             'currency' => $dp->currencyCode(),

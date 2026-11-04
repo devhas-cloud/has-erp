@@ -237,9 +237,9 @@ class Invoice extends Model
     }
 
     /**
-     * Nomor invoice: YYMM + 4 digit urut.
+     * Nomor invoice: INV-YYMM + 4 digit urut.
      * Urutan dimulai dari 0001 dan reset setiap tahun.
-     * Contoh: 26100001 untuk invoice pertama Oktober 2026.
+     * Contoh: INV-26100001 untuk invoice pertama Oktober 2026.
      */
     public static function generateInvoiceNumber(?string $date = null): string
     {

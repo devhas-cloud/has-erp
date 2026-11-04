@@ -140,7 +140,7 @@ class DirectPurchase extends Model
     }
 
     /**
-     * Nomor dokumen: YYMM + 4 digit (reset tiap tahun, acuan tanggal dibuat).
+     * Nomor dokumen: DPO-YYMM + 4 digit (reset tiap tahun, acuan tanggal dibuat).
      * Urutan sendiri di tabel direct_purchases.
      */
     public static function generateNumber(?string $date = null): string

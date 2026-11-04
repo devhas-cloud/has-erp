@@ -136,7 +136,7 @@ class CustomerReceiptTest extends TestCase
         $this->assertSame(1110000.0, $receipt->amount);
         $this->assertSame(CustomerReceipt::STATUS_DRAFT, $receipt->status);
         $this->assertSame($this->project->company_id, $receipt->company_id);
-        $this->assertMatchesRegularExpression('/^\d{8}$/', $receipt->receipt_number);
+        $this->assertMatchesRegularExpression('/^RV-\d{8}$/', $receipt->receipt_number);
 
         // Draft belum melunasi invoice.
         $this->assertSame(Invoice::STATUS_UNPAID, $invoice->fresh()->status);

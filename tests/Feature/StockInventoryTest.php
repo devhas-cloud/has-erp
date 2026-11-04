@@ -100,7 +100,7 @@ class StockInventoryTest extends TestCase
         $id = $this->entry(10)->assertOk()->json('id');
 
         $entry = StockEntry::findOrFail($id);
-        $this->assertSame('26110001', $entry->entry_number);
+        $this->assertSame('SE-26110001', $entry->entry_number);
         $this->assertSame(10, StockMovement::balance($this->stockWarehouse->id, $this->product()->id));
         $this->assertDatabaseHas('stock_movements', ['type' => StockMovement::TYPE_MISC_IN, 'source_type' => StockMovement::SOURCE_STOCK_ENTRY, 'source_id' => $id, 'unit' => 'Pcs']);
 
@@ -113,7 +113,7 @@ class StockInventoryTest extends TestCase
         $this->actingAs($this->user)->get(route('stock-entry.index'))->assertOk();
         $this->actingAs($this->user)->get(route('stock-entry.create'))->assertOk();
         $this->actingAs($this->user)->get(route('stock-entry.show', $id))->assertOk()->assertSee('Saldo Awal');
-        $this->actingAs($this->user)->getJson(route('stock-entry.data'))->assertOk()->assertJsonPath('data.0.entry_number', '26110001');
+        $this->actingAs($this->user)->getJson(route('stock-entry.data'))->assertOk()->assertJsonPath('data.0.entry_number', 'SE-26110001');
     }
 
     public function test_transfer_allocates_free_stock_to_project_in_transit(): void
@@ -138,7 +138,7 @@ class StockInventoryTest extends TestCase
             ->assertOk()->json('id');
 
         $transfer = StockTransfer::findOrFail($id);
-        $this->assertSame('26110001', $transfer->transfer_number);
+        $this->assertSame('ST-26110001', $transfer->transfer_number);
         $this->assertSame('Alokasi ke Project', $transfer->kindLabel());
         $this->assertSame(6, StockMovement::balance($this->stockWarehouse->id, $product->id));
         $this->assertSame(4, StockMovement::balance($this->transitWarehouse->id, $product->id, $project->id));

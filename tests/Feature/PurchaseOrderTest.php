@@ -381,12 +381,12 @@ class PurchaseOrderTest extends TestCase
             ->json('po_number');
 
         // po_number dari client diabaikan; default jenis = manufacture.
-        $this->assertSame('26100001', $store(['po_number' => 'MANUAL-1']));
-        $this->assertSame('26100002-L', $store(['po_type' => 'local']));
-        $this->assertSame('26100003-C', $store(['po_type' => 'calibration']));
-        $this->assertSame('26100004', $store(['po_type' => 'manufacture']));
+        $this->assertSame('PO-26100001', $store(['po_number' => 'MANUAL-1']));
+        $this->assertSame('PO-26100002-L', $store(['po_type' => 'local']));
+        $this->assertSame('PO-26100003-C', $store(['po_type' => 'calibration']));
+        $this->assertSame('PO-26100004', $store(['po_type' => 'manufacture']));
 
-        $this->assertSame(PurchaseOrder::TYPE_MANUFACTURE, PurchaseOrder::where('po_number', '26100001')->value('po_type'));
+        $this->assertSame(PurchaseOrder::TYPE_MANUFACTURE, PurchaseOrder::where('po_number', 'PO-26100001')->value('po_type'));
 
         $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
             'supplier_name' => 'PT Supplier',
@@ -395,7 +395,7 @@ class PurchaseOrderTest extends TestCase
 
         // Acuan tanggal dibuat: urutan reset di tahun berikutnya.
         $this->travelTo('2027-01-03 09:00:00');
-        $this->assertSame('27010001-L', $store(['po_type' => 'local', 'date' => '2026-12-30']));
+        $this->assertSame('PO-27010001-L', $store(['po_type' => 'local', 'date' => '2026-12-30']));
     }
 
     public function test_changing_po_type_only_changes_suffix(): void
@@ -417,15 +417,15 @@ class PurchaseOrderTest extends TestCase
             return PurchaseOrder::findOrFail($id);
         };
 
-        $this->assertSame('26100001-C', $update('calibration')->po_number);
+        $this->assertSame('PO-26100001-C', $update('calibration')->po_number);
         $po = $update('manufacture');
-        $this->assertSame('26100001', $po->po_number);
+        $this->assertSame('PO-26100001', $po->po_number);
         $this->assertSame(PurchaseOrder::TYPE_MANUFACTURE, $po->po_type);
-        $this->assertSame('26100001-L', $update('local')->po_number);
+        $this->assertSame('PO-26100001-L', $update('local')->po_number);
 
         $this->actingAs($this->creator)->get(route('purchase-order.show', $id))
             ->assertOk()
-            ->assertSee('26100001-L')
+            ->assertSee('PO-26100001-L')
             ->assertSee('Local');
         $this->actingAs($this->creator)->get(route('purchase-order.pdf', $id))->assertOk();
     }
@@ -690,7 +690,7 @@ class PurchaseOrderTest extends TestCase
 
         $id = $this->storePo([$this->line($first, 4), $this->line($second)], ['po_type' => PurchaseOrder::TYPE_LOCAL, 'terms' => '30 hari'])->assertOk()->json('id');
         $source = PurchaseOrder::findOrFail($id);
-        $baseNumber = substr($source->po_number, 0, 8);
+        $baseNumber = substr($source->po_number, 0, 11); // PO- + 8 digit
 
         // Hanya PO Rejected yang bisa direvisi.
         $this->actingAs($this->creator)->postJson(route('purchase-order.revise', $id))->assertStatus(422);
@@ -735,6 +735,6 @@ class PurchaseOrderTest extends TestCase
 
         // Nomor revisi tidak memajukan urutan PO baru.
         $nextId = $this->storePo([$this->line($first, 1)])->assertOk()->json('id');
-        $this->assertSame(str_pad((string) ((int) substr($baseNumber, 4) + 2), 4, '0', STR_PAD_LEFT), substr(PurchaseOrder::findOrFail($nextId)->po_number, 4, 4));
+        $this->assertSame(str_pad((string) ((int) substr($baseNumber, 7) + 2), 4, '0', STR_PAD_LEFT), substr(PurchaseOrder::findOrFail($nextId)->po_number, 7, 4));
     }
 }

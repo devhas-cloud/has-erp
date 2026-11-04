@@ -151,7 +151,7 @@
     <div class="doc-footer">
         <table style="width:100%">
             <tr>
-                <td>PO {{ $purchaseOrder->po_number ?: '#'.$purchaseOrder->id }}</td>
+                <td>{{ $purchaseOrder->po_number ?: 'PO #'.$purchaseOrder->id }}</td>
                 <td class="pg">Hal. </td>
             </tr>
         </table>

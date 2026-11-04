@@ -138,7 +138,7 @@ class StockOpnameTest extends TestCase
 
         $id = $this->actingAs($this->counter)->postJson(route('stock-opname.store'), $payload)->assertOk()->json('id');
         $opname = StockOpname::with('items')->findOrFail($id);
-        $this->assertSame('26110001', $opname->opname_number);
+        $this->assertSame('SC-26110001', $opname->opname_number);
         $this->assertSame([10, 4, 0], $opname->items->pluck('system_qty')->all());
 
         foreach (['index', 'create'] as $page) {
