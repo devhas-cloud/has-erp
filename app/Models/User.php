@@ -70,6 +70,24 @@ class User extends Authenticatable
         );
     }
 
+    /** Divisi yang boleh melihat & mengubah harga beli/jual master product. */
+    public const PRICE_VIEWER_DIVISIONS = ['Admin', 'IMS'];
+
+    /**
+     * Harga beli/jual master product: role Admin, atau user berdivisi Admin / IMS.
+     * Satu-satunya aturan — dipakai view (canViewPrice) dan ProductManagementController.
+     */
+    public function canViewProductPrice(): bool
+    {
+        if ($this->role === 'Admin') {
+            return true;
+        }
+
+        $division = strtolower(trim((string) $this->division?->division_name));
+
+        return in_array($division, array_map('strtolower', self::PRICE_VIEWER_DIVISIONS), true);
+    }
+
     public function division(): BelongsTo
     {
         return $this->belongsTo(Division::class);

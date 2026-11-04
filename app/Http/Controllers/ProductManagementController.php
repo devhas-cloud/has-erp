@@ -141,7 +141,7 @@ class ProductManagementController extends Controller
         ]);
 
         $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
-        $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price']);
+        $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price'] ?? null);
 
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('product-images', 'public');
@@ -177,7 +177,7 @@ class ProductManagementController extends Controller
         $data['selling_price_formula_formatted'] = number_format($data['selling_price_formula'], 2, '.', ',');
 
         if (! $this->isAdmin()) {
-            // Harga hanya untuk role Admin divisi Admin.
+            // Harga hanya untuk role Admin / divisi Admin / divisi IMS.
             $data['selling_price'] = null;
             $data['purchase_price'] = null;
             $data['selling_price_formula'] = null;
@@ -219,9 +219,10 @@ class ProductManagementController extends Controller
         ]);
 
         $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
-        // Harga hanya bisa diubah role Admin divisi Admin. Non-Admin tidak
+        // Harga hanya bisa diubah role Admin / divisi Admin / divisi IMS. Lainnya tidak
         // mengirim harga -> harga DB tetap.
-        if ($this->isAdmin()) {
+        // Form tanpa field harga (purchase_price tidak dikirim) juga mempertahankan harga DB.
+        if ($this->isAdmin() && array_key_exists('purchase_price', $validated)) {
             $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price']);
         } else {
             unset($validated['selling_price'], $validated['purchase_price']);
@@ -347,15 +348,11 @@ class ProductManagementController extends Controller
     }
 
     /**
-     * Harga beli/jual hanya dilihat role Admin yang berdivisi Admin.
+     * Harga beli/jual: role Admin, divisi Admin, atau divisi IMS (User::canViewProductPrice).
      */
     private function isAdmin(): bool
     {
-        $user = Auth::user();
-
-        return $user !== null
-            && $user->role === 'Admin'
-            && strcasecmp($user->division?->division_name ?? '', 'Admin') === 0;
+        return (bool) Auth::user()?->canViewProductPrice();
     }
 
     /**
