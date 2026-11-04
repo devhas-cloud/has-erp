@@ -192,13 +192,13 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Harga Beli</label>
-                                <input type="number" id="product-purchase-price" class="form-control" min="0" step="0.01" placeholder="0.00">
-                                <div style="padding:9px 10px;background:var(--bg,#f8f9fa);border:1px dashed var(--card-border,#ced4da);border-radius:.35rem;font-size:12.5px;line-height:1.55">
+                                <input type="text" inputmode="decimal" autocomplete="off" data-number="money" id="product-purchase-price" class="form-control" placeholder="0">
+                                {{-- <div style="padding:9px 10px;background:var(--bg,#f8f9fa);border:1px dashed var(--card-border,#ced4da);border-radius:.35rem;font-size:12.5px;line-height:1.55">
                                     <i class="fa-solid fa-circle-info me-1" style="color:var(--accent)"></i>
                                     Harga jual dihitung otomatis dari <strong>harga beli</strong>:<br>
                                     &bull; IDR / base: harga beli &times; 2 (IDR)<br>
                                     &bull; Currency lain: harga beli &divide; 0.43 &times; kurs (IDR), dibulatkan ke atas kelipatan 500.000 (di bawah 10 juta) / 1.000.000.
-                                </div>
+                                </div> --}}
                             </div>
                         </div>
 
@@ -545,7 +545,7 @@ function openEditModal(id) {
         $('#product-type').val(p.type || '');
         $('#product-parameter').val(p.parameter || '');
         $('#product-division').val(p.division_id || '');
-        $('#product-purchase-price').val(p.purchase_price || '');
+        $('#product-purchase-price').val(p.purchase_price ? Num.format(p.purchase_price, 2) : '');
         $('#product-currency').val(p.currency_id || '');
         $('#product-status').val(p.status || 'Active');
         $('#product-description').val(p.description || '');
@@ -625,7 +625,8 @@ $('#btn-detail-edit').on('click', function() {
 $(document).on('click', '#btn-save-product', function() {
     var name = $('#product-name').val().trim();
     var code = $('#product-code').val().trim();
-    var purchasePrice = $('#product-purchase-price').val();
+    var purchasePrice = Num.parseOrNull($('#product-purchase-price').val());
+    if (purchasePrice === null) purchasePrice = '';
     var status = $('#product-status').val();
 
     if (!code) { toastr.error('Code produk wajib diisi.'); $('#product-code').addClass('is-invalid'); return; }
