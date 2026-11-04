@@ -57,10 +57,12 @@ class Invoice extends Model
         'due_date',
         'date_payment',
         'reference_number',
+        'tax_invoice_number',
         'subtotal',
         'discount_percent',
         'discount_amount',
         'noted',
+        'non_term_reason',
         'signer_name',
         'signer_position',
         'percent_payment',
@@ -116,6 +118,21 @@ class Invoice extends Model
         return $this->hasMany(InvoiceItem::class)->orderBy('id');
     }
 
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(CustomerReceipt::class)->orderByDesc('id');
+    }
+
+    /**
+     * Penerimaan yang sedang berjalan (Draft / Posted) — maksimal satu per invoice.
+     */
+    public function activeReceipt(): ?CustomerReceipt
+    {
+        $receipts = $this->relationLoaded('receipts') ? $this->receipts : $this->receipts()->get();
+
+        return $receipts->first(fn (CustomerReceipt $receipt) => in_array($receipt->status, CustomerReceipt::ACTIVE_STATUSES, true));
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -142,11 +159,27 @@ class Invoice extends Model
     }
 
     /**
-     * Pembayaran & pembatalan hanya untuk invoice yang sudah Approved dan belum dibayar.
+     * Penerimaan & pembatalan hanya untuk invoice yang sudah Approved dan belum dibayar.
      */
     public function canRecordPayment(): bool
     {
         return $this->isApproved() && $this->status === self::STATUS_UNPAID;
+    }
+
+    /**
+     * Invoice siap dicatat penerimaannya: Approved, Unpaid, dan belum ada draft penerimaan.
+     */
+    public function awaitsReceipt(): bool
+    {
+        return $this->canRecordPayment() && ! $this->activeReceipt();
+    }
+
+    /**
+     * Tagihan di luar timeline termin project (pekerjaan tambahan dsb.), wajib beralasan.
+     */
+    public function isOutsideTimeline(): bool
+    {
+        return $this->billing_term_id === null;
     }
 
     public function canBeCancelled(): bool

@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DirectPurchase;
+use App\Models\Log;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class SupplierController extends Controller
 {
@@ -48,6 +51,11 @@ class SupplierController extends Controller
                 'fax' => $supplier->fax,
                 'email' => $supplier->email,
                 'attn_name' => $supplier->attn_name,
+                'payment_term_days' => $supplier->payment_term_days,
+                'payment_term_label' => Supplier::termLabel($supplier->payment_term_days),
+                'max_advance_percent' => $supplier->max_advance_percent,
+                'is_pkp' => $supplier->is_pkp,
+                'has_bank' => (bool) $supplier->bank_account_no,
                 'status' => $supplier->status,
             ];
         }
@@ -84,6 +92,8 @@ class SupplierController extends Controller
             'phone' => $s->phone,
             'fax' => $s->fax,
             'attn_name' => $s->attn_name,
+            'payment_term_days' => $s->payment_term_days,
+            'max_advance_percent' => $s->max_advance_percent,
         ]);
 
         return response()->json(['results' => $data]);
@@ -91,13 +101,14 @@ class SupplierController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate($this->rules());
+        $validated = $this->withoutEmptyTerm($request->validate($this->rules()));
 
-        $supplier = Supplier::create($validated);
+        $supplier = Supplier::create($validated + ['is_pkp' => false]);
 
         return response()->json([
             'success' => true,
             'message' => 'Supplier '.$supplier->name.' berhasil ditambahkan.',
+            'id' => $supplier->id,
         ]);
     }
 
@@ -115,7 +126,7 @@ class SupplierController extends Controller
     {
         $supplier = Supplier::findOrFail($id);
 
-        $validated = $request->validate($this->rules($supplier->id));
+        $validated = $this->withoutEmptyTerm($request->validate($this->rules($supplier->id)));
 
         $supplier->update($validated);
 
@@ -125,14 +136,43 @@ class SupplierController extends Controller
         ]);
     }
 
+    /**
+     * Batas uang muka per PO (% nilai PO). Dipisah dari update biasa karena
+     * menyangkut risiko dana keluar sebelum barang datang: route
+     * supplier.advance.approve -> middleware mewajibkan can_approve Supplier.
+     */
+    public function updateAdvanceLimit(Request $request, $id): JsonResponse
+    {
+        $supplier = Supplier::findOrFail($id);
+
+        $validated = $request->validate([
+            'max_advance_percent' => 'required|numeric|min:0|max:100',
+        ], ['max_advance_percent.max' => 'Batas uang muka maksimal 100%.']);
+
+        $before = $supplier->max_advance_percent;
+        $supplier->update(['max_advance_percent' => round((float) $validated['max_advance_percent'], 2)]);
+
+        Log::record(
+            'update_supplier_advance_limit',
+            'Batas uang muka supplier '.$supplier->name.' diubah dari '.$before.'% menjadi '.$supplier->max_advance_percent.'% oleh '.Auth::user()->display_name,
+            'MOD_SUPPLIER',
+            $supplier
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Batas uang muka '.$supplier->name.' menjadi '.rtrim(rtrim(number_format($supplier->max_advance_percent, 2), '0'), '.').'%.',
+        ]);
+    }
+
     public function destroy($id): JsonResponse
     {
         $supplier = Supplier::findOrFail($id);
 
-        if (PurchaseOrder::where('supplier_id', $id)->exists()) {
+        if (PurchaseOrder::where('supplier_id', $id)->exists() || DirectPurchase::where('supplier_id', $id)->exists()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Supplier masih dipakai oleh Purchase Order dan tidak dapat dihapus.',
+                'message' => 'Supplier masih dipakai oleh Purchase Order / Direct Purchase dan tidak dapat dihapus. Ubah statusnya menjadi Inactive.',
             ], 422);
         }
 
@@ -145,6 +185,18 @@ class SupplierController extends Controller
         ]);
     }
 
+    /**
+     * Termin kosong tidak menimpa nilai yang ada (default kolom: 30 hari).
+     */
+    private function withoutEmptyTerm(array $validated): array
+    {
+        if (($validated['payment_term_days'] ?? null) === null) {
+            unset($validated['payment_term_days']);
+        }
+
+        return $validated;
+    }
+
     private function rules(?int $ignoreId = null): array
     {
         return [
@@ -154,6 +206,13 @@ class SupplierController extends Controller
             'fax' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:150',
             'attn_name' => 'nullable|string|max:150',
+            'payment_term_days' => 'nullable|integer|min:0|max:365',
+            'npwp' => 'nullable|string|max:30',
+            'is_pkp' => 'nullable|boolean',
+            'default_pph_percent' => 'nullable|numeric|min:0|max:100',
+            'bank_name' => 'nullable|string|max:100',
+            'bank_account_no' => 'nullable|string|max:50',
+            'bank_account_name' => 'nullable|string|max:150',
             'status' => 'required|in:Active,Inactive',
         ];
     }

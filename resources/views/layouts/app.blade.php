@@ -432,7 +432,7 @@
         }
 
         .sidebar-group-body.is-long .sidebar-group-body-inner {
-            max-height: 252px;
+            max-height: 325px;
             overflow-y: auto;
             scrollbar-width: thin;
             scrollbar-color: rgba(16, 185, 129, 0.15) transparent;
@@ -2462,10 +2462,13 @@
                 @php
                     $groupedModules = \App\Support\SidebarMenu::forUser(Auth::user());
                     $activeRouteName = request()->route() ? request()->route()->getName() : '';
+                    // Cocok per segmen: "supplier.*" tidak ikut aktif saat membuka "supplier-bill.*".
+                    $isActiveModule = fn ($m) => $m->route_name && $activeRouteName
+                        && ($activeRouteName === $m->route_name || str_starts_with($activeRouteName, $m->route_name.'.'));
                 @endphp
                 @foreach ($groupedModules as $groupName => $groupModules)
                     @php
-                        $groupActive = $groupModules->contains(fn($m) => $m->route_name && $activeRouteName && str_starts_with($activeRouteName, $m->route_name));
+                        $groupActive = $groupModules->contains($isActiveModule);
                         $groupCount = $groupModules->count();
                     @endphp
                     <div class="sidebar-group {{ $groupActive ? 'open active' : '' }}" data-title="{{ $groupName }}" data-search="{{ strtolower($groupName) }}">
@@ -2479,7 +2482,7 @@
                         <div class="sidebar-group-body-inner">
                             @foreach ($groupModules as $module)
                                 <a href="{{ $module->route_name ? route($module->route_name . '.index') : '#' }}"
-                                    class="sidebar-link {{ $module->route_name && $activeRouteName && str_starts_with($activeRouteName, $module->route_name) ? 'active' : '' }}"
+                                    class="sidebar-link {{ $isActiveModule($module) ? 'active' : '' }}"
                                     data-title="{{ $module->module_name }}"
                                     data-search="{{ strtolower($module->module_name) }}">
                                     <i class="sidebar-icon {{ $module->icon ?? 'fa-solid fa-circle' }}"></i>

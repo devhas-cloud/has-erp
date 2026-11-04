@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\AccountCompany;
+use App\Models\CustomerReceipt;
 use App\Models\Document;
 use App\Models\Invoice;
 use App\Models\Module;
+use App\Models\Notification;
 use App\Models\Project;
 use App\Models\ProjectBillingTerm;
 use App\Models\User;
@@ -119,7 +121,8 @@ class ProjectBillingTimelineTest extends TestCase
             'noted' => 'DP',
             'percent_payment' => 99,
             'ppn' => 11,
-            'items' => [['description' => 'Paket SPARING', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 2000000]],
+            // Project manual: dasar invoice termin = net sale 1.500.000 (sebelum PPN).
+            'items' => [['description' => 'Paket SPARING', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 1500000]],
         ], $overrides);
     }
 
@@ -204,9 +207,98 @@ class ProjectBillingTimelineTest extends TestCase
         $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($other, $termin1->id))
             ->assertStatus(422)->assertJsonValidationErrors('billing_term_id');
 
-        // Invoice tanpa termin tetap boleh.
-        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, null, ['percent_payment' => 10]))->assertOk();
-        $this->assertSame(10.0, Invoice::latest('id')->first()->percent_payment);
+        // Invoice tanpa termin (di luar timeline) tetap boleh, tetapi alasan wajib.
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, null, ['percent_payment' => 10]))
+            ->assertStatus(422)->assertJsonValidationErrors('non_term_reason');
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, null, [
+            'percent_payment' => 10,
+            'non_term_reason' => 'Pekerjaan tambahan di luar PO',
+        ]))->assertOk();
+        $extra = Invoice::latest('id')->first();
+        $this->assertSame(10.0, $extra->percent_payment);
+        $this->assertSame('Pekerjaan tambahan di luar PO', $extra->non_term_reason);
+        $this->assertTrue($extra->isOutsideTimeline());
+    }
+
+    public function test_term_invoice_must_match_project_contract_value(): void
+    {
+        $project = $this->createProjectWithTerms();
+        $dp = $project->billingTerms->first();
+
+        // Nilai kontrak project tanpa quotation = net sale 1.500.000 (bukan total sale 2.000.000 yang termasuk PPN).
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'items' => [['description' => 'Paket SPARING', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 2000000]],
+        ]))->assertStatus(422)->assertJsonValidationErrors('items');
+
+        // Diskon yang membuat nilai sebelum PPN berbeda juga ditolak.
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'discount_amount' => 100000,
+        ]))->assertStatus(422)->assertJsonValidationErrors('items');
+
+        $this->assertSame(0, Invoice::count());
+    }
+
+    public function test_last_term_bills_remaining_contract_value_without_rounding_gap(): void
+    {
+        $id = $this->actingAs($this->staff)->post(route('project.store'), $this->projectPayload([
+            'total_sale_amount' => 1110002,
+            'net_sale_amount' => 1000001,
+            'billing_terms' => [
+                ['name' => 'Termin 1', 'percent' => 33.33],
+                ['name' => 'Termin 2', 'percent' => 33.33],
+                ['name' => 'Termin 3', 'percent' => 33.34],
+            ],
+        ]), ['Accept' => 'application/json'])->assertOk()->json('id');
+        $project = Project::with('billingTerms')->findOrFail($id);
+        foreach ($project->billingTerms as $term) {
+            $this->setTermAccess($project, $term, false)->assertOk();
+        }
+
+        $items = ['items' => [['description' => 'Paket', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 1000001]]];
+        // Termin terakhir ditagih lebih dulu: belum melengkapi 100%, tetap persen x dasar.
+        foreach ($project->billingTerms->reverse() as $term) {
+            $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $term->id, $items))->assertOk();
+        }
+
+        $invoices = Invoice::orderBy('id')->get();
+        $this->assertSame(333400.33, $invoices[0]->amount_payment);
+        $this->assertSame(333300.33, $invoices[1]->amount_payment);
+        // Invoice yang melengkapi timeline = sisa nilai kontrak.
+        $this->assertSame(333300.34, $invoices[2]->amount_payment);
+        $this->assertSame(100000100, (int) round($invoices->sum('amount_payment') * 100));
+        $this->assertSame(round(333300.34 * 1.11, 2), $invoices[2]->total_payment);
+    }
+
+    public function test_manual_project_net_sale_is_billing_base_and_locks_after_term_invoice(): void
+    {
+        // Net (sebelum PPN) tidak boleh melebihi total (termasuk PPN).
+        $this->actingAs($this->staff)->post(route('project.store'), $this->projectPayload([
+            'total_sale_amount' => 1000000, 'net_sale_amount' => 1200000,
+        ]), ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonPath('message', 'Net Sale Amount (sebelum PPN) tidak boleh melebihi Total Sale Amount.');
+
+        $project = $this->createProjectWithTerms();
+        $this->assertSame(1500000.0, $project->billingBaseAmount());
+        $this->actingAs($this->staff)->get(route('project.show', $project->id))
+            ->assertOk()->assertSee('Rp 450,000')->assertSee('(Net Sale Amount)');
+
+        // Sebelum ada invoice termin, net sale masih boleh diubah.
+        $update = fn (array $overrides) => $this->actingAs($this->staff)->post(route('project.update', $project->id), array_merge($this->projectPayload([
+            'po_number_company' => $project->po_number_company,
+            'billing_terms' => $project->billingTerms->map(fn ($t) => ['id' => $t->id, 'name' => $t->name, 'percent' => $t->percent])->all(),
+        ]), ['_method' => 'PUT'], $overrides), ['Accept' => 'application/json']);
+        $update(['net_sale_amount' => 1600000])->assertOk();
+        $update(['net_sale_amount' => 1500000])->assertOk();
+
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $project->billingTerms->first()->id))->assertOk();
+        $invoice = Invoice::firstOrFail();
+        $this->assertSame(450000.0, $invoice->amount_payment);
+
+        $update(['net_sale_amount' => 1600000])
+            ->assertStatus(422)->assertJsonPath('message', 'Net Sale Amount terkunci karena sudah ada invoice termin '.$invoice->invoice_number.'. Batalkan invoice tersebut dulu bila nilai project berubah.');
+        // Field lain tetap bisa diubah selama net sale sama.
+        $update(['project_name' => 'Project SPARING Revisi'])->assertOk();
+        $this->actingAs($this->staff)->get(route('project.edit', $project->id))->assertOk()->assertSee('Terkunci karena sudah ada invoice termin');
     }
 
     public function test_cancelled_invoice_reopens_term(): void
@@ -315,6 +407,38 @@ class ProjectBillingTimelineTest extends TestCase
         $this->assertSame(0, Document::where('documentable_id', $otherTerm->id)->count());
     }
 
+    public function test_project_with_issued_invoice_cannot_be_deleted(): void
+    {
+        $project = $this->createProjectWithTerms();
+        $dp = $project->billingTerms->first();
+
+        // Invoice Draft ikut terhapus bersama project.
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id))->assertOk();
+        $invoice = Invoice::firstOrFail();
+        $this->assertSame([], $project->fresh()->deletionBlockers());
+
+        // Invoice yang sudah diajukan / disetujui (atau punya penerimaan) mengunci project.
+        $invoice->update(['approval_status' => Invoice::APPROVAL_APPROVED]);
+        CustomerReceipt::create([
+            'receipt_number' => '26100001', 'invoice_id' => $invoice->id, 'receipt_date' => '2026-10-21',
+            'method' => 'transfer', 'amount' => $invoice->total_payment, 'status' => CustomerReceipt::STATUS_POSTED,
+        ]);
+        $invoice->update(['status' => Invoice::STATUS_PAID]);
+
+        $this->actingAs($this->staff)->deleteJson(route('project.destroy', $project->id))
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Project tidak bisa dihapus karena sudah memiliki 1 invoice yang sudah diajukan / disetujui. Bila project batal, ubah statusnya menjadi Cancelled agar riwayat transaksi tetap utuh.');
+        $this->assertNotNull($project->fresh());
+        $this->assertSame(1, CustomerReceipt::count());
+
+        // Project lain dengan invoice Draft saja tetap bisa dihapus; invoicenya ikut terhapus.
+        $other = $this->createProjectWithTerms();
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($other, $other->billingTerms->first()->id))->assertOk();
+        $this->actingAs($this->staff)->deleteJson(route('project.destroy', $other->id))->assertOk();
+        $this->assertSame(1, Invoice::count());
+    }
+
     public function test_terms_start_locked_and_unlock_requires_update_permission(): void
     {
         $projectModule = Module::where('route_name', 'project')->firstOrFail();
@@ -357,7 +481,7 @@ class ProjectBillingTimelineTest extends TestCase
         $this->assertSame('billing_term_unlocked', $notification->type);
         $this->assertStringContainsString('DP', $notification->body);
         $this->assertSame(route('project.show', $project->id).'#timeline-penagihan', $notification->data['url']);
-        $this->assertSame(0, \App\Models\Notification::where('user_id', $this->staff->id)->count());
+        $this->assertSame(0, Notification::where('user_id', $this->staff->id)->count());
         $this->actingAs($invoicer)->getJson(route('notifications.index'))
             ->assertOk()->assertJsonPath('data.0.notifications.0.url', $notification->data['url']);
 

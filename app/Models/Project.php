@@ -9,12 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\DB;
 
 class Project extends Model
 {
-    use Notifiable;
-
     use Loggable;
+    use Notifiable;
 
     public const STATUS_ACTIVE = 'active';
 
@@ -135,15 +135,16 @@ class Project extends Model
     }
 
     /**
-     * Dasar persentase penagihan: nilai penawaran sebelum PPN (sub total - diskon
-     * quotation); project tanpa quotation memakai total sale.
+     * Dasar persentase penagihan: nilai sebelum PPN. Project dari quotation =
+     * sub total - diskon quotation; project manual (tanpa quotation) = net sale
+     * amount, karena total sale amount sudah termasuk PPN.
      */
     public function billingBaseAmount(): float
     {
         $quotation = $this->quotation;
 
         if (! $quotation) {
-            return (float) $this->total_sale_amount;
+            return (float) $this->net_sale_amount;
         }
 
         $subtotal = (float) $quotation->subtotal;
@@ -152,6 +153,36 @@ class Project extends Model
             : round((float) $quotation->discount_amount, 2);
 
         return round($subtotal - $discount, 2);
+    }
+
+    /**
+     * Alasan project tidak boleh dihapus: sudah punya dokumen keuangan,
+     * pembelian, atau stok. Project seperti ini dibatalkan lewat status
+     * Cancelled agar riwayatnya tetap utuh. Invoice Draft/Rejected, timeline,
+     * achievement, dan approval PO supplier ikut terhapus bersama project.
+     *
+     * @return array<int, string>
+     */
+    public function deletionBlockers(): array
+    {
+        $issuedInvoices = $this->invoices()
+            ->where(fn ($q) => $q->whereNotIn('approval_status', [Invoice::APPROVAL_DRAFT, Invoice::APPROVAL_REJECTED])
+                ->orWhereHas('receipts'))
+            ->count();
+
+        $checks = [
+            'invoice yang sudah diajukan / disetujui' => $issuedInvoices,
+            'Delivery Order' => $this->deliveryOrders()->count(),
+            'Permintaan Barang' => DB::table('goods_requests')->where('project_id', $this->id)->count(),
+            'Direct Purchase' => DB::table('direct_purchases')->where('project_id', $this->id)->count(),
+            'tagihan supplier' => DB::table('supplier_bill_items')->where('project_id', $this->id)->distinct()->count('supplier_bill_id'),
+            'pergerakan stok' => DB::table('stock_movements')->where('project_id', $this->id)->count(),
+            'Transfer Stok' => DB::table('stock_transfers')->where('from_project_id', $this->id)->orWhere('to_project_id', $this->id)->count(),
+            'Masuk Stok Lain-lain' => DB::table('stock_entries')->where('project_id', $this->id)->count(),
+            'Stock Opname' => DB::table('stock_opname_items')->where('project_id', $this->id)->distinct()->count('stock_opname_id'),
+        ];
+
+        return collect($checks)->filter()->map(fn (int $count, string $label) => $count.' '.$label)->values()->all();
     }
 
     public function invoices(): HasMany
@@ -163,6 +194,11 @@ class Project extends Model
      * Approval "boleh lanjut PO ke supplier" (modul PO Supplier Approval),
      * BUKAN approval quotation (lihat Quotation::finalChecker()).
      */
+    public function deliveryOrders(): HasMany
+    {
+        return $this->hasMany(DeliveryOrder::class)->orderByDesc('id');
+    }
+
     public function poSupplierApprovals(): HasMany
     {
         return $this->hasMany(ProjectPoSupplierApproval::class);

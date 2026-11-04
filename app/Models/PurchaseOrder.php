@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPurchaseDocuments;
 use App\Support\NumberSequence;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseOrder extends Model
 {
+    use HasPurchaseDocuments;
+
     public const STATUS_DRAFT = 'draft';
 
     public const STATUS_WAITING_APPROVAL = 'waiting_approval';
@@ -16,6 +19,17 @@ class PurchaseOrder extends Model
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_REJECTED = 'rejected';
+
+    public const STATUS_PARTIALLY_RECEIVED = 'partially_received';
+
+    public const STATUS_RECEIVED = 'received';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
+    /**
+     * Status yang boleh diterima barangnya (Penerimaan Barang) dan dibatalkan.
+     */
+    public const RECEIVABLE_STATUSES = [self::STATUS_APPROVED, self::STATUS_PARTIALLY_RECEIVED];
 
     public const TYPE_MANUFACTURE = 'manufacture';
 
@@ -45,7 +59,10 @@ class PurchaseOrder extends Model
         self::STATUS_DRAFT => 'Draft',
         self::STATUS_WAITING_APPROVAL => 'Waiting Approval',
         self::STATUS_APPROVED => 'Approved',
+        self::STATUS_PARTIALLY_RECEIVED => 'Diterima Sebagian',
+        self::STATUS_RECEIVED => 'Diterima',
         self::STATUS_REJECTED => 'Rejected',
+        self::STATUS_CANCELLED => 'Dibatalkan',
     ];
 
     protected $fillable = [
@@ -57,8 +74,10 @@ class PurchaseOrder extends Model
         'supplier_attn',
         'po_number',
         'po_type',
+        'revision_of_id',
         'date',
         'terms',
+        'payment_term_days',
         'delivery',
         'your_ref',
         'discount_percent',
@@ -73,16 +92,21 @@ class PurchaseOrder extends Model
         'approval_note',
         'approved_at',
         'rejected_at',
+        'cancel_reason',
+        'cancelled_by',
+        'cancelled_at',
     ];
 
     protected function casts(): array
     {
         return [
             'date' => 'date',
+            'payment_term_days' => 'integer',
             'discount_percent' => 'float',
             'ppn_percent' => 'float',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -106,6 +130,70 @@ class PurchaseOrder extends Model
         return $this->belongsTo(User::class, 'final_checked_by');
     }
 
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function goodsReceipts(): HasMany
+    {
+        return $this->hasMany(GoodsReceipt::class)->orderBy('id');
+    }
+
+    public function documentTypes(): array
+    {
+        return self::purchaseDocumentTypes([
+            Document::TYPE_SUPPLIER_QUOTE, Document::TYPE_SUPPLIER_CONFIRMATION, Document::TYPE_SUPPLIER_INVOICE, Document::TYPE_OTHER,
+        ]);
+    }
+
+    /**
+     * Setelah diputuskan (approved/rejected/...) dokumen menjadi arsip — hanya bisa ditambah.
+     */
+    public function canDeleteDocument(Document $document, User $user): bool
+    {
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_WAITING_APPROVAL], true);
+    }
+
+    public function isReceivable(): bool
+    {
+        return in_array($this->status, self::RECEIVABLE_STATUSES, true);
+    }
+
+    /**
+     * Batalkan hanya PO yang sudah Approved & belum diterima penuh; sisa yang
+     * belum diterima dilepas kembali ke Permintaan Barang.
+     */
+    public function canBeCancelled(): bool
+    {
+        return $this->isReceivable();
+    }
+
+    /**
+     * Status penerimaan dari total qty diterima (dipanggil setelah posting Penerimaan Barang).
+     */
+    public function refreshReceiptStatus(): void
+    {
+        // Received ikut dihitung ulang: retur ke supplier bisa membuka kembali penerimaan.
+        if (! $this->isReceivable() && $this->status !== self::STATUS_RECEIVED) {
+            return;
+        }
+
+        $items = $this->items()->with('goodsReceiptItems.goodsReceipt')->get();
+        $received = $items->sum(fn (PurchaseOrderItem $item) => min($item->receivedQty(), (int) $item->qty));
+        $ordered = (int) $items->sum('qty');
+
+        $status = match (true) {
+            $received <= 0 => self::STATUS_APPROVED,
+            $received >= $ordered => self::STATUS_RECEIVED,
+            default => self::STATUS_PARTIALLY_RECEIVED,
+        };
+
+        if ($status !== $this->status) {
+            $this->update(['status' => $status]);
+        }
+    }
+
     /**
      * Nomor PO baru: YYMM + 4 digit (reset tiap tahun, acuan tanggal dibuat)
      * ditambah suffix jenis.
@@ -118,6 +206,179 @@ class PurchaseOrder extends Model
     /**
      * Ganti jenis hanya mengganti suffix; bagian angka nomor tetap.
      */
+    /**
+     * Nomor revisi dari PO Rejected: nomor dasar (8 digit) yang sama + REV,
+     * REV2, REV3, ... + suffix jenis. Contoh: 26110005REV, 26110005REV2-L.
+     */
+    public static function revisionNumber(string $sourceNumber, string $type): string
+    {
+        $base = substr($sourceNumber, 0, 8);
+
+        $last = static::where('po_number', 'like', $base.'REV%')
+            ->pluck('po_number')
+            ->map(fn ($number) => preg_match('/^\d{8}REV(\d*)/', $number, $m) ? max(1, (int) $m[1]) : 0)
+            ->max() ?? 0;
+
+        $next = $last + 1;
+
+        return $base.'REV'.($next > 1 ? $next : '').(self::TYPE_SUFFIXES[$type] ?? '');
+    }
+
+    public function supplierBills(): HasMany
+    {
+        return $this->hasMany(SupplierBill::class)->orderByDesc('id');
+    }
+
+    public const BILLING_LABELS = [
+        'none' => 'Belum Ditagih',
+        'partial' => 'Ditagih Sebagian',
+        'full' => 'Ditagih Penuh',
+    ];
+
+    /**
+     * Status penagihan dari qty ditagih vs qty yang akhirnya dibeli (PO batal:
+     * hanya yang sudah diterima).
+     */
+    public function billingStatus(): string
+    {
+        $billable = $this->items->sum(fn (PurchaseOrderItem $item) => $this->status === self::STATUS_CANCELLED ? $item->receivedQty() : (int) $item->qty);
+        $billed = $this->items->sum(fn (PurchaseOrderItem $item) => $item->billedQty());
+
+        return match (true) {
+            $billed <= 0 => 'none',
+            $billed >= $billable => 'full',
+            default => 'partial',
+        };
+    }
+
+    public const PAYMENT_LABELS = [
+        'unbilled' => 'Belum Ditagih',
+        'unpaid' => 'Belum Dibayar',
+        'partial' => 'Dibayar Sebagian',
+        'advance' => 'Uang Muka Dibayar',
+        'refund' => 'Menunggu Refund',
+        'paid' => 'Lunas',
+    ];
+
+    public function supplierRefunds(): HasMany
+    {
+        return $this->hasMany(SupplierRefund::class)->orderByDesc('id');
+    }
+
+    /** Batas uang muka PO = nilai PO x maks % supplier. */
+    public function advanceLimit(): float
+    {
+        return round($this->netTotal() * (float) ($this->supplier?->max_advance_percent ?? 0) / 100, 2);
+    }
+
+    private function activeBills()
+    {
+        return $this->supplierBills->where('status', '!=', SupplierBill::STATUS_VOID);
+    }
+
+    /** Total tagihan uang muka (selain void) — untuk batas. */
+    public function advanceBilled(?int $exceptBillId = null): float
+    {
+        return round((float) $this->activeBills()->where('bill_type', SupplierBill::TYPE_ADVANCE)
+            ->reject(fn (SupplierBill $bill) => $bill->id === $exceptBillId)->sum('total'), 2);
+    }
+
+    /**
+     * Kurs rata-rata tertimbang tagihan uang muka PO (nilai buku uang muka).
+     * Dipakai untuk menilai refund uang muka; tanpa uang muka -> kurs master.
+     */
+    public function advanceRate(): float
+    {
+        $advances = $this->activeBills()->where('bill_type', SupplierBill::TYPE_ADVANCE);
+        $total = (float) $advances->sum('total');
+
+        return $total > 0
+            ? round($advances->sum(fn (SupplierBill $bill) => $bill->total * $bill->exchange_rate) / $total, 6)
+            : Currency::rateOf($this->currencyCode());
+    }
+
+    /** Uang muka yang sudah benar-benar dibayar (pembayaran Posted). */
+    public function advancePaid(): float
+    {
+        return round((float) $this->activeBills()->where('bill_type', SupplierBill::TYPE_ADVANCE)
+            ->sum(fn (SupplierBill $bill) => $bill->paidAmount()), 2);
+    }
+
+    /** Uang muka yang sudah dipotongkan di tagihan reguler (draft ikut, agar tidak dobel). */
+    public function advanceApplied(?int $exceptBillId = null): float
+    {
+        return round((float) $this->activeBills()->where('bill_type', SupplierBill::TYPE_REGULAR)
+            ->reject(fn (SupplierBill $bill) => $bill->id === $exceptBillId)->sum('advance_deduction'), 2);
+    }
+
+    public function refundedAmount(?int $exceptRefundId = null, bool $postedOnly = true): float
+    {
+        return round((float) $this->supplierRefunds
+            ->filter(fn (SupplierRefund $refund) => $postedOnly ? $refund->status === SupplierRefund::STATUS_POSTED : $refund->status !== SupplierRefund::STATUS_VOID)
+            ->reject(fn (SupplierRefund $refund) => $refund->id === $exceptRefundId)->sum('amount'), 2);
+    }
+
+    /** Saldo uang muka yang belum terpakai = dibayar - dipotongkan - direfund. */
+    public function advanceBalance(?int $exceptBillId = null): float
+    {
+        return round(max(0, $this->advancePaid() - $this->advanceApplied($exceptBillId) - $this->refundedAmount()), 2);
+    }
+
+    /**
+     * Refund jatuh tempo bila uang muka tidak akan terpakai lagi: PO batal, atau
+     * semua barang sudah diterima dan ditagih.
+     */
+    public function refundDue(): float
+    {
+        $settled = $this->status === self::STATUS_CANCELLED
+            || ($this->status === self::STATUS_RECEIVED && $this->billingStatus() === 'full');
+
+        return $settled ? $this->advanceBalance() : 0.0;
+    }
+
+    /**
+     * Status bayar dari tagihan terverifikasi (draft & void diabaikan).
+     */
+    public function paymentStatus(): string
+    {
+        $bills = $this->supplierBills->whereNotIn('status', [SupplierBill::STATUS_DRAFT, SupplierBill::STATUS_VOID]);
+        if ($bills->isEmpty()) {
+            return 'unbilled';
+        }
+        if ($this->refundDue() > 0) {
+            return 'refund';
+        }
+
+        $paid = $bills->sum(fn (SupplierBill $bill) => $bill->paidAmount() + $bill->advance_deduction);
+        $allPaid = $bills->every(fn (SupplierBill $bill) => $bill->status === SupplierBill::STATUS_PAID);
+        $onlyAdvance = $bills->every(fn (SupplierBill $bill) => $bill->isAdvance());
+
+        return match (true) {
+            $paid <= 0 => 'unpaid',
+            $onlyAdvance && $allPaid => 'advance',
+            $allPaid => 'paid',
+            default => 'partial',
+        };
+    }
+
+    public function revisionOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'revision_of_id');
+    }
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(self::class, 'revision_of_id')->orderByDesc('id');
+    }
+
+    /**
+     * Hanya PO Rejected yang belum punya revisi (revisi draft yang dihapus melepasnya lagi).
+     */
+    public function canBeRevised(): bool
+    {
+        return $this->status === self::STATUS_REJECTED && ! $this->revisions()->exists();
+    }
+
     public static function numberWithType(string $number, string $type): string
     {
         return preg_replace('/-[A-Z]+$/', '', $number).(self::TYPE_SUFFIXES[$type] ?? '');
@@ -140,16 +401,15 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Label grup "project" untuk item: nama project Permintaan Barang asal,
-     * cadangan nama opportunity (permintaan lama tanpa project), lalu "Stock"
-     * untuk baris manual.
+     * Label grup item: nama project Permintaan Barang asal, atau "Stok / Internal".
      */
     public static function projectLabelFor(PurchaseOrderItem $item): string
     {
-        $goodsRequest = $item->goodsRequest;
+        $goodsRequest = $item->goodsRequest();
 
-        return $goodsRequest?->project?->project_name
-            ?: ($goodsRequest?->opportunity?->opportunity_name ?: 'Stock');
+        return $goodsRequest && $goodsRequest->isForProject()
+            ? ($goodsRequest->project?->project_name ?: 'Project #'.$goodsRequest->project_id)
+            : GoodsRequest::PURPOSE_LABELS[GoodsRequest::PURPOSE_INTERNAL];
     }
 
     public function getStatusLabelAttribute(): string
@@ -163,19 +423,20 @@ class PurchaseOrder extends Model
             self::STATUS_DRAFT => '<span class="status-badge" style="background:var(--info-soft);color:#1e40af;">Draft</span>',
             self::STATUS_WAITING_APPROVAL => '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Waiting Approval</span>',
             self::STATUS_APPROVED => '<span class="status-badge status-active">Approved</span>',
+            self::STATUS_PARTIALLY_RECEIVED => '<span class="status-badge" style="background:#ede9fe;color:#5b21b6;">Diterima Sebagian</span>',
+            self::STATUS_RECEIVED => '<span class="status-badge" style="background:#dcfce7;color:#166534;">Diterima</span>',
             self::STATUS_REJECTED => '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Rejected</span>',
+            self::STATUS_CANCELLED => '<span class="status-badge" style="background:#f3f4f6;color:#4b5563;">Dibatalkan</span>',
             default => '<span class="status-badge">'.ucfirst($this->status).'</span>',
         };
     }
 
     /**
-     * Total nilai item PO dalam mata uang PO (qty x harga satuan), tanpa
-     * konversi kurs. PO lama yang belum punya harga asli jatuh ke selling_price.
+     * Total nilai item PO dalam mata uang PO (qty x harga satuan), tanpa kurs.
      */
     public function grandTotal(): float
     {
-        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0)
-            * (float) ($item->selling_price_currency ?? $item->selling_price ?? 0));
+        return (float) $this->items->sum(fn (PurchaseOrderItem $item) => $item->amount());
     }
 
     /**
@@ -229,44 +490,29 @@ class PurchaseOrder extends Model
     public function divisionNames(): array
     {
         return $this->items
-            ->pluck('goodsRequest.division.division_name')
+            ->map(fn (PurchaseOrderItem $item) => $item->goodsRequest()?->division?->division_name)
             ->filter()
             ->unique()
             ->values()
             ->all();
     }
 
-    /**
-     * Jumlah item sesungguhnya (baris parent/kategori tidak dihitung).
-     */
     public function itemCount(): int
     {
-        return $this->items->reject(fn (PurchaseOrderItem $item) => $item->isHeader())->count();
+        return $this->items->count();
     }
 
     /**
-     * Item dikelompokkan per "project" untuk dicetak di dokumen PO (label
-     * per grup, seperti pada contoh dokumen) — labelnya diambil dari nama
-     * project Permintaan Barang asal item tersebut (projectLabelFor()). Item tanpa
-     * Permintaan Barang (baris manual) masuk grup "Stock". Urutan grup
-     * mengikuti urutan kemunculan pertama item terkait (bukan alfabetis).
+     * Item dikelompokkan per tujuan (project Permintaan Barang asal, atau
+     * "Stok / Internal") untuk form/show/PDF. Urutan grup mengikuti kemunculan
+     * pertama item.
      */
     public function projectGroups(): array
     {
         $groups = [];
 
         foreach ($this->items as $item) {
-            if ($item->isHeader()) {
-                continue;
-            }
-
-            $label = self::projectLabelFor($item);
-
-            if (! isset($groups[$label])) {
-                $groups[$label] = [];
-            }
-
-            $groups[$label][] = $item;
+            $groups[self::projectLabelFor($item)][] = $item;
         }
 
         return collect($groups)
@@ -276,56 +522,11 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Group dari hirarki parent yang tersimpan (baris kategori sebagai header).
-     * Dipakai form/show/PDF bila PO memakai grup kategori; PO lama (flat, tanpa
-     * baris parent) jatuh ke projectGroups() sebagai fallback. Item standalone
-     * tanpa parent dikelompokkan per project (sisa "Stock").
+     * Alias lama — PO tidak lagi menyimpan baris group manual.
      */
     public function hierarchyGroups(): array
     {
-        $items = $this->items;
-
-        if ($items->doesntContain(fn (PurchaseOrderItem $item) => $item->isHeader())) {
-            return $this->projectGroups();
-        }
-
-        $headers = $items->whereNotNull('category')
-            ->map(fn (PurchaseOrderItem $h) => [
-                'id' => $h->id,
-                'label' => $h->category,
-                'items' => collect(),
-            ])
-            ->keyBy('id');
-
-        $leftover = collect();
-        foreach ($items as $item) {
-            if ($item->isHeader()) {
-                continue;
-            }
-
-            if ($item->parent_id && isset($headers[$item->parent_id])) {
-                $headers[$item->parent_id]['items']->push($item);
-            } else {
-                $leftover->push($item);
-            }
-        }
-
-        $groups = $headers
-            ->filter(fn ($group) => $group['items']->isNotEmpty())
-            ->values()
-            ->all();
-
-        $byProject = [];
-        foreach ($leftover as $item) {
-            $label = self::projectLabelFor($item);
-            $byProject[$label][] = $item;
-        }
-
-        foreach ($byProject as $label => $projectItems) {
-            $groups[] = ['label' => $label, 'items' => collect($projectItems)];
-        }
-
-        return $groups;
+        return $this->projectGroups();
     }
 
     /**
@@ -337,39 +538,25 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Kode mata uang yang dipakai untuk mencetak harga satuan/subtotal per
-     * baris pada dokumen PO — hanya jika SEMUA item memakai mata uang yang
-     * sama (null = campuran, dokumen jatuh ke total dalam Rupiah/`price`
-     * lewat printTotal() supaya tidak menjumlahkan mata uang berbeda).
+     * Kode mata uang item PO (satu PO satu mata uang; divalidasi saat simpan).
+     * PO kosong -> mata uang dasar; data lama bercampur -> null.
      */
     public function printCurrency(): ?string
     {
-        // Baris group (kategori) diabaikan: PO lama sempat menyimpan mata uang dasar di sana.
-        $currencies = $this->items->reject(fn (PurchaseOrderItem $item) => $item->isHeader())
-            ->pluck('currency')->filter()->unique()->values();
+        $currencies = $this->items->pluck('currency')->filter()->unique()->values();
 
-        if ($currencies->count() === 0) {
-            return Currency::baseName();
-        }
-
-        if ($currencies->count() === 1) {
-            return $currencies->first();
-        }
-
-        return null;
+        return match ($currencies->count()) {
+            0 => Currency::baseName(),
+            1 => $currencies->first(),
+            default => null,
+        };
     }
 
     /**
-     * Total untuk dicetak: dalam mata uang asli bila seragam (jumlah
-     * qty x selling_price_currency), atau dalam Rupiah (grandTotal()) bila item
-     * memakai mata uang campuran.
+     * Total untuk dicetak (qty x harga satuan, mata uang PO).
      */
     public function printTotal(): float
     {
-        if ($this->printCurrency() === null) {
-            return $this->grandTotal();
-        }
-
-        return (float) $this->items->sum(fn ($item) => (float) ($item->qty ?? 0) * (float) ($item->selling_price_currency ?? 0));
+        return $this->grandTotal();
     }
 }

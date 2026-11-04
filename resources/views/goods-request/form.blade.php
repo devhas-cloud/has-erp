@@ -30,6 +30,18 @@
     .gr-chip.catalog { background: #dcfce7; color: #166534; }
     .gr-chip.manual { background: #f3f4f6; color: #4b5563; }
     .gr-chip.warn { background: #fef3c7; color: #92400e; }
+    .gr-chip.danger { background: var(--danger-soft); color: #7f1d1d; }
+    .gr-purpose { display: flex; gap: 8px; }
+    .gr-purpose input { display: none; }
+    .gr-purpose label {
+        flex: 1; margin: 0; cursor: pointer; padding: 9px 12px;
+        border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+        font-size: 13px; color: var(--text-muted);
+    }
+    .gr-purpose label strong { display: block; color: var(--text-primary); font-size: 13.5px; }
+    .gr-purpose input:checked + label { border-color: var(--accent); background: var(--accent-subtle); box-shadow: 0 0 0 1px var(--accent) inset; }
+    .gr-purpose input:disabled + label { cursor: not-allowed; opacity: .75; }
+    .gr-product-link { font-size: 12px; }
 
     .gr-desc[contenteditable="true"] {
         border: 1px solid var(--card-border, #ced4da);
@@ -104,8 +116,16 @@
                 <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Informasi Permintaan</span>
             </div>
             <div class="card-body-custom">
+                @php $purposeValue = $purpose ?? \App\Models\GoodsRequest::PURPOSE_PROJECT; @endphp
+                <label class="form-label">Tujuan Permintaan <span class="text-danger">*</span></label>
+                <div class="gr-purpose mb-3">
+                    <input type="radio" name="gr-purpose" id="gr-purpose-project" value="project" @checked($purposeValue === 'project') @disabled($goodsRequest)>
+                    <label for="gr-purpose-project"><strong><i class="fa-solid fa-diagram-project me-1"></i> Project</strong>Barang untuk project customer, nantinya dialokasikan ke project.</label>
+                    <input type="radio" name="gr-purpose" id="gr-purpose-internal" value="internal" @checked($purposeValue === 'internal') @disabled($goodsRequest)>
+                    <label for="gr-purpose-internal"><strong><i class="fa-solid fa-warehouse me-1"></i> Stok / Internal</strong>Isi ulang stok atau kebutuhan internal, tanpa project.</label>
+                </div>
                 <div class="row g-3">
-                    <div class="col-lg-7">
+                    <div class="col-lg-7 gr-project-field">
                         <label class="form-label">Project <span class="text-danger">*</span></label>
                         <select id="gr-project-id" class="form-select" style="width:100%" @if($goodsRequest) disabled @endif>
                             <option value="">— Pilih Project —</option>
@@ -124,13 +144,13 @@
                         </select>
                         @if($goodsRequest)
                             <input type="hidden" id="gr-project-id-hidden" value="{{ $goodsRequest->project_id }}">
-                            <input type="hidden" id="gr-opportunity-id-hidden" value="{{ $goodsRequest->opportunity_id }}">
+                            <input type="hidden" id="gr-opportunity-id-hidden" value="{{ $goodsRequest->opportunity()?->id }}">
                             <small class="gr-hint"><i class="fa fa-lock me-1"></i>Project tidak bisa diganti setelah permintaan barang dibuat.</small>
                         @else
                             <small class="gr-hint">Hanya project aktif yang PO Supplier Approval-nya sudah disetujui 2 approver.</small>
                         @endif
                     </div>
-                    <div class="col-lg-5">
+                    <div class="col-lg-5 gr-project-field">
                         <label class="form-label">Informasi Project</label>
                         <div id="gr-project-info" class="gr-project-info">Pilih project untuk melihat informasi.</div>
                     </div>
@@ -163,7 +183,7 @@
                         <thead>
                             <tr>
                                 <th style="width:42px" class="text-center">#</th>
-                                <th style="width:18%">Part Number</th>
+                                <th style="width:24%">Produk (Master) <span class="text-danger">*</span></th>
                                 <th>Nama Barang / Deskripsi</th>
                                 <th style="width:130px" class="text-center">Qty</th>
                                 <th style="width:110px">Unit</th>
@@ -183,15 +203,10 @@
                         <button type="button" class="btn btn-secondary btn-sm" onclick="grOpenProductPicker()">
                             <i class="fa fa-magnifying-glass me-1"></i> Cari di Katalog
                         </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="grAddBlankRow()">
-                            <i class="fa fa-plus me-1"></i> Baris Kosong
-                        </button>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center px-2 pt-2" id="gr-items-footer" style="display:none !important">
-                    <button type="button" class="btn btn-link btn-sm px-0" onclick="grAddBlankRow()">
-                        <i class="fa fa-plus me-1"></i> Tambah baris kosong
-                    </button>
+                    <small class="gr-hint"><i class="fa fa-circle-info me-1"></i>Setiap item wajib terhubung master produk agar bisa dipenuhi dari stok, di-PO, dan diterima ke gudang.</small>
                     <small class="gr-hint">Deskripsi bisa diformat: <b>Ctrl+B</b> tebal, <i>Ctrl+I</i> miring.</small>
                 </div>
             </div>
@@ -208,7 +223,7 @@
                 <div class="gr-summary-row"><span class="lbl">Total Qty</span><span class="val" id="gr-sum-qty">0</span></div>
                 <div class="gr-summary-row"><span class="lbl"><span class="gr-chip config">Configuration</span></span><span class="val" id="gr-sum-config">0</span></div>
                 <div class="gr-summary-row"><span class="lbl"><span class="gr-chip catalog">Katalog</span></span><span class="val" id="gr-sum-catalog">0</span></div>
-                <div class="gr-summary-row"><span class="lbl"><span class="gr-chip manual">Manual</span></span><span class="val" id="gr-sum-manual">0</span></div>
+                <div class="gr-summary-row"><span class="lbl"><span class="gr-chip danger">Belum ada produk</span></span><span class="val" id="gr-sum-manual">0</span></div>
 
                 <button type="button" class="btn btn-primary w-100 mt-3" id="gr-save-btn" onclick="grSave()">
                     <i class="fa fa-save me-1"></i> Simpan {{ $goodsRequest ? 'Perubahan' : 'Draft' }}
@@ -314,9 +329,7 @@
                 </div>
             </div>
             <div class="modal-footer justify-content-between">
-                <button type="button" class="btn btn-soft btn-sm" onclick="grAddBlankRow()">
-                    <i class="fa fa-file me-1"></i> Baris Kosong (di luar katalog)
-                </button>
+                <small class="gr-hint"><i class="fa fa-circle-info me-1"></i>Barang belum ada di katalog? Tambahkan dulu di Master Produk.</small>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
                     <button type="button" class="btn btn-primary btn-sm" id="gr-product-apply" onclick="grApplyProductPicked()" disabled>
@@ -349,6 +362,7 @@ const grStoreUrl = '{{ route("goods-request.store") }}';
 const grUpdateUrl = '{{ $goodsRequest ? route("goods-request.update", $goodsRequest->id) : "" }}';
 const grShowUrl = '{{ $goodsRequest ? route("goods-request.show", $goodsRequest->id) : "" }}';
 const grInitialItems = @json($items ?? []);
+const grGoodsRequestId = @json($goodsRequest?->id);
 const grCurrencies = @json(collect($currencies ?? [])->pluck('name')->values());
 const grBaseCurrency = grCurrencies.length ? grCurrencies[0] : 'IDR';
 
@@ -375,7 +389,23 @@ function grNumber(value) {
 
 // ── Project ──
 
+function grPurpose() {
+    return $('input[name="gr-purpose"]:checked').val() || 'project';
+}
+
+function grSyncPurpose() {
+    var forProject = grPurpose() === 'project';
+    $('.gr-project-field').toggle(forProject);
+    if (!forProject) {
+        $('#gr-btn-pick, #gr-empty-pick').prop('disabled', true).hide();
+    } else {
+        $('#gr-btn-pick').show();
+        grSyncProject();
+    }
+}
+
 function grCurrentOpportunityId() {
+    if (grPurpose() !== 'project') return '';
     var selected = $('#gr-project-id option:selected');
     var fromSelect = selected.length ? selected.data('opportunity-id') : null;
     return fromSelect || $('#gr-opportunity-id-hidden').val() || '';
@@ -402,6 +432,7 @@ function grRenderProjectInfo() {
 }
 
 function grSyncProject() {
+    if (grPurpose() !== 'project') return;
     var hasConfig = !!grCurrentOpportunityId();
     $('#gr-btn-pick').prop('disabled', !hasConfig);
     $('#gr-empty-pick').toggle(hasConfig);
@@ -411,13 +442,13 @@ function grSyncProject() {
 // ── Daftar item ──
 
 function grSourceOf(item) {
+    if (!item.master_product_id) return 'manual';
     if (item.quote_configuration_item_id) return 'config';
-    if (item.master_product_id) return 'catalog';
-    return 'manual';
+    return 'catalog';
 }
 
 function grSourceChip(source) {
-    var labels = { config: 'Configuration', catalog: 'Katalog', manual: 'Manual' };
+    var labels = { config: 'Configuration', catalog: 'Katalog', manual: 'Perlu produk' };
     return '<span class="gr-chip ' + source + '">' + labels[source] + '</span>';
 }
 
@@ -437,12 +468,24 @@ function grCurrencyCell(item, source) {
     return html + '</select>';
 }
 
+// Master produk wajib: tampilkan produk terhubung, atau tombol pilih produk bila belum.
+function grProductCell(item) {
+    if (item.master_product_id) {
+        return '<div class="gr-product-cell"><div style="font-weight:600;font-size:13px">' + grEsc(item.part_number || '—') + '</div>'
+            + '<div class="gr-hint">' + grEsc(item.product_name || '') + '</div>'
+            + '<a href="javascript:void(0)" class="gr-product-link" onclick="grPickProductForRow(this)"><i class="fa fa-arrows-rotate me-1"></i>Ganti produk</a></div>';
+    }
+    return '<div class="gr-product-cell"><div style="font-size:12.5px">' + grEsc(item.part_number || '—') + '</div>'
+        + '<span class="gr-chip danger mb-1"><i class="fa fa-triangle-exclamation"></i> Belum terhubung produk</span><br>'
+        + '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 mt-1" onclick="grPickProductForRow(this)"><i class="fa fa-magnifying-glass me-1"></i>Pilih produk</button></div>';
+}
+
 function grRowHtml(item) {
     var key = grNewKey();
     var source = grSourceOf(item);
     var html = '<tr data-key="' + key + '" data-config-item-id="' + (item.quote_configuration_item_id || '') + '" data-product-id="' + (item.master_product_id || '') + '">';
     html += '<td class="text-center gr-row-num"></td>';
-    html += '<td><input type="text" class="form-control form-control-sm gr-pn" maxlength="100" placeholder="Part number" value="' + grEsc(item.part_number || '') + '"></td>';
+    html += '<td><input type="hidden" class="gr-pn" value="' + grEsc(item.part_number || '') + '">' + grProductCell(item) + '</td>';
     {{-- Deskripsi sudah HTML tersanitasi dari server (Quotation::renderDescription) --}}
     html += '<td><div class="form-control form-control-sm gr-desc" contenteditable="true" data-placeholder="Nama barang / deskripsi (wajib)">' + (item.description || grEsc(item.name || '')) + '</div>';
     html += '<div class="gr-row-source">' + grSourceChip(source) + '</div></td>';
@@ -465,10 +508,33 @@ function grAddRow(item) {
     return $row;
 }
 
-function grAddBlankRow() {
-    var $row = grAddRow({ qty: 1, unit: 'Unit' });
-    if (grProductPickerInstance) grProductPickerInstance.hide();
-    setTimeout(function() { $row.find('.gr-desc').trigger('focus'); }, 200);
+// Pilih produk untuk satu baris (item configuration tanpa kecocokan / ganti produk).
+let grProductTargetRow = null;
+
+function grPickProductForRow(el) {
+    grProductTargetRow = $(el).closest('tr');
+    grOpenProductPicker(true);
+}
+
+function grApplyProductToRow($row, p) {
+    var item = {
+        master_product_id: p.id,
+        product_name: p.name,
+        part_number: p.code,
+        currency: p.currency
+    };
+    $row.attr('data-product-id', p.id);
+    $row.find('.gr-pn').val(p.code || '');
+    $row.find('.gr-product-cell').replaceWith(grProductCell(item));
+    if (!grPlainText($row.find('.gr-desc').html())) $row.find('.gr-desc').html(p.description || grEsc(p.name || ''));
+    // Mata uang item configuration dikunci sesuai configuration; selain itu ikut produk.
+    if (!$row.attr('data-config-item-id')) {
+        $row.find('.gr-currency').closest('td').html(grCurrencyCell({ currency: p.currency }, 'catalog'));
+    }
+    var source = grSourceOf({ quote_configuration_item_id: $row.attr('data-config-item-id'), master_product_id: p.id });
+    $row.find('.gr-row-source').html(grSourceChip(source));
+    $row.find('.gr-product-cell').removeClass('is-invalid');
+    grRefresh();
 }
 
 function grRemoveRow(btn) {
@@ -561,14 +627,19 @@ function grLoadPicker() {
     }
     grPickerInstance.show();
 
-    $.get(grFetchItemsUrl, { opportunity_id: opportunityId })
+    $.get(grFetchItemsUrl, { opportunity_id: opportunityId, goods_request_id: grGoodsRequestId })
         .done(function(res) {
             grPickerPool = res.data || [];
+            var hidden = res.hidden_count || 0;
+            var hiddenNote = hidden
+                ? '<div class="gr-hint mb-2"><i class="fa fa-eye-slash me-1"></i>' + hidden + ' item configuration tidak ditampilkan karena sudah diminta di Permintaan Barang lain.</div>'
+                : '';
             if (grPickerPool.length === 0) {
-                $('#gr-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>Belum ada item configuration approved untuk opportunity ini.</div>');
+                $('#gr-picker-body').html(hiddenNote + '<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>'
+                    + (hidden ? 'Semua item configuration sudah diminta.' : 'Belum ada item configuration approved untuk opportunity ini.') + '</div>');
                 return;
             }
-            $('#gr-picker-body').html(grBuildPickerGroupsHtml(grPickerPool));
+            $('#gr-picker-body').html(hiddenNote + grBuildPickerGroupsHtml(grPickerPool));
         })
         .fail(function() {
             $('#gr-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Gagal memuat item.</div>');
@@ -652,11 +723,13 @@ $(document).on('change', '.gr-picker-check-div', function() {
 
 function grApplyPicked() {
     var picked = 0;
+    var unmatched = 0;
     $('.gr-picker-check:checked').each(function() {
         var item = grPickerPool[$(this).data('idx')];
         if (item) {
             grAddRow(item);
             picked++;
+            if (!item.master_product_id) unmatched++;
         }
     });
     if (picked === 0) {
@@ -664,6 +737,9 @@ function grApplyPicked() {
         return;
     }
     toastr.success(picked + ' item ditambahkan.');
+    if (unmatched) {
+        toastr.warning(unmatched + ' item belum cocok dengan master produk (part number tidak ditemukan). Klik "Pilih produk" pada baris bertanda merah.');
+    }
     if (grPickerInstance) grPickerInstance.hide();
 }
 
@@ -785,7 +861,11 @@ function grFillProductFilters(filters) {
     $('#gr-product-category').html(catHtml).trigger('change.select2');
 }
 
-function grOpenProductPicker() {
+function grOpenProductPicker(forRow) {
+    if (!forRow) grProductTargetRow = null;
+    $('#gr-product-apply').html(grProductTargetRow
+        ? '<i class="fa fa-check me-1"></i> Pakai Produk Terpilih'
+        : '<i class="fa fa-plus me-1"></i> Tambahkan <span id="gr-product-apply-count">0</span> Item');
     if (!grProductPickerInstance) {
         grProductPickerInstance = new bootstrap.Modal(document.getElementById('grProductPickerModal'));
 
@@ -816,6 +896,19 @@ function grToggleProduct(idx, checked) {
 }
 
 function grApplyProductPicked() {
+    if (grProductTargetRow) {
+        var ids = Object.keys(grProductSelected);
+        if (ids.length !== 1) {
+            toastr.error('Pilih tepat satu produk untuk baris ini.');
+            return;
+        }
+        grApplyProductToRow(grProductTargetRow, grProductSelected[ids[0]]);
+        grProductTargetRow = null;
+        toastr.success('Produk diterapkan ke baris.');
+        if (grProductPickerInstance) grProductPickerInstance.hide();
+        return;
+    }
+
     var added = grExistingIds('data-product-id');
     var picked = 0;
 
@@ -861,7 +954,7 @@ function grValidate() {
     grClearInvalid();
 
     var projectId = $('#gr-project-id').val() || $('#gr-project-id-hidden').val();
-    if (!projectId) {
+    if (grPurpose() === 'project' && !projectId) {
         toastr.error('Pilih project terlebih dahulu.');
         $('#gr-project-id').select2('open');
         return false;
@@ -881,6 +974,10 @@ function grValidate() {
             ok = grFail('Qty baris ' + (i + 1) + ' minimal 1.', $row.find('.gr-qty'));
             return false;
         }
+        if (!$row.attr('data-product-id')) {
+            ok = grFail('Baris ' + (i + 1) + ' belum terhubung master produk. Klik "Pilih produk".', $row.find('.gr-product-cell'));
+            return false;
+        }
     });
 
     return ok;
@@ -896,7 +993,8 @@ function grSave() {
     if (!grValidate()) return;
 
     var payload = {
-        project_id: $('#gr-project-id').val() || $('#gr-project-id-hidden').val(),
+        purpose: grPurpose(),
+        project_id: grPurpose() === 'project' ? ($('#gr-project-id').val() || $('#gr-project-id-hidden').val()) : '',
         notes: $('#gr-notes').val(),
         items: grCollectItems(),
         _token: '{{ csrf_token() }}'
@@ -968,6 +1066,8 @@ $(document).ready(function() {
     (grInitialItems || []).forEach(function(it) { grAddRow(it); });
     grRefresh();
     grSyncProject();
+    grSyncPurpose();
+    $('input[name="gr-purpose"]').on('change', grSyncPurpose);
 
     $('#gr-btn-pick').on('click', grLoadPicker);
 

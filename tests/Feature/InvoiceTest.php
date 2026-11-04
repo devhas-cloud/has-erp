@@ -12,6 +12,7 @@ use App\Models\QuotationItem;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class InvoiceTest extends TestCase
@@ -126,6 +127,7 @@ class InvoiceTest extends TestCase
             'do_number' => 'DO-001',
             'terms' => 30,
             'noted' => 'DP',
+            'non_term_reason' => 'Pekerjaan tambahan di luar PO',
             'percent_payment' => 50,
             'ppn' => 11,
             'items' => [
@@ -498,6 +500,59 @@ class InvoiceTest extends TestCase
         $this->assertNull($invoice->final_checked_by);
     }
 
+    public function test_creator_with_approve_permission_can_approve_own_invoice(): void
+    {
+        $maker = User::where('username', 'creator')->first();
+        UserAccessControl::where('user_id', $maker->id)->update(['can_approve' => true]);
+
+        $this->actingAs($maker)->postJson(route('invoice.store'), $this->payload())->assertOk();
+        $invoice = Invoice::latest('id')->first();
+        $this->actingAs($maker)->postJson(route('invoice.submit', $invoice->id))->assertOk();
+
+        $this->actingAs($maker)->get(route('invoice.show', $invoice->id))
+            ->assertOk()->assertSee('invApprove()', false);
+        $this->actingAs($maker)->postJson(route('invoice.approve', $invoice->id))->assertOk();
+
+        $invoice->refresh();
+        $this->assertSame(Invoice::APPROVAL_APPROVED, $invoice->approval_status);
+        $this->assertSame($maker->id, $invoice->final_checked_by);
+    }
+
+    public function test_tax_invoice_number_can_be_filled_after_approval(): void
+    {
+        $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload([
+            'tax_invoice_number' => ' 010.000-26.00000001 ',
+        ]))->assertOk();
+        $invoice = Invoice::latest('id')->first();
+        $this->assertSame('010.000-26.00000001', $invoice->tax_invoice_number);
+
+        $this->actingAs($this->creator)->postJson(route('invoice.submit', $invoice->id))->assertOk();
+        $this->actingAs($this->approver)->postJson(route('invoice.approve', $invoice->id))->assertOk();
+
+        $this->actingAs($this->viewer)->patchJson(route('invoice.tax-invoice', $invoice->id), ['tax_invoice_number' => 'X'])
+            ->assertForbidden();
+        $this->actingAs($this->creator)->patchJson(route('invoice.tax-invoice', $invoice->id), ['tax_invoice_number' => '010.000-26.00000002'])
+            ->assertOk();
+        $this->assertSame('010.000-26.00000002', $invoice->fresh()->tax_invoice_number);
+        $this->actingAs($this->creator)->get(route('invoice.show', $invoice->id))->assertOk()->assertSee('010.000-26.00000002');
+
+        $this->actingAs($this->creator)->postJson(route('invoice.cancel', $invoice->id), ['cancel_reason' => 'Salah customer'])->assertOk();
+        $this->actingAs($this->creator)->patchJson(route('invoice.tax-invoice', $invoice->id), ['tax_invoice_number' => 'Y'])
+            ->assertStatus(422);
+    }
+
+    public function test_invoice_outside_timeline_shows_reason(): void
+    {
+        $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload(['non_term_reason' => '']))
+            ->assertStatus(422)->assertJsonValidationErrors('non_term_reason');
+
+        $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload())->assertOk();
+        $invoice = Invoice::latest('id')->first();
+
+        $this->actingAs($this->creator)->get(route('invoice.show', $invoice->id))
+            ->assertOk()->assertSee('Tagihan di luar timeline project')->assertSee('Pekerjaan tambahan di luar PO');
+    }
+
     public function test_approval_actions_require_can_approve(): void
     {
         $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload())->assertOk();
@@ -623,49 +678,14 @@ class InvoiceTest extends TestCase
         return $invoice->fresh();
     }
 
-    public function test_pay_requires_payment_date_and_reference(): void
+    public function test_payment_is_no_longer_recorded_from_invoice_module(): void
     {
         $invoice = $this->approvedInvoice();
 
-        $this->actingAs($this->approver)->postJson(route('invoice.pay', $invoice->id), [])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['date_payment', 'reference_number']);
-
-        $this->actingAs($this->approver)->postJson(route('invoice.pay', $invoice->id), [
-            'date_payment' => now()->addDay()->toDateString(),
-            'reference_number' => 'TRF-001',
-        ])->assertStatus(422)->assertJsonValidationErrors(['date_payment']);
-
-        $this->actingAs($this->approver)->postJson(route('invoice.pay', $invoice->id), [
-            'date_payment' => now()->toDateString(),
-            'reference_number' => 'TRF-001',
-        ])->assertOk();
-
-        $invoice->refresh();
-        $this->assertSame(Invoice::STATUS_PAID, $invoice->status);
-        $this->assertSame(now()->toDateString(), $invoice->date_payment->toDateString());
-        $this->assertSame('TRF-001', $invoice->reference_number);
-        $this->assertSame($this->approver->id, $invoice->paid_by);
-
-        // Sudah lunas: tidak bisa dicatat ulang atau dibatalkan.
-        $this->actingAs($this->approver)->postJson(route('invoice.pay', $invoice->id), [
-            'date_payment' => now()->toDateString(),
-            'reference_number' => 'TRF-002',
-        ])->assertStatus(422);
-        $this->actingAs($this->creator)->postJson(route('invoice.cancel', $invoice->id), ['cancel_reason' => 'x'])
-            ->assertStatus(422);
-    }
-
-    public function test_pay_requires_approved_invoice_and_approve_permission(): void
-    {
-        $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload())->assertOk();
-        $invoice = Invoice::firstOrFail();
-        $data = ['date_payment' => now()->toDateString(), 'reference_number' => 'TRF-001'];
-
-        $this->actingAs($this->approver)->postJson(route('invoice.pay', $invoice->id), $data)->assertStatus(422);
-
-        $invoice = $this->approvedInvoice();
-        $this->actingAs($this->creator)->postJson(route('invoice.pay', $invoice->id), $data)->assertStatus(403);
+        // Pembayaran dicatat lewat modul Penerimaan Customer (customer-receipt).
+        $this->assertFalse(Route::has('invoice.pay'));
+        $this->actingAs($this->approver)->get(route('invoice.show', $invoice->id))
+            ->assertOk()->assertDontSee('invPayModal');
         $this->assertSame(Invoice::STATUS_UNPAID, $invoice->fresh()->status);
     }
 
@@ -686,11 +706,6 @@ class InvoiceTest extends TestCase
         $this->assertSame('Customer membatalkan PO', $invoice->cancel_reason);
         $this->assertSame($this->creator->id, $invoice->cancelled_by);
         $this->assertNotNull($invoice->cancelled_at);
-
-        $this->actingAs($this->approver)->postJson(route('invoice.pay', $invoice->id), [
-            'date_payment' => now()->toDateString(),
-            'reference_number' => 'TRF-001',
-        ])->assertStatus(422);
 
         $this->actingAs($this->creator)->get(route('invoice.show', $invoice->id))
             ->assertOk()

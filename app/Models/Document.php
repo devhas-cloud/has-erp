@@ -10,8 +10,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Dokumen lampiran: kontrak/perjanjian Project (TYPE_AGREEMENT) dan dokumen
- * pendukung termin penagihan (TYPE_SUPPORT). Disimpan di disk private; dibuka
+ * Dokumen lampiran: kontrak/perjanjian Project (TYPE_AGREEMENT), dokumen
+ * pendukung termin penagihan (TYPE_SUPPORT), dan arsip pembelian
+ * (PURCHASE_TYPE_LABELS — PO, Direct Purchase, Penerimaan Barang). Disimpan di disk private; dibuka
  * hanya lewat route project/invoice yang mengecek hak akses.
  */
 class Document extends Model
@@ -21,6 +22,31 @@ class Document extends Model
     public const TYPE_AGREEMENT = 'agreement';
 
     public const TYPE_SUPPORT = 'support';
+
+    // Arsip pembelian (PO, Direct Purchase, Penerimaan Barang)
+    public const TYPE_SUPPLIER_QUOTE = 'supplier_quote';
+
+    public const TYPE_SUPPLIER_CONFIRMATION = 'supplier_confirmation';
+
+    public const TYPE_DELIVERY_NOTE = 'delivery_note';
+
+    public const TYPE_SUPPLIER_INVOICE = 'supplier_invoice';
+
+    public const TYPE_TAX_INVOICE = 'tax_invoice';
+
+    public const TYPE_PAYMENT_PROOF = 'payment_proof';
+
+    public const TYPE_OTHER = 'other';
+
+    public const PURCHASE_TYPE_LABELS = [
+        self::TYPE_SUPPLIER_QUOTE => 'Penawaran Supplier',
+        self::TYPE_SUPPLIER_CONFIRMATION => 'PO Bertanda Tangan / Konfirmasi Supplier',
+        self::TYPE_DELIVERY_NOTE => 'Surat Jalan Supplier',
+        self::TYPE_SUPPLIER_INVOICE => 'Invoice / Nota Supplier',
+        self::TYPE_TAX_INVOICE => 'Faktur Pajak',
+        self::TYPE_PAYMENT_PROOF => 'Bukti Transfer / Pembayaran',
+        self::TYPE_OTHER => 'Lain-lain',
+    ];
 
     public const MAX_FILES = 10;
 
@@ -104,6 +130,8 @@ class Document extends Model
         return [
             'id' => $this->id,
             'file_name' => $this->file_name,
+            'type' => $this->type,
+            'type_label' => self::PURCHASE_TYPE_LABELS[$this->type] ?? null,
             'notes' => $this->notes,
             'size' => $this->sizeLabel(),
             'icon' => $this->iconClass(),

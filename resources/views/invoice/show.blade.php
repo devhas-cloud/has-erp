@@ -83,7 +83,7 @@
         \App\Models\Invoice::APPROVAL_DRAFT => 'Invoice masih draft. Periksa data, lalu klik Submit Approval agar bisa disetujui.',
         \App\Models\Invoice::APPROVAL_WAITING_APPROVAL => 'Menunggu persetujuan. Invoice tidak bisa diubah selama proses approval.',
         \App\Models\Invoice::APPROVAL_REJECTED => 'Invoice ditolak. Perbaiki sesuai alasan penolakan, lalu submit ulang.',
-        \App\Models\Invoice::APPROVAL_APPROVED => 'Invoice sudah disetujui. PDF siap dikirim ke customer. Catat pembayaran setelah dana diterima.',
+        \App\Models\Invoice::APPROVAL_APPROVED => 'Invoice sudah disetujui. PDF siap dikirim ke customer. Catat penerimaan di menu Penerimaan Customer setelah dana masuk.',
         default => null,
     };
 
@@ -94,6 +94,9 @@
     } elseif ($isCancelled) {
         $nextHint = 'Invoice ini sudah dibatalkan dan tidak berlaku lagi.';
     }
+
+    $canEditTaxInvoice = ($canUpdate ?? false) && ! $isCancelled;
+    $activeReceipt = $invoice->activeReceipt();
 
     // Sisa hari menuju jatuh tempo (hanya relevan bila belum dibayar).
     $dueDays = $invoice->due_date && $invoice->status === \App\Models\Invoice::STATUS_UNPAID
@@ -168,10 +171,14 @@
                         <i class="fa fa-ban me-1"></i> Batalkan Invoice
                     </button>
                 @endif
-                @if(($canApprove ?? false) && $invoice->canRecordPayment())
-                    <button type="button" class="btn btn-success btn-sm" onclick="invOpenModal('invPayModal')">
-                        <i class="fa fa-money-bill-wave me-1"></i> Catat Pembayaran
-                    </button>
+                @if($activeReceipt && $activeReceipt->isDraft())
+                    <a href="{{ route('customer-receipt.show', $activeReceipt->id) }}" class="btn btn-soft btn-sm">
+                        <i class="fa fa-hand-holding-dollar me-1"></i> Penerimaan {{ $activeReceipt->receipt_number }} (Draft)
+                    </a>
+                @elseif(($canCreateReceipt ?? false) && $invoice->awaitsReceipt())
+                    <a href="{{ route('customer-receipt.create', ['invoice_id' => $invoice->id]) }}" class="btn btn-success btn-sm">
+                        <i class="fa fa-hand-holding-dollar me-1"></i> Catat Penerimaan
+                    </a>
                 @endif
             </div>
         </div>
@@ -184,9 +191,11 @@
             <div class="mt-3 p-3" style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:var(--radius-sm);">
                 <div style="font-weight:600;font-size:13px;color:#166534">
                     <i class="fa fa-circle-check me-1"></i> Lunas pada {{ $invoice->date_payment?->format('d M Y') ?? '—' }}
-                    &middot; Ref {{ $invoice->reference_number ?: '—' }}
+                    @if($activeReceipt)
+                        &middot; Penerimaan Customer <a href="{{ route('customer-receipt.show', $activeReceipt->id) }}" style="color:inherit">{{ $activeReceipt->receipt_number }}</a>
+                    @endif
                     @if($invoice->payer)
-                        <span style="font-weight:400">— dicatat oleh {{ $invoice->payer->display_name }}</span>
+                        <span style="font-weight:400">— diposting oleh {{ $invoice->payer->display_name }}</span>
                     @endif
                 </div>
             </div>
@@ -201,6 +210,15 @@
                     @endif
                 </div>
                 <div style="font-size:13px;color:#7f1d1d;margin-top:4px">{{ $invoice->cancel_reason ?: '—' }}</div>
+            </div>
+        @endif
+
+        @if($invoice->isOutsideTimeline())
+            <div class="mt-3 p-3" style="border:1px solid #fde68a;background:#fffbeb;border-radius:var(--radius-sm);">
+                <div style="font-weight:600;font-size:13px;color:#92400e">
+                    <i class="fa fa-triangle-exclamation me-1"></i> Tagihan di luar timeline project
+                </div>
+                <div style="font-size:13px;color:#92400e;margin-top:4px">{{ $invoice->non_term_reason ?: 'Invoice lama tanpa termin — alasan belum dicatat.' }}</div>
             </div>
         @endif
 
@@ -310,18 +328,26 @@
     <div class="col-lg-5">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Pembayaran &amp; Persetujuan</span>
+                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Pembayaran, Pajak &amp; Persetujuan</span>
             </div>
             <div class="card-body-custom">
                 <dl class="inv-dl mb-0">
-                    <dt>Tanggal Bayar</dt>
-                    <dd>{{ $invoice->date_payment?->format('d M Y') ?? '—' }}</dd>
-                    <dt>Reference No.</dt>
-                    <dd>{{ $invoice->reference_number ?: '—' }}</dd>
-                    @if($invoice->payer)
-                        <dt>Dicatat Oleh</dt>
-                        <dd>{{ $invoice->payer->display_name }}</dd>
-                    @endif
+                    <dt>Penerimaan Customer</dt>
+                    <dd>
+                        @if($activeReceipt)
+                            <a href="{{ route('customer-receipt.show', $activeReceipt->id) }}" class="text-decoration-none">{{ $activeReceipt->receipt_number }}</a> {!! $activeReceipt->statusBadgeHtml() !!}
+                            <div class="inv-muted" style="font-weight:400">{{ $activeReceipt->receipt_date?->format('d M Y') }}{{ $activeReceipt->reference_number ? ' · Ref '.$activeReceipt->reference_number : '' }}</div>
+                        @else
+                            Belum ada
+                        @endif
+                    </dd>
+                    <dt>No. Faktur Pajak</dt>
+                    <dd>
+                        <span id="inv-tax-number">{{ $invoice->tax_invoice_number ?: '—' }}</span>
+                        @if($canEditTaxInvoice)
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="invEditTaxInvoice()" title="Isi / ubah no. faktur pajak"><i class="fa fa-pen"></i></button>
+                        @endif
+                    </dd>
                     <dt>Approval</dt>
                     <dd>{!! $invoice->approvalBadgeHtml() !!}</dd>
                     @if($invoice->final_checked_by && ! $isRejected)
@@ -364,7 +390,7 @@
                 <div class="inv-term-box">
                     <div class="inv-muted">Termin</div>
                     <div style="font-size:16px;font-weight:700;color:var(--text-primary)">{{ $term->name }}</div>
-                    <div style="font-weight:600;color:var(--accent)">{{ \App\Models\Invoice::formatNumber($term->percent) }}% dari nilai penawaran</div>
+                    <div style="font-weight:600;color:var(--accent)">{{ \App\Models\Invoice::formatNumber($term->percent) }}% dari nilai kontrak sebelum PPN</div>
                     @if($term->description)<div class="inv-muted mt-1">{{ $term->description }}</div>@endif
                     @if($term->target_date)<div class="inv-muted mt-1"><i class="fa fa-calendar me-1"></i>Target tagih {{ $term->target_date->format('d M Y') }}</div>@endif
                 </div>
@@ -391,6 +417,32 @@
                 </div>
                 @endif
             </div>
+        </div>
+    </div>
+</div>
+@endif
+
+@if($invoice->receipts->isNotEmpty())
+<div class="card-custom fade-in mb-3">
+    <div class="card-header-custom">
+        <span><i class="fa-solid fa-hand-holding-dollar me-2" style="color:var(--accent)"></i>Riwayat Penerimaan Customer <span class="inv-muted">({{ $invoice->receipts->count() }})</span></span>
+    </div>
+    <div class="card-body-custom p-2">
+        <div class="table-responsive">
+            <table class="table table-custom align-middle mb-0">
+                <thead><tr><th>No. Penerimaan</th><th>Tanggal Terima</th><th>Metode / Referensi</th><th class="text-end">Nominal</th><th class="text-center">Status</th></tr></thead>
+                <tbody>
+                    @foreach($invoice->receipts as $receipt)
+                    <tr @if($receipt->status === \App\Models\CustomerReceipt::STATUS_VOID) style="opacity:.6" @endif>
+                        <td><a href="{{ route('customer-receipt.show', $receipt->id) }}" class="fw-semibold text-decoration-none">{{ $receipt->receipt_number }}</a></td>
+                        <td>{{ $receipt->receipt_date?->format('d/m/Y') }}</td>
+                        <td>{{ $receipt->method_label }}<div class="inv-muted">{{ $receipt->reference_number ?: '—' }}</div></td>
+                        <td class="text-end">{{ \App\Models\Invoice::formatMoney($receipt->amount) }}</td>
+                        <td class="text-center">{!! $receipt->statusBadgeHtml() !!}@if($receipt->void_reason)<div class="inv-muted">{{ $receipt->void_reason }}</div>@endif</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -491,36 +543,6 @@
     </div>
 </div>
 
-<div class="modal fade" id="invPayModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-money-bill-wave me-1"></i> Catat Pembayaran</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="p-2 mb-3" style="background:var(--accent-soft);border-radius:var(--radius-sm);font-size:13px">
-                    Total tagihan: <strong>{{ \App\Models\Invoice::formatMoney($invoice->total_payment) }}</strong>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Tanggal Bayar <span class="text-danger">*</span></label>
-                    <input type="date" id="inv-pay-date" class="form-control" max="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}">
-                </div>
-                <div class="mb-1">
-                    <label class="form-label">Reference No <span class="text-danger">*</span></label>
-                    <input type="text" id="inv-pay-reference" class="form-control" maxlength="100" placeholder="No. bukti transfer / referensi bank">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-success btn-sm" id="inv-btn-pay">
-                    <i class="fa fa-check me-1"></i> Simpan Pembayaran
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="modal fade" id="invCancelModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -552,8 +574,9 @@ let invRejectModalInstance = null;
 const invSubmitUrl = '{{ route("invoice.submit", $invoice->id) }}';
 const invApproveUrl = '{{ route("invoice.approve", $invoice->id) }}';
 const invRejectUrl = '{{ route("invoice.reject", $invoice->id) }}';
-const invPayUrl = '{{ route("invoice.pay", $invoice->id) }}';
 const invCancelUrl = '{{ route("invoice.cancel", $invoice->id) }}';
+const invTaxInvoiceUrl = '{{ route("invoice.tax-invoice", $invoice->id) }}';
+let invTaxInvoiceNumber = @json($invoice->tax_invoice_number);
 const invDocUploadUrl = '{{ route("invoice.documents.store", $invoice->id) }}';
 const invCanDeleteDocs = {{ ($canDelete ?? false) ? 'true' : 'false' }};
 let invDocs = @json($termDocuments);
@@ -652,21 +675,39 @@ function invPostAction(url, data, $btn, fallback) {
         });
 }
 
-$(document).on('click', '#inv-btn-pay', function() {
-    var date = $('#inv-pay-date').val();
-    var reference = $.trim($('#inv-pay-reference').val());
-    if (!date) { toastr.error('Tanggal bayar wajib diisi.'); $('#inv-pay-date').focus(); return; }
-    if (!reference) { toastr.error('Reference No wajib diisi.'); $('#inv-pay-reference').focus(); return; }
-
-    invPostAction(invPayUrl, { date_payment: date, reference_number: reference }, $(this), 'Gagal mencatat pembayaran.');
-});
-
 $(document).on('click', '#inv-btn-cancel', function() {
     var reason = $.trim($('#inv-cancel-reason').val());
     if (!reason) { toastr.error('Alasan pembatalan wajib diisi.'); $('#inv-cancel-reason').focus(); return; }
 
     invPostAction(invCancelUrl, { cancel_reason: reason }, $(this), 'Gagal membatalkan invoice.');
 });
+
+function invEditTaxInvoice() {
+    Swal.fire({
+        title: 'No. Faktur Pajak',
+        input: 'text',
+        inputValue: invTaxInvoiceNumber || '',
+        inputAttributes: { maxlength: 50 },
+        inputPlaceholder: 'Kosongkan untuk menghapus',
+        showCancelButton: true,
+        confirmButtonText: 'Simpan',
+        cancelButtonText: 'Batal'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        var number = $.trim(result.value || '');
+        $.ajax({
+            url: invTaxInvoiceUrl,
+            method: 'POST',
+            data: { _token: '{{ csrf_token() }}', _method: 'PATCH', tax_invoice_number: number }
+        }).done(function(res) {
+            invTaxInvoiceNumber = number || null;
+            $('#inv-tax-number').text(number || '—');
+            toastr.success(res.message);
+        }).fail(function(xhr) {
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menyimpan no. faktur pajak.');
+        });
+    });
+}
 
 function invSubmit() {
     Swal.fire({

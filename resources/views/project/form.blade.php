@@ -271,7 +271,8 @@
             </div>
             <div class="card-body-custom">
                 <div class="pj-hint mb-2">
-                    Bagi nilai penawaran sebelum PPN (<strong id="pj-billing-base-label">Rp 0</strong>) menjadi beberapa tahap pembayaran.
+                    Bagi nilai sebelum PPN (<strong id="pj-billing-base-label">Rp 0</strong>) menjadi beberapa tahap pembayaran.
+                    <span id="pj-billing-base-source"></span>
                     Invoice nantinya dibuat langsung dari tiap baris, dan persentasenya mengikuti baris tersebut.
                 </div>
                 <div class="pj-term-progress" id="pj-term-progress">
@@ -328,22 +329,29 @@
                     </div>
 
                     {{-- Project tanpa quotation: nilai diisi manual --}}
+                    {{-- Urutan sama dengan rincian Estimasi PL: total (termasuk PPN) dulu, lalu net (sebelum PPN). --}}
                     <div id="pj-value-manual">
-                    <div class="pj-amount-box mb-2">
-                        <div class="lbl">Net Sale Amount <span class="text-danger">*</span></div>
-                        <div class="d-flex align-items-center">
-                            <span class="prefix">Rp</span>
-                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-net-sale" class="form-control pj-number pj-readonly text-end" value="{{ $project ? \App\Models\Project::formatNumber($project->net_sale_amount) : '' }}" placeholder="0" readonly>
-                        </div>
-                        <div class="pj-hint">Nilai riil project, dasar pembagian achievement sales.</div>
-                    </div>
-                    <div class="pj-amount-box secondary mb-3">
-                        <div class="lbl">Total Sale Amount <span class="text-danger">*</span></div>
+                    <div class="pj-amount-box secondary mb-2">
+                        <div class="lbl">Total Sale Amount <span class="text-danger">*</span> <span class="pj-hint">termasuk PPN</span></div>
                         <div class="d-flex align-items-center">
                             <span class="prefix">Rp</span>
                             <input type="text" inputmode="decimal" autocomplete="off" id="pj-total-sale" class="form-control pj-number pj-readonly text-end" value="{{ $project ? \App\Models\Project::formatNumber($project->total_sale_amount) : '' }}" placeholder="0" readonly>
                         </div>
-                        <div class="pj-hint" id="pj-sync-note">Diisi manual bila tanpa quotation.</div>
+                        <div class="pj-hint" id="pj-sync-note">Nilai PO customer termasuk PPN.</div>
+                    </div>
+                    <div class="pj-amount-box mb-3">
+                        <div class="lbl">Net Sale Amount <span class="text-danger">*</span> <span class="pj-hint">sebelum PPN</span></div>
+                        <div class="d-flex align-items-center">
+                            <span class="prefix">Rp</span>
+                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-net-sale" class="form-control pj-number pj-readonly text-end" value="{{ $project ? \App\Models\Project::formatNumber($project->net_sale_amount) : '' }}" placeholder="0" readonly>
+                        </div>
+                        <div class="pj-hint" id="pj-net-note">
+                            @if($netLocked ?? false)
+                                <i class="fa fa-lock me-1"></i> Terkunci karena sudah ada invoice termin.
+                            @else
+                                Nilai riil project: dasar timeline penagihan dan pembagian achievement sales.
+                            @endif
+                        </div>
                     </div>
                     </div>
 
@@ -406,6 +414,7 @@ const pjInitialSales = @json($salesOptions);
 const pjInitialCompanyId = @json($initialCompanyId);
 const pjInitialCompanyName = @json($initialCompanyName);
 const pjInitialTerms = @json($billingTerms);
+const pjNetLocked = {{ ($netLocked ?? false) ? 'true' : 'false' }};
 let pjBillingBase = {{ (float) $billingBase }};
 let pjTermSeq = 0;
 
@@ -483,8 +492,8 @@ function pjApplyTermTemplate(name) {
 }
 
 function pjCurrentBillingBase() {
-    // Tanpa quotation: dasar penagihan = total sale yang diisi manual.
-    return $('#pj-quotation-id').val() ? pjBillingBase : (parseFloat(pjToRaw($('#pj-total-sale').val())) || 0);
+    // Tanpa quotation: dasar penagihan = net sale (sebelum PPN) yang diisi manual.
+    return $('#pj-quotation-id').val() ? pjBillingBase : (parseFloat(pjToRaw($('#pj-net-sale').val())) || 0);
 }
 
 function pjRecalcTerms() {
@@ -509,6 +518,9 @@ function pjRecalcTerms() {
     $progress.toggle($rows.length > 0).toggleClass('full', total === 100).toggleClass('over', total > 100);
     $('#pj-term-bar').css('width', Math.min(total, 100) + '%');
     $('#pj-billing-base-label').text(pjFormatMoney(base));
+    $('#pj-billing-base-source').text($('#pj-quotation-id').val()
+        ? '(sub total − diskon quotation)'
+        : '(Net Sale Amount)');
     $('#pj-term-total-label').text(pjFormatNumber(total) + '% terjadwal');
 
     var text;
@@ -638,7 +650,10 @@ function pjSetCompany(id, name, locked) {
 }
 
 function pjLockAmounts(locked) {
-    $('#pj-total-sale, #pj-net-sale').prop('readonly', locked).toggleClass('pj-readonly', locked);
+    $('#pj-total-sale').prop('readonly', locked).toggleClass('pj-readonly', locked);
+    // Net sale project manual terkunci bila sudah ada invoice termin.
+    var netLocked = locked || pjNetLocked;
+    $('#pj-net-sale').prop('readonly', netLocked).toggleClass('pj-readonly', netLocked);
 }
 
 // Rincian nilai project dari Estimasi PL (urutan sama dengan halaman Estimasi PL).
@@ -690,7 +705,7 @@ function pjApplyQuotation(id) {
         //pjRenderQuotationInfo(null);
         $('#pj-company').prop('disabled', false).trigger('change.select2');
         $('#pj-company-hint').text('Pilih company secara manual (tanpa quotation).');
-        $('#pj-sync-note').text('Diisi manual bila tanpa quotation.');
+        $('#pj-sync-note').text('Nilai PO customer termasuk PPN.');
         $('#pj-po-file-required').toggle(false);
         pjRenderSalesSplit();
         return;
@@ -825,8 +840,12 @@ function pjValidate() {
     }
     if (file && file.size > pjMaxFileSize) return pjFail('#pj-po-file', 'Ukuran file tidak boleh lebih dari 10MB.');
 
-    if (!$('#pj-net-sale').val() && $('#pj-net-sale').val() !== '0') {
-        return pjFail('#pj-net-sale', 'Net Sale Amount wajib diisi.');
+    if (!quotationId) {
+        if (!$('#pj-total-sale').val()) return pjFail('#pj-total-sale', 'Total Sale Amount wajib diisi.');
+        if (!$('#pj-net-sale').val()) return pjFail('#pj-net-sale', 'Net Sale Amount wajib diisi.');
+        if (pjCents($('#pj-net-sale').val()) > pjCents($('#pj-total-sale').val())) {
+            return pjFail('#pj-net-sale', 'Net Sale Amount (sebelum PPN) tidak boleh melebihi Total Sale Amount.');
+        }
     }
 
     if (($('#pj-sales').val() || []).length === 0) return pjFail('#pj-sales', 'Pilih minimal satu sales.');
@@ -952,7 +971,7 @@ $(document).ready(function() {
     (pjInitialTerms || []).forEach(function(t) { pjAddTerm(t); });
     pjRecalcTerms();
     $(document).on('input', '.pj-term-percent', pjRecalcTerms);
-    $(document).on('input', '#pj-total-sale', pjRecalcTerms);
+    $(document).on('input', '#pj-net-sale', pjRecalcTerms);
     $(document).on('input', '.pj-term-name, .pj-term-percent', function() { $(this).removeClass('is-invalid'); });
     $('#pj-agreement-files').on('change', pjRenderPendingAgreements);
 });

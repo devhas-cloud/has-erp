@@ -4,23 +4,8 @@
 @section('page-title', 'Permintaan Barang')
 
 @section('styles')
+@include('partials.list-toolbar')
 <style>
-    .gr-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-    .gr-tab {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 5px 12px; border-radius: 999px;
-        border: 1px solid var(--card-border); background: var(--card);
-        font-size: 12.5px; font-weight: 500; color: var(--text-muted);
-        cursor: pointer; transition: all .15s;
-    }
-    .gr-tab:hover { border-color: var(--accent); color: var(--accent); }
-    .gr-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .gr-tab .count {
-        min-width: 20px; padding: 0 6px; border-radius: 999px;
-        background: var(--accent-soft); color: var(--accent);
-        font-size: 11px; font-weight: 700; text-align: center;
-    }
-    .gr-tab.active .count { background: rgba(255,255,255,.25); color: #fff; }
     .gr-cell-main { font-weight: 600; color: var(--text-primary); }
     .gr-cell-sub { font-size: 12px; color: var(--text-muted); }
 </style>
@@ -45,20 +30,59 @@
 <div class="card-custom fade-in">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="fa-solid fa-dolly me-2" style="color:var(--accent)"></i>Daftar Permintaan Barang</span>
-        <div class="gr-tabs" id="gr-status-tabs">
-            @php $initialStatus = array_key_exists(request('status'), \App\Models\GoodsRequest::STATUS_LABELS) ? request('status') : ''; @endphp
-            <span class="gr-tab {{ $initialStatus === '' ? 'active' : '' }}" data-status="">Semua <span class="count" data-count="all">0</span></span>
-            @foreach(\App\Models\GoodsRequest::STATUS_LABELS as $key => $label)
-                <span class="gr-tab {{ $initialStatus === $key ? 'active' : '' }}" data-status="{{ $key }}">{{ $label }} <span class="count" data-count="{{ $key }}">0</span></span>
-            @endforeach
-        </div>
     </div>
     <div class="card-body-custom p-2">
+        <div class="list-toolbar" id="gr-toolbar">
+            <div class="lt-search">
+                <i class="fa fa-magnifying-glass"></i>
+                <input type="search" class="form-control" data-search placeholder="Cari no. permintaan, project, customer, divisi, pembuat…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Hapus pencarian"><i class="fa fa-xmark"></i></button>
+            </div>
+            <select class="form-select" data-filter="status" data-status-select aria-label="Status">
+                <option value="">Semua Status</option>
+                @foreach(\App\Models\GoodsRequest::STATUS_LABELS as $key => $label)
+                    <option value="{{ $key }}" data-label="{{ $label }}" @selected(request('status') === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <select class="form-select" data-filter="purpose" aria-label="Tujuan">
+                <option value="">Semua Tujuan</option>
+                @foreach(\App\Models\GoodsRequest::PURPOSE_LABELS as $key => $label)
+                    <option value="{{ $key }}">{{ $label }}</option>
+                @endforeach
+            </select>
+            @if($projects->isNotEmpty())
+            <select class="form-select" data-filter="project_id" data-searchable data-hide-when="purpose:internal" aria-label="Project">
+                <option value="">Semua Project</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->id }}">{{ $p->project_number }} — {{ $p->project_name }}</option>
+                @endforeach
+            </select>
+            @endif
+            @if($divisions->count() > 1)
+            <select class="form-select" data-filter="division_id" aria-label="Divisi">
+                <option value="">Semua Divisi</option>
+                @foreach($divisions as $d)
+                    <option value="{{ $d->id }}">{{ $d->division_name }}</option>
+                @endforeach
+            </select>
+            @endif
+            <div class="lt-date" title="Rentang tanggal">
+                <input type="date" class="form-control" data-filter="date_from" aria-label="Dari tanggal">
+                <span>–</span>
+                <input type="date" class="form-control" data-filter="date_to" aria-label="Sampai tanggal">
+            </div>
+            <select class="form-select" data-filter="mine" aria-label="Pembuat">
+                <option value="">Semua Pembuat</option>
+                <option value="1">Dibuat oleh Saya</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+        </div>
         <div class="table-responsive">
             <table id="gr-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
+                        <th>No. Permintaan</th>
                         <th>Project</th>
                         <th>Customer</th>
                         <th>Divisi</th>
@@ -77,7 +101,6 @@
 @section('scripts')
 <script>
 let grTable = null;
-let grStatusFilter = @json($initialStatus);
 
 const grShowUrl = '{{ route("goods-request.show", "__ID__") }}';
 const grEditUrl = '{{ route("goods-request.edit", "__ID__") }}';
@@ -98,19 +121,27 @@ function initGrTable() {
     if (grTable) grTable.destroy();
 
     grTable = $('#gr-table').DataTable({
+        layout: ListToolbar.layout,
+        language: ListToolbar.language,
         processing: true,
         serverSide: true,
         ajax: {
             url: '{{ route("goods-request.data") }}',
-            data: function(d) { d.status = grStatusFilter; }
+            data: function(d) { return grToolbar.params(d); }
         },
         order: [],
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
+            { data: 'request_number', orderable: false, searchable: true,
+                render: function(data, type, row) {
+                    return '<a href="' + grShowUrl.replace('__ID__', row.id) + '" class="gr-cell-main" style="text-decoration:none">' + grEsc(data) + '</a>';
+                }
+            },
             { data: 'project_number', orderable: false, searchable: true,
                 render: function(data, type, row) {
-                    var html = '<a href="' + grShowUrl.replace('__ID__', row.id) + '" class="gr-cell-main" style="text-decoration:none">' + grEsc(data) + '</a>';
+                    var html = '<div class="gr-cell-main">' + grEsc(data) + '</div>';
                     html += '<div style="font-size:13px">' + grEsc(row.project_name) + '</div>';
+                    if (row.purpose === 'internal') html += '<div class="gr-cell-sub"><i class="fa fa-warehouse me-1"></i>Tujuan stok / internal</div>';
                     if (row.opportunity_name) html += '<div class="gr-cell-sub"><i class="fa fa-bullseye me-1"></i>' + grEsc(row.opportunity_name) + '</div>';
                     return html;
                 }
@@ -134,8 +165,15 @@ function initGrTable() {
             },
             { data: 'status_badge', orderable: false, searchable: false,
                 render: function(data, type, row) {
-                    if (row.status !== 'waiting_approval') return data;
-                    return data + '<div class="gr-cell-sub mt-1"><i class="fa fa-user-check me-1"></i>Approval ' + row.approval_count + '/' + row.required_approvals + '</div>';
+                    if (row.status === 'waiting_approval') {
+                        return data + '<div class="gr-cell-sub mt-1"><i class="fa fa-user-check me-1"></i>Approval ' + row.approval_count + '/' + row.required_approvals + '</div>';
+                    }
+                    if (row.fulfillment) {
+                        var labels = { none: 'Belum diproses', partial: 'Terpenuhi sebagian', done: 'Terpenuhi' };
+                        var colors = { none: '#6b7280', partial: '#b45309', done: '#166534' };
+                        return data + '<div class="gr-cell-sub mt-1" style="color:' + colors[row.fulfillment] + '"><i class="fa fa-boxes-stacked me-1"></i>' + labels[row.fulfillment] + '</div>';
+                    }
+                    return data;
                 }
             },
             {
@@ -158,23 +196,8 @@ function initGrTable() {
         ]
     });
 
-    grTable.on('xhr.dt', function(e, settings, json) {
-        if (!json || !json.status_counts) return;
-        var all = 0;
-        $.each(json.status_counts, function(key, total) {
-            all += total;
-            $('#gr-status-tabs [data-count="' + key + '"]').text(total);
-        });
-        $('#gr-status-tabs [data-count="all"]').text(all);
-    });
+    grTable.on('xhr.dt', function(e, settings, json) { grToolbar.statusCounts(json); });
 }
-
-$(document).on('click', '#gr-status-tabs .gr-tab', function() {
-    $('#gr-status-tabs .gr-tab').removeClass('active');
-    $(this).addClass('active');
-    grStatusFilter = $(this).data('status') || '';
-    grTable.ajax.reload();
-});
 
 function submitGr(id) {
     Swal.fire({
@@ -245,7 +268,10 @@ function deleteGr(id) {
     });
 }
 
+let grToolbar = null;
+
 $(document).ready(function() {
+    grToolbar = ListToolbar('#gr-toolbar', function() { return grTable; });
     initGrTable();
 });
 </script>

@@ -8,12 +8,17 @@ use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\DashboardAchievementController;
 use App\Http\Controllers\DashboardTaskPlannerController;
+use App\Http\Controllers\DeliveryOrderController;
+use App\Http\Controllers\DirectPurchaseController;
 use App\Http\Controllers\EmployeeManagementController;
 use App\Http\Controllers\EnviroConfigurationController;
 use App\Http\Controllers\GasConfigurationController;
+use App\Http\Controllers\GoodsReceiptController;
 use App\Http\Controllers\GoodsRequestController;
 use App\Http\Controllers\IhConfigurationController;
 use App\Http\Controllers\ImsConfigurationController;
+use App\Http\Controllers\CustomerReceiptController;
+use App\Http\Controllers\FinanceNotificationController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\LeaveRequestController;
@@ -21,6 +26,8 @@ use App\Http\Controllers\LoanController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\OvertimeRequestController;
+use App\Http\Controllers\PayableReportController;
+use App\Http\Controllers\ReceivableReportController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PoSupplierApprovalController;
 use App\Http\Controllers\ProductManagementController;
@@ -29,9 +36,19 @@ use App\Http\Controllers\ProfitEstimateController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\QuotationController;
+use App\Http\Controllers\StockEntryController;
+use App\Http\Controllers\StockOpnameController;
+use App\Http\Controllers\StockOutController;
+use App\Http\Controllers\StockReportController;
+use App\Http\Controllers\StockTransferController;
+use App\Http\Controllers\SupplierBillController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplierPaymentController;
+use App\Http\Controllers\SupplierRefundController;
+use App\Http\Controllers\SupplierReturnController;
 use App\Http\Controllers\TaskPlannerController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\WaterConfigurationController;
 use App\Models\Module;
 use Illuminate\Support\Facades\Route;
@@ -305,9 +322,28 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('invoice/{id}/submit', [InvoiceController::class, 'submit'])->name('invoice.submit');
     Route::post('invoice/{id}/approve', [InvoiceController::class, 'approve'])->name('invoice.approve');
     Route::post('invoice/{id}/reject', [InvoiceController::class, 'reject'])->name('invoice.reject');
-    Route::post('invoice/{id}/pay', [InvoiceController::class, 'pay'])->name('invoice.pay');
     Route::post('invoice/{id}/cancel', [InvoiceController::class, 'cancel'])->name('invoice.cancel');
+    Route::patch('invoice/{id}/tax-invoice', [InvoiceController::class, 'updateTaxInvoice'])->name('invoice.tax-invoice');
     Route::resource('invoice', InvoiceController::class);
+
+    // Finance — Penerimaan Customer (piutang)
+    Route::get('customer-receipt/data', [CustomerReceiptController::class, 'data'])->name('customer-receipt.data');
+    Route::get('customer-receipt/open-invoices', [CustomerReceiptController::class, 'openInvoices'])->name('customer-receipt.open-invoices');
+    Route::post('customer-receipt/{id}/approve', [CustomerReceiptController::class, 'approve'])->name('customer-receipt.approve');
+    Route::post('customer-receipt/{id}/void', [CustomerReceiptController::class, 'void'])->name('customer-receipt.void');
+    Route::post('customer-receipt/{id}/documents', [CustomerReceiptController::class, 'uploadDocument'])->name('customer-receipt.documents.store');
+    Route::get('customer-receipt/{id}/documents/{document}', [CustomerReceiptController::class, 'viewDocument'])->name('customer-receipt.documents.show');
+    Route::delete('customer-receipt/{id}/documents/{document}', [CustomerReceiptController::class, 'deleteDocument'])->name('customer-receipt.documents.destroy');
+    Route::resource('customer-receipt', CustomerReceiptController::class);
+
+    // Finance — Laporan Piutang
+    Route::get('receivable-report', [ReceivableReportController::class, 'index'])->name('receivable-report.index');
+    Route::get('receivable-report/export', [ReceivableReportController::class, 'export'])->name('receivable-report.export');
+
+    // Master Data — Notifikasi Finance (pengingat WhatsApp hutang & piutang)
+    Route::get('finance-notification', [FinanceNotificationController::class, 'index'])->name('finance-notification.index');
+    Route::patch('finance-notification/{type}', [FinanceNotificationController::class, 'update'])->whereIn('type', ['payable', 'receivable'])->name('finance-notification.update');
+    Route::post('finance-notification/{type}/send', [FinanceNotificationController::class, 'send'])->whereIn('type', ['payable', 'receivable'])->name('finance-notification.send');
 
     Route::get('po-supplier-approval/data', [PoSupplierApprovalController::class, 'data'])->name('po-supplier-approval.data');
     Route::post('po-supplier-approval/{id}/approve', [PoSupplierApprovalController::class, 'approve'])->name('po-supplier-approval.approve');
@@ -319,19 +355,108 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('goods-request/{id}/submit', [GoodsRequestController::class, 'submit'])->name('goods-request.submit');
     Route::post('goods-request/{id}/approve', [GoodsRequestController::class, 'approve'])->name('goods-request.approve');
     Route::post('goods-request/{id}/reject', [GoodsRequestController::class, 'reject'])->name('goods-request.reject');
+    Route::patch('goods-request/{id}/close-remaining', [GoodsRequestController::class, 'closeRemaining'])->name('goods-request.close-remaining');
+    Route::patch('goods-request/{id}/items/{item}/product', [GoodsRequestController::class, 'mapProduct'])->name('goods-request.items.product');
     Route::resource('goods-request', GoodsRequestController::class);
 
     Route::get('purchase-order/data', [PurchaseOrderController::class, 'data'])->name('purchase-order.data');
     Route::get('purchase-order/fetch-available-items', [PurchaseOrderController::class, 'fetchAvailableItems'])->name('purchase-order.fetch-available-items');
-    Route::get('purchase-order/search-products', [PurchaseOrderController::class, 'searchProducts'])->name('purchase-order.search-products');
     Route::post('purchase-order/{id}/submit', [PurchaseOrderController::class, 'submit'])->name('purchase-order.submit');
     Route::post('purchase-order/{id}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-order.approve');
     Route::post('purchase-order/{id}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-order.reject');
+    Route::post('purchase-order/{id}/revise', [PurchaseOrderController::class, 'revise'])->name('purchase-order.revise');
+    Route::post('purchase-order/{id}/documents', [PurchaseOrderController::class, 'uploadDocument'])->name('purchase-order.documents.store');
+    Route::get('purchase-order/{id}/documents/{document}', [PurchaseOrderController::class, 'viewDocument'])->name('purchase-order.documents.show');
+    Route::delete('purchase-order/{id}/documents/{document}', [PurchaseOrderController::class, 'deleteDocument'])->name('purchase-order.documents.destroy');
+    Route::post('purchase-order/{id}/cancel', [PurchaseOrderController::class, 'cancel'])->name('purchase-order.void');
     Route::get('purchase-order/{id}/pdf', [PurchaseOrderController::class, 'pdf'])->name('purchase-order.pdf');
     Route::resource('purchase-order', PurchaseOrderController::class);
 
+    Route::get('direct-purchase/data', [DirectPurchaseController::class, 'data'])->name('direct-purchase.data');
+    Route::get('direct-purchase/search-products', [DirectPurchaseController::class, 'searchProducts'])->name('direct-purchase.search-products');
+    Route::post('direct-purchase/{id}/submit', [DirectPurchaseController::class, 'submit'])->name('direct-purchase.submit');
+    Route::post('direct-purchase/{id}/approve', [DirectPurchaseController::class, 'approve'])->name('direct-purchase.approve');
+    Route::post('direct-purchase/{id}/reject', [DirectPurchaseController::class, 'reject'])->name('direct-purchase.reject');
+    Route::get('direct-purchase/{id}/pdf', [DirectPurchaseController::class, 'pdf'])->name('direct-purchase.pdf');
+    Route::post('direct-purchase/{id}/documents', [DirectPurchaseController::class, 'uploadDocument'])->name('direct-purchase.documents.store');
+    Route::get('direct-purchase/{id}/documents/{document}', [DirectPurchaseController::class, 'viewDocument'])->name('direct-purchase.documents.show');
+    Route::delete('direct-purchase/{id}/documents/{document}', [DirectPurchaseController::class, 'deleteDocument'])->name('direct-purchase.documents.destroy');
+    Route::resource('direct-purchase', DirectPurchaseController::class);
+
+    Route::get('warehouse/data', [WarehouseController::class, 'data'])->name('warehouse.data');
+    Route::resource('warehouse', WarehouseController::class)->except(['create', 'show']);
+
+    Route::get('goods-receipt/data', [GoodsReceiptController::class, 'data'])->name('goods-receipt.data');
+    Route::get('goods-receipt/fetch-source-items', [GoodsReceiptController::class, 'fetchSourceItems'])->name('goods-receipt.fetch-source-items');
+    Route::post('goods-receipt/{id}/documents', [GoodsReceiptController::class, 'uploadDocument'])->name('goods-receipt.documents.store');
+    Route::get('goods-receipt/{id}/documents/{document}', [GoodsReceiptController::class, 'viewDocument'])->name('goods-receipt.documents.show');
+    Route::delete('goods-receipt/{id}/documents/{document}', [GoodsReceiptController::class, 'deleteDocument'])->name('goods-receipt.documents.destroy');
+    Route::resource('goods-receipt', GoodsReceiptController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
+
+    Route::get('stock-out', [StockOutController::class, 'index'])->name('stock-out.index');
+    Route::post('stock-out', [StockOutController::class, 'store'])->name('stock-out.store');
+
+    Route::get('stock-transfer/data', [StockTransferController::class, 'data'])->name('stock-transfer.data');
+    Route::get('stock-transfer/available-stock', [StockTransferController::class, 'availableStock'])->name('stock-transfer.available-stock');
+    Route::resource('stock-transfer', StockTransferController::class)->only(['index', 'create', 'store', 'show']);
+
+    Route::get('stock-entry/data', [StockEntryController::class, 'data'])->name('stock-entry.data');
+    Route::get('stock-entry/search-products', [StockEntryController::class, 'searchProducts'])->name('stock-entry.search-products');
+    Route::resource('stock-entry', StockEntryController::class)->only(['index', 'create', 'store', 'show']);
+
+    Route::get('stock-report', [StockReportController::class, 'index'])->name('stock-report.index');
+    Route::get('stock-report/data', [StockReportController::class, 'data'])->name('stock-report.data');
+    Route::get('stock-report/card/{productId}', [StockReportController::class, 'card'])->name('stock-report.card');
+
+    Route::get('delivery-order/data', [DeliveryOrderController::class, 'data'])->name('delivery-order.data');
+    Route::get('delivery-order/project-stock', [DeliveryOrderController::class, 'projectStock'])->name('delivery-order.project-stock');
+    Route::post('delivery-order/{id}/post', [DeliveryOrderController::class, 'post'])->name('delivery-order.post');
+    Route::get('delivery-order/{id}/pdf', [DeliveryOrderController::class, 'pdf'])->name('delivery-order.pdf');
+    Route::resource('delivery-order', DeliveryOrderController::class);
+
+    Route::get('stock-opname/data', [StockOpnameController::class, 'data'])->name('stock-opname.data');
+    Route::get('stock-opname/system-stock', [StockOpnameController::class, 'systemStock'])->name('stock-opname.system-stock');
+    Route::get('stock-opname/search-products', [StockOpnameController::class, 'searchProducts'])->name('stock-opname.search-products');
+    Route::post('stock-opname/{id}/approve', [StockOpnameController::class, 'approve'])->name('stock-opname.approve');
+    Route::resource('stock-opname', StockOpnameController::class);
+
     Route::get('supplier/data', [SupplierController::class, 'data'])->name('supplier.data');
     Route::get('supplier/search', [SupplierController::class, 'search'])->name('supplier.search');
+    Route::get('supplier-bill/data', [SupplierBillController::class, 'data'])->name('supplier-bill.data');
+    Route::get('supplier-bill/billable-lines', [SupplierBillController::class, 'billableLines'])->name('supplier-bill.billable-lines');
+    Route::post('supplier-bill/{id}/approve', [SupplierBillController::class, 'approve'])->name('supplier-bill.approve');
+    Route::post('supplier-bill/{id}/void', [SupplierBillController::class, 'void'])->name('supplier-bill.void');
+    Route::post('supplier-bill/{id}/documents', [SupplierBillController::class, 'uploadDocument'])->name('supplier-bill.documents.store');
+    Route::get('supplier-bill/{id}/documents/{document}', [SupplierBillController::class, 'viewDocument'])->name('supplier-bill.documents.show');
+    Route::delete('supplier-bill/{id}/documents/{document}', [SupplierBillController::class, 'deleteDocument'])->name('supplier-bill.documents.destroy');
+    Route::resource('supplier-bill', SupplierBillController::class);
+
+    Route::get('supplier-payment/data', [SupplierPaymentController::class, 'data'])->name('supplier-payment.data');
+    Route::get('supplier-payment/open-bills', [SupplierPaymentController::class, 'openBills'])->name('supplier-payment.open-bills');
+    Route::post('supplier-payment/{id}/approve', [SupplierPaymentController::class, 'approve'])->name('supplier-payment.approve');
+    Route::post('supplier-payment/{id}/void', [SupplierPaymentController::class, 'void'])->name('supplier-payment.void');
+    Route::post('supplier-payment/{id}/documents', [SupplierPaymentController::class, 'uploadDocument'])->name('supplier-payment.documents.store');
+    Route::get('supplier-payment/{id}/documents/{document}', [SupplierPaymentController::class, 'viewDocument'])->name('supplier-payment.documents.show');
+    Route::delete('supplier-payment/{id}/documents/{document}', [SupplierPaymentController::class, 'deleteDocument'])->name('supplier-payment.documents.destroy');
+    Route::resource('supplier-payment', SupplierPaymentController::class);
+
+    Route::get('supplier-refund/data', [SupplierRefundController::class, 'data'])->name('supplier-refund.data');
+    Route::post('supplier-refund/{id}/approve', [SupplierRefundController::class, 'approve'])->name('supplier-refund.approve');
+    Route::post('supplier-refund/{id}/void', [SupplierRefundController::class, 'void'])->name('supplier-refund.void');
+    Route::post('supplier-refund/{id}/documents', [SupplierRefundController::class, 'uploadDocument'])->name('supplier-refund.documents.store');
+    Route::get('supplier-refund/{id}/documents/{document}', [SupplierRefundController::class, 'viewDocument'])->name('supplier-refund.documents.show');
+    Route::delete('supplier-refund/{id}/documents/{document}', [SupplierRefundController::class, 'deleteDocument'])->name('supplier-refund.documents.destroy');
+    Route::resource('supplier-refund', SupplierRefundController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
+
+    Route::get('supplier-return/returnable-lines', [SupplierReturnController::class, 'returnableLines'])->name('supplier-return.returnable-lines');
+    Route::resource('supplier-return', SupplierReturnController::class)->only(['index', 'create', 'store', 'show']);
+    Route::patch('supplier-bill/{id}/pph-slip', [SupplierBillController::class, 'updatePphSlip'])->name('supplier-bill.pph-slip');
+    Route::patch('supplier-bill/{id}/exchange-rate', [SupplierBillController::class, 'updateExchangeRate'])->name('supplier-bill.exchange-rate');
+
+    Route::get('payable-report', [PayableReportController::class, 'index'])->name('payable-report.index');
+    Route::get('payable-report/export', [PayableReportController::class, 'export'])->name('payable-report.export');
+
+    Route::post('supplier/{id}/advance-limit', [SupplierController::class, 'updateAdvanceLimit'])->name('supplier.advance.approve');
     Route::resource('supplier', SupplierController::class)->except(['create', 'show']);
 
     Route::get('profit-estimate/data', [ProfitEstimateController::class, 'data'])->name('profit-estimate.data');

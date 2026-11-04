@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Supplier</h1>
-        <p class="page-header-sub">Data master supplier — dipakai sebagai sumber pilihan supplier saat membuat Purchase Order</p>
+        <p class="page-header-sub">Data master supplier — kontak, termin bayar, pajak, dan rekening; dipakai di Purchase Order, Direct Purchase, dan modul Finance</p>
     </div>
     @if($canCreate)
     <div class="page-header-actions">
@@ -33,6 +33,8 @@
                         <th>Alamat</th>
                         <th>Telepon</th>
                         <th>Attn</th>
+                        <th>Termin</th>
+                        <th>Keuangan</th>
                         <th>Status</th>
                         <th class="text-center" style="width:130px">Aksi</th>
                     </tr>
@@ -46,7 +48,7 @@
 @push('modals')
 {{-- Modal Create / Edit --}}
 <div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title" id="supplierModalTitle">Tambah Supplier</h6>
@@ -94,6 +96,72 @@
                             </div>
                         </div>
                     </div>
+                    <div class="pt-2 mb-2" style="border-top:1px dashed var(--card-border)">
+                        <div class="fw-semibold" style="font-size:13px"><i class="fa-solid fa-building-columns me-1" style="color:var(--accent)"></i>Keuangan &amp; Pajak</div>
+                        <small style="color:var(--text-muted)">Dipakai untuk jatuh tempo tagihan dan transfer pembayaran di modul Finance.</small>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Termin Bayar (hari)</label>
+                                <input type="number" id="supplier-payment-term-days" class="form-control" min="0" max="365" step="1" value="30">
+                                <small style="color:var(--text-muted)">0 = tunai / bayar di muka</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">NPWP</label>
+                                <input type="text" id="supplier-npwp" class="form-control" maxlength="30" placeholder="00.000.000.0-000.000">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label d-block">Status Pajak</label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="supplier-is-pkp">
+                                    <label class="form-check-label" for="supplier-is-pkp">PKP (menerbitkan faktur pajak)</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Bank</label>
+                                <input type="text" id="supplier-bank-name" class="form-control" maxlength="100" placeholder="Contoh: BCA">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">No. Rekening</label>
+                                <input type="text" id="supplier-bank-account-no" class="form-control" maxlength="50">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Atas Nama</label>
+                                <input type="text" id="supplier-bank-account-name" class="form-control" maxlength="150">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label" for="supplier-default-pph">Saran Tarif PPh</label>
+                                <div class="input-group">
+                                    <input type="number" id="supplier-default-pph" class="form-control" min="0" max="100" step="any" placeholder="Kosong = tidak dipotong">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <small style="color:var(--text-muted)">Hanya saran awal di tagihan; tarif tetap bisa diubah per tagihan.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Maks. Uang Muka per PO</label>
+                                <div class="input-group">
+                                    <input type="number" id="supplier-max-advance" class="form-control" min="0" max="100" step="any" value="0" @disabled(! $canApprove)>
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <small style="color:var(--text-muted)">{{ $canApprove ? '0 = tidak boleh uang muka; 100 = boleh bayar penuh di muka.' : 'Hanya bisa diubah approver Supplier.' }}</small>
+                            </div>
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Status <span style="color:var(--danger)">*</span></label>
                         <select id="supplier-status" class="form-select" required>
@@ -119,6 +187,8 @@
 let supplierModalInstance = null;
 let supplierTable = null;
 
+const supplierAdvanceUrl = '{{ route("supplier.advance.approve", "__ID__") }}';
+const supplierCanApprove = {{ $canApprove ? 'true' : 'false' }};
 const supplierEditUrl = '{{ route("supplier.edit", "__ID__") }}';
 const supplierUpdateUrl = '{{ route("supplier.update", "__ID__") }}';
 const supplierDeleteUrl = '{{ route("supplier.destroy", "__ID__") }}';
@@ -151,6 +221,18 @@ function initSupplierTable() {
             { data: 'attn_name', orderable: false, searchable: false,
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
+            { data: 'payment_term_label', orderable: false, searchable: false,
+                render: function(data) { return '<span style="font-size:12.5px;white-space:nowrap">' + (data || '—') + '</span>'; }
+            },
+            { data: 'max_advance_percent', orderable: false, searchable: false,
+                render: function(data, type, row) {
+                    var chips = [];
+                    if (row.is_pkp) chips.push('<span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px">PKP</span>');
+                    if (Number(data) > 0) chips.push('<span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px" title="Batas uang muka per PO">Uang muka ≤ ' + Number(data) + '%</span>');
+                    if (!row.has_bank) chips.push('<span class="badge" style="background:#f3f4f6;color:#6b7280;font-size:10px">Rekening belum ada</span>');
+                    return chips.join(' ') || '<span style="color:var(--text-muted)">—</span>';
+                }
+            },
             { data: 'status', orderable: false, searchable: false,
                 render: function(data) {
                     if (data === 'Active') {
@@ -181,6 +263,8 @@ function resetSupplierForm() {
     document.getElementById('supplier-form').reset();
     document.getElementById('supplier-edit-id').value = '';
     document.getElementById('supplier-status').value = 'Active';
+    $('#supplier-payment-term-days').val(30);
+    $('#supplier-max-advance').val(0).attr('data-original', 0);
     $('#supplier-form .is-invalid').removeClass('is-invalid');
 }
 
@@ -207,6 +291,14 @@ function openEditModal(id) {
         $('#supplier-attn-name').val(s.attn_name || '');
         $('#supplier-email').val(s.email || '');
         $('#supplier-status').val(s.status || 'Active');
+        $('#supplier-payment-term-days').val(s.payment_term_days != null ? s.payment_term_days : 30);
+        $('#supplier-npwp').val(s.npwp || '');
+        $('#supplier-is-pkp').prop('checked', !!s.is_pkp);
+        $('#supplier-bank-name').val(s.bank_name || '');
+        $('#supplier-bank-account-no').val(s.bank_account_no || '');
+        $('#supplier-bank-account-name').val(s.bank_account_name || '');
+        $('#supplier-default-pph').val(s.default_pph_percent != null ? Number(s.default_pph_percent) : '');
+        $('#supplier-max-advance').val(Number(s.max_advance_percent || 0)).attr('data-original', Number(s.max_advance_percent || 0));
 
         if (!supplierModalInstance) {
             supplierModalInstance = new bootstrap.Modal(document.getElementById('supplierModal'));
@@ -234,8 +326,17 @@ $(document).on('click', '#btn-save-supplier', function() {
         fax: $('#supplier-fax').val().trim(),
         attn_name: $('#supplier-attn-name').val().trim(),
         email: $('#supplier-email').val().trim(),
+        payment_term_days: $('#supplier-payment-term-days').val(),
+        npwp: $('#supplier-npwp').val().trim(),
+        is_pkp: $('#supplier-is-pkp').is(':checked') ? 1 : 0,
+        bank_name: $('#supplier-bank-name').val().trim(),
+        bank_account_no: $('#supplier-bank-account-no').val().trim(),
+        bank_account_name: $('#supplier-bank-account-name').val().trim(),
+        default_pph_percent: $('#supplier-default-pph').val(),
         status: status
     };
+    var advance = parseFloat($('#supplier-max-advance').val()) || 0;
+    var advanceChanged = supplierCanApprove && advance !== (parseFloat($('#supplier-max-advance').attr('data-original')) || 0);
 
     $('#btn-save-supplier').prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Menyimpan...');
 
@@ -245,6 +346,16 @@ $(document).on('click', '#btn-save-supplier', function() {
         data: payload,
         dataType: 'json',
         headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+    }).then(function(res) {
+        // Batas uang muka disimpan lewat route khusus approver (can_approve).
+        if (!advanceChanged) return res;
+        return $.ajax({
+            url: supplierAdvanceUrl.replace('__ID__', isEdit ? id : res.id),
+            method: 'POST',
+            data: { max_advance_percent: advance },
+            dataType: 'json',
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+        }).then(function() { return res; });
     }).done(function(res) {
         toastr.success(res.message || 'Supplier berhasil disimpan.');
         supplierModalInstance.hide();
@@ -262,6 +373,9 @@ $(document).on('click', '#btn-save-supplier', function() {
                     fax: 'supplier-fax',
                     attn_name: 'supplier-attn-name',
                     email: 'supplier-email',
+                    payment_term_days: 'supplier-payment-term-days',
+                    npwp: 'supplier-npwp',
+                    max_advance_percent: 'supplier-max-advance',
                     status: 'supplier-status'
                 };
                 $('#supplier-form .is-invalid').removeClass('is-invalid');

@@ -3,6 +3,10 @@
 @section('title', 'Purchase Order')
 @section('page-title', 'Purchase Order')
 
+@section('styles')
+@include('partials.list-toolbar')
+@endsection
+
 @section('content')
 <div class="page-header">
     <div>
@@ -20,10 +24,53 @@
 </div>
 
 <div class="card-custom fade-in">
-    <div class="card-header-custom">
+    <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="fa-solid fa-file-invoice-dollar me-2" style="color:var(--accent)"></i>Daftar Purchase Order</span>
     </div>
     <div class="card-body-custom p-2">
+        <div class="list-toolbar" id="po-toolbar">
+            <div class="lt-search">
+                <i class="fa fa-magnifying-glass"></i>
+                <input type="search" class="form-control" data-search placeholder="Cari no. PO, supplier, part number, pembuat…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Hapus pencarian"><i class="fa fa-xmark"></i></button>
+            </div>
+            <select class="form-select" data-filter="status" data-status-select aria-label="Status">
+                <option value="">Semua Status</option>
+                @foreach(\App\Models\PurchaseOrder::STATUS_LABELS as $key => $label)
+                    <option value="{{ $key }}" data-label="{{ $label }}" @selected(request('status') === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <select class="form-select" data-filter="po_type" aria-label="Jenis PO">
+                <option value="">Semua Jenis</option>
+                @foreach(\App\Models\PurchaseOrder::TYPE_LABELS as $key => $label)
+                    <option value="{{ $key }}">{{ $label }}</option>
+                @endforeach
+            </select>
+            @if($suppliers->count() > 1)
+            <select class="form-select" data-filter="supplier" data-searchable aria-label="Supplier">
+                <option value="">Semua Supplier</option>
+                @foreach($suppliers as $supplier)
+                    <option value="{{ $supplier }}">{{ $supplier }}</option>
+                @endforeach
+            </select>
+            @endif
+            <select class="form-select" data-filter="pay_status" aria-label="Status bayar">
+                <option value="">Semua Status Bayar</option>
+                <option value="unbilled">Belum Ditagih</option>
+                <option value="unpaid">Ada Tagihan Belum Lunas</option>
+                <option value="paid">Lunas</option>
+            </select>
+            <div class="lt-date" title="Rentang tanggal">
+                <input type="date" class="form-control" data-filter="date_from" aria-label="Dari tanggal">
+                <span>–</span>
+                <input type="date" class="form-control" data-filter="date_to" aria-label="Sampai tanggal">
+            </div>
+            <select class="form-select" data-filter="mine" aria-label="Pembuat">
+                <option value="">Semua Pembuat</option>
+                <option value="1">Dibuat oleh Saya</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+        </div>
         <div class="table-responsive">
             <table id="po-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
@@ -54,16 +101,16 @@ const poShowUrl = '{{ route("purchase-order.show", "__ID__") }}';
 const poEditUrl = '{{ route("purchase-order.edit", "__ID__") }}';
 const poDeleteUrl = '{{ route("purchase-order.destroy", "__ID__") }}';
 const poSubmitUrl = '{{ route("purchase-order.submit", "__ID__") }}';
-const poApproveUrl = '{{ route("purchase-order.approve", "__ID__") }}';
-const poCanApprove = {{ $canApprove ? 'true' : 'false' }};
 
 function initPoTable() {
     if (poTable) poTable.destroy();
 
     poTable = $('#po-table').DataTable({
+        layout: ListToolbar.layout,
+        language: ListToolbar.language,
         processing: true,
         serverSide: true,
-        ajax: '{{ route("purchase-order.data") }}',
+        ajax: { url: '{{ route("purchase-order.data") }}', data: function(d) { return poToolbar.params(d); } },
         order: [],
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
@@ -89,15 +136,13 @@ function initPoTable() {
                         btn += '<button class="btn-icon" title="Submit Approval" onclick="submitPo(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
                         btn += '<button class="btn-icon text-danger" title="Hapus" onclick="deletePo(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
-                    if (poCanApprove && row.status === 'waiting_approval') {
-                        btn += '<button class="btn-icon" title="Approve" onclick="approvePo(' + data + ')"><i class="fa fa-check"></i></button>';
-                    }
                     btn += '</div>';
                     return btn;
                 }
             }
         ]
     });
+    poTable.on('xhr.dt', function(e, settings, json) { poToolbar.statusCounts(json); });
 }
 
 function submitPo(id) {
@@ -116,25 +161,6 @@ function submitPo(id) {
                 poTable.ajax.reload();
             }).fail(function(xhr) {
                 toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal submit.');
-            });
-    });
-}
-
-function approvePo(id) {
-    Swal.fire({
-        title: 'Approve Purchase Order?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Ya, Approve',
-        cancelButtonText: 'Batal'
-    }).then(function(result) {
-        if (!result.isConfirmed) return;
-        $.post(poApproveUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
-            .done(function(res) {
-                toastr.success(res.message || 'Disetujui.');
-                poTable.ajax.reload();
-            }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal approve.');
             });
     });
 }
@@ -162,7 +188,10 @@ function deletePo(id) {
     });
 }
 
+let poToolbar = null;
+
 $(document).ready(function() {
+    poToolbar = ListToolbar('#po-toolbar', function() { return poTable; });
     initPoTable();
 });
 </script>

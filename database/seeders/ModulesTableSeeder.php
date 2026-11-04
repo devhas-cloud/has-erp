@@ -17,6 +17,8 @@ class ModulesTableSeeder extends Seeder
         'Master Data',
         'Admin',
         'Purchasing',
+        'Inventory',
+        'Finance',
         'Employee Relations',
         'Water',
         'IMS',
@@ -26,15 +28,45 @@ class ModulesTableSeeder extends Seeder
     ];
 
     /**
-     * Urutan modul di dalam grup Admin (alur bisnis: quotation -> PL ->
-     * project -> invoice -> approval PO supplier).
+     * Urutan modul mengikuti alur bisnis (bukan urutan daftar di bawah):
+     * - Admin: quotation -> PL -> project -> approval PO supplier.
+     * - Purchasing: dokumen dengan supplier — permintaan -> PO / pembelian langsung -> retur.
+     * - Inventory: pergerakan stok oleh gudang — terima -> keluar / kirim -> pindah ->
+     *   masuk lain-lain -> opname -> laporan.
+     * - Finance: piutang (invoice -> penerimaan -> laporan) lalu hutang (tagihan ->
+     *   pembayaran -> refund -> laporan).
      */
-    private const ADMIN_ORDER = [
-        'MOD_QUOTATION',
-        'MOD_PROFIT_ESTIMATE',
-        'MOD_PROJECT',
-        'MOD_INVOICE',
-        'MOD_PO_SUPPLIER_APPROVAL',
+    private const GROUP_MODULE_ORDER = [
+        'Admin' => [
+            'MOD_QUOTATION',
+            'MOD_PROFIT_ESTIMATE',
+            'MOD_PROJECT',
+            'MOD_PO_SUPPLIER_APPROVAL',
+        ],
+        'Purchasing' => [
+            'MOD_GOODS_REQUEST',
+            'MOD_PURCHASE_ORDER',
+            'MOD_DIRECT_PURCHASE',
+            'MOD_SUPPLIER_RETURN',
+        ],
+        'Inventory' => [
+            'MOD_GOODS_RECEIPT',
+            'MOD_STOCK_OUT',
+            'MOD_DELIVERY_ORDER',
+            'MOD_STOCK_TRANSFER',
+            'MOD_STOCK_ENTRY',
+            'MOD_STOCK_OPNAME',
+            'MOD_STOCK_REPORT',
+        ],
+        'Finance' => [
+            'MOD_INVOICE',
+            'MOD_CUSTOMER_RECEIPT',
+            'MOD_RECEIVABLE_REPORT',
+            'MOD_SUPPLIER_BILL',
+            'MOD_SUPPLIER_PAYMENT',
+            'MOD_SUPPLIER_REFUND',
+            'MOD_PAYABLE_REPORT',
+        ],
     ];
 
     public function run(): void
@@ -145,6 +177,22 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Master Data',
             ],
             [
+                'module_code' => 'MOD_WAREHOUSE',
+                'module_name' => 'Gudang',
+                'description' => 'Data master gudang/lokasi penyimpanan stok',
+                'route_name' => 'warehouse',
+                'icon' => 'fa fa-warehouse',
+                'group' => 'Master Data',
+            ],
+            [
+                'module_code' => 'MOD_FINANCE_NOTIFICATION',
+                'module_name' => 'Notifikasi Finance',
+                'description' => 'Pengaturan pengingat WhatsApp harian hutang supplier & piutang customer — aktif/nonaktif, jam kirim, tujuan grup / WA pribadi, pratinjau, kirim sekarang',
+                'route_name' => 'finance-notification',
+                'icon' => 'fa fa-bell',
+                'group' => 'Master Data',
+            ],
+            [
                 'module_code' => 'MOD_Water_CONFIGURATION',
                 'module_name' => 'Water Configuration',
                 'description' => 'Menu quotation water configuration (parameter pH, Ammonia, COD, TSS dan Debit)',
@@ -201,14 +249,6 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Admin',
             ],
             [
-                'module_code' => 'MOD_INVOICE',
-                'module_name' => 'Invoice',
-                'description' => 'Menu pembuatan invoice project — item, termin pembayaran, PPN persen, dan status pembayaran',
-                'route_name' => 'invoice',
-                'icon' => 'fa fa-file-invoice-dollar',
-                'group' => 'Admin',
-            ],
-            [
                 'module_code' => 'MOD_PROFIT_ESTIMATE',
                 'module_name' => 'Estimasi PL',
                 'description' => 'Menu Estimasi Perhitungan Pendapatan (profit & loss) per quotation',
@@ -239,6 +279,134 @@ class ModulesTableSeeder extends Seeder
                 'route_name' => 'purchase-order',
                 'icon' => 'fa fa-file-invoice-dollar',
                 'group' => 'Purchasing',
+            ],
+            [
+                'module_code' => 'MOD_DIRECT_PURCHASE',
+                'module_name' => 'Direct Purchase',
+                'description' => 'Menu pembelian langsung di luar PO formal, tidak terikat Permintaan Barang — beli untuk stok, untuk project, atau langsung pakai; diterima lewat Penerimaan Barang',
+                'route_name' => 'direct-purchase',
+                'icon' => 'fa fa-basket-shopping',
+                'group' => 'Purchasing',
+            ],
+            [
+                'module_code' => 'MOD_GOODS_RECEIPT',
+                'module_name' => 'Penerimaan Barang',
+                'description' => 'Penerimaan barang dari PO / Direct Purchase — masuk gudang (stok bebas / milik project) atau langsung pakai',
+                'route_name' => 'goods-receipt',
+                'icon' => 'fa fa-boxes-stacked',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_STOCK_OUT',
+                'module_name' => 'Pemenuhan dari Stok',
+                'description' => 'Penuhi item Permintaan Barang dari stok bebas — internal keluar stok, project dialokasikan ke gudang transit',
+                'route_name' => 'stock-out',
+                'icon' => 'fa fa-right-from-bracket',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_STOCK_TRANSFER',
+                'module_name' => 'Transfer Stok',
+                'description' => 'Pindah stok antar gudang dan/atau kepemilikan — termasuk alokasi stok bebas ke project dan lepas alokasi',
+                'route_name' => 'stock-transfer',
+                'icon' => 'fa fa-arrow-right-arrow-left',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_STOCK_ENTRY',
+                'module_name' => 'Masuk Stok Lain-lain',
+                'description' => 'Barang masuk tanpa dokumen pembelian — saldo awal, retur, hibah/sampel',
+                'route_name' => 'stock-entry',
+                'icon' => 'fa fa-square-plus',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_STOCK_REPORT',
+                'module_name' => 'Laporan Stok',
+                'description' => 'Saldo stok per produk, gudang, dan kepemilikan (bebas / project) beserta kartu stok',
+                'route_name' => 'stock-report',
+                'icon' => 'fa fa-chart-column',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_DELIVERY_ORDER',
+                'module_name' => 'Delivery Order',
+                'description' => 'Surat jalan pengiriman barang milik project dari gudang (umumnya transit) ke customer — draft lalu diposting oleh gudang',
+                'route_name' => 'delivery-order',
+                'icon' => 'fa fa-truck',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_STOCK_OPNAME',
+                'module_name' => 'Stock Opname',
+                'description' => 'Hitung fisik stok per gudang — draft oleh gudang, posting penyesuaian selisih oleh approver (can_approve)',
+                'route_name' => 'stock-opname',
+                'icon' => 'fa fa-clipboard-list',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_SUPPLIER_RETURN',
+                'module_name' => 'Retur ke Supplier',
+                'description' => 'Pengembalian barang yang sudah diterima ke supplier (rusak / salah kirim) — stok keluar, barang retur tidak bisa ditagih',
+                'route_name' => 'supplier-return',
+                'icon' => 'fa fa-truck-arrow-right',
+                'group' => 'Purchasing',
+            ],
+            [
+                'module_code' => 'MOD_INVOICE',
+                'module_name' => 'Invoice',
+                'description' => 'Invoice ke customer per termin timeline project (piutang) — item, PPN, faktur pajak keluaran, approval bukan oleh pembuat, dan status pembayaran',
+                'route_name' => 'invoice',
+                'icon' => 'fa fa-file-invoice-dollar',
+                'group' => 'Finance',
+            ],
+            [
+                'module_code' => 'MOD_CUSTOMER_RECEIPT',
+                'module_name' => 'Penerimaan Customer',
+                'description' => 'Pencatatan dana masuk dari customer untuk invoice Approved (nominal = total invoice), diposting approver Finance — invoice menjadi Lunas',
+                'route_name' => 'customer-receipt',
+                'icon' => 'fa fa-hand-holding-dollar',
+                'group' => 'Finance',
+            ],
+            [
+                'module_code' => 'MOD_RECEIVABLE_REPORT',
+                'module_name' => 'Laporan Piutang',
+                'description' => 'Monitoring piutang customer: per customer, umur piutang, proyeksi penerimaan, dan piutang per project mengikuti timeline termin & PO due date',
+                'route_name' => 'receivable-report',
+                'icon' => 'fa fa-chart-pie',
+                'group' => 'Finance',
+            ],
+            [
+                'module_code' => 'MOD_SUPPLIER_BILL',
+                'module_name' => 'Tagihan Supplier',
+                'description' => 'Pencatatan tagihan/invoice supplier dari PO dengan 3-way match (PO x Penerimaan x Tagihan), diverifikasi Finance sebagai hutang',
+                'route_name' => 'supplier-bill',
+                'icon' => 'fa fa-file-invoice',
+                'group' => 'Finance',
+            ],
+            [
+                'module_code' => 'MOD_SUPPLIER_PAYMENT',
+                'module_name' => 'Pembayaran Supplier',
+                'description' => 'Pencatatan pembayaran ke supplier untuk tagihan terverifikasi (sebagian / banyak tagihan sekaligus), diposting approver Finance',
+                'route_name' => 'supplier-payment',
+                'icon' => 'fa fa-money-bill-transfer',
+                'group' => 'Finance',
+            ],
+            [
+                'module_code' => 'MOD_SUPPLIER_REFUND',
+                'module_name' => 'Refund Supplier',
+                'description' => 'Pengembalian uang muka PO dari supplier (PO batal / barang kurang) — daftar Menunggu Refund dan penerimaan refund',
+                'route_name' => 'supplier-refund',
+                'icon' => 'fa fa-rotate-left',
+                'group' => 'Finance',
+            ],
+            [
+                'module_code' => 'MOD_PAYABLE_REPORT',
+                'module_name' => 'Laporan Hutang',
+                'description' => 'Monitoring hutang supplier: per supplier, umur hutang, jadwal pembayaran, dan biaya pembelian per project vs Estimasi PL',
+                'route_name' => 'payable-report',
+                'icon' => 'fa fa-chart-line',
+                'group' => 'Finance',
             ],
             [
                 'module_code' => 'MOD_ER_EMPLOYEE',
@@ -299,9 +467,10 @@ class ModulesTableSeeder extends Seeder
             );
         }
 
-        // Admin: urutan bisnis eksplisit, bukan urutan daftar di atas.
-        foreach (self::ADMIN_ORDER as $i => $code) {
-            Module::where('module_code', $code)->update(['sort_order' => ($i + 1) * 10]);
+        foreach (self::GROUP_MODULE_ORDER as $codes) {
+            foreach ($codes as $i => $code) {
+                Module::where('module_code', $code)->update(['sort_order' => ($i + 1) * 10]);
+            }
         }
     }
 }

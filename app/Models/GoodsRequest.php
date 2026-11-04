@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\ModuleAccess;
+use App\Support\NumberSequence;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,6 +25,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class GoodsRequest extends Model
 {
     public const MODULE_CODE = 'MOD_GOODS_REQUEST';
+
+    /**
+     * Tujuan permintaan: 'project' (terikat project, barang dialokasikan ke project)
+     * atau 'internal' (stok / kebutuhan internal, tanpa project).
+     */
+    public const PURPOSE_PROJECT = 'project';
+
+    public const PURPOSE_INTERNAL = 'internal';
+
+    public const PURPOSE_LABELS = [
+        self::PURPOSE_PROJECT => 'Project',
+        self::PURPOSE_INTERNAL => 'Stok / Internal',
+    ];
 
     public const REQUIRED_APPROVALS = 2;
 
@@ -50,9 +64,9 @@ class GoodsRequest extends Model
     ];
 
     protected $fillable = [
+        'request_number',
+        'purpose',
         'project_id',
-        'opportunity_id',
-        'quotation_id',
         'division_id',
         'status',
         'notes',
@@ -71,19 +85,55 @@ class GoodsRequest extends Model
         ];
     }
 
+    public static function generateNumber(?string $date = null): string
+    {
+        return NumberSequence::make('goods_requests', 'request_number', $date);
+    }
+
+    /**
+     * Nomor untuk ditampilkan (fallback #id bila belum bernomor).
+     */
+    public function getNumberLabelAttribute(): string
+    {
+        return $this->request_number ?: '#'.$this->id;
+    }
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
     }
 
-    public function quotation(): BelongsTo
+    /**
+     * Quotation & opportunity diturunkan lewat project (tidak disimpan di permintaan).
+     */
+    public function quotation(): ?Quotation
     {
-        return $this->belongsTo(Quotation::class);
+        return $this->project?->quotation;
     }
 
-    public function opportunity(): BelongsTo
+    public function opportunity(): ?Opportunity
     {
-        return $this->belongsTo(Opportunity::class);
+        return $this->project?->quotation?->opportunity;
+    }
+
+    public function isForProject(): bool
+    {
+        return $this->purpose === self::PURPOSE_PROJECT && $this->project_id;
+    }
+
+    public function getPurposeLabelAttribute(): string
+    {
+        return self::PURPOSE_LABELS[$this->purpose] ?? ucfirst((string) $this->purpose);
+    }
+
+    /**
+     * Label tujuan untuk tampilan: nomor & nama project, atau "Stok / Internal".
+     */
+    public function destinationLabel(): string
+    {
+        return $this->isForProject() && $this->project
+            ? $this->project->project_number.' — '.$this->project->project_name
+            : self::PURPOSE_LABELS[self::PURPOSE_INTERNAL];
     }
 
     public function division(): BelongsTo
@@ -176,15 +226,27 @@ class GoodsRequest extends Model
     }
 
     /**
-     * Sudah semua item permintaan ini masuk ke suatu Purchase Order (lintas
-     * PO manapun, lihat GoodsRequestItem::isOrdered()).
+     * Status pemenuhan dokumen: none (belum diproses) | partial | done.
+     * Hanya bermakna untuk permintaan Approved; butuh items + FULFILLMENT_RELATIONS.
      */
-    public function isFullyOrdered(): bool
+    public function fulfillmentStatus(): string
     {
         if ($this->items->isEmpty()) {
-            return false;
+            return 'none';
         }
 
-        return $this->items->every(fn (GoodsRequestItem $item) => $item->isOrdered());
+        $statuses = $this->items->map(fn (GoodsRequestItem $item) => $item->fulfillmentStatus())->unique();
+
+        return match (true) {
+            $statuses->every(fn ($s) => $s === 'done') => 'done',
+            $statuses->every(fn ($s) => $s === 'none') => 'none',
+            default => 'partial',
+        };
     }
+
+    public const FULFILLMENT_LABELS = [
+        'none' => 'Belum diproses',
+        'partial' => 'Sebagian',
+        'done' => 'Terpenuhi',
+    ];
 }

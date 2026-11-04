@@ -2,51 +2,57 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ManagesPurchaseDocuments;
 use App\Models\Currency;
 use App\Models\GoodsRequest;
 use App\Models\GoodsRequestItem;
-use App\Models\MasterProduct;
+use App\Models\Log;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
+use App\Models\StockMovement;
+use App\Models\Supplier;
+use App\Models\SupplierBill;
+use App\Support\ModuleAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Modul "Purchase Order": PO barang ke supplier, disusun dari item Permintaan
- * Barang yang sudah Approved. Satu PO boleh menggabungkan item dari beberapa
- * Permintaan Barang berbeda — termasuk lintas divisi — selama tujuannya
- * supplier yang sama. Satu item Permintaan Barang hanya boleh masuk ke SATU
- * PO manapun (dijaga unique constraint di goods_request_items.id pada
- * purchase_order_items, plus dicek ulang di controller). Harga baru muncul
- * di modul ini — sesuai keputusan bahwa Permintaan Barang tidak perlu tahu
- * harga, harga ditentukan saat PO ke supplier.
+ * Modul "Purchase Order": PO barang ke supplier, HANYA dari item Permintaan
+ * Barang berstatus Approved (pembelian tanpa permintaan lewat Direct Purchase).
+ * Satu item permintaan boleh dipecah ke beberapa PO / supplier; qty baris PO
+ * tidak boleh melebihi sisa kebutuhan item (GoodsRequestItem::remainingQty()).
+ * Ketersediaan stok hanya informasi — user tetap boleh membeli.
  *
- * Nomor PO dibuat otomatis saat PO pertama kali disimpan (YYMM + 4 digit,
- * urutan bersama lintas jenis, acuan tanggal dibuat) dengan suffix jenis:
- * manufacture tanpa suffix, local "-L", calibration "-C". Ganti jenis selama
- * Draft hanya mengganti suffix.
+ * Status: draft -> waiting_approval -> approved -> partially_received -> received,
+ * plus rejected (melepas seluruh qty ke permintaan) dan cancelled (oleh
+ * pemegang can_approve, alasan wajib; hanya sisa yang belum diterima dilepas).
+ * Barang diterima lewat modul Penerimaan Barang.
  *
- * Mata uang: satu PO satu mata uang, mengikuti mata uang item Permintaan
- * Barang (dikunci) atau master product, TANPA konversi kurs — semua harga dan
- * total dalam mata uang PO. Harga otomatis dari harga beli (purchase_price)
- * master product.
+ * Nomor PO otomatis (YYMM + 4 digit, urutan bersama lintas jenis) + suffix jenis.
+ * PO Rejected bisa direvisi: disalin menjadi draft baru bernomor dasar sama +
+ * REV (26110005REV, 26110005REV2-L, ...) — lihat revise().
+ * Satu PO satu mata uang (mengikuti item permintaan, dikunci), tanpa kurs.
  */
 class PurchaseOrderController extends Controller
 {
+    use ManagesPurchaseDocuments;
+
     public function index()
     {
-        return view('purchase-order.index');
+        return view('purchase-order.index', [
+            'suppliers' => PurchaseOrder::whereNotNull('supplier_name')->distinct()->orderBy('supplier_name')->pluck('supplier_name'),
+        ]);
     }
 
     public function data(Request $request): JsonResponse
     {
-        $query = PurchaseOrder::withCount(['items' => fn ($q) => $q->whereNull('category')])->with('creator');
+        $query = PurchaseOrder::withCount('items')->with(['creator', 'items']);
 
         $recordsTotal = (clone $query)->count();
 
@@ -55,8 +61,24 @@ class PurchaseOrderController extends Controller
             $query->where(function ($q) use ($searchValue) {
                 $q->where('supplier_name', 'like', "%{$searchValue}%")
                     ->orWhere('po_number', 'like', "%{$searchValue}%")
+                    ->orWhereHas('items', fn ($i) => $i->where('part_number', 'like', "%{$searchValue}%"))
                     ->orWhereHas('creator', fn ($u) => $u->where('username', 'like', "%{$searchValue}%")->orWhere('full_name', 'like', "%{$searchValue}%"));
             });
+        }
+
+        // Filter bar: status, supplier, tanggal (tanggal dokumen, fallback tanggal dibuat), milik saya.
+        $query->when($request->input('supplier'), fn ($q, $supplier) => $q->where('supplier_name', $supplier))
+            ->when($request->input('date_from'), fn ($q, $from) => $q->whereRaw('DATE(COALESCE(date, created_at)) >= ?', [$from]))
+            ->when($request->input('date_to'), fn ($q, $to) => $q->whereRaw('DATE(COALESCE(date, created_at)) <= ?', [$to]))
+            ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', Auth::id()))
+            ->when($request->input('po_type'), fn ($q, $type) => $q->where('po_type', $type))
+            ->when($request->input('pay_status'), fn ($q, $pay) => $this->filterPayStatus($q, $pay));
+
+        $statusCounts = (clone $query)->reorder()->toBase()
+            ->select('status')->selectRaw('COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
         }
 
         $recordsFiltered = $query->count();
@@ -90,6 +112,7 @@ class PurchaseOrderController extends Controller
             'draw' => (int) $request->input('draw'),
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
+            'status_counts' => collect(PurchaseOrder::STATUS_LABELS)->map(fn ($label, $key) => (int) ($statusCounts[$key] ?? 0)),
             'data' => $data,
         ]);
     }
@@ -119,6 +142,7 @@ class PurchaseOrderController extends Controller
                 'po_type' => $validated['po_type'],
                 'date' => $validated['date'] ?? null,
                 'terms' => $validated['terms'] ?? null,
+                'payment_term_days' => $validated['payment_term_days'],
                 'delivery' => $validated['delivery'] ?? null,
                 'your_ref' => $validated['your_ref'] ?? null,
                 'discount_percent' => $validated['discount_percent'] ?? null,
@@ -146,17 +170,26 @@ class PurchaseOrderController extends Controller
 
     public function show($id)
     {
-        $purchaseOrder = PurchaseOrder::with(['items.goodsRequest.division', 'items.goodsRequest.opportunity', 'items.goodsRequest.project', 'items.goodsRequest.quotation', 'supplier', 'creator', 'finalChecker'])->findOrFail($id);
+        $purchaseOrder = PurchaseOrder::with([
+            'items.goodsRequestItem.goodsRequest.division', 'items.goodsRequestItem.goodsRequest.project',
+            'items.goodsReceiptItems.goodsReceipt', 'supplier', 'creator', 'finalChecker', 'canceller',
+            'revisionOf', 'revisions', 'items.billItems.bill', 'items.returnItems', 'supplierBills.allocations.payment', 'supplierRefunds',
+            'goodsReceipts' => fn ($q) => $q->with('warehouse')->withSum('items', 'qty'),
+        ])->findOrFail($id);
 
         return view('purchase-order.show', [
             'purchaseOrder' => $purchaseOrder,
             'poGroups' => $purchaseOrder->hierarchyGroups(),
+            'documents' => $this->documentList($purchaseOrder),
+            'canCreateBill' => ModuleAccess::for()->module('MOD_SUPPLIER_BILL')->canCreate(),
+            'canCreateRefund' => ModuleAccess::for()->module('MOD_SUPPLIER_REFUND')->canCreate(),
+            'canCreateReturn' => ModuleAccess::for()->module('MOD_SUPPLIER_RETURN')->canCreate(),
         ]);
     }
 
     public function edit($id)
     {
-        $purchaseOrder = PurchaseOrder::with(['items'])->findOrFail($id);
+        $purchaseOrder = PurchaseOrder::with(['items.goodsRequestItem' => fn ($q) => $q->with(array_merge(['goodsRequest.project', 'goodsRequest.division'], GoodsRequestItem::FULFILLMENT_RELATIONS))])->findOrFail($id);
 
         if ($purchaseOrder->status !== PurchaseOrder::STATUS_DRAFT) {
             return redirect()->route('purchase-order.index')
@@ -165,23 +198,7 @@ class PurchaseOrderController extends Controller
 
         return view('purchase-order.form', [
             'purchaseOrder' => $purchaseOrder,
-            'items' => $purchaseOrder->items->map(fn ($item) => [
-                '_key' => 'db-'.$item->id,
-                'parent_key' => $item->parent_id ? 'db-'.$item->parent_id : null,
-                'category' => $item->category,
-                'id' => $item->id,
-                'goods_request_item_id' => $item->goods_request_item_id,
-                'goods_request_id' => $item->goods_request_id,
-                'master_product_id' => $item->master_product_id,
-                'part_number' => $item->part_number,
-                'description' => Quotation::renderDescription($item->description),
-                'qty' => $item->qty,
-                'unit' => $item->unit,
-                'selling_price' => $item->selling_price,
-                'selling_price_currency' => $item->selling_price_currency,
-                'purchase_price_currency' => $item->purchase_price_currency,
-                'currency' => $item->currency,
-            ])->all(),
+            'items' => $purchaseOrder->items->map(fn (PurchaseOrderItem $item) => $this->lineForForm($item))->all(),
             'currencies' => Currency::formOptions(),
         ]);
     }
@@ -189,9 +206,7 @@ class PurchaseOrderController extends Controller
     public function pdf($id)
     {
         $purchaseOrder = PurchaseOrder::with([
-            'items.goodsRequest.division',
-            'items.goodsRequest.opportunity',
-            'items.goodsRequest.project',
+            'items.goodsRequestItem.goodsRequest.project',
             'supplier',
             'creator',
         ])->findOrFail($id);
@@ -231,6 +246,7 @@ class PurchaseOrderController extends Controller
                 'po_type' => $validated['po_type'],
                 'date' => $validated['date'] ?? null,
                 'terms' => $validated['terms'] ?? null,
+                'payment_term_days' => $validated['payment_term_days'],
                 'delivery' => $validated['delivery'] ?? null,
                 'your_ref' => $validated['your_ref'] ?? null,
                 'discount_percent' => $validated['discount_percent'] ?? null,
@@ -279,6 +295,7 @@ class PurchaseOrderController extends Controller
         }
 
         $purchaseOrder->update(['status' => PurchaseOrder::STATUS_WAITING_APPROVAL]);
+        $this->log($purchaseOrder, 'submit_purchase_order', 'diajukan approval');
 
         return response()->json(['success' => true, 'message' => 'Purchase order dikirim untuk approval.']);
     }
@@ -296,8 +313,9 @@ class PurchaseOrderController extends Controller
             'final_checked_by' => Auth::id(),
             'approved_at' => now(),
         ]);
+        $this->log($purchaseOrder, 'approve_purchase_order', 'disetujui');
 
-        return response()->json(['success' => true, 'message' => 'Purchase order disetujui.']);
+        return response()->json(['success' => true, 'message' => 'Purchase order disetujui. Barang siap diterima lewat Penerimaan Barang.']);
     }
 
     public function reject(Request $request, $id): JsonResponse
@@ -318,115 +336,180 @@ class PurchaseOrderController extends Controller
             'approval_note' => $validated['approval_note'],
             'rejected_at' => now(),
         ]);
+        $this->log($purchaseOrder, 'reject_purchase_order', 'ditolak: '.$validated['approval_note']);
 
-        return response()->json(['success' => true, 'message' => 'Purchase order ditolak.']);
+        return response()->json(['success' => true, 'message' => 'Purchase order ditolak. Item kembali tersedia di Permintaan Barang.']);
     }
 
     /**
-     * Item dari SEMUA Permintaan Barang berstatus Approved yang belum pernah
-     * dipakai di Purchase Order manapun — lintas project/divisi, untuk modal
-     * "Ambil dari Permintaan Barang". Dikelompokkan per Permintaan Barang dan
-     * diberi identitas project (acuan grup item & label PROJECT di PDF).
-     * Filter opsional project_id; daftar project yang tersedia ikut dikirim
-     * untuk dropdown filter.
+     * Revisi PO Rejected: salin header & item ke PO draft baru bernomor dasar
+     * sama + REV. Qty tiap item mengikuti sisa kebutuhan Permintaan Barang saat
+     * ini (item yang sudah di-PO di tempat lain dikurangi / dilewati).
+     * Route purchase-order.revise -> middleware mewajibkan can_update.
+     */
+    public function revise($id): JsonResponse
+    {
+        $source = PurchaseOrder::with(['items.goodsRequestItem' => fn ($q) => $q->with(array_merge(['goodsRequest'], GoodsRequestItem::FULFILLMENT_RELATIONS))])
+            ->findOrFail($id);
+
+        if ($source->status !== PurchaseOrder::STATUS_REJECTED) {
+            return response()->json(['success' => false, 'message' => 'Hanya purchase order Rejected yang bisa direvisi.'], 422);
+        }
+        if ($existing = $source->revisions()->first()) {
+            return response()->json(['success' => false, 'message' => 'PO ini sudah direvisi menjadi '.$existing->po_number.'.', 'id' => $existing->id], 422);
+        }
+
+        $rows = [];
+        $skipped = 0;
+        foreach ($source->items as $item) {
+            $requestItem = $item->goodsRequestItem;
+            $qty = $requestItem && $requestItem->goodsRequest?->status === GoodsRequest::STATUS_APPROVED
+                ? min((int) $item->qty, $requestItem->remainingQty())
+                : 0;
+            if ($qty < 1) {
+                $skipped++;
+
+                continue;
+            }
+            $rows[] = [
+                'goods_request_item_id' => $requestItem->id,
+                'description' => $item->description,
+                'qty' => $qty,
+                'price' => $item->price,
+            ];
+        }
+
+        if (! $rows) {
+            return response()->json(['success' => false, 'message' => 'Semua item PO ini sudah diproses di PO lain atau sisa kebutuhannya ditutup — tidak ada yang bisa direvisi.'], 422);
+        }
+
+        $revision = $this->createWithNumber(fn () => DB::transaction(function () use ($source, $rows) {
+            $po = $source->replicate(['po_number', 'status', 'final_checked_by', 'approval_note', 'approved_at', 'rejected_at', 'cancel_reason', 'cancelled_by', 'cancelled_at']);
+            $po->fill([
+                'po_number' => PurchaseOrder::revisionNumber($source->po_number ?: PurchaseOrder::generatePoNumber($source->po_type), $source->po_type),
+                'revision_of_id' => $source->id,
+                'status' => PurchaseOrder::STATUS_DRAFT,
+                'created_by' => Auth::id(),
+            ])->save();
+
+            $this->syncItems($po, $rows);
+
+            return $po;
+        }));
+
+        $this->log($revision, 'revise_purchase_order', 'dibuat sebagai revisi dari PO '.($source->po_number ?: '#'.$source->id));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Revisi '.$revision->po_number.' dibuat sebagai draft.'.($skipped ? ' '.$skipped.' item dilewati karena sudah diproses di PO lain.' : ''),
+            'id' => $revision->id,
+            'redirect' => route('purchase-order.edit', $revision->id),
+        ]);
+    }
+
+    /**
+     * Batalkan PO Approved yang belum diterima penuh — hanya pemegang can_approve
+     * PO, alasan wajib. Barang yang sudah diterima tetap tercatat; sisa yang
+     * belum diterima dilepas kembali ke Permintaan Barang.
+     */
+    public function cancel(Request $request, $id): JsonResponse
+    {
+        // Route purchase-order.void -> middleware mewajibkan can_approve.
+        $purchaseOrder = PurchaseOrder::findOrFail($id);
+
+        if (! $purchaseOrder->canBeCancelled()) {
+            return response()->json(['success' => false, 'message' => 'Hanya PO Approved yang belum diterima penuh yang bisa dibatalkan.'], 422);
+        }
+
+        $validated = $request->validate([
+            'cancel_reason' => 'required|string|max:1000',
+        ], ['cancel_reason.required' => 'Alasan pembatalan wajib diisi.']);
+
+        $purchaseOrder->update([
+            'status' => PurchaseOrder::STATUS_CANCELLED,
+            'cancel_reason' => $validated['cancel_reason'],
+            'cancelled_by' => Auth::id(),
+            'cancelled_at' => now(),
+        ]);
+        $this->log($purchaseOrder, 'cancel_purchase_order', 'dibatalkan: '.$validated['cancel_reason']);
+
+        return response()->json(['success' => true, 'message' => 'Purchase order dibatalkan. Sisa yang belum diterima kembali ke Permintaan Barang.']);
+    }
+
+    /**
+     * Item Permintaan Barang Approved yang masih punya sisa kebutuhan (setelah
+     * stok, PO berlaku, dan tutup sisa) — untuk modal "Ambil dari Permintaan
+     * Barang". Stok bebas produk ikut dikirim sebagai INFORMASI (user tetap
+     * boleh membeli). Filter opsional project_id / purpose internal.
      */
     public function fetchAvailableItems(Request $request): JsonResponse
     {
-        $excludeGoodsRequestItemIds = [];
-        if ($request->filled('exclude_goods_request_item_ids')) {
-            $excludeGoodsRequestItemIds = array_filter((array) $request->input('exclude_goods_request_item_ids'));
-        }
+        $exclude = array_filter((array) $request->input('exclude_goods_request_item_ids', []));
 
-        $requests = GoodsRequest::with(['items' => function ($q) use ($excludeGoodsRequestItemIds) {
-            $q->whereDoesntHave('purchaseOrderItem');
-            if (! empty($excludeGoodsRequestItemIds)) {
-                $q->whereNotIn('id', $excludeGoodsRequestItemIds);
-            }
-        }, 'division', 'opportunity', 'project'])
+        $requests = GoodsRequest::with([
+            'items' => fn ($q) => $q->with(array_merge(['masterProduct.currency'], GoodsRequestItem::FULFILLMENT_RELATIONS))
+                ->whereNotNull('master_product_id')
+                ->when($exclude, fn ($q) => $q->whereNotIn('id', $exclude)),
+            'division', 'project',
+        ])
             ->where('status', GoodsRequest::STATUS_APPROVED)
             ->orderByDesc('id')
             ->get()
+            ->map(function (GoodsRequest $gr) {
+                $gr->setRelation('items', $gr->items->filter(fn (GoodsRequestItem $item) => $item->remainingQty() > 0)->values());
+
+                return $gr;
+            })
             ->filter(fn (GoodsRequest $gr) => $gr->items->isNotEmpty())
             ->values();
 
-        $projects = $requests->map(fn (GoodsRequest $gr) => $gr->project)->filter()->unique('id')
+        $projects = $requests->filter->isForProject()->map(fn (GoodsRequest $gr) => $gr->project)->filter()->unique('id')
             ->sortBy('project_number')
             ->map(fn ($project) => [
                 'id' => $project->id,
                 'text' => $project->project_number.' — '.$project->project_name,
             ])->values();
 
-        if ($request->filled('project_id')) {
-            $requests = $requests->where('project_id', (int) $request->input('project_id'))->values();
+        $projectFilter = $request->input('project_id');
+        if ($projectFilter === 'internal') {
+            $requests = $requests->reject->isForProject()->values();
+        } elseif ($projectFilter) {
+            $requests = $requests->where('project_id', (int) $projectFilter)->values();
         }
 
-        $data = $requests->map(function (GoodsRequest $gr) {
-            $projectName = $gr->project?->project_name ?: ($gr->opportunity?->opportunity_name ?: 'Stock');
+        $freeStock = $this->freeStockByProduct($requests->flatMap->items->pluck('master_product_id')->unique()->all());
+
+        $data = $requests->map(function (GoodsRequest $gr) use ($freeStock) {
+            $groupLabel = $gr->isForProject() ? ($gr->project?->project_name ?? 'Project') : GoodsRequest::PURPOSE_LABELS[GoodsRequest::PURPOSE_INTERNAL];
 
             return [
                 'goods_request_id' => $gr->id,
-                'project_id' => $gr->project_id,
-                'project_number' => $gr->project?->project_number,
-                'project_name' => $projectName,
+                'request_number' => $gr->number_label,
+                'purpose' => $gr->purpose,
+                'project_id' => $gr->isForProject() ? $gr->project_id : null,
+                'project_number' => $gr->isForProject() ? $gr->project?->project_number : null,
+                'project_name' => $groupLabel,
                 'division_name' => $gr->division?->division_name,
-                'opportunity_name' => $gr->opportunity?->opportunity_name,
                 'items' => $gr->items->map(fn (GoodsRequestItem $item) => [
                     'goods_request_item_id' => $item->id,
-                    'quote_configuration_item_id' => $item->quote_configuration_item_id,
+                    'goods_request_id' => $gr->id,
                     'master_product_id' => $item->master_product_id,
-                    'project_name' => $projectName,
+                    'product_name' => $item->masterProduct?->name,
+                    'project_name' => $groupLabel,
                     'part_number' => $item->part_number,
                     'description' => Quotation::renderDescription($item->description),
-                    'qty' => $item->qty,
+                    'qty' => $item->remainingQty(),
+                    'remaining_qty' => $item->remainingQty(),
+                    'requested_qty' => (int) $item->qty,
                     'unit' => $item->unit,
                     'currency' => GoodsRequestItem::normalizeCurrency($item->currency),
+                    'price' => $this->defaultPrice($item),
+                    'free_stock' => $freeStock[$item->master_product_id] ?? 0,
                 ])->values(),
             ];
         })->values();
 
         return response()->json(['success' => true, 'data' => $data, 'projects' => $projects]);
-    }
-
-    /**
-     * Katalog Master Product (aktif, lintas divisi — PO bisa menggabungkan
-     * item lintas divisi) untuk picker produk di kolom Part Number pada form
-     * PO. Mengembalikan harga + mata uang agar saat produk dipilih, currency
-     * dan harga satuan langsung terisi (masih bisa diedit / negosiasi supplier).
-     */
-    public function searchProducts(Request $request): JsonResponse
-    {
-        $q = $request->get('q', '');
-        $base = Currency::baseName();
-
-        $products = MasterProduct::with('currency')
-            ->active()
-            ->where(function ($builder) use ($q) {
-                $builder->where('name', 'like', "%{$q}%")
-                    ->orWhere('code', 'like', "%{$q}%")
-                    ->orWhere('brand', 'like', "%{$q}%")
-                    ->orWhere('category', 'like', "%{$q}%")
-                    ->orWhere('description', 'like', "%{$q}%");
-            })
-            ->orderBy('name')
-            ->limit(50)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'selling_price', 'purchase_price', 'currency_id']);
-
-        $data = $products->map(fn (MasterProduct $product) => [
-            'id' => $product->id,
-            'code' => $product->code,
-            'name' => $product->name,
-            'brand' => $product->brand,
-            'category' => $product->category,
-            'description' => $product->description,
-            // Harga PO ke supplier = harga beli master product (mata uang produk, tanpa kurs).
-            'price' => (float) $product->purchase_price,
-            'selling_price' => (float) $product->selling_price,
-            'purchase_price_currency' => (float) $product->purchase_price,
-            'currency' => $product->currency && ! $product->currency->isBase() ? strtoupper($product->currency->name) : $base,
-            'rate' => $product->currency && ! $product->currency->isBase() ? (float) $product->currency->rate : 1,
-        ])->values();
-
-        return response()->json(['success' => true, 'data' => $data]);
     }
 
     private function validatePurchaseOrder(Request $request): array
@@ -441,6 +524,7 @@ class PurchaseOrderController extends Controller
             'po_type' => 'nullable|in:'.implode(',', array_keys(PurchaseOrder::TYPE_LABELS)),
             'date' => 'nullable|date',
             'terms' => 'nullable|string|max:100',
+            'payment_term_days' => 'nullable|integer|min:0|max:365',
             'delivery' => 'nullable|string|max:150',
             'your_ref' => 'nullable|string|max:100',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
@@ -450,23 +534,20 @@ class PurchaseOrderController extends Controller
             'finance_name' => 'nullable|string|max:150',
             'accounting_name' => 'nullable|string|max:150',
             'items' => 'nullable|array',
-            'items.*._key' => 'nullable|string',
-            'items.*.parent_key' => 'nullable|string',
-            'items.*.category' => 'nullable|string|max:200',
-            'items.*.goods_request_item_id' => 'nullable|integer|exists:goods_request_items,id',
-            'items.*.goods_request_id' => 'nullable|integer|exists:goods_requests,id',
-            'items.*.master_product_id' => 'nullable|integer|exists:master_products,id',
-            'items.*.part_number' => 'nullable|string|max:100',
+            'items.*.goods_request_item_id' => 'required|integer|exists:goods_request_items,id',
             'items.*.description' => 'nullable|string',
-            'items.*.qty' => 'nullable|integer|min:0',
-            'items.*.unit' => 'nullable|string|max:50',
-            'items.*.selling_price' => 'nullable|numeric|min:0',
-            'items.*.selling_price_currency' => 'nullable|numeric|min:0',
-            'items.*.purchase_price_currency' => 'nullable|numeric|min:0',
-            'items.*.currency' => 'nullable|string|max:10',
+            'items.*.qty' => 'required|integer|min:1',
+            'items.*.price' => 'nullable|numeric|min:0',
+        ], [
+            'items.*.goods_request_item_id.required' => 'Setiap baris PO harus berasal dari item Permintaan Barang.',
+            'items.*.qty.min' => 'Qty baris PO minimal 1.',
         ]);
 
         $validated['po_type'] ??= PurchaseOrder::TYPE_MANUFACTURE;
+        // Termin bayar (hari) = dasar jatuh tempo tagihan; kosong -> termin supplier.
+        $validated['payment_term_days'] ??= isset($validated['supplier_id'])
+            ? Supplier::whereKey($validated['supplier_id'])->value('payment_term_days')
+            : null;
 
         return $validated;
     }
@@ -491,90 +572,59 @@ class PurchaseOrderController extends Controller
     }
 
     /**
-     * Simpan item PO dengan hirarki parent-child (baris kategori sebagai parent).
-     * goods_request_item_id divalidasi ulang di sini (selain unique constraint di
-     * DB) supaya pesan error jelas kalau ternyata sudah dipakai PO lain sejak
-     * form dibuka (race condition).
-     *
-     * Flow dua-pass (pola water/ims syncItems):
-     *   1. insert semua baris (parent & item) tanpa parent_id
-     *   2. ambil id hasil insert (urutan sama dengan payload)
-     *   3. pasang parent_id berdasar parent_key
-     *
-     * Harga: bila baris punya master_product_id dan user belum mengirim
-     * selling_price_currency, diisi otomatis dari master product (Q2=A: tetap bisa
-     * diedit/negosiasi supplier).
+     * Simpan baris PO dari item Permintaan Barang. Divalidasi ulang di server:
+     * permintaan Approved, item punya master product, qty <= sisa kebutuhan
+     * (qty baris PO ini sendiri dikembalikan dulu saat edit), dan satu mata uang.
+     * Produk, unit, dan mata uang dikunci mengikuti item permintaan.
      */
     private function syncItems(PurchaseOrder $purchaseOrder, array $items): void
     {
         $items = array_values($items);
+        $fail = fn (string $message) => abort(response()->json(['success' => false, 'message' => $message], 422));
 
-        $goodsRequestItemIds = collect($items)->pluck('goods_request_item_id')->filter()->values();
-
-        if ($goodsRequestItemIds->isNotEmpty()) {
-            $alreadyOrdered = PurchaseOrderItem::whereIn('goods_request_item_id', $goodsRequestItemIds)
-                ->where('purchase_order_id', '!=', $purchaseOrder->id)
-                ->exists();
-
-            if ($alreadyOrdered) {
-                abort(response()->json([
-                    'success' => false,
-                    'message' => 'Salah satu item sudah dipakai di Purchase Order lain. Muat ulang halaman dan coba lagi.',
-                ], 422));
-            }
-        }
-
-        if (empty($items)) {
-            $purchaseOrder->items()->delete();
-
-            return;
-        }
-
-        $productIds = collect($items)->pluck('master_product_id')->filter()->unique()->values();
-        $products = MasterProduct::with('currency')
-            ->whereIn('id', $productIds)
-            ->get(['id', 'selling_price', 'purchase_price', 'currency_id'])
+        $requestItems = GoodsRequestItem::with(array_merge(['goodsRequest'], GoodsRequestItem::FULFILLMENT_RELATIONS))
+            ->whereIn('id', collect($items)->pluck('goods_request_item_id'))
+            ->get()
             ->keyBy('id');
-        $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
-        // Item dari Permintaan Barang wajib memakai mata uang item Permintaan Barang-nya.
-        $goodsRequestCurrencies = GoodsRequestItem::whereIn('id', collect($items)->pluck('goods_request_item_id')->filter())
-            ->pluck('currency', 'id');
 
-        $now = now();
-        $keyMap = [];
+        // Qty baris PO ini sendiri tidak dihitung sebagai pemakai sisa (saat edit).
+        $ownQty = $purchaseOrder->exists
+            ? $purchaseOrder->items()->get()->groupBy('goods_request_item_id')->map->sum('qty')
+            : collect();
+
+        $requestedQty = [];
         $payload = [];
+        $now = now();
 
-        foreach ($items as $i => $item) {
-            $key = $item['_key'] ?? 'row-'.$i;
-            $keyMap[$key] = $i;
+        foreach ($items as $i => $row) {
+            $requestItem = $requestItems->get((int) $row['goods_request_item_id']);
+            $label = 'Baris '.($i + 1);
 
-            $isHeader = ($item['category'] ?? '') !== '';
-            // Baris group (kategori) tidak punya harga/mata uang — supaya tidak
-            // terhitung sebagai mata uang lain saat cek satu mata uang per PO.
-            $pricing = $isHeader
-                ? ['currency' => null, 'selling_price_currency' => null, 'selling_price' => null, 'purchase_price_currency' => null]
-                : $this->pricingForItem($item, $products, $baseCurrency);
-
-            $goodsRequestItemId = $item['goods_request_item_id'] ?? null;
-            if (! $isHeader && $goodsRequestItemId && isset($goodsRequestCurrencies[$goodsRequestItemId])) {
-                $pricing['currency'] = GoodsRequestItem::normalizeCurrency($goodsRequestCurrencies[$goodsRequestItemId]);
+            if (! $requestItem || $requestItem->goodsRequest?->status !== GoodsRequest::STATUS_APPROVED) {
+                $fail($label.': item Permintaan Barang tidak valid atau belum Approved.');
             }
+            if (! $requestItem->master_product_id) {
+                $fail($label.': item permintaan belum terhubung master produk. Petakan produknya dulu di Permintaan Barang.');
+            }
+
+            $requestedQty[$requestItem->id] = ($requestedQty[$requestItem->id] ?? 0) + (int) $row['qty'];
+            $available = $requestItem->remainingQty() + (int) ($ownQty[$requestItem->id] ?? 0);
+            if ($requestedQty[$requestItem->id] > $available) {
+                $fail($label.' ('.($requestItem->part_number ?: 'item').'): qty melebihi sisa kebutuhan ('.$available.').');
+            }
+
+            $price = isset($row['price']) && $row['price'] !== '' ? round((float) $row['price'], 2) : $this->defaultPrice($requestItem);
 
             $payload[] = [
                 'purchase_order_id' => $purchaseOrder->id,
-                'parent_id' => null,
-                'category' => ($item['category'] ?? '') !== '' ? $item['category'] : null,
-                'goods_request_item_id' => $item['goods_request_item_id'] ?? null,
-                'goods_request_id' => $item['goods_request_id'] ?? null,
-                'master_product_id' => $item['master_product_id'] ?? null,
-                'part_number' => $item['part_number'] ?? null,
-                'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
-                'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
-                'unit' => $item['unit'] ?? null,
-                'selling_price' => $pricing['selling_price'],
-                'selling_price_currency' => $pricing['selling_price_currency'],
-                'purchase_price_currency' => $pricing['purchase_price_currency'],
-                'currency' => $pricing['currency'],
+                'goods_request_item_id' => $requestItem->id,
+                'master_product_id' => $requestItem->master_product_id,
+                'part_number' => $requestItem->part_number,
+                'description' => Quotation::sanitizeDescription($row['description'] ?? $requestItem->description ?? ''),
+                'qty' => (int) $row['qty'],
+                'unit' => $requestItem->unit,
+                'price' => $price,
+                'currency' => GoodsRequestItem::normalizeCurrency($requestItem->currency),
                 'sort_order' => $i + 1,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -582,112 +632,117 @@ class PurchaseOrderController extends Controller
         }
 
         // Satu PO hanya boleh satu mata uang (mis. tidak boleh campur IDR dan USD).
-        $currencies = collect($payload)->pluck('currency')->filter()->unique()->values();
+        $currencies = collect($payload)->pluck('currency')->unique()->values();
         if ($currencies->count() > 1) {
-            abort(response()->json([
-                'success' => false,
-                'message' => 'Semua item dalam satu PO harus memakai mata uang yang sama. Ditemukan: '.$currencies->implode(', ').'. Pisahkan ke PO berbeda.',
-            ], 422));
+            $fail('Semua item dalam satu PO harus memakai mata uang yang sama. Ditemukan: '.$currencies->implode(', ').'. Pisahkan ke PO berbeda.');
         }
 
         $purchaseOrder->items()->delete();
-
-        try {
+        if ($payload) {
             PurchaseOrderItem::insert($payload);
-        } catch (QueryException $e) {
-            abort(response()->json([
-                'success' => false,
-                'message' => 'Salah satu item sudah dipakai di Purchase Order lain. Muat ulang halaman dan coba lagi.',
-            ], 422));
         }
-
-        // Id hasil insert berurutan sama dengan urutan payload.
-        $ids = PurchaseOrderItem::where('purchase_order_id', $purchaseOrder->id)
-            ->orderBy('id')
-            ->pluck('id')
-            ->all();
-
-        $parentByChildId = [];
-        foreach ($items as $i => $item) {
-            $parentKey = $item['parent_key'] ?? null;
-            if (! $parentKey || ! isset($keyMap[$parentKey]) || $keyMap[$parentKey] === $i) {
-                continue;
-            }
-            if (isset($ids[$i], $ids[$keyMap[$parentKey]])) {
-                $parentByChildId[$ids[$i]] = $ids[$keyMap[$parentKey]];
-            }
-        }
-
-        $this->assignParents($parentByChildId);
     }
 
     /**
-     * Harga item dalam mata uang item, TANPA konversi kurs. Bila ada
-     * master_product_id dan user belum mengirim harga, harga diisi dari harga
-     * beli (purchase_price) master product beserta mata uangnya — tetap bisa
-     * diedit/negosiasi supplier. selling_price disamakan dengan harga satuan
-     * (bukan lagi hasil kurs ke Rupiah) karena total PO dihitung dalam mata uang PO.
-     *
-     * @return array{currency: ?string, selling_price_currency: ?float, selling_price: ?float, purchase_price_currency: float}
+     * Harga default = harga beli master product, hanya bila mata uang produk sama
+     * dengan mata uang item permintaan (tanpa kurs). Selain itu dikosongkan.
      */
-    private function pricingForItem(array $item, Collection $products, string $baseCurrency): array
+    private function defaultPrice(GoodsRequestItem $item): ?float
     {
-        $productId = $item['master_product_id'] ?? null;
-        $product = $productId ? $products->get($productId) : null;
-        $productCurrency = $product && $product->currency && ! $product->currency->isBase()
-            ? strtoupper($product->currency->name)
-            : $baseCurrency;
-
-        $rawPrice = $item['selling_price_currency'] ?? null;
-        $hasPrice = $rawPrice !== null && $rawPrice !== '';
-
-        if ($product && ! $hasPrice) {
-            $price = round((float) $product->purchase_price, 2);
-            $currency = $productCurrency;
-        } else {
-            $price = $hasPrice ? round((float) $rawPrice, 2) : null;
-            $currency = ($item['currency'] ?? '') !== '' ? strtoupper($item['currency']) : ($product ? $productCurrency : $baseCurrency);
+        $product = $item->relationLoaded('masterProduct') ? $item->masterProduct : $item->masterProduct()->with('currency')->first();
+        if (! $product) {
+            return null;
         }
 
-        $purchasePrice = $item['purchase_price_currency'] ?? null;
-        if ($purchasePrice === null || $purchasePrice === '') {
-            $purchasePrice = $product ? (float) $product->purchase_price : 0.0;
+        $productCurrency = GoodsRequestItem::normalizeCurrency($product->currency?->name);
+
+        return $productCurrency === GoodsRequestItem::normalizeCurrency($item->currency)
+            ? round((float) $product->purchase_price, 2)
+            : null;
+    }
+
+    /**
+     * Stok bebas (semua gudang) per produk — hanya informasi di picker.
+     *
+     * @return array<int,int>
+     */
+    private function freeStockByProduct(array $productIds): array
+    {
+        if (! $productIds) {
+            return [];
         }
+
+        return StockMovement::whereIn('master_product_id', $productIds)
+            ->whereNull('project_id')
+            ->get(['master_product_id', 'type', 'qty'])
+            ->groupBy('master_product_id')
+            ->map(fn ($rows) => max(0, $rows->sum(fn (StockMovement $m) => $m->isIn() ? $m->qty : -$m->qty)))
+            ->all();
+    }
+
+    private function lineForForm(PurchaseOrderItem $item): array
+    {
+        $requestItem = $item->goodsRequestItem;
+        $request = $requestItem?->goodsRequest;
 
         return [
-            'currency' => $currency,
-            'selling_price_currency' => $price,
-            'selling_price' => $price,
-            'purchase_price_currency' => round((float) $purchasePrice, 2),
+            'goods_request_item_id' => $item->goods_request_item_id,
+            'goods_request_id' => $request?->id,
+            'request_number' => $request?->number_label,
+            'master_product_id' => $item->master_product_id,
+            'project_name' => $request && $request->isForProject() ? ($request->project?->project_name ?? 'Project') : GoodsRequest::PURPOSE_LABELS[GoodsRequest::PURPOSE_INTERNAL],
+            'part_number' => $item->part_number,
+            'description' => Quotation::renderDescription($item->description),
+            'qty' => $item->qty,
+            // Batas qty saat edit = sisa kebutuhan + qty baris ini sendiri.
+            'remaining_qty' => ($requestItem?->remainingQty() ?? 0) + (int) $item->qty,
+            'requested_qty' => (int) ($requestItem?->qty ?? 0),
+            'unit' => $item->unit,
+            'price' => $item->price,
+            'currency' => $item->currency,
+            'source_label' => $request ? 'Permintaan '.$request->number_label.' / '.($request->division?->division_name ?? '-') : null,
         ];
     }
 
     /**
-     * Pasang parent_id banyak baris dalam satu query:
-     * UPDATE ... SET parent_id = CASE id WHEN ? THEN ? ... END WHERE id IN (...).
-     *
-     * @param  array<int,int>  $parentByChildId  [child_id => parent_id]
+     * Filter status bayar: unbilled (belum ada tagihan terverifikasi), unpaid (ada
+     * tagihan terbuka), paid (semua tagihan terverifikasi lunas).
      */
-    private function assignParents(array $parentByChildId): void
+    private function filterPayStatus($query, string $status)
     {
-        if (empty($parentByChildId)) {
-            return;
-        }
+        $active = fn ($q) => $q->whereNotIn('status', [SupplierBill::STATUS_DRAFT, SupplierBill::STATUS_VOID]);
 
-        $cases = '';
-        $bindings = [];
-        foreach ($parentByChildId as $childId => $parentId) {
-            $cases .= ' WHEN ? THEN ?';
-            $bindings[] = $childId;
-            $bindings[] = $parentId;
-        }
+        return match ($status) {
+            'unbilled' => $query->whereDoesntHave('supplierBills', $active),
+            'unpaid' => $query->whereHas('supplierBills', fn ($q) => $q->whereIn('status', SupplierBill::OPEN_STATUSES)),
+            'paid' => $query->whereHas('supplierBills', fn ($q) => $q->where('status', SupplierBill::STATUS_PAID))
+                ->whereDoesntHave('supplierBills', fn ($q) => $q->whereIn('status', SupplierBill::OPEN_STATUSES)),
+            default => $query,
+        };
+    }
 
-        $childIds = array_keys($parentByChildId);
-        $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+    protected function documentOwner($id): Model
+    {
+        return PurchaseOrder::findOrFail($id);
+    }
 
-        DB::update(
-            "UPDATE purchase_order_items SET parent_id = CASE id{$cases} END WHERE id IN ({$placeholders})",
-            array_merge($bindings, $childIds)
+    protected function documentRoutePrefix(): string
+    {
+        return 'purchase-order';
+    }
+
+    protected function documentModuleCode(): string
+    {
+        return 'MOD_PURCHASE_ORDER';
+    }
+
+    private function log(PurchaseOrder $purchaseOrder, string $action, string $what): void
+    {
+        Log::record(
+            $action,
+            'Purchase order '.($purchaseOrder->po_number ?: '#'.$purchaseOrder->id).' '.$what.' oleh '.Auth::user()->display_name,
+            'MOD_PURCHASE_ORDER',
+            $purchaseOrder
         );
     }
 }

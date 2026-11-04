@@ -12,8 +12,11 @@ use App\Models\ProjectAchievement;
 use App\Models\ProjectBillingTerm;
 use App\Models\Quotation;
 use App\Models\SalesAchievement;
+use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use App\Models\Warehouse;
+use App\Support\PayableReport;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -114,6 +117,7 @@ class ProjectController extends Controller
             'salesOptions' => [],
             'billingTerms' => [],
             'billingBase' => 0,
+            'netLocked' => false,
             'agreements' => [],
         ]);
     }
@@ -140,6 +144,10 @@ class ProjectController extends Controller
         $net = $quotation
             ? (float) $quotation->profitEstimate->real_project_value
             : (float) $validated['net_sale_amount'];
+
+        if (! $quotation) {
+            $this->assertManualAmounts($total, $net, null);
+        }
 
         $file = null;
         $path = null;
@@ -203,6 +211,7 @@ class ProjectController extends Controller
             'company', 'quotation.opportunity', 'creator', 'updater', 'poUploader',
             'achievements.division', 'salesAchievements.salesPerson', 'invoices',
             'documents.uploader', 'billingTerms.invoices', 'billingTerms.documents.uploader', 'billingTerms.unlocker',
+            'deliveryOrders.warehouse',
         ])->findOrFail($id);
 
         $user = Auth::user();
@@ -212,8 +221,15 @@ class ProjectController extends Controller
             ->exists();
 
         $billingBase = $project->billingBaseAmount();
+        $canCreateDeliveryOrder = $user->role === 'Admin' || UserAccessControl::where('user_id', $user->id)
+            ->whereHas('module', fn ($q) => $q->where('route_name', 'delivery-order'))
+            ->where('can_create', true)
+            ->exists();
 
         return view('project.show', [
+            'projectGoods' => $this->projectGoods($project),
+            'purchaseCost' => (new PayableReport)->projectCosts($project->id)->first(),
+            'canCreateDeliveryOrder' => $canCreateDeliveryOrder,
             'project' => $project,
             'canCreateInvoice' => $canCreateInvoice,
             'billingBase' => $billingBase,
@@ -223,6 +239,38 @@ class ProjectController extends Controller
             'agreements' => $project->documents->where('type', Document::TYPE_AGREEMENT)
                 ->map(fn (Document $doc) => $this->documentItem($project, $doc))->values(),
         ]);
+    }
+
+    /**
+     * Barang milik project: saldo per gudang (teralokasi, belum dikirim) dan
+     * total terkirim lewat Delivery Order, per produk.
+     */
+    private function projectGoods(Project $project)
+    {
+        $balances = StockMovement::balancesQuery()->where('project_id', $project->id)->get();
+        $delivered = StockMovement::where('project_id', $project->id)
+            ->where('type', StockMovement::TYPE_DELIVERY)
+            ->groupBy('master_product_id')
+            ->selectRaw('master_product_id, SUM(qty) AS qty')
+            ->pluck('qty', 'master_product_id');
+
+        $products = MasterProduct::whereIn('id', $balances->pluck('master_product_id'))->get(['id', 'code', 'name'])->keyBy('id');
+        $warehouses = Warehouse::whereIn('id', $balances->pluck('warehouse_id'))->get(['id', 'code'])->keyBy('id');
+
+        return $balances->groupBy('master_product_id')
+            ->map(fn ($rows, $productId) => [
+                'master_product_id' => (int) $productId,
+                'code' => $products[$productId]->code ?? '—',
+                'name' => $products[$productId]->name ?? '—',
+                'unit' => $rows->pluck('unit')->filter()->first(),
+                'in_stock' => (int) $rows->sum('balance'),
+                'locations' => $rows->filter(fn ($row) => $row->balance > 0)
+                    ->map(fn ($row) => ($warehouses[$row->warehouse_id]->code ?? '?').': '.(int) $row->balance)->values()->all(),
+                'delivered' => (int) ($delivered[$productId] ?? 0),
+            ])
+            ->filter(fn ($row) => $row['in_stock'] > 0 || $row['delivered'] > 0)
+            ->sortBy('code')
+            ->values();
     }
 
     /**
@@ -373,6 +421,8 @@ class ProjectController extends Controller
                 'invoice_number' => $term->activeInvoice()?->invoice_number,
             ])->values()->all(),
             'billingBase' => $project->billingBaseAmount(),
+            // Project manual: net sale terkunci bila sudah ada invoice termin.
+            'netLocked' => ! $project->quotation_id && $project->billingTerms->contains(fn (ProjectBillingTerm $term) => $term->hasActiveInvoice()),
             'agreements' => $project->documents->where('type', Document::TYPE_AGREEMENT)
                 ->map(fn (Document $doc) => $this->documentItem($project, $doc))->values()->all(),
         ]);
@@ -397,6 +447,10 @@ class ProjectController extends Controller
         $net = $quotation
             ? (float) $quotation->profitEstimate->real_project_value
             : (float) $validated['net_sale_amount'];
+
+        if (! $quotation) {
+            $this->assertManualAmounts($total, $net, $project);
+        }
 
         $newPath = null;
         if ($request->hasFile('po_document')) {
@@ -453,6 +507,15 @@ class ProjectController extends Controller
     public function destroy($id): JsonResponse
     {
         $project = Project::findOrFail($id);
+
+        $blockers = $project->deletionBlockers();
+        if ($blockers) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Project tidak bisa dihapus karena sudah memiliki '.implode(', ', $blockers)
+                    .'. Bila project batal, ubah statusnya menjadi Cancelled agar riwayat transaksi tetap utuh.',
+            ], 422);
+        }
 
         Log::record(
             'delete_project',
@@ -572,7 +635,7 @@ class ProjectController extends Controller
             ->where(function ($query) use ($q) {
                 $query->where('username', 'like', "%{$q}%")
                     ->orWhere('full_name', 'like', "%{$q}%");
-            })->where('division_id',6) // Hanya menampilkan user dengan division_id = 6 (Sales)
+            })->where('division_id', 6) // Hanya menampilkan user dengan division_id = 6 (Sales)
             ->orderBy('full_name')
             ->limit(20)
             ->get();
@@ -815,6 +878,27 @@ class ProjectController extends Controller
             'po_document.max' => 'Ukuran file tidak boleh lebih dari 10MB.',
             'sales.required' => 'Pilih minimal satu sales.',
         ]);
+    }
+
+    /**
+     * Project manual: net sale (sebelum PPN) menjadi dasar penagihan, jadi tidak
+     * boleh melebihi total sale dan terkunci begitu ada invoice termin aktif
+     * (nilai invoice termin harus sama dengan nilai kontrak).
+     */
+    private function assertManualAmounts(float $total, float $net, ?Project $project): void
+    {
+        $fail = fn (string $message) => throw new HttpResponseException(response()->json(['success' => false, 'message' => $message], 422));
+
+        if ($net > $total) {
+            $fail('Net Sale Amount (sebelum PPN) tidak boleh melebihi Total Sale Amount.');
+        }
+
+        if ($project && abs($net - (float) $project->net_sale_amount) > 0.005) {
+            $billed = $project->billingTerms()->with('invoices')->get()->first(fn (ProjectBillingTerm $term) => $term->hasActiveInvoice());
+            if ($billed) {
+                $fail('Net Sale Amount terkunci karena sudah ada invoice termin '.$billed->activeInvoice()->invoice_number.'. Batalkan invoice tersebut dulu bila nilai project berubah.');
+            }
+        }
     }
 
     /**

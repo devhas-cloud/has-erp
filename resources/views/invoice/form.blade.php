@@ -21,6 +21,7 @@
         background: var(--accent-soft); color: var(--text-primary);
     }
     .inv-term-info i { color: var(--accent); margin-top: 3px; }
+    .inv-base-warn { font-size: 12.5px; color: #92400e; background: #fef3c7; border-radius: var(--radius-sm); padding: 7px 10px; margin-top: 4px; }
     .inv-locked { background: var(--accent-subtle) !important; }
     .inv-summary-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 14px; }
     .inv-summary-row + .inv-summary-row { border-top: 1px dashed var(--card-border); }
@@ -85,6 +86,11 @@
                     <small style="color:var(--text-muted);display:none" id="inv-term-locked-hint"><i class="fa fa-lock me-1"></i>Termin terkunci belum bisa ditagih. Termin dibuka dari detail project oleh pemegang akses edit project.</small>
                     <div id="inv-term-info" class="inv-term-info mt-2" style="display:none"></div>
                 </div>
+                <div class="mb-3" id="inv-nonterm-wrap" style="display:none">
+                    <label class="form-label">Alasan Tagihan di Luar Timeline <span class="text-danger">*</span></label>
+                    <textarea id="inv-non-term-reason" class="form-control" rows="2" maxlength="1000" placeholder="Contoh: pekerjaan tambahan di luar PO customer">{{ $invoice?->non_term_reason }}</textarea>
+                    <small style="color:var(--text-muted)">Invoice tanpa termin tidak mengurangi sisa termin project dan tampil terpisah di laporan piutang.</small>
+                </div>
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Informasi Project</label>
@@ -120,6 +126,10 @@
                     </div>
                     <div class="col-12">
                         <small style="color:var(--text-muted)">Jatuh tempo: <strong id="inv-due-preview">—</strong></small>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">No. Faktur Pajak</label>
+                        <input type="text" id="inv-tax-invoice" class="form-control" maxlength="50" value="{{ $invoice?->tax_invoice_number }}" placeholder="Boleh diisi setelah invoice Approved">
                     </div>
                 </div>
             </div>
@@ -239,6 +249,7 @@
                 <div class="inv-summary-row"><span class="lbl">Sub Total</span><span class="val" id="inv-subtotal">Rp 0</span></div>
                 <div class="inv-summary-row" id="inv-discount-row"><span class="lbl" id="inv-discount-label">Diskon</span><span class="val text-danger" id="inv-discount">- Rp 0</span></div>
                 <div class="inv-summary-row"><span class="lbl">Nilai Sebelum PPN</span><span class="val" id="inv-net-subtotal">Rp 0</span></div>
+                <div class="inv-base-warn" id="inv-base-warn" style="display:none"></div>
                 <div class="inv-summary-row"><span class="lbl" id="inv-amount-label">Pembayaran</span><span class="val" id="inv-amount-payment">Rp 0</span></div>
                 <div class="inv-summary-row"><span class="lbl" id="inv-ppn-label">PPN (11%)</span><span class="val" id="inv-ppn-amount">Rp 0</span></div>
                 <div class="inv-summary-total"><span>Total Tagihan</span><span class="val" id="inv-total-payment">Rp 0</span></div>
@@ -305,6 +316,7 @@ const invInvoiceId = {{ $invoice?->id ?? 'null' }};
 let invInitialTermId = @json($selectedTermId ?? null);
 let invTerms = {};
 let invQuoteItems = [];
+let invProjectBase = null; // nilai kontrak project sebelum PPN (acuan invoice termin)
 let invQuoteModalInstance = null;
 
 function invToRaw(value) {
@@ -431,6 +443,8 @@ function invApplyTerm(fillNoted) {
     var t = invTerms[$('#inv-term').val()];
     var $percent = $('#inv-percent-payment');
 
+    $('#inv-nonterm-wrap').toggle(!t && !!$('#inv-project-id').val());
+
     if (!t) {
         $percent.prop('readonly', false).removeClass('inv-locked');
         $('#inv-percent-lock').hide();
@@ -456,7 +470,7 @@ function invFetchProject(id, fillShipTo) {
         var d = res.data;
         var html = '<strong style="color:var(--text-primary)">' + invEsc(d.project_number) + '</strong> — ' + invEsc(d.project_name);
         html += '<div>' + invEsc(d.company_name || '—') + '</div>';
-        html += '<div>Nilai Penawaran (sebelum PPN): ' + invMoney(d.before_ppn) + '</div>';
+        html += '<div>Nilai Kontrak (sebelum PPN): ' + invMoney(d.before_ppn) + '</div>';
         html += '<div>Quote: ' + invEsc(d.quotation_number || '—') + ' (' + (d.quotation_items || []).length + ' item)</div>';
         $('#inv-project-info').html(html);
 
@@ -470,6 +484,7 @@ function invFetchProject(id, fillShipTo) {
         }
 
         invQuoteItems = d.quotation_items || [];
+        invProjectBase = d.before_ppn;
         $('#inv-load-quote').prop('disabled', invQuoteItems.length === 0);
 
         // Termin awal hanya dipakai sekali (dari tombol "Buat Invoice" di timeline / data edit).
@@ -688,6 +703,17 @@ function invRecalc() {
     $('#inv-ppn-label').text('PPN (' + invNumber(ppnPercent) + '%)');
     $('#inv-ppn-amount').text(invMoney(ppnCents / 100));
     $('#inv-total-payment').text(invMoney(totalCents / 100));
+
+    var baseMismatch = invTermBaseMismatch(netCents);
+    $('#inv-base-warn').toggle(baseMismatch).html(baseMismatch
+        ? '<i class="fa fa-triangle-exclamation me-1"></i>Invoice termin harus bernilai sama dengan nilai kontrak project (' + invMoney(invProjectBase) + ' sebelum PPN). Gunakan item dari quotation.'
+        : '');
+}
+
+// Invoice termin: sub total - diskon wajib sama dengan nilai kontrak project.
+function invTermBaseMismatch(netCents) {
+    if (!$('#inv-term').val() || invProjectBase === null) return false;
+    return netCents !== Math.round(parseFloat(invProjectBase) * 100);
 }
 
 function invValidate() {
@@ -712,11 +738,23 @@ function invValidate() {
     var discPct = parseFloat(invToRaw($('#inv-disc-pct').val())) || 0;
     if (discPct < 0 || discPct > 100) { toastr.error('Diskon persen harus 0 sampai 100.'); return false; }
 
+    if (!$('#inv-term').val() && !$.trim($('#inv-non-term-reason').val())) {
+        toastr.error('Invoice tanpa termin adalah tagihan di luar timeline project. Isi alasannya.');
+        $('#inv-non-term-reason').focus();
+        return false;
+    }
+
     var subtotalCents = items.reduce(function(sum, item) {
         return sum + Math.round((parseFloat(item.qty) || 0) * (parseFloat(item.unit_price) || 0) * 100);
     }, 0);
     if (discPct === 0 && invCents($('#inv-disc-amt').val()) > subtotalCents) {
         toastr.error('Diskon tidak boleh melebihi sub total.');
+        return false;
+    }
+
+    invRecalc();
+    if ($('#inv-base-warn').is(':visible')) {
+        toastr.error('Nilai sebelum PPN invoice termin harus sama dengan nilai kontrak project.');
         return false;
     }
 
@@ -738,6 +776,8 @@ function invSave() {
     fd.append('do_number', $('#inv-do').val());
     fd.append('shipping_method', $('#inv-shipping').val());
     fd.append('noted', $('#inv-noted').val());
+    fd.append('non_term_reason', $('#inv-term').val() ? '' : $.trim($('#inv-non-term-reason').val()));
+    fd.append('tax_invoice_number', $.trim($('#inv-tax-invoice').val()));
     fd.append('signer_name', $('#inv-signer-name').val());
     fd.append('signer_position', $('#inv-signer-position').val());
     fd.append('ship_to', $('#inv-ship-to').val());

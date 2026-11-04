@@ -13,7 +13,6 @@
         };
         $percent = fn ($value) => rtrim(rtrim(number_format((float) $value, 2, ',', '.'), '0'), ',');
 
-        $printCurrencyMatches = $purchaseOrder->printCurrency() !== null;
         $totals = $purchaseOrder->printTotals();
         $groups = $purchaseOrder->hierarchyGroups();
         // Baris judul project hanya dicetak bila PO menggabungkan lebih dari satu project.
@@ -207,7 +206,7 @@
             <td style="width:42%;padding-left:16px">
                 <table class="meta-right">
                     <tr><td class="k">PO DATE</td><td class="sep">:</td><td>{{ $purchaseOrder->date?->format('M, d Y') ?? '' }}</td></tr>
-                    <tr><td class="k">TERMS</td><td class="sep">:</td><td>{{ $purchaseOrder->terms }}</td></tr>
+                    <tr><td class="k">TERMS</td><td class="sep">:</td><td>{{ $purchaseOrder->terms ?: \App\Models\Supplier::termLabel($purchaseOrder->payment_term_days) }}</td></tr>
                     <tr>
                         <td class="k">PROJECT</td><td class="sep">:</td>
                         <td>
@@ -240,7 +239,7 @@
                 @endif
                 @foreach($group['items'] as $item)
                     @php
-                        $unitPrice = $printCurrencyMatches ? $item->selling_price_currency : $item->selling_price;
+                        $unitPrice = $item->price;
                         $amount = $item->qty !== null && $unitPrice !== null ? $item->qty * $unitPrice : null;
                         $description = trim(html_entity_decode(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", (string) $item->description)), ENT_QUOTES | ENT_HTML5));
                         $partNumber = trim((string) $item->part_number);

@@ -5,18 +5,20 @@ namespace Tests\Feature;
 use App\Models\AccountCompany;
 use App\Models\Currency;
 use App\Models\Division;
+use App\Models\GoodsReceipt;
 use App\Models\GoodsRequest;
+use App\Models\GoodsRequestItem;
 use App\Models\MasterProduct;
 use App\Models\Module;
-use App\Models\Opportunity;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
-use App\Models\PurchaseOrderItem;
-use App\Models\Quotation;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class PurchaseOrderTest extends TestCase
@@ -97,39 +99,37 @@ class PurchaseOrderTest extends TestCase
         return $user;
     }
 
-    private function makeQuotationWithOpportunity(): Quotation
+    private function makeProject(string $name): Project
     {
-        $company = AccountCompany::create([
-            'account_name' => 'PT Maju Bersama',
-            'address_billing_street' => 'Jl. Industri No. 1',
-            'address_billing_city' => 'Jakarta',
-            'address_billing_province' => 'DKI Jakarta',
-            'status' => 'Active',
-        ]);
+        static $seq = 0;
+        $seq++;
 
-        $opportunity = Opportunity::create([
-            'opportunity_name' => 'SPARING Kawasan Industri Gresik',
-            'account_companies_id' => $company->id,
-            'owner_id' => $this->admin->id,
-            'probability' => 70,
-        ]);
+        $company = AccountCompany::firstOrCreate(['account_name' => 'PT Maju Bersama'], ['status' => 'Active']);
 
-        return Quotation::create([
-            'opportunity_id' => $opportunity->id,
-            'status' => Quotation::STATUS_FINISH,
+        return Project::create([
+            'project_number' => '2610'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT),
+            'project_name' => $name,
+            'company_id' => $company->id,
+            'po_number_company' => 'PO-CUST-'.$seq,
+            'po_date' => '2026-10-01',
+            'po_date_received' => '2026-10-02',
+            'po_due_date' => '2026-11-01',
+            'total_sale_amount' => 1000000,
+            'net_sale_amount' => 900000,
+            'status' => Project::STATUS_ACTIVE,
             'created_by' => $this->admin->id,
-            'quotation_number' => '001/HAS/QT-T/VIII/2026',
-            'to_name' => 'PT Maju Bersama',
         ]);
     }
 
-    private function makeApprovedGoodsRequest(Division $division, array $itemsData = [['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit']]): GoodsRequest
+    /**
+     * Permintaan Barang Approved; tiap item otomatis terhubung master product
+     * (kode = part_number). Tanpa project -> tujuan internal.
+     */
+    private function makeApprovedGoodsRequest(Division $division, array $itemsData = [['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit']], ?Project $project = null): GoodsRequest
     {
-        $quotation = $this->makeQuotationWithOpportunity();
-
         $gr = GoodsRequest::create([
-            'opportunity_id' => $quotation->opportunity_id,
-            'quotation_id' => $quotation->id,
+            'purpose' => $project ? GoodsRequest::PURPOSE_PROJECT : GoodsRequest::PURPOSE_INTERNAL,
+            'project_id' => $project?->id,
             'division_id' => $division->id,
             'status' => GoodsRequest::STATUS_APPROVED,
             'created_by' => $this->creator->id,
@@ -138,10 +138,53 @@ class PurchaseOrderTest extends TestCase
         ]);
 
         foreach ($itemsData as $i => $data) {
-            $gr->items()->create(array_merge(['sort_order' => $i + 1], $data));
+            $product = MasterProduct::firstOrCreate(['code' => $data['part_number']], [
+                'name' => 'Produk '.$data['part_number'],
+                'division_id' => $division->id,
+                'currency_id' => $data['currency_id'] ?? null,
+                'purchase_price' => $data['purchase_price'] ?? 0,
+                'status' => 'Active',
+            ]);
+            unset($data['currency_id'], $data['purchase_price']);
+            $gr->items()->create(array_merge(['sort_order' => $i + 1, 'master_product_id' => $product->id], $data));
         }
 
         return $gr->fresh('items');
+    }
+
+    private function line(GoodsRequestItem $item, ?int $qty = null, ?float $price = 1000): array
+    {
+        return ['goods_request_item_id' => $item->id, 'qty' => $qty ?? $item->qty, 'price' => $price, 'description' => $item->description];
+    }
+
+    private function storePo(array $items, array $extra = []): TestResponse
+    {
+        return $this->actingAs($this->creator)->postJson(route('purchase-order.store'), array_merge([
+            'supplier_name' => 'PT Supplier Jaya',
+            'items' => $items,
+        ], $extra));
+    }
+
+    private function receive(PurchaseOrder $po, int $qty): void
+    {
+        $warehouse = Warehouse::firstOrCreate(['code' => 'G1'], ['name' => 'Gudang 12', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
+        $receipt = GoodsReceipt::create([
+            'receipt_number' => 'GRN-'.uniqid(),
+            'purchase_order_id' => $po->id,
+            'warehouse_id' => $warehouse->id,
+            'received_date' => now()->toDateString(),
+            'status' => GoodsReceipt::STATUS_POSTED,
+            'created_by' => $this->creator->id,
+        ]);
+        $item = $po->items()->first();
+        $receipt->items()->create([
+            'purchase_order_item_id' => $item->id,
+            'master_product_id' => $item->master_product_id,
+            'qty' => $qty,
+            'destination' => 'warehouse',
+            'sort_order' => 1,
+        ]);
+        $po->refreshReceiptStatus();
     }
 
     public function test_store_rejected_for_user_without_module_access(): void
@@ -159,165 +202,6 @@ class PurchaseOrderTest extends TestCase
         $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
             'items' => [],
         ])->assertStatus(422);
-    }
-
-    /**
-     * Item bisa berasal dari beberapa Permintaan Barang berbeda divisi
-     * sekaligus, digabung dalam satu PO ke satu supplier — ini inti dari
-     * "group purchasing" yang diminta.
-     */
-    public function test_store_persists_items_from_multiple_goods_requests_across_divisions(): void
-    {
-        $grWater = $this->makeApprovedGoodsRequest($this->division, [
-            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
-        ]);
-        $grIms = $this->makeApprovedGoodsRequest($this->otherDivision, [
-            ['part_number' => 'PN-2', 'description' => 'Valve B', 'qty' => 5, 'unit' => 'Pcs'],
-        ]);
-
-        $response = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier Jaya',
-            'po_number' => 'PO-001',
-            'items' => [
-                [
-                    'goods_request_item_id' => $grWater->items->first()->id,
-                    'goods_request_id' => $grWater->id,
-                    'part_number' => 'PN-1',
-                    'description' => 'Sensor A',
-                    'qty' => 2,
-                    'unit' => 'Unit',
-                    'currency' => 'IDR',
-                    'selling_price_currency' => 100000,
-                    'selling_price' => 100000,
-                ],
-                [
-                    'goods_request_item_id' => $grIms->items->first()->id,
-                    'goods_request_id' => $grIms->id,
-                    'part_number' => 'PN-2',
-                    'description' => 'Valve B',
-                    'qty' => 5,
-                    'unit' => 'Pcs',
-                    'currency' => 'IDR',
-                    'selling_price_currency' => 50000,
-                    'selling_price' => 50000,
-                ],
-            ],
-        ])->assertOk();
-
-        $po = PurchaseOrder::with('items')->findOrFail($response->json('id'));
-        $this->assertSame('PT Supplier Jaya', $po->supplier_name);
-        $this->assertCount(2, $po->items);
-        $this->assertSame([$this->division->id, $this->otherDivision->id], $po->items->map(fn ($i) => $i->goodsRequest->division_id)->sort()->values()->all());
-        $this->assertSame(2 * 100000 + 5 * 50000, (int) $po->grandTotal());
-    }
-
-    public function test_store_sanitizes_item_description(): void
-    {
-        $gr = $this->makeApprovedGoodsRequest($this->division);
-
-        $rich = 'Range <br>- pH : 0-14';
-        $withScript = $rich.'<script>alert(1)</script>';
-
-        $response = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier Jaya',
-            'items' => [
-                [
-                    'goods_request_item_id' => $gr->items->first()->id,
-                    'goods_request_id' => $gr->id,
-                    'description' => $withScript,
-                    'qty' => 1,
-                ],
-            ],
-        ])->assertOk();
-
-        $po = PurchaseOrder::with('items')->findOrFail($response->json('id'));
-        $saved = $po->items->first()->description;
-        $this->assertSame($rich, $saved);
-        $this->assertStringNotContainsString('<script>', $saved);
-    }
-
-    /**
-     * Satu item Permintaan Barang tidak boleh dipakai di lebih dari satu PO —
-     * dicek di controller (pesan error jelas) DAN dijamin oleh unique
-     * constraint di level DB sebagai backstop race-condition.
-     */
-    public function test_goods_request_item_already_used_in_another_po_is_rejected(): void
-    {
-        $gr = $this->makeApprovedGoodsRequest($this->division);
-        $itemId = $gr->items->first()->id;
-
-        $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier Pertama',
-            'items' => [
-                ['goods_request_item_id' => $itemId, 'goods_request_id' => $gr->id, 'part_number' => 'PN-1', 'qty' => 2],
-            ],
-        ])->assertOk();
-
-        $this->assertSame(1, PurchaseOrder::count());
-
-        $response = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier Kedua',
-            'items' => [
-                ['goods_request_item_id' => $itemId, 'goods_request_id' => $gr->id, 'part_number' => 'PN-1', 'qty' => 2],
-            ],
-        ]);
-
-        $response->assertStatus(422);
-        $this->assertSame(1, PurchaseOrder::count());
-    }
-
-    public function test_db_unique_constraint_blocks_duplicate_goods_request_item_id_directly(): void
-    {
-        $gr = $this->makeApprovedGoodsRequest($this->division);
-        $itemId = $gr->items->first()->id;
-
-        $po1 = PurchaseOrder::create(['supplier_name' => 'A', 'status' => PurchaseOrder::STATUS_DRAFT, 'created_by' => $this->creator->id]);
-        $po2 = PurchaseOrder::create(['supplier_name' => 'B', 'status' => PurchaseOrder::STATUS_DRAFT, 'created_by' => $this->creator->id]);
-
-        PurchaseOrderItem::create(['purchase_order_id' => $po1->id, 'goods_request_item_id' => $itemId, 'goods_request_id' => $gr->id, 'sort_order' => 1]);
-
-        $this->expectException(\Illuminate\Database\QueryException::class);
-        PurchaseOrderItem::create(['purchase_order_id' => $po2->id, 'goods_request_item_id' => $itemId, 'goods_request_id' => $gr->id, 'sort_order' => 1]);
-    }
-
-    /**
-     * fetchAvailableItems: hanya item dari Permintaan Barang berstatus
-     * Approved, mengelompokkan per Permintaan Barang, dan mengecualikan item
-     * yang sudah dipakai di PO manapun.
-     */
-    public function test_fetch_available_items_only_returns_approved_and_unused_items_grouped_by_request(): void
-    {
-        $grApproved = $this->makeApprovedGoodsRequest($this->division, [
-            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
-            ['part_number' => 'PN-2', 'description' => 'Sensor B', 'qty' => 1, 'unit' => 'Unit'],
-        ]);
-
-        $draftQuotation = $this->makeQuotationWithOpportunity();
-        $grDraft = GoodsRequest::create([
-            'opportunity_id' => $draftQuotation->opportunity_id,
-            'quotation_id' => $draftQuotation->id,
-            'division_id' => $this->division->id,
-            'status' => GoodsRequest::STATUS_DRAFT,
-            'created_by' => $this->creator->id,
-        ]);
-        $grDraft->items()->create(['part_number' => 'PN-DRAFT', 'description' => 'Belum Approved', 'qty' => 1, 'sort_order' => 1]);
-
-        // Pakai satu item lewat PO lain -> harus dikecualikan dari daftar tersedia.
-        $po = PurchaseOrder::create(['supplier_name' => 'PT Lain', 'status' => PurchaseOrder::STATUS_DRAFT, 'created_by' => $this->creator->id]);
-        PurchaseOrderItem::create([
-            'purchase_order_id' => $po->id,
-            'goods_request_item_id' => $grApproved->items->first()->id,
-            'goods_request_id' => $grApproved->id,
-            'sort_order' => 1,
-        ]);
-
-        $response = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items'))->assertOk();
-
-        $data = $response->json('data');
-        $this->assertCount(1, $data);
-        $this->assertSame($grApproved->id, $data[0]['goods_request_id']);
-        $this->assertCount(1, $data[0]['items']);
-        $this->assertSame('PN-2', $data[0]['items'][0]['part_number']);
     }
 
     public function test_submit_requires_at_least_one_item(): void
@@ -488,274 +372,6 @@ class PurchaseOrderTest extends TestCase
         $this->assertSame('Sundowo', $po->accounting_name);
     }
 
-    /**
-     * Permintaan Barang lama tanpa project: label "PROJECT" jatuh ke nama
-     * opportunity; item tanpa Permintaan Barang (baris manual) masuk "Stock".
-     */
-    public function test_project_groups_fall_back_to_opportunity_then_stock(): void
-    {
-        $gr = $this->makeApprovedGoodsRequest($this->division, [
-            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
-        ]);
-        $opportunityName = $gr->opportunity->opportunity_name;
-
-        $po = PurchaseOrder::create(['supplier_name' => 'PT Supplier', 'status' => PurchaseOrder::STATUS_DRAFT, 'created_by' => $this->creator->id]);
-        PurchaseOrderItem::create([
-            'purchase_order_id' => $po->id,
-            'goods_request_item_id' => $gr->items->first()->id,
-            'goods_request_id' => $gr->id,
-            'part_number' => 'PN-1',
-            'qty' => 2,
-            'sort_order' => 1,
-        ]);
-        PurchaseOrderItem::create([
-            'purchase_order_id' => $po->id,
-            'part_number' => 'PN-MANUAL',
-            'qty' => 1,
-            'sort_order' => 2,
-        ]);
-
-        $groups = $po->fresh(['items.goodsRequest.opportunity'])->projectGroups();
-
-        $this->assertCount(2, $groups);
-        $this->assertSame($opportunityName, $groups[0]['label']);
-        $this->assertCount(1, $groups[0]['items']);
-        $this->assertSame('Stock', $groups[1]['label']);
-        $this->assertCount(1, $groups[1]['items']);
-    }
-
-    public function test_pdf_renders_successfully_with_grouped_items_and_mixed_currency_fallback(): void
-    {
-        $supplier = Supplier::create(['name' => 'CV. Riztech Engineering', 'address' => 'Bandung', 'status' => 'Active']);
-        $gr = $this->makeApprovedGoodsRequest($this->division, [
-            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
-        ]);
-
-        $po = PurchaseOrder::create([
-            'supplier_name' => $supplier->name,
-            'supplier_id' => $supplier->id,
-            'supplier_address' => $supplier->address,
-            'terms' => 'TT',
-            'date' => now(),
-            'notes' => 'Freight to Jakarta Using FedEx Account Number 365492026',
-            'request_by_name' => 'Tania',
-            'finance_name' => 'Limaran Bambang Slamet',
-            'accounting_name' => 'Sundowo',
-            'status' => PurchaseOrder::STATUS_DRAFT,
-            'created_by' => $this->creator->id,
-        ]);
-        PurchaseOrderItem::create([
-            'purchase_order_id' => $po->id,
-            'goods_request_item_id' => $gr->items->first()->id,
-            'goods_request_id' => $gr->id,
-            'part_number' => 'PN-1',
-            'description' => 'Sensor A',
-            'qty' => 2,
-            'unit' => 'Unit',
-            'currency' => 'EUR',
-            'selling_price_currency' => 941,
-            'selling_price' => 941 * 15800,
-            'sort_order' => 1,
-        ]);
-        // Mata uang berbeda pada item kedua -> printCurrency() harus fallback ke IDR.
-        PurchaseOrderItem::create([
-            'purchase_order_id' => $po->id,
-            'part_number' => 'PN-MANUAL',
-            'description' => 'Item stock',
-            'qty' => 1,
-            'unit' => 'Each',
-            'currency' => 'IDR',
-            'selling_price_currency' => 100000,
-            'selling_price' => 100000,
-            'sort_order' => 2,
-        ]);
-
-        $response = $this->actingAs($this->creator)->get(route('purchase-order.pdf', $po->id));
-
-        $response->assertOk();
-        $this->assertSame('application/pdf', $response->headers->get('content-type'));
-        $this->assertGreaterThan(1000, strlen($response->getContent()));
-
-        $this->assertNull($po->fresh(['items'])->printCurrency());
-    }
-
-    /**
-     * Hirarki parent-child: baris group (kategori/project) sebagai parent,
-     * item sebagai anak. Baris group tidak dihitung ke total.
-     */
-    public function test_store_persists_hierarchy_with_category_group_and_children(): void
-    {
-        $gr = $this->makeApprovedGoodsRequest($this->division, [
-            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
-        ]);
-        $opportunityName = $gr->opportunity->opportunity_name;
-
-        $response = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier Jaya',
-            'items' => [
-                ['_key' => 'g1', 'category' => $opportunityName],
-                [
-                    '_key' => 'i1',
-                    'parent_key' => 'g1',
-                    'goods_request_item_id' => $gr->items->first()->id,
-                    'goods_request_id' => $gr->id,
-                    'part_number' => 'PN-1',
-                    'description' => 'Sensor A',
-                    'qty' => 2,
-                    'unit' => 'Unit',
-                    'currency' => 'IDR',
-                    'selling_price_currency' => 100000,
-                    'selling_price' => 100000,
-                ],
-            ],
-        ])->assertOk();
-
-        $po = PurchaseOrder::with('items')->findOrFail($response->json('id'));
-
-        $this->assertCount(2, $po->items);
-
-        $header = $po->items->first();
-        $this->assertSame($opportunityName, $header->category);
-        $this->assertTrue($header->isHeader());
-        $this->assertNull($header->goods_request_item_id);
-
-        $child = $po->items->last();
-        $this->assertSame($header->id, $child->parent_id);
-        $this->assertNull($child->category);
-
-        // Total & jumlah item hanya menghitung item; baris group tidak ikut.
-        $this->assertSame(2 * 100000, (int) $po->grandTotal());
-        $this->assertSame(1, $po->itemCount());
-
-        // PDF dengan baris group kategori tetap render (label grup dari hirarki).
-        $this->actingAs($this->creator)->get(route('purchase-order.pdf', $po->id))->assertOk();
-    }
-
-    /**
-     * Picker produk master (search-products) mengembalikan harga + mata uang
-     * agar form bisa mengisi currency & price otomatis saat part number dipilih.
-     */
-    public function test_search_products_returns_price_and_currency(): void
-    {
-        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
-        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
-        $product = MasterProduct::create([
-            'name' => 'pH::lyser pro',
-            'code' => 'E-514-4-075',
-            'division_id' => $this->division->id,
-            'selling_price' => 100,
-            'purchase_price' => 70,
-            'currency_id' => $usd->id,
-            'status' => 'Active',
-        ]);
-
-        $response = $this->actingAs($this->creator)
-            ->getJson(route('purchase-order.search-products').'?q=E-514')
-            ->assertOk();
-
-        $this->assertSame($product->id, $response->json('data.0.id'));
-        $this->assertSame('USD', $response->json('data.0.currency'));
-        $this->assertEquals(70.0, $response->json('data.0.price'));
-        $this->assertEquals(20000, $response->json('data.0.rate'));
-    }
-
-    /**
-     * Saat item memakai master_product_id dan user tidak mengirim harga,
-     * currency + harga diisi otomatis dari master product (Q2=A: tetap bisa
-     * diedit/negosiasi — nilai client dipakai bila dikirim).
-     */
-    public function test_store_autofills_pricing_from_master_product(): void
-    {
-        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
-        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
-        $product = MasterProduct::create([
-            'name' => 'Sensor DO',
-            'code' => 'DO-001',
-            'division_id' => $this->division->id,
-            'selling_price' => 100,
-            'purchase_price' => 80,
-            'currency_id' => $usd->id,
-            'status' => 'Active',
-        ]);
-
-        $response = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier Jaya',
-            'items' => [
-                [
-                    '_key' => 'i1',
-                    'master_product_id' => $product->id,
-                    'part_number' => 'DO-001',
-                    'description' => 'Sensor DO',
-                    'qty' => 2,
-                    'unit' => 'Unit',
-                ],
-            ],
-        ])->assertOk();
-
-        $po = PurchaseOrder::with('items')->findOrFail($response->json('id'));
-        $item = $po->items->first();
-
-        $this->assertSame($product->id, $item->master_product_id);
-        // Harga beli (purchase_price) dalam mata uang produk, tanpa konversi kurs.
-        $this->assertSame(80.0, (float) $item->selling_price_currency);
-        $this->assertSame('USD', $item->currency);
-        $this->assertSame(80.0, (float) $item->selling_price);
-        $this->assertSame(160.0, $po->grandTotal());
-        $this->assertSame('USD', $po->currencyCode());
-    }
-
-    /**
-     * fetchAvailableItems membawa master_product_id & project (opportunity)
-     * agar form bisa membuat group kategori per project saat item diambil.
-     */
-    public function test_fetch_available_items_includes_master_product_and_project(): void
-    {
-        $product = MasterProduct::create([
-            'name' => 'Sensor A',
-            'code' => 'PN-1',
-            'division_id' => $this->division->id,
-            'selling_price' => 50000,
-            'status' => 'Active',
-        ]);
-        $gr = $this->makeApprovedGoodsRequest($this->division, [
-            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 2, 'unit' => 'Unit'],
-        ]);
-        $gr->items->first()->update(['master_product_id' => $product->id]);
-
-        $response = $this->actingAs($this->creator)
-            ->getJson(route('purchase-order.fetch-available-items'))
-            ->assertOk();
-
-        $this->assertSame($gr->opportunity->opportunity_name, $response->json('data.0.opportunity_name'));
-        $this->assertSame($gr->opportunity->opportunity_name, $response->json('data.0.items.0.project_name'));
-        $this->assertSame($product->id, $response->json('data.0.items.0.master_product_id'));
-    }
-
-
-    private function attachProject(GoodsRequest $gr, string $name): Project
-    {
-        static $seq = 0;
-        $seq++;
-
-        $project = Project::create([
-            'project_number' => now()->format('ym').str_pad((string) $seq, 4, '0', STR_PAD_LEFT),
-            'project_name' => $name,
-            'quotation_id' => $gr->quotation_id,
-            'company_id' => AccountCompany::firstOrFail()->id,
-            'po_number_company' => 'PO-CUST-'.$seq,
-            'po_date' => '2026-10-01',
-            'po_date_received' => '2026-10-02',
-            'po_due_date' => '2026-11-01',
-            'total_sale_amount' => 1000000,
-            'net_sale_amount' => 900000,
-            'status' => Project::STATUS_ACTIVE,
-            'created_by' => $this->admin->id,
-        ]);
-        $gr->update(['project_id' => $project->id]);
-
-        return $project;
-    }
-
     public function test_po_number_is_generated_with_type_suffix_and_shared_sequence(): void
     {
         $this->travelTo('2026-10-15 09:00:00');
@@ -814,79 +430,234 @@ class PurchaseOrderTest extends TestCase
         $this->actingAs($this->creator)->get(route('purchase-order.pdf', $id))->assertOk();
     }
 
-    public function test_fetch_available_items_uses_project_and_filters_by_project(): void
+    /**
+     * Item bisa berasal dari beberapa Permintaan Barang lintas divisi,
+     * digabung dalam satu PO ke satu supplier. Data produk & satuan diambil
+     * dari item permintaan (server), bukan dari client.
+     */
+    public function test_store_persists_items_from_multiple_goods_requests_across_divisions(): void
     {
         $grA = $this->makeApprovedGoodsRequest($this->division);
-        $grB = $this->makeApprovedGoodsRequest($this->otherDivision, [
-            ['part_number' => 'PN-2', 'description' => 'Valve B', 'qty' => 1, 'unit' => 'Pcs'],
-        ]);
-        $projectA = $this->attachProject($grA, 'SPARING Gresik');
-        $projectB = $this->attachProject($grB, 'Retail Bekasi');
+        $grB = $this->makeApprovedGoodsRequest($this->otherDivision, [['part_number' => 'PN-2', 'description' => 'Sensor B', 'qty' => 5, 'unit' => 'Pcs']]);
 
-        $all = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items'))->assertOk();
-        $this->assertCount(2, $all->json('data'));
-        $this->assertEqualsCanonicalizing([$projectA->id, $projectB->id], array_column($all->json('projects'), 'id'));
+        $id = $this->storePo([
+            $this->line($grA->items->first(), 2, 1500),
+            $this->line($grB->items->first(), 5, 250),
+        ])->assertOk()->json('id');
 
-        $filtered = $this->actingAs($this->creator)
-            ->getJson(route('purchase-order.fetch-available-items', ['project_id' => $projectB->id]))
-            ->assertOk();
-        $this->assertCount(1, $filtered->json('data'));
-        $this->assertSame($projectB->project_number, $filtered->json('data.0.project_number'));
-        $this->assertSame('Retail Bekasi', $filtered->json('data.0.project_name'));
-        $this->assertSame('Retail Bekasi', $filtered->json('data.0.items.0.project_name'));
-        // Daftar filter project tetap lengkap walau sedang difilter.
-        $this->assertCount(2, $filtered->json('projects'));
+        $po = PurchaseOrder::with('items')->findOrFail($id);
+        $this->assertCount(2, $po->items);
+        $this->assertSame($grA->items->first()->master_product_id, $po->items[0]->master_product_id);
+        $this->assertSame('PN-1', $po->items[0]->part_number);
+        $this->assertSame('Pcs', $po->items[1]->unit);
+        $this->assertSame(1500.0, $po->items[0]->price);
+        $this->assertSame(3000.0 + 1250.0, $po->grandTotal());
+        $this->assertEqualsCanonicalizing(['Water', 'IMS'], $po->divisionNames());
     }
 
-    public function test_project_groups_use_project_name_across_multiple_projects(): void
+    public function test_store_sanitizes_item_description(): void
     {
-        $grA = $this->makeApprovedGoodsRequest($this->division);
-        $grB = $this->makeApprovedGoodsRequest($this->otherDivision, [
-            ['part_number' => 'PN-2', 'description' => 'Valve B', 'qty' => 1, 'unit' => 'Pcs'],
+        $gr = $this->makeApprovedGoodsRequest($this->division);
+        $line = $this->line($gr->items->first());
+        $line['description'] = 'Range<br>- pH 0-14<script>alert(1)</script>';
+
+        $id = $this->storePo([$line])->assertOk()->json('id');
+
+        $this->assertSame('Range<br>- pH 0-14', PurchaseOrder::findOrFail($id)->items->first()->description);
+    }
+
+    public function test_item_must_come_from_approved_goods_request(): void
+    {
+        $gr = $this->makeApprovedGoodsRequest($this->division);
+        $gr->update(['status' => GoodsRequest::STATUS_WAITING_APPROVAL]);
+
+        $this->storePo([$this->line($gr->items->first())])->assertStatus(422);
+        $this->storePo([['qty' => 1]])->assertStatus(422)->assertJsonValidationErrors('items.0.goods_request_item_id');
+        $this->assertSame(0, PurchaseOrder::count());
+    }
+
+    /**
+     * Satu item permintaan boleh dipecah ke beberapa PO, tapi total qty tidak
+     * boleh melebihi sisa kebutuhan.
+     */
+    public function test_goods_request_item_can_be_split_across_pos_up_to_remaining_qty(): void
+    {
+        $gr = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 10, 'unit' => 'Unit']]);
+        $item = $gr->items->first();
+
+        $this->storePo([$this->line($item, 6)])->assertOk();
+        $this->storePo([$this->line($item, 5)])->assertStatus(422)->assertJsonPath('success', false);
+        $second = $this->storePo([$this->line($item, 4)])->assertOk()->json('id');
+
+        $this->assertSame(0, $item->fresh()->remainingQty());
+        $this->assertSame('done', $item->fresh()->fulfillmentStatus());
+
+        // Saat edit, qty baris PO itu sendiri tidak dihitung sebagai pemakai sisa.
+        $this->actingAs($this->creator)->putJson(route('purchase-order.update', $second), [
+            'supplier_name' => 'PT Supplier Jaya',
+            'items' => [$this->line($item, 4, 2000)],
+        ])->assertOk();
+        $this->actingAs($this->creator)->putJson(route('purchase-order.update', $second), [
+            'supplier_name' => 'PT Supplier Jaya',
+            'items' => [$this->line($item, 5)],
+        ])->assertStatus(422);
+    }
+
+    public function test_rejected_po_releases_goods_request_qty(): void
+    {
+        $gr = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 3, 'unit' => 'Unit']]);
+        $item = $gr->items->first();
+        $id = $this->storePo([$this->line($item)])->assertOk()->json('id');
+        $this->assertSame(0, $item->fresh()->remainingQty());
+
+        PurchaseOrder::whereKey($id)->update(['status' => PurchaseOrder::STATUS_WAITING_APPROVAL]);
+        $this->actingAs($this->approver)->postJson(route('purchase-order.reject', $id), ['approval_note' => 'Harga mahal'])->assertOk();
+
+        $this->assertSame(3, $item->fresh()->remainingQty());
+    }
+
+    /**
+     * Cancel hanya oleh approver PO, wajib alasan; barang yang sudah diterima
+     * tetap, sisanya dilepas kembali ke Permintaan Barang.
+     */
+    public function test_cancel_releases_only_unreceived_qty(): void
+    {
+        $gr = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 10, 'unit' => 'Unit']]);
+        $item = $gr->items->first();
+        $po = PurchaseOrder::findOrFail($this->storePo([$this->line($item)])->assertOk()->json('id'));
+
+        // Draft belum bisa dibatalkan.
+        $this->actingAs($this->approver)->postJson(route('purchase-order.void', $po->id), ['cancel_reason' => 'x'])->assertStatus(422);
+
+        $po->update(['status' => PurchaseOrder::STATUS_APPROVED]);
+        $this->receive($po, 4);
+        $this->assertSame(PurchaseOrder::STATUS_PARTIALLY_RECEIVED, $po->fresh()->status);
+
+        $this->actingAs($this->creator)->postJson(route('purchase-order.void', $po->id), ['cancel_reason' => 'Supplier tidak sanggup'])->assertStatus(403);
+        $this->actingAs($this->approver)->postJson(route('purchase-order.void', $po->id), [])->assertStatus(422)->assertJsonValidationErrors('cancel_reason');
+        $this->actingAs($this->approver)->postJson(route('purchase-order.void', $po->id), ['cancel_reason' => 'Supplier tidak sanggup'])->assertOk();
+
+        $po->refresh();
+        $this->assertSame(PurchaseOrder::STATUS_CANCELLED, $po->status);
+        $this->assertSame($this->approver->id, $po->cancelled_by);
+        $this->assertSame(6, $item->fresh()->remainingQty());
+
+        $this->actingAs($this->approver)->get(route('purchase-order.show', $po->id))
+            ->assertOk()
+            ->assertSee('Supplier tidak sanggup');
+    }
+
+    public function test_receipt_status_follows_received_qty(): void
+    {
+        $gr = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 5, 'unit' => 'Unit']]);
+        $po = PurchaseOrder::findOrFail($this->storePo([$this->line($gr->items->first())])->assertOk()->json('id'));
+        $po->update(['status' => PurchaseOrder::STATUS_APPROVED]);
+
+        $this->receive($po, 2);
+        $this->assertSame(PurchaseOrder::STATUS_PARTIALLY_RECEIVED, $po->fresh()->status);
+        $this->receive($po, 3);
+        $this->assertSame(PurchaseOrder::STATUS_RECEIVED, $po->fresh()->status);
+        $this->assertSame(0, $po->items()->first()->remainingReceiptQty());
+    }
+
+    /**
+     * Picker hanya menampilkan item Approved yang masih punya sisa; stok bebas
+     * ikut sebagai informasi; filter project / internal.
+     */
+    public function test_fetch_available_items_returns_remaining_with_free_stock_and_filters(): void
+    {
+        $project = $this->makeProject('SPARING Gresik');
+        $grProject = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 4, 'unit' => 'Unit']], $project);
+        $grInternal = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-2', 'description' => 'Kabel', 'qty' => 2, 'unit' => 'Roll']]);
+        $draft = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-3', 'description' => 'Draft', 'qty' => 1, 'unit' => 'Unit']]);
+        $draft->update(['status' => GoodsRequest::STATUS_DRAFT]);
+
+        $warehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang 12', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
+        StockMovement::record(['warehouse_id' => $warehouse->id, 'master_product_id' => $grProject->items->first()->master_product_id, 'type' => StockMovement::TYPE_MISC_IN, 'qty' => 7, 'created_by' => $this->admin->id]);
+
+        $this->storePo([$this->line($grProject->items->first(), 1)])->assertOk();
+
+        $data = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items'))->assertOk()->json();
+        $this->assertCount(2, $data['data']);
+        $projectGroup = collect($data['data'])->firstWhere('goods_request_id', $grProject->id);
+        $this->assertSame('SPARING Gresik', $projectGroup['project_name']);
+        $this->assertSame(3, $projectGroup['items'][0]['remaining_qty']);
+        $this->assertSame(7, $projectGroup['items'][0]['free_stock']);
+        $this->assertSame($project->id, $data['projects'][0]['id']);
+
+        $internal = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items', ['project_id' => 'internal']))->json('data');
+        $this->assertSame([$grInternal->id], array_column($internal, 'goods_request_id'));
+
+        $byProject = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items', ['project_id' => $project->id]))->json('data');
+        $this->assertSame([$grProject->id], array_column($byProject, 'goods_request_id'));
+    }
+
+    public function test_price_defaults_to_master_product_purchase_price_when_currency_matches(): void
+    {
+        $gr = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 2, 'unit' => 'Unit', 'purchase_price' => 125000]]);
+
+        $id = $this->storePo([$this->line($gr->items->first(), 2, null)])->assertOk()->json('id');
+        $this->assertSame(125000.0, PurchaseOrder::findOrFail($id)->items->first()->price);
+
+        $picker = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items'))->json('data');
+        $this->assertSame([], $picker);
+    }
+
+    public function test_po_rejects_mixed_currencies_and_follows_request_currency(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 16000, 'is_base' => false, 'status' => 'Active']);
+
+        $gr = $this->makeApprovedGoodsRequest($this->division, [
+            ['part_number' => 'PN-1', 'description' => 'Sensor IDR', 'qty' => 1, 'unit' => 'Unit', 'currency' => 'IDR'],
+            ['part_number' => 'PN-2', 'description' => 'Sensor USD', 'qty' => 1, 'unit' => 'Unit', 'currency' => 'USD', 'currency_id' => $usd->id, 'purchase_price' => 120],
         ]);
-        $this->attachProject($grA, 'SPARING Gresik');
-        $this->attachProject($grB, 'Retail Bekasi');
-        // Project B tanpa opportunity (project retail) tetap berlabel nama project, bukan "Stock".
-        $grB->update(['opportunity_id' => null]);
+        [$idr, $dollar] = [$gr->items[0], $gr->items[1]];
 
-        $po = PurchaseOrder::create(['supplier_name' => 'PT Supplier', 'po_number' => '26109999', 'status' => PurchaseOrder::STATUS_DRAFT, 'created_by' => $this->creator->id]);
-        foreach ([$grA, $grB] as $i => $gr) {
-            PurchaseOrderItem::create([
-                'purchase_order_id' => $po->id,
-                'goods_request_item_id' => $gr->items->first()->id,
-                'goods_request_id' => $gr->id,
-                'part_number' => 'PN-'.$i,
-                'qty' => 1,
-                'sort_order' => $i + 1,
-            ]);
-        }
+        $this->storePo([$this->line($idr), $this->line($dollar)])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false);
 
-        $this->assertSame(['SPARING Gresik', 'Retail Bekasi'], $po->fresh()->projectLabels());
+        // Mata uang dari client diabaikan — mengikuti item permintaan; harga tanpa kurs.
+        $id = $this->storePo([$this->line($dollar, 1, null) + ['currency' => 'IDR']])->assertOk()->json('id');
+        $po = PurchaseOrder::with('items')->findOrFail($id);
+        $this->assertSame('USD', $po->items->first()->currency);
+        $this->assertSame(120.0, $po->items->first()->price);
+        $this->assertSame('USD', $po->currencyCode());
+    }
+
+    public function test_project_groups_use_project_name_or_internal_label(): void
+    {
+        $project = $this->makeProject('SPARING Gresik');
+        $grProject = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 1, 'unit' => 'Unit']], $project);
+        $grInternal = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-2', 'description' => 'Kabel', 'qty' => 1, 'unit' => 'Roll']]);
+
+        $id = $this->storePo([$this->line($grProject->items->first()), $this->line($grInternal->items->first())])->assertOk()->json('id');
+        $po = PurchaseOrder::with('items.goodsRequestItem.goodsRequest.project')->findOrFail($id);
+
+        $this->assertSame(['SPARING Gresik', 'Stok / Internal'], $po->projectLabels());
+        $this->actingAs($this->creator)->get(route('purchase-order.show', $id))->assertOk()->assertSee('SPARING Gresik');
+        $this->actingAs($this->creator)->get(route('purchase-order.edit', $id))->assertOk();
+        $this->actingAs($this->creator)->get(route('purchase-order.pdf', $id))->assertOk()->assertHeader('content-type', 'application/pdf');
     }
 
     public function test_totals_apply_discount_then_ppn_and_render_on_pdf(): void
     {
-        $id = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
+        $gr = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'HSM-1', 'description' => 'Heat Stress Monitor', 'qty' => 1, 'unit' => 'Unit']]);
+
+        $id = $this->storePo([$this->line($gr->items->first(), 1, 1125000)], [
             'supplier_name' => 'PT Teknora Sukses Cemerlang',
             'po_type' => 'calibration',
             'delivery' => 'Franco Jakarta',
             'your_ref' => '1055/TSC/10/2026',
             'discount_percent' => 10,
             'ppn_percent' => 11,
-            'items' => [[
-                'description' => 'Heat Stress Monitor',
-                'qty' => 1,
-                'unit' => 'Unit',
-                'currency' => 'IDR',
-                'selling_price_currency' => 1125000,
-                'selling_price' => 1125000,
-            ]],
         ])->assertOk()->json('id');
 
         $po = PurchaseOrder::with('items')->findOrFail($id);
         $this->assertSame('Franco Jakarta', $po->delivery);
         $this->assertSame('1055/TSC/10/2026', $po->your_ref);
-        // Sesuai contoh dokumen: 1.125.000 - 10% = 1.012.500, PPN 11% = 111.375, Total 1.123.875.
+        // 1.125.000 - 10% = 1.012.500, PPN 11% = 111.375, Total 1.123.875.
         $this->assertSame([
             'subtotal' => 1125000.0,
             'discount' => 112500.0,
@@ -894,7 +665,6 @@ class PurchaseOrderTest extends TestCase
             'ppn' => 111375.0,
             'total' => 1123875.0,
         ], $po->printTotals());
-        $this->assertSame(1123875.0, $po->netTotal());
 
         $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
             'supplier_name' => 'PT Supplier',
@@ -910,91 +680,61 @@ class PurchaseOrderTest extends TestCase
             ->assertHeader('content-type', 'application/pdf');
     }
 
-    public function test_po_rejects_mixed_currencies_and_ignores_group_rows(): void
+    public function test_rejected_po_can_be_revised_with_rev_number(): void
     {
-        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
-        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
-        $usdProduct = MasterProduct::create([
-            'name' => 'Sensor DO',
-            'code' => 'DO-001',
-            'division_id' => $this->division->id,
-            'selling_price' => 100,
-            'currency_id' => $usd->id,
-            'status' => 'Active',
-        ]);
-
-        $idrItem = ['description' => 'Kabel', 'qty' => 1, 'unit' => 'Roll', 'currency' => 'IDR', 'selling_price_currency' => 50000];
-        $usdItem = ['description' => 'Sensor', 'qty' => 1, 'unit' => 'Unit', 'currency' => 'USD', 'selling_price_currency' => 100];
-
-        // IDR + USD dalam satu PO ditolak.
-        $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier',
-            'items' => [$idrItem, $usdItem],
-        ])->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'IDR') && str_contains($m, 'USD'));
-        $this->assertSame(0, PurchaseOrder::count());
-
-        // Mata uang dari master product (USD) ikut dihitung walau tidak dikirim client.
-        $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier',
-            'items' => [$idrItem, ['master_product_id' => $usdProduct->id, 'description' => 'Sensor DO', 'qty' => 1]],
-        ])->assertStatus(422);
-
-        // Semua USD dengan baris group: group tidak bermata uang, PDF tercetak dalam USD.
-        $id = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier',
-            'items' => [
-                ['_key' => 'g1', 'category' => 'SPARING Gresik'],
-                array_merge($usdItem, ['_key' => 'i1', 'parent_key' => 'g1']),
-            ],
-        ])->assertOk()->json('id');
-
-        $po = PurchaseOrder::with('items')->findOrFail($id);
-        $this->assertNull($po->items->firstWhere('category', 'SPARING Gresik')->currency);
-        $this->assertSame('USD', $po->printCurrency());
-
-        // Update yang mencampur mata uang ditolak dan item lama tetap utuh.
-        $this->actingAs($this->creator)->putJson(route('purchase-order.update', $id), [
-            'supplier_name' => 'PT Supplier',
-            'items' => [$usdItem, $idrItem],
-        ])->assertStatus(422);
-        $this->assertSame(2, $po->items()->count());
-    }
-
-    public function test_po_follows_goods_request_item_currency_without_conversion(): void
-    {
-        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
-        Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 20000, 'is_base' => false, 'status' => 'Active']);
-        Currency::create(['name' => 'EUR', 'symbol' => '€', 'rate' => 18000, 'is_base' => false, 'status' => 'Active']);
-
         $gr = $this->makeApprovedGoodsRequest($this->division, [
-            ['part_number' => 'PN-USD', 'description' => 'Sensor USD', 'qty' => 2, 'unit' => 'Unit', 'currency' => 'USD'],
-            ['part_number' => 'PN-EUR', 'description' => 'Valve EUR', 'qty' => 1, 'unit' => 'Pcs', 'currency' => 'EUR'],
+            ['part_number' => 'PN-1', 'description' => 'Sensor A', 'qty' => 5, 'unit' => 'Unit'],
+            ['part_number' => 'PN-2', 'description' => 'Logger', 'qty' => 2, 'unit' => 'Unit'],
         ]);
-        [$usdItem, $eurItem] = $gr->items->all();
+        [$first, $second] = $gr->items->all();
 
-        $available = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items'))->assertOk();
-        $this->assertSame(['USD', 'EUR'], array_column($available->json('data.0.items'), 'currency'));
+        $id = $this->storePo([$this->line($first, 4), $this->line($second)], ['po_type' => PurchaseOrder::TYPE_LOCAL, 'terms' => '30 hari'])->assertOk()->json('id');
+        $source = PurchaseOrder::findOrFail($id);
+        $baseNumber = substr($source->po_number, 0, 8);
 
-        // Mata uang dari client diabaikan: item Permintaan Barang tetap USD, harga tanpa kurs.
-        $id = $this->actingAs($this->creator)->postJson(route('purchase-order.store'), [
-            'supplier_name' => 'PT Supplier',
-            'items' => [[
-                'goods_request_item_id' => $usdItem->id,
-                'goods_request_id' => $gr->id,
-                'description' => 'Sensor USD',
-                'qty' => 2,
-                'currency' => 'IDR',
-                'selling_price_currency' => 150,
-            ]],
-        ])->assertOk()->json('id');
+        // Hanya PO Rejected yang bisa direvisi.
+        $this->actingAs($this->creator)->postJson(route('purchase-order.revise', $id))->assertStatus(422);
 
-        $po = PurchaseOrder::with('items')->findOrFail($id);
-        $this->assertSame('USD', $po->items->first()->currency);
-        $this->assertSame(150.0, (float) $po->items->first()->selling_price);
-        $this->assertSame(300.0, $po->grandTotal());
-        $this->assertSame('USD', $po->currencyCode());
+        $source->update(['status' => PurchaseOrder::STATUS_REJECTED, 'approval_note' => 'Harga terlalu tinggi', 'rejected_at' => now()]);
 
-        $this->actingAs($this->creator)->getJson(route('purchase-order.data'))
-            ->assertJsonPath('data.0.grand_total_label', 'USD 300.00');
+        // Item kedua sudah di-PO di tempat lain -> dilewati saat revisi.
+        $this->storePo([$this->line($second)])->assertOk();
+
+        $this->actingAs($this->approver)->postJson(route('purchase-order.revise', $id))->assertForbidden();
+        $revisionId = $this->actingAs($this->creator)->postJson(route('purchase-order.revise', $id))
+            ->assertOk()
+            ->assertJsonPath('redirect', route('purchase-order.edit', PurchaseOrder::max('id')))
+            ->json('id');
+
+        $revision = PurchaseOrder::with('items')->findOrFail($revisionId);
+        $this->assertSame($baseNumber.'REV-L', $revision->po_number);
+        $this->assertSame(PurchaseOrder::STATUS_DRAFT, $revision->status);
+        $this->assertSame($id, $revision->revision_of_id);
+        $this->assertSame('30 hari', $revision->terms);
+        $this->assertNull($revision->approval_note);
+        $this->assertCount(1, $revision->items);
+        $this->assertSame(4, $revision->items->first()->qty);
+
+        // Satu PO Rejected hanya satu revisi.
+        $this->actingAs($this->creator)->postJson(route('purchase-order.revise', $id))->assertStatus(422);
+        $this->actingAs($this->creator)->get(route('purchase-order.show', $id))->assertOk()->assertSee($baseNumber.'REV-L');
+        $this->actingAs($this->creator)->get(route('purchase-order.show', $revisionId))->assertOk()->assertSee('Revisi dari');
+
+        // Ganti jenis saat edit: REV tetap, suffix ikut jenis baru.
+        $this->actingAs($this->creator)->putJson(route('purchase-order.update', $revisionId), [
+            'supplier_name' => 'PT Supplier Jaya',
+            'po_type' => PurchaseOrder::TYPE_CALIBRATION,
+            'items' => [['goods_request_item_id' => $first->id, 'qty' => 4, 'price' => 900]],
+        ])->assertOk();
+        $this->assertSame($baseNumber.'REV-C', $revision->fresh()->po_number);
+
+        // Revisi yang ditolak lagi -> REV2, tetap nomor dasar yang sama.
+        $revision->update(['status' => PurchaseOrder::STATUS_REJECTED]);
+        $secondRevisionId = $this->actingAs($this->creator)->postJson(route('purchase-order.revise', $revisionId))->assertOk()->json('id');
+        $this->assertSame($baseNumber.'REV2-C', PurchaseOrder::findOrFail($secondRevisionId)->po_number);
+
+        // Nomor revisi tidak memajukan urutan PO baru.
+        $nextId = $this->storePo([$this->line($first, 1)])->assertOk()->json('id');
+        $this->assertSame(str_pad((string) ((int) substr($baseNumber, 4) + 2), 4, '0', STR_PAD_LEFT), substr(PurchaseOrder::findOrFail($nextId)->po_number, 4, 4));
     }
 }

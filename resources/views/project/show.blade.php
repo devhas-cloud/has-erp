@@ -91,8 +91,9 @@
 
     $activeInvoices = $project->invoices->where('status', '!=', \App\Models\Invoice::STATUS_CANCELLED);
     $paidInvoices = $project->invoices->where('status', \App\Models\Invoice::STATUS_PAID);
-    $billedPercent = min(100, (float) $activeInvoices->sum('percent_payment'));
-    $paidPercent = min(100, (float) $paidInvoices->sum('percent_payment'));
+    // Persen progres hanya dari invoice termin; tagihan di luar timeline tidak menambah persen.
+    $billedPercent = min(100, (float) $activeInvoices->whereNotNull('billing_term_id')->sum('percent_payment'));
+    $paidPercent = min(100, (float) $paidInvoices->whereNotNull('billing_term_id')->sum('percent_payment'));
     $billedAmount = (float) $activeInvoices->sum('total_payment');
     $paidAmount = (float) $paidInvoices->sum('total_payment');
 
@@ -385,7 +386,7 @@
                             <td colspan="2" class="text-end pj-muted" style="font-size:13px">Total</td>
                             <td class="text-end">{{ \App\Models\Project::formatNumber($termTotal) }}%</td>
                             <td class="text-end">{{ \App\Models\Project::formatMoney(round($billingBase * $termTotal / 100, 2)) }}</td>
-                            <td colspan="4" class="pj-muted" style="font-size:12px;font-weight:400">Dari nilai penawaran sebelum PPN {{ \App\Models\Project::formatMoney($billingBase) }}</td>
+                            <td colspan="4" class="pj-muted" style="font-size:12px;font-weight:400">Dari nilai kontrak sebelum PPN {{ \App\Models\Project::formatMoney($billingBase) }}{{ $project->quotation_id ? '' : ' (Net Sale Amount)' }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -549,7 +550,12 @@
                     <tr @if($inv->status === \App\Models\Invoice::STATUS_CANCELLED) style="opacity:.55" @endif>
                         <td><a href="{{ route('invoice.show', $inv->id) }}" class="fw-semibold text-decoration-none">{{ $inv->invoice_number }}</a></td>
                         <td>{{ $inv->invoice_date?->format('d/m/Y') ?? '—' }}</td>
-                        <td>{{ $inv->noted ?: 'Pembayaran' }} <span class="pj-muted">({{ \App\Models\Invoice::formatNumber($inv->percent_payment) }}%)</span></td>
+                        <td>
+                            {{ $inv->noted ?: 'Pembayaran' }} <span class="pj-muted">({{ \App\Models\Invoice::formatNumber($inv->percent_payment) }}%)</span>
+                            @if($inv->isOutsideTimeline())
+                                <span class="status-badge ms-1" style="background:#fef3c7;color:#92400e;" title="{{ $inv->non_term_reason }}">Di luar timeline</span>
+                            @endif
+                        </td>
                         <td>{{ $inv->due_date?->format('d/m/Y') ?? '—' }}</td>
                         <td class="text-end">{{ \App\Models\Invoice::formatMoney($inv->total_payment) }}</td>
                         <td class="text-center">{!! $inv->approvalBadgeHtml() !!}</td>
@@ -564,6 +570,113 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+{{-- Biaya pembelian project (Finance): realisasi vs Estimasi PL --}}
+{{-- @if($purchaseCost)
+@php $pc = $purchaseCost; $fmt = fn ($v) => number_format((float) $v, 0, ',', '.'); @endphp
+<div class="card-custom fade-in mb-4">
+    <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa-solid fa-coins me-2" style="color:var(--accent)"></i>Biaya Pembelian <span class="pj-muted">(sebelum pajak, {{ \App\Models\Currency::baseName() }})</span></span>
+        @if($pc['estimate'] !== null)
+            <span class="pj-pill {{ $pc['variance'] < 0 ? 'danger' : 'ok' }}">{{ $pc['variance'] < 0 ? 'Melebihi estimasi '.$fmt(abs($pc['variance'])) : 'Sisa anggaran '.$fmt($pc['variance']) }}</span>
+        @endif
+    </div>
+    <div class="card-body-custom">
+        <div class="row g-3">
+            @foreach([['Komitmen (PO/DP)', $pc['commitment']], ['Diterima', $pc['received']], ['Ditagih', $pc['billed']], ['Terbayar', $pc['paid']], ['Alokasi Stok', $pc['stock_allocated']], ['Total Biaya', $pc['actual']], ['Estimasi Biaya (PL)', $pc['estimate']]] as [$label, $value])
+                <div class="col-6 col-md-3">
+                    <div class="pj-label">{{ $label }}</div>
+                    <div class="fw-semibold" style="font-variant-numeric:tabular-nums">{{ $value !== null ? $fmt($value) : '—' }}</div>
+                </div>
+            @endforeach
+        </div>
+        @if($pc['estimate'])
+            @php $pct = min(100, $pc['actual'] / $pc['estimate'] * 100); @endphp
+            <div style="height:6px;border-radius:99px;background:#eef2f7;overflow:hidden;margin-top:14px" title="Realisasi terhadap estimasi"><span style="display:block;height:100%;width:{{ $pct }}%;background:{{ $pc['variance'] < 0 ? '#dc2626' : 'var(--accent)' }}"></span></div>
+            <div class="pj-muted mt-1">Realisasi {{ number_format($pc['actual'] / $pc['estimate'] * 100, 1, ',', '.') }}% dari estimasi biaya.</div>
+        @endif
+    </div>
+</div>
+@endif --}}
+
+{{-- Barang project: stok teralokasi (belum dikirim) & Delivery Order --}}
+<div class="card-custom fade-in mb-4">
+    <div class="card-header-custom d-flex justify-content-between align-items-center">
+        <span><i class="fa-solid fa-truck me-2" style="color:var(--accent)"></i>Barang &amp; Pengiriman <span class="pj-muted">({{ $project->deliveryOrders->count() }} DO)</span></span>
+        @if($canCreateDeliveryOrder && $projectGoods->sum('in_stock') > 0)
+            <a href="{{ route('delivery-order.create', ['project_id' => $project->id]) }}" class="btn btn-secondary btn-sm">
+                <i class="fa fa-plus me-1"></i> Buat Delivery Order
+            </a>
+        @endif
+    </div>
+    <div class="card-body-custom p-2">
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="pj-label px-2">Barang Milik Project</div>
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Produk</th>
+                                <th class="text-center">Di Gudang</th>
+                                <th class="text-center">Terkirim</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($projectGoods as $g)
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold" style="font-size:13px">{{ $g['name'] }}</div>
+                                    <div class="pj-muted">{{ $g['code'] }}@if($g['locations']) · {{ implode(', ', $g['locations']) }}@endif</div>
+                                </td>
+                                <td class="text-center">{{ $g['in_stock'] }} {{ $g['unit'] }}</td>
+                                <td class="text-center">{{ $g['delivered'] }}</td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="3" class="text-center py-4" style="color:var(--text-muted)">
+                                    <i class="fa-solid fa-inbox me-1"></i> Belum ada barang teralokasi ke project ini.
+                                </td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="pj-label px-2">Delivery Order</div>
+                <div class="table-responsive">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>No. DO</th>
+                                <th>Tanggal</th>
+                                <th>Penerima</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($project->deliveryOrders as $do)
+                            <tr>
+                                <td><a href="{{ route('delivery-order.show', $do->id) }}" class="fw-semibold text-decoration-none">{{ $do->do_number }}</a></td>
+                                <td>{{ $do->delivery_date?->format('d/m/Y') }}</td>
+                                <td>{{ $do->recipient_name }}</td>
+                                <td class="text-center">{!! $do->statusBadgeHtml() !!}</td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="4" class="text-center py-4" style="color:var(--text-muted)">
+                                    <i class="fa-solid fa-inbox me-1"></i> Belum ada Delivery Order.
+                                </td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>

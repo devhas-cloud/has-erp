@@ -9,6 +9,7 @@ use App\Models\MasterProduct;
 use App\Models\Project;
 use App\Models\ProjectBillingTerm;
 use App\Models\Quotation;
+use App\Support\ModuleAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -117,13 +118,7 @@ class InvoiceController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $this->validateInvoice($request, null);
-        $totals = $this->calculateTotals(
-            $validated['items'],
-            (float) $validated['percent_payment'],
-            (float) $validated['ppn'],
-            isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : null,
-            (float) ($validated['discount_amount'] ?? 0)
-        );
+        $totals = $this->invoiceTotals($validated, null);
 
         $invoice = DB::transaction(function () use ($validated, $totals) {
             $terms = (int) ($validated['terms'] ?? Invoice::DEFAULT_TERMS);
@@ -143,6 +138,8 @@ class InvoiceController extends Controller
                 'discount_percent' => $totals['discount_percent'],
                 'discount_amount' => $totals['discount_amount'],
                 'noted' => $validated['noted'] ?? null,
+                'non_term_reason' => $validated['non_term_reason'],
+                'tax_invoice_number' => $validated['tax_invoice_number'] ?? null,
                 'signer_name' => $validated['signer_name'] ?? Invoice::DEFAULT_SIGNER_NAME,
                 'signer_position' => $validated['signer_position'] ?? Invoice::DEFAULT_SIGNER_POSITION,
                 'percent_payment' => $validated['percent_payment'],
@@ -176,12 +173,13 @@ class InvoiceController extends Controller
 
     public function show($id)
     {
-        $invoice = Invoice::with(['project.company', 'items.product', 'creator', 'finalChecker', 'payer', 'canceller', 'billingTerm.invoices', 'billingTerm.documents.uploader'])
+        $invoice = Invoice::with(['project.company', 'items.product', 'creator', 'finalChecker', 'payer', 'canceller', 'billingTerm.invoices', 'billingTerm.documents.uploader', 'receipts.poster'])
             ->findOrFail($id);
 
         return view('invoice.show', [
             'invoice' => $invoice,
             'termDocuments' => $this->termDocumentItems($invoice),
+            'canCreateReceipt' => ModuleAccess::for()->module('MOD_CUSTOMER_RECEIPT')->canCreate(),
         ]);
     }
 
@@ -301,13 +299,7 @@ class InvoiceController extends Controller
         }
 
         $validated = $this->validateInvoice($request, $invoice);
-        $totals = $this->calculateTotals(
-            $validated['items'],
-            (float) $validated['percent_payment'],
-            (float) $validated['ppn'],
-            isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : null,
-            (float) ($validated['discount_amount'] ?? 0)
-        );
+        $totals = $this->invoiceTotals($validated, $invoice);
 
         DB::transaction(function () use ($invoice, $validated, $totals) {
             $terms = (int) ($validated['terms'] ?? Invoice::DEFAULT_TERMS);
@@ -326,6 +318,8 @@ class InvoiceController extends Controller
                 'discount_percent' => $totals['discount_percent'],
                 'discount_amount' => $totals['discount_amount'],
                 'noted' => $validated['noted'] ?? null,
+                'non_term_reason' => $validated['non_term_reason'],
+                'tax_invoice_number' => $validated['tax_invoice_number'] ?? null,
                 'signer_name' => $validated['signer_name'] ?? Invoice::DEFAULT_SIGNER_NAME,
                 'signer_position' => $validated['signer_position'] ?? Invoice::DEFAULT_SIGNER_POSITION,
                 'percent_payment' => $validated['percent_payment'],
@@ -491,47 +485,6 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function pay(Request $request, $id): JsonResponse
-    {
-        $invoice = Invoice::findOrFail($id);
-
-        if (! $invoice->canRecordPayment()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Pembayaran hanya bisa dicatat untuk invoice Approved yang belum dibayar.',
-            ], 422);
-        }
-
-        $validated = $request->validate([
-            'date_payment' => 'required|date|before_or_equal:today',
-            'reference_number' => 'required|string|max:100',
-        ], [
-            'date_payment.required' => 'Tanggal bayar wajib diisi.',
-            'date_payment.before_or_equal' => 'Tanggal bayar tidak boleh melebihi hari ini.',
-            'reference_number.required' => 'Reference No wajib diisi.',
-        ]);
-
-        $invoice->update([
-            'status' => Invoice::STATUS_PAID,
-            'date_payment' => $validated['date_payment'],
-            'reference_number' => trim($validated['reference_number']),
-            'paid_by' => Auth::id(),
-            'updated_by' => Auth::id(),
-        ]);
-
-        Log::record(
-            'pay_invoice',
-            "Pembayaran invoice {$invoice->invoice_number} (ref {$invoice->reference_number}) dicatat oleh ".Auth::user()->display_name,
-            'MOD_INVOICE',
-            $invoice
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Pembayaran invoice berhasil dicatat.',
-        ]);
-    }
-
     public function cancel(Request $request, $id): JsonResponse
     {
         $invoice = Invoice::findOrFail($id);
@@ -540,6 +493,14 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya invoice Approved yang belum dibayar yang bisa dibatalkan.',
+            ], 422);
+        }
+
+        $draftReceipt = $invoice->activeReceipt();
+        if ($draftReceipt) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invoice ini sedang dicatat di penerimaan '.$draftReceipt->receipt_number.'. Hapus draft penerimaan itu dulu.',
             ], 422);
         }
 
@@ -567,6 +528,44 @@ class InvoiceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Invoice berhasil dibatalkan.',
+        ]);
+    }
+
+    /**
+     * No. faktur pajak keluaran: boleh diisi/diubah kapan saja selama invoice
+     * belum dibatalkan, karena faktur sering terbit setelah invoice Approved.
+     */
+    public function updateTaxInvoice(Request $request, $id): JsonResponse
+    {
+        $invoice = Invoice::findOrFail($id);
+
+        if ($invoice->status === Invoice::STATUS_CANCELLED) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invoice yang dibatalkan tidak bisa diubah.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'tax_invoice_number' => 'nullable|string|max:50',
+        ]);
+
+        $number = trim((string) ($validated['tax_invoice_number'] ?? ''));
+        $invoice->update([
+            'tax_invoice_number' => $number !== '' ? $number : null,
+            'updated_by' => Auth::id(),
+        ]);
+
+        Log::record(
+            'update_invoice_tax_number',
+            "No. faktur pajak invoice {$invoice->invoice_number} diisi ".($invoice->tax_invoice_number ?? '(kosong)').' oleh '.Auth::user()->display_name,
+            'MOD_INVOICE',
+            $invoice
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'No. faktur pajak disimpan.',
         ]);
     }
 
@@ -671,6 +670,8 @@ class InvoiceController extends Controller
             'do_number' => 'nullable|string|max:100',
             'terms' => 'nullable|integer|min:0|max:3650',
             'noted' => 'nullable|string|max:255',
+            'non_term_reason' => [Rule::requiredIf(! $request->filled('billing_term_id')), 'nullable', 'string', 'max:1000'],
+            'tax_invoice_number' => 'nullable|string|max:50',
             'signer_name' => 'nullable|string|max:100',
             'signer_position' => 'nullable|string|max:100',
             'percent_payment' => 'required|numeric|min:0|max:100',
@@ -687,7 +688,11 @@ class InvoiceController extends Controller
         ], [
             'items.required' => 'Tambahkan minimal satu item invoice.',
             'billing_term_id.exists' => 'Termin penagihan tidak sesuai dengan project yang dipilih.',
+            'non_term_reason.required' => 'Invoice tanpa termin adalah tagihan di luar timeline project. Isi alasannya.',
         ]);
+
+        $reason = trim((string) ($validated['non_term_reason'] ?? ''));
+        $validated['non_term_reason'] = empty($validated['billing_term_id']) && $reason !== '' ? $reason : null;
 
         // Termin penagihan: satu invoice aktif per termin, persen terkunci mengikuti termin.
         if (! empty($validated['billing_term_id'])) {
@@ -727,6 +732,71 @@ class InvoiceController extends Controller
         }
 
         return $validated;
+    }
+
+    /**
+     * Total invoice dari item, lalu aturan termin:
+     * - dasar invoice termin (sub total - diskon) wajib sama dengan nilai kontrak project,
+     *   sehingga jumlah semua termin = nilai project;
+     * - termin yang melengkapi timeline 100% menagih sisa nilai kontrak (bukan persen x dasar)
+     *   agar tidak tersisa selisih pembulatan.
+     */
+    private function invoiceTotals(array $validated, ?Invoice $invoice): array
+    {
+        $totals = $this->calculateTotals(
+            $validated['items'],
+            (float) $validated['percent_payment'],
+            (float) $validated['ppn'],
+            isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : null,
+            (float) ($validated['discount_amount'] ?? 0)
+        );
+
+        if (empty($validated['billing_term_id'])) {
+            return $totals;
+        }
+
+        $project = Project::with(['quotation', 'billingTerms.invoices'])->findOrFail($validated['project_id']);
+        $baseCents = (int) round($project->billingBaseAmount() * 100);
+        $netCents = (int) round(($totals['subtotal'] - $totals['discount_amount']) * 100);
+
+        if ($netCents !== $baseCents) {
+            throw ValidationException::withMessages([
+                'items' => 'Nilai sebelum PPN invoice termin ('.Invoice::formatMoney($netCents / 100).') harus sama dengan nilai kontrak project ('
+                    .Invoice::formatMoney($baseCents / 100).'). Muat item dari quotation; perubahan nilai dilakukan lewat revisi quotation/project.',
+            ]);
+        }
+
+        $terms = $project->billingTerms;
+        if (abs((float) $terms->sum('percent') - 100) > 0.001) {
+            return $totals;
+        }
+
+        $billedCents = 0;
+        foreach ($terms as $term) {
+            if ((int) $term->id === (int) $validated['billing_term_id']) {
+                continue;
+            }
+
+            $active = $term->invoices->first(fn (Invoice $other) => $other->status !== Invoice::STATUS_CANCELLED
+                && (! $invoice || $other->id !== $invoice->id));
+
+            if (! $active) {
+                return $totals;
+            }
+
+            $billedCents += (int) round($active->amount_payment * 100);
+        }
+
+        $amountCents = $baseCents - $billedCents;
+        if ($amountCents < 0) {
+            return $totals;
+        }
+
+        $ppnCents = (int) round($amountCents * (float) $validated['ppn'] / 100);
+        $totals['amount_payment'] = $amountCents / 100;
+        $totals['total_payment'] = ($amountCents + $ppnCents) / 100;
+
+        return $totals;
     }
 
     /**
@@ -805,7 +875,7 @@ class InvoiceController extends Controller
 
         if (! $quotation) {
             return [
-                'before_ppn' => (float) $project->total_sale_amount,
+                'before_ppn' => $project->billingBaseAmount(),
                 'discount_percent' => null,
                 'discount_amount' => 0.0,
             ];

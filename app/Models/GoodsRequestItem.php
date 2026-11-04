@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GoodsRequestItem extends Model
 {
@@ -15,6 +15,10 @@ class GoodsRequestItem extends Model
         'part_number',
         'description',
         'qty',
+        'closed_qty',
+        'closed_reason',
+        'closed_by',
+        'closed_at',
         'unit',
         'currency',
         'sort_order',
@@ -34,6 +38,8 @@ class GoodsRequestItem extends Model
     {
         return [
             'qty' => 'integer',
+            'closed_qty' => 'integer',
+            'closed_at' => 'datetime',
         ];
     }
 
@@ -52,17 +58,94 @@ class GoodsRequestItem extends Model
         return $this->belongsTo(MasterProduct::class);
     }
 
-    /**
-     * PurchaseOrderItem yang memakai item ini (unique di level DB — satu item
-     * Permintaan Barang hanya boleh diorder di SATU PO manapun).
-     */
-    public function purchaseOrderItem(): HasOne
+    public function closer(): BelongsTo
     {
-        return $this->hasOne(PurchaseOrderItem::class);
+        return $this->belongsTo(User::class, 'closed_by');
     }
 
-    public function isOrdered(): bool
+    /**
+     * Baris PO yang memakai item ini — satu item boleh dipecah ke beberapa PO.
+     */
+    public function purchaseOrderItems(): HasMany
     {
-        return $this->purchaseOrderItem()->exists();
+        return $this->hasMany(PurchaseOrderItem::class);
     }
+
+    /**
+     * Pergerakan stok yang memenuhi item ini dari stok bebas (keluar stok
+     * internal / alokasi ke project).
+     */
+    public function stockFulfillmentMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class, 'goods_request_item_id')
+            ->whereIn('type', StockMovement::FULFILLMENT_TYPES);
+    }
+
+    /**
+     * Qty yang dipesan lewat PO yang masih berlaku (lihat PurchaseOrderItem::committedQty()).
+     */
+    public function orderedQty(): int
+    {
+        $lines = $this->relationLoaded('purchaseOrderItems')
+            ? $this->purchaseOrderItems
+            : $this->purchaseOrderItems()->with(['purchaseOrder', 'goodsReceiptItems.goodsReceipt'])->get();
+
+        return (int) $lines->sum(fn (PurchaseOrderItem $line) => $line->committedQty());
+    }
+
+    /**
+     * Qty yang dipenuhi dari stok (keluar stok / alokasi).
+     */
+    public function stockQty(): int
+    {
+        $movements = $this->relationLoaded('stockFulfillmentMovements')
+            ? $this->stockFulfillmentMovements
+            : $this->stockFulfillmentMovements()->get();
+
+        return (int) $movements->sum('qty');
+    }
+
+    /**
+     * Total terpenuhi: dari stok + PO berlaku + qty yang ditutup.
+     */
+    public function fulfilledQty(): int
+    {
+        return $this->stockQty() + $this->orderedQty() + (int) $this->closed_qty;
+    }
+
+    /**
+     * Sisa kebutuhan yang masih bisa dipenuhi (stok atau PO).
+     */
+    public function remainingQty(): int
+    {
+        return max(0, (int) ($this->qty ?? 0) - $this->fulfilledQty());
+    }
+
+    public function isFulfilled(): bool
+    {
+        return $this->remainingQty() <= 0;
+    }
+
+    /**
+     * Status pemenuhan: none | partial | done.
+     */
+    public function fulfillmentStatus(): string
+    {
+        $remaining = $this->remainingQty();
+
+        return match (true) {
+            $remaining <= 0 => 'done',
+            $remaining < (int) $this->qty => 'partial',
+            default => 'none',
+        };
+    }
+
+    /**
+     * Relasi yang perlu di-eager-load agar perhitungan pemenuhan tanpa N+1.
+     */
+    public const FULFILLMENT_RELATIONS = [
+        'purchaseOrderItems.purchaseOrder',
+        'purchaseOrderItems.goodsReceiptItems.goodsReceipt',
+        'stockFulfillmentMovements',
+    ];
 }
