@@ -87,7 +87,7 @@
                 @continue($code === 'IDR')
                 <div>
                     <label class="pl-label">Kurs {{ $code }} (1 {{ $code }} = Rp)</label>
-                    <input type="number" step="any" min="0" class="form-control form-control-sm text-end pl-rate" data-code="{{ $code }}" id="pl-rate-{{ $code }}" value="{{ $data['rates'][$code] ?? 0 }}">
+                    <input type="text" inputmode="decimal" autocomplete="off" data-number="rate" class="form-control form-control-sm text-end pl-rate" data-code="{{ $code }}" id="pl-rate-{{ $code }}" value="{{ $data['rates'][$code] ?? 0 }}">
                 </div>
             @endforeach
         </div>
@@ -103,12 +103,12 @@
         <div class="row g-3">
             <div class="col-lg-6">
                 <table class="w-100 pl-summary">
-                    <tr><td class="k">Nilai Awal</td><td class="v"><input type="number" step="any" min="0" id="pl-nilai-awal" class="form-control form-control-sm text-end pl-num" value="{{ $data['nilai_awal'] }}"></td></tr>
-                    <tr><td class="k">PPN</td><td class="v"><input type="number" step="any" min="0" id="pl-ppn" class="form-control form-control-sm text-end pl-num" value="{{ $data['ppn_amount'] }}"></td></tr>
+                    <tr><td class="k">Nilai Awal</td><td class="v"><input type="text" inputmode="decimal" autocomplete="off" data-number="money" id="pl-nilai-awal" class="form-control form-control-sm text-end pl-num" value="{{ $data['nilai_awal'] }}"></td></tr>
+                    <tr><td class="k">PPN</td><td class="v"><input type="text" inputmode="decimal" autocomplete="off" data-number="money" id="pl-ppn" class="form-control form-control-sm text-end pl-num" value="{{ $data['ppn_amount'] }}"></td></tr>
                     <tr><td class="k">Sub Total I</td><td class="v" id="pl-subtotal1">0.00</td></tr>
-                    <tr><td class="k">Discount</td><td class="v"><input type="number" step="any" min="0" id="pl-discount" class="form-control form-control-sm text-end pl-num" value="{{ $data['discount_amount'] }}"></td></tr>
+                    <tr><td class="k">Discount</td><td class="v"><input type="text" inputmode="decimal" autocomplete="off" data-number="money" id="pl-discount" class="form-control form-control-sm text-end pl-num" value="{{ $data['discount_amount'] }}"></td></tr>
                     <tr><td class="k">Sub Total II</td><td class="v" id="pl-subtotal2">0.00</td></tr>
-                    <tr><td class="k">Referen <input type="number" step="any" min="0" max="100" id="pl-referral-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['referral_percent'] }}"> %</td><td class="v" id="pl-referral">0.00</td></tr>
+                    <tr><td class="k">Referen <input type="text" inputmode="decimal" autocomplete="off" data-number="percent" id="pl-referral-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['referral_percent'] }}"> %</td><td class="v" id="pl-referral">0.00</td></tr>
                     <tr class="total"><td class="k">Nilai Real Project</td><td class="v" id="pl-real">0.00</td></tr>
                 </table>
             </div>
@@ -191,12 +191,12 @@
         <div class="row g-3">
             <div class="col-lg-7">
                 <table class="w-100 pl-summary">
-                    <tr><td class="k">Company Investment &amp; Development <input type="number" step="any" min="0" max="100" id="pl-investment-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['investment_percent'] }}"> %</td><td class="v" id="pl-investment">0.00</td><td class="pct"></td></tr>
+                    <tr><td class="k">Company Investment &amp; Development <input type="text" inputmode="decimal" autocomplete="off" data-number="percent" id="pl-investment-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['investment_percent'] }}"> %</td><td class="v" id="pl-investment">0.00</td><td class="pct"></td></tr>
                     <tr class="total"><td class="k">Total Biaya Yang Dikeluarkan</td><td class="v" id="pl-total-cost">0.00</td><td class="pct"></td></tr>
                     <tr><td class="k">Nilai Real Project</td><td class="v" id="pl-real-2">0.00</td><td class="pct"></td></tr>
                     <tr><td class="k">Estimasi Nilai Profit</td><td class="v" id="pl-profit">0.00</td><td class="pct v" id="pl-profit-pct">0.00 %</td></tr>
-                    <tr><td class="k">Fee Marketing <input type="number" step="any" min="0" max="100" id="pl-marketing-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['marketing_fee_percent'] }}"> %</td><td class="v" id="pl-marketing">0.00</td><td class="pct"></td></tr>
-                    <tr><td class="k">Fee PM <input type="number" step="any" min="0" max="100" id="pl-pm-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['pm_fee_percent'] }}"> %</td><td class="v" id="pl-pm">0.00</td><td class="pct"></td></tr>
+                    <tr><td class="k">Fee Marketing <input type="text" inputmode="decimal" autocomplete="off" data-number="percent" id="pl-marketing-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['marketing_fee_percent'] }}"> %</td><td class="v" id="pl-marketing">0.00</td><td class="pct"></td></tr>
+                    <tr><td class="k">Fee PM <input type="text" inputmode="decimal" autocomplete="off" data-number="percent" id="pl-pm-pct" class="form-control form-control-sm d-inline-block text-end pl-num" style="width:90px" value="{{ $data['pm_fee_percent'] }}"> %</td><td class="v" id="pl-pm">0.00</td><td class="pct"></td></tr>
                     <tr class="total"><td class="k">Real Profit</td><td class="v" id="pl-real-profit">0.00</td><td class="pct v" id="pl-real-profit-pct">0.00 %</td></tr>
                 </table>
             </div>
@@ -274,14 +274,11 @@ const PL = {
     hppUp: {{ \App\Models\ProfitEstimate::HPP_UP_AMOUNT }}
 };
 
-function plFmt(n) {
-    n = Number(n) || 0;
-    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function plNum(sel) {
-    var v = parseFloat($(sel).val());
-    return isNaN(v) ? 0 : v;
-}
+// Format angka satu standar (gaya US) — lihat partials/number-input.
+function plFmt(n) { return Num.money(n); }
+function plNum(sel) { return Num.parse($(sel).val()); }
+// Nilai input untuk dikirim ke server: angka mentah, kosong tetap kosong.
+function plRaw(v) { return String(v == null ? '' : v).trim() === '' ? '' : Num.parse(v); }
 function plEsc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
@@ -299,11 +296,11 @@ function plRowHtml(section, line) {
     if (section === 'product') {
         return '<tr data-section="product">'
             + '<td><input type="text" class="form-control form-control-sm pl-label-in" value="' + plEsc(line.label) + '" maxlength="255" placeholder="Nama item"></td>'
-            + '<td><input type="number" step="any" min="0" class="form-control form-control-sm text-end pl-qty" value="' + plEsc(line.qty == null ? 1 : line.qty) + '"></td>'
+            + '<td><input type="text" inputmode="decimal" autocomplete="off" data-number="decimal" class="form-control form-control-sm text-end pl-qty" value="' + plEsc(Num.format(line.qty == null ? 1 : line.qty, 2)) + '"></td>'
             + '<td><input type="text" class="form-control form-control-sm pl-unit" value="' + plEsc(line.unit || 'Each') + '" maxlength="50"></td>'
             + '<td><input type="text" class="form-control form-control-sm pl-vendor" value="' + plEsc(line.vendor) + '" maxlength="150" list="pl-vendor-list" placeholder="Wajib"></td>'
             + '<td>' + plCurrencySelect(line.currency) + '</td>'
-            + '<td><input type="number" step="any" min="0" class="form-control form-control-sm text-end pl-amount pl-num" value="' + plEsc(line.amount == null ? 0 : line.amount) + '"></td>'
+            + '<td><input type="text" inputmode="decimal" autocomplete="off" data-number="decimal" class="form-control form-control-sm text-end pl-amount pl-num" value="' + plEsc(Num.format(line.amount == null ? 0 : line.amount, 4)) + '"></td>'
             + '<td class="idr-cell pl-idr">0.00</td>'
             + '<td class="text-center" style="white-space:nowrap">'
             + '<button type="button" class="btn-icon" title="Pilih item dari List Configuration" onclick="plOpenConfigPicker(this)"><i class="fa fa-cart-plus"></i></button>'
@@ -311,13 +308,13 @@ function plRowHtml(section, line) {
             + '</td></tr>';
     }
     var pctCell = section === 'cost_spent'
-        ? '<td><div class="input-group input-group-sm"><input type="number" step="any" min="0" max="100" class="form-control text-end pl-percent pl-num" value="' + plEsc(line.percent == null ? '' : line.percent) + '" placeholder="manual"><span class="input-group-text">%</span></div></td>'
+        ? '<td><div class="input-group input-group-sm"><input type="text" inputmode="decimal" autocomplete="off" data-number="percent" class="form-control text-end pl-percent pl-num" value="' + plEsc(line.percent == null || line.percent === '' ? '' : Num.percent(line.percent)) + '" placeholder="manual"><span class="input-group-text">%</span></div></td>'
         : '';
     return '<tr data-section="' + section + '">'
         + '<td><input type="text" class="form-control form-control-sm pl-label-in" value="' + plEsc(line.label) + '" maxlength="255" placeholder="Deskripsi biaya"></td>'
         + pctCell
         + '<td>' + plCurrencySelect(line.currency) + '</td>'
-        + '<td><input type="number" step="any" min="0" class="form-control form-control-sm text-end pl-amount pl-num" value="' + plEsc(line.amount == null ? 0 : line.amount) + '"></td>'
+        + '<td><input type="text" inputmode="decimal" autocomplete="off" data-number="decimal" class="form-control form-control-sm text-end pl-amount pl-num" value="' + plEsc(Num.format(line.amount == null ? 0 : line.amount, 4)) + '"></td>'
         + '<td class="idr-cell pl-idr">0.00</td>'
         + del + '</tr>';
 }
@@ -327,7 +324,7 @@ function plHppRowHtml(g) {
         + '<td class="pl-hpp-vendor"></td>'
         + '<td class="pl-hpp-cur"></td>'
         + '<td><div class="d-flex align-items-center gap-1">'
-        + '<input type="number" step="any" min="0" class="form-control form-control-sm text-end pl-amount pl-hpp-amount" value="0">'
+        + '<input type="text" inputmode="decimal" autocomplete="off" data-number="decimal" class="form-control form-control-sm text-end pl-amount pl-hpp-amount" value="0">'
         + '<button type="button" class="btn btn-sm btn-soft pl-up" title="Naikkan nominal +' + PL.hppUp + ' (biaya TT); klik lagi untuk membatalkan" onclick="plToggleHppUp(this)" style="display:none">+' + PL.hppUp + '</button>'
         + '</div></td>'
         + '<td class="pl-derived pl-derived-col">0.00</td>'
@@ -451,7 +448,7 @@ function plApplyConfigPicker() {
     }
     $row.find('.pl-qty').val(1);
     $row.find('.pl-currency').val(r.currency);
-    $row.find('.pl-amount').val(r.amount);
+    $row.find('.pl-amount').val(Num.format(r.amount, 4));
     plRecalc();
     if (plPickerModal) plPickerModal.hide();
     toastr.success(r.items.length + ' item configuration dimasukkan ke Amount baris.');
@@ -460,8 +457,7 @@ function plApplyConfigPicker() {
 function plRates() {
     var rates = {};
     $('.pl-rate').each(function() {
-        var v = parseFloat($(this).val());
-        rates[$(this).data('code')] = isNaN(v) ? 0 : v;
+        rates[$(this).data('code')] = Num.parse($(this).val());
     });
     return rates;
 }
@@ -480,7 +476,7 @@ function plDerivedGroups(rates) {
         var $r = $(this);
         var vendor = ($r.find('.pl-vendor').val() || '').trim();
         var cur = $r.find('.pl-currency').val() || 'IDR';
-        var amount = parseFloat($r.find('.pl-amount').val()) || 0;
+        var amount = Num.parse($r.find('.pl-amount').val());
         var idr = plToIdr(amount, cur, rates);
         $r.find('.pl-idr').text(plFmt(idr));
         $r.toggleClass('pl-missing-vendor', !vendor);
@@ -533,7 +529,7 @@ function plRebuildHpp(rates) {
         $row.toggleClass('pl-missing-vendor', !g.vendor).toggleClass('pl-manual', manual);
         var $amt = $row.find('.pl-hpp-amount');
         if (!manual && !$amt.is(':focus')) {
-            $amt.val(Math.round((g.amount + (up ? PL.hppUp : 0)) * 10000) / 10000);
+            $amt.val(Num.format(Math.round((g.amount + (up ? PL.hppUp : 0)) * 10000) / 10000, 4));
         }
         $row.find('.pl-reset').toggle(manual);
         $row.find('.pl-up').toggle(foreign).toggleClass('active', up);
@@ -565,7 +561,7 @@ function plRecalc() {
             var $r = $(this);
             var cur = section === 'hpp' ? $r.find('.pl-hpp-cur').text() : $r.find('.pl-currency').val();
             var $pct = $r.find('.pl-percent');
-            var pct = $pct.length ? parseFloat($pct.val()) : NaN;
+            var pct = $pct.length && $pct.val() !== '' ? Num.parse($pct.val()) : NaN;
             var idr;
             if ($pct.length && !isNaN(pct) && $pct.val() !== '') {
                 // Berpersentase: nominal = pct% x total HPP non-IDR (IDR). Nominal tetap bisa
@@ -573,12 +569,12 @@ function plRecalc() {
                 idr = Math.round(foreignHpp * pct) / 100;
                 $r.find('.pl-currency').val('IDR').prop('disabled', true);
                 var $amt = $r.find('.pl-amount');
-                if (!$amt.is(':focus')) $amt.val(idr);
+                if (!$amt.is(':focus')) $amt.val(Num.format(idr, 4));
                 $r.addClass('pl-by-percent');
             } else {
                 $r.find('.pl-currency').prop('disabled', false);
                 $r.removeClass('pl-by-percent');
-                var amount = parseFloat($r.find('.pl-amount').val()) || 0;
+                var amount = Num.parse($r.find('.pl-amount').val());
                 idr = plToIdr(amount, cur, rates);
             }
             $r.find('.pl-idr').text(plFmt(idr));
@@ -627,11 +623,11 @@ function plCollectLines() {
         lines.push({
             section: 'product',
             label: $r.find('.pl-label-in').val() || '',
-            qty: $r.find('.pl-qty').val() || '',
+            qty: plRaw($r.find('.pl-qty').val()),
             unit: $r.find('.pl-unit').val() || '',
             vendor: $r.find('.pl-vendor').val() || '',
             currency: $r.find('.pl-currency').val() || '',
-            amount: $r.find('.pl-amount').val() || ''
+            amount: plRaw($r.find('.pl-amount').val())
         });
     });
     $('#pl-lines-hpp tbody tr').each(function() {
@@ -640,7 +636,7 @@ function plCollectLines() {
             section: 'hpp',
             vendor: $r.find('.pl-hpp-vendor').text() === '(tanpa vendor)' ? '' : $r.find('.pl-hpp-vendor').text(),
             currency: $r.find('.pl-hpp-cur').text() || '',
-            amount: $r.find('.pl-hpp-amount').val() || '',
+            amount: plRaw($r.find('.pl-hpp-amount').val()),
             is_manual: $r.attr('data-manual') === '1' ? 1 : 0,
             is_up: $r.attr('data-up') === '1' ? 1 : 0
         });
@@ -655,8 +651,8 @@ function plCollectLines() {
                 label: $r.find('.pl-label-in').val() || '',
                 currency: $r.find('.pl-currency').val() || '',
                 // Nominal dikirim kosong bila berpersentase: server menghitung dari persen.
-                amount: byPercent ? '' : ($r.find('.pl-amount').val() || ''),
-                percent: byPercent ? $pct.val() : ''
+                amount: byPercent ? '' : plRaw($r.find('.pl-amount').val()),
+                percent: byPercent ? plRaw($pct.val()) : ''
             });
         });
     });
@@ -666,7 +662,7 @@ function plCollectLines() {
 $(document).on('input change', '.pl-hpp-amount', function() {
     var $row = $(this).closest('tr');
     var derived = parseFloat($row.find('.pl-derived').attr('data-derived')) || 0;
-    var val = parseFloat($(this).val()) || 0;
+    var val = Num.parse($(this).val());
     var isAuto = Math.abs(val - derived) < 0.00005;
     var isUp = $row.find('.pl-up').is(':visible') && Math.abs(val - (derived + PL.hppUp)) < 0.00005;
     $row.attr('data-up', isUp ? '1' : '0');
@@ -698,13 +694,13 @@ $('#pl-save-btn').on('click', function() {
             date: $('#pl-date').val(),
             project_name: $('#pl-project').val(),
             rates: plRates(),
-            nilai_awal: $('#pl-nilai-awal').val(),
-            ppn_amount: $('#pl-ppn').val(),
-            discount_amount: $('#pl-discount').val(),
-            referral_percent: $('#pl-referral-pct').val(),
-            investment_percent: $('#pl-investment-pct').val(),
-            marketing_fee_percent: $('#pl-marketing-pct').val(),
-            pm_fee_percent: $('#pl-pm-pct').val(),
+            nilai_awal: plRaw($('#pl-nilai-awal').val()),
+            ppn_amount: plRaw($('#pl-ppn').val()),
+            discount_amount: plRaw($('#pl-discount').val()),
+            referral_percent: plRaw($('#pl-referral-pct').val()),
+            investment_percent: plRaw($('#pl-investment-pct').val()),
+            marketing_fee_percent: plRaw($('#pl-marketing-pct').val()),
+            pm_fee_percent: plRaw($('#pl-pm-pct').val()),
             notes: $('#pl-notes').val(),
             sales_person_name: $('#pl-sales').val(),
             finance_name: $('#pl-finance').val(),
@@ -737,6 +733,7 @@ $(document).ready(function() {
         if (line.section === 'hpp') { PL.savedHpp[plHppKey(line.vendor, line.currency)] = line; return; }
         $('#pl-lines-' + line.section + ' tbody').append(plRowHtml(line.section, line));
     });
+    Num.formatAll();
     plRecalc();
     // Terapkan status HPP tersimpan langsung dari kolom is_up/is_manual (bukan
     // menebak dari nominal), sehingga tetap akurat walau HPP otomatis berubah.
@@ -747,7 +744,7 @@ $(document).ready(function() {
         if (line.is_up) {
             $row.attr('data-up', '1').attr('data-manual', '0');
         } else if (line.is_manual) {
-            $row.attr('data-up', '0').attr('data-manual', '1').find('.pl-hpp-amount').val(parseFloat(line.amount) || 0);
+            $row.attr('data-up', '0').attr('data-manual', '1').find('.pl-hpp-amount').val(Num.format(parseFloat(line.amount) || 0, 4));
         }
     });
     plRecalc();

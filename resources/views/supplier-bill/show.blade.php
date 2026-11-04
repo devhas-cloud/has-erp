@@ -5,7 +5,7 @@
 
 @php
     $money = fn ($v) => \App\Models\SupplierBill::formatMoney((float) $v);
-    $pct = fn ($v) => rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',');
+    $pct = fn ($v) => \App\Support\Number::percent((float) $v);
 @endphp
 
 @section('styles')
@@ -311,13 +311,13 @@ function sbCorrectRate() {
         title: 'Kurs {{ $bill->currency }} → {{ $baseCurrency }}',
         text: 'Kurs pada tanggal invoice supplier {{ $bill->bill_date?->format('d/m/Y') }}.',
         input: 'text',
-        inputValue: '{{ rtrim(rtrim(number_format($bill->exchange_rate, 6, ',', ''), '0'), ',') }}',
+        inputValue: '{{ \App\Support\Number::rate($bill->exchange_rate) }}',
         showCancelButton: true,
         confirmButtonText: 'Simpan',
         cancelButtonText: 'Batal'
     }).then(function(r) {
         if (!r.isConfirmed) return;
-        var rate = parseFloat(String(r.value || '').replace(/\./g, '').replace(',', '.'));
+        var rate = Num.parse(r.value);
         if (!(rate > 0)) { toastr.error('Kurs harus lebih dari 0.'); return; }
         $.ajax({ url: '{{ route("supplier-bill.exchange-rate", $bill->id) }}', method: 'PATCH', data: { _token: sbCsrf, exchange_rate: rate } })
             .done(function(res) { toastr.success(res.message); setTimeout(function() { location.reload(); }, 600); })

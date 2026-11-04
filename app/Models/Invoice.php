@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Number;
 use App\Support\NumberSequence;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -246,19 +247,15 @@ class Invoice extends Model
         return NumberSequence::make('invoices', 'invoice_number', $date);
     }
 
+    /** Angka gaya US tanpa nol di belakang: 1,000,000 / 1,000,000.5 (App\Support\Number). */
     public static function formatNumber($value, int $decimals = 2): string
     {
-        $formatted = number_format((float) $value, $decimals, '.', ',');
-
-        if (str_contains($formatted, '.')) {
-            $formatted = rtrim(rtrim($formatted, '0'), '.');
-        }
-
-        return $formatted;
+        return Number::format($value, $decimals);
     }
 
+    /** Rupiah: tanpa desimal kecuali ada sen — Rp 1,000,000 / Rp 17,112,643.56. */
     public static function formatMoney($value, int $decimals = 2): string
     {
-        return 'Rp '.self::formatNumber($value, $decimals);
+        return 'Rp '.Number::money($value);
     }
 }

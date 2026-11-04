@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Number;
 use App\Traits\Notifiable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -400,9 +401,10 @@ class Quotation extends Model
     /**
      * Format angka ala dokumen quotation: 123100000 -> "123,100,000".
      */
+    /** Gaya US (App\Support\Number): desimal hanya bila ada pecahan. */
     public static function formatMoney($value): string
     {
-        return number_format((float) $value, 0, '.', ',');
+        return Number::money($value);
     }
 
     /**

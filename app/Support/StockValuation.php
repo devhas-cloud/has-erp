@@ -69,6 +69,6 @@ class StockValuation
         }
         $decimals = abs($value - round($value)) > 0.004 ? 2 : 0;
 
-        return number_format($value, $decimals, ',', '.');
+        return Number::format($value, $decimals);
     }
 }

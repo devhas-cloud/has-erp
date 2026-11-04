@@ -458,7 +458,7 @@ class ProfitEstimateTest extends TestCase
         // Halaman detail & PDF.
         $this->actingAs($this->admin)->get(route('profit-estimate.show', $estimate->id))
             ->assertOk()
-            ->assertSee('1,520,663,100.00');
+            ->assertSee('1,520,663,100');
 
         $this->actingAs($this->admin)->get(route('profit-estimate.pdf', $estimate->id))
             ->assertOk()

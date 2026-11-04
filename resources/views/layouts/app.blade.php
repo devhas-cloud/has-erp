@@ -3035,6 +3035,8 @@
             });
         });
     </script>
+    <script>window.NUM_BASE_CURRENCY = @json(\App\Models\Currency::baseName());</script>
+    @include('partials.number-input')
     @stack('modals')
     @yield('scripts')
     @stack('page-scripts')

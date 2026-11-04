@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Number;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -458,9 +459,10 @@ class ProfitEstimate extends Model
     /**
      * Format angka ala lembar PL: 1520663100 -> "1,520,663,100.00".
      */
+    /** Gaya US (App\Support\Number): Rupiah tanpa desimal kecuali ada sen. */
     public static function formatMoney($value, int $decimals = 2): string
     {
-        return number_format((float) $value, $decimals, '.', ',');
+        return Number::money($value);
     }
 
     /**

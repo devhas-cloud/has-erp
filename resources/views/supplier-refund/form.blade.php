@@ -77,8 +77,9 @@
 <script>
 const srBase = @json($baseCurrency);
 const srRates = @json($rates);
-function srFmt(n) { return (Number(n) || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
-function srParse(v) { v = String(v || '').trim(); if (!v) return 0; var n = parseFloat(v.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; }
+// Format angka satu standar (gaya US) — lihat partials/number-input.
+function srFmt(n) { return Num.format(n, 2); }
+function srParse(v) { return Num.parse(v); }
 
 function srSync() {
     var $o = $('#sr-po option:selected');

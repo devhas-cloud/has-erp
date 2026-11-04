@@ -576,7 +576,7 @@
 
 {{-- Biaya pembelian project (Finance): realisasi vs Estimasi PL --}}
 {{-- @if($purchaseCost)
-@php $pc = $purchaseCost; $fmt = fn ($v) => number_format((float) $v, 0, ',', '.'); @endphp
+@php $pc = $purchaseCost; $fmt = fn ($v) => \App\Support\Number::money((float) $v); @endphp
 <div class="card-custom fade-in mb-4">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="fa-solid fa-coins me-2" style="color:var(--accent)"></i>Biaya Pembelian <span class="pj-muted">(sebelum pajak, {{ \App\Models\Currency::baseName() }})</span></span>
@@ -596,7 +596,7 @@
         @if($pc['estimate'])
             @php $pct = min(100, $pc['actual'] / $pc['estimate'] * 100); @endphp
             <div style="height:6px;border-radius:99px;background:#eef2f7;overflow:hidden;margin-top:14px" title="Realisasi terhadap estimasi"><span style="display:block;height:100%;width:{{ $pct }}%;background:{{ $pc['variance'] < 0 ? '#dc2626' : 'var(--accent)' }}"></span></div>
-            <div class="pj-muted mt-1">Realisasi {{ number_format($pc['actual'] / $pc['estimate'] * 100, 1, ',', '.') }}% dari estimasi biaya.</div>
+            <div class="pj-muted mt-1">Realisasi {{ \App\Support\Number::format($pc['actual'] / $pc['estimate'] * 100, 1) }}% dari estimasi biaya.</div>
         @endif
     </div>
 </div>

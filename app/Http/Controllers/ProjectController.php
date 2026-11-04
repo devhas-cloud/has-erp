@@ -16,6 +16,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
+use App\Support\Number;
 use App\Support\PayableReport;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
@@ -1045,7 +1046,7 @@ class ProjectController extends Controller
     {
         return response()->json([
             'success' => false,
-            'message' => 'Total amount rincian achievement harus sama dengan Net Sale Amount ('.number_format($net, 2, ',', '.').').',
+            'message' => 'Total amount rincian achievement harus sama dengan Net Sale Amount ('.Number::money($net).').',
         ], 422);
     }
 

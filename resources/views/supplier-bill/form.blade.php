@@ -90,7 +90,7 @@
                     </div>
                     <div class="col-lg-4" id="sb-rate-wrap" style="display:none">
                         <label class="form-label" for="sb-rate">Kurs <span class="sb-rate-cur">—</span> → <span class="sb-base-cur">IDR</span> <span class="text-danger">*</span></label>
-                        <input type="text" inputmode="decimal" id="sb-rate" class="form-control text-end" value="{{ $bill && $bill->isForeign() ? rtrim(rtrim(number_format($bill->exchange_rate, 6, ',', '.'), '0'), ',') : '' }}">
+                        <input type="text" inputmode="decimal" id="sb-rate" class="form-control text-end" value="{{ $bill && $bill->isForeign() ? \App\Support\Number::rate($bill->exchange_rate) : '' }}">
                         <small class="sb-hint">Kurs pada tanggal invoice supplier — menjadi nilai buku hutang. Default kurs master.</small>
                     </div>
                     <div class="col-12">
@@ -113,7 +113,7 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-md-5">
                         <label class="form-label" for="sb-adv-amount">Nominal Uang Muka <span class="text-danger">*</span></label>
-                        <div class="input-group"><span class="input-group-text sb-adv-cur">—</span><input type="text" inputmode="decimal" id="sb-adv-amount" class="form-control text-end" value="{{ $bill && $bill->isAdvance() ? number_format($bill->total, 2, ',', '.') : '' }}"></div>
+                        <div class="input-group"><span class="input-group-text sb-adv-cur">—</span><input type="text" inputmode="decimal" id="sb-adv-amount" class="form-control text-end" value="{{ $bill && $bill->isAdvance() ? \App\Support\Number::money($bill->total) : '' }}"></div>
                     </div>
                     <div class="col-md-7 d-flex gap-2 flex-wrap" id="sb-adv-quick"></div>
                 </div>
@@ -347,13 +347,9 @@ $(document).on('change', 'input[name="sb-type"]', function() {
 });
 
 function sbEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
-function sbFmt(n) { return (Number(n) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
-function sbParse(v) {
-    v = String(v == null ? '' : v).trim();
-    if (v === '') return 0;
-    var n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-}
+// Format angka satu standar (gaya US) — lihat partials/number-input.
+function sbFmt(n) { return Num.format(n, 2); }
+function sbParse(v) { return Num.parse(v); }
 function sbAddDays(date, days) {
     if (!date) return '';
     var d = new Date(date + 'T00:00:00');

@@ -4,7 +4,7 @@
 @section('page-title', 'Laporan Piutang')
 
 @php
-    $money = fn ($v) => number_format((float) $v, 0, ',', '.');
+    $money = fn ($v) => \App\Support\Number::money((float) $v);
     $positionColors = ['unscheduled' => '#cbd5e1', 'locked' => '#94a3b8', 'ready' => '#0ea5e9', 'in_process' => '#8b5cf6', 'receivable' => '#f59e0b', 'paid' => '#10b981'];
 @endphp
 

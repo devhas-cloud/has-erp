@@ -6,6 +6,7 @@ use App\Models\SupplierBill;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Services\Concerns\SendsWhatsAppDigest;
+use App\Support\Number;
 use App\Support\PayableReport;
 use Illuminate\Support\Collection;
 
@@ -65,7 +66,7 @@ class PayableDueNotifier
 
         $report = new PayableReport;
         $base = $report->baseCurrency();
-        $money = fn (float $v) => number_format($v, 0, ',', '.');
+        $money = fn (float $v) => Number::money($v);
         $sum = fn (Collection $bills) => $bills->sum(fn (SupplierBill $b) => $b->outstandingBase());
 
         $lines = ['*Pengingat Hutang Supplier* — '.now()->format('d/m/Y'), ''];

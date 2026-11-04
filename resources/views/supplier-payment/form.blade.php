@@ -74,17 +74,17 @@
                     </div>
                     <div class="col-lg-3 col-sm-6 sp-fx-field" style="display:none">
                         <label class="form-label" for="sp-debit">{{ $baseCurrency }} Didebit Bank</label>
-                        <input type="text" inputmode="decimal" id="sp-debit" class="form-control text-end" value="{{ $payment && $payment->exchange_rate != 1 ? number_format($payment->amount_base, 2, ',', '.') : '' }}" placeholder="Sesuai mutasi rekening">
+                        <input type="text" inputmode="decimal" id="sp-debit" class="form-control text-end" value="{{ $payment && $payment->exchange_rate != 1 ? \App\Support\Number::money($payment->amount_base) : '' }}" placeholder="Sesuai mutasi rekening">
                         <small class="sp-hint">Nilai konversi bank (di luar biaya). Kurs dihitung otomatis.</small>
                     </div>
                     <div class="col-lg-3 col-sm-6 sp-fx-field" id="sp-rate-wrap" style="display:none">
                         <label class="form-label" for="sp-rate">Kurs ke {{ $baseCurrency }} <span class="text-danger">*</span></label>
-                        <input type="text" inputmode="decimal" id="sp-rate" class="form-control text-end" value="{{ $payment && $payment->exchange_rate != 1 ? number_format($payment->exchange_rate, 6, ',', '.') : '' }}">
+                        <input type="text" inputmode="decimal" id="sp-rate" class="form-control text-end" value="{{ $payment && $payment->exchange_rate != 1 ? \App\Support\Number::rate($payment->exchange_rate) : '' }}">
                         <small class="sp-hint">Kurs konversi bank saat bayar.</small>
                     </div>
                     <div class="col-lg-3 col-sm-6">
                         <label class="form-label" for="sp-charge">Biaya Bank ({{ $baseCurrency }})</label>
-                        <input type="text" inputmode="decimal" id="sp-charge" class="form-control text-end" value="{{ $payment && $payment->bank_charge > 0 ? number_format($payment->bank_charge, 2, ',', '.') : '' }}" placeholder="0">
+                        <input type="text" inputmode="decimal" id="sp-charge" class="form-control text-end" value="{{ $payment && $payment->bank_charge > 0 ? \App\Support\Number::money($payment->bank_charge) : '' }}" placeholder="0">
                         <small class="sp-hint">Biaya transfer / bank koresponden — tidak mengurangi hutang.</small>
                     </div>
                     <div class="col">
@@ -157,13 +157,9 @@ let spInitial = @json($allocations);
 let spRates = {};
 
 function spEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
-function spFmt(n) { return (Number(n) || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
-function spParse(v) {
-    v = String(v == null ? '' : v).trim();
-    if (v === '') return 0;
-    var n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-}
+// Format angka satu standar (gaya US) — lihat partials/number-input.
+function spFmt(n) { return Num.format(n, 2); }
+function spParse(v) { return Num.parse(v); }
 
 function spLoad() {
     var supplierId = $('#sp-supplier').val();
@@ -262,7 +258,7 @@ $(document).on('input', '.sp-amount, #sp-rate, #sp-debit, #sp-charge', function(
 $(document).on('blur', '.sp-amount, #sp-debit, #sp-charge', function() { if ($(this).val() !== '') $(this).val(spFmt(spParse($(this).val()))); });
 $(document).on('blur', '#sp-rate', function() { if ($(this).val() !== '') $(this).val(spFmtRate(spParse($(this).val()))); });
 
-function spFmtRate(n) { return (Number(n) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 6 }); }
+function spFmtRate(n) { return Num.rate(n); }
 $(document).on('change', '#sp-method', spRecalc);
 
 function spFail(msg, $el) {

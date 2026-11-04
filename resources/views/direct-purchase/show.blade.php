@@ -170,12 +170,12 @@
                             <td class="text-center">{{ $item->receivedQty() }} / {{ (int) $item->qty }}</td>
                             <td class="text-end">
                                 @if($item->price !== null)
-                                    {{ $item->currency ?: 'IDR' }} {{ number_format($item->price, 2, ',', '.') }}
+                                    {{ $item->currency ?: 'IDR' }} {{ \App\Support\Number::money($item->price) }}
                                 @else
                                     —
                                 @endif
                             </td>
-                            <td class="text-end">{{ number_format($item->amount(), 2, ',', '.') }}</td>
+                            <td class="text-end">{{ \App\Support\Number::money($item->amount()) }}</td>
                         </tr>
                     @empty
                         <tr>
@@ -187,17 +187,17 @@
                     @php($dpTotals = $directPurchase->totalsFrom($directPurchase->grandTotal()))
                     <tr>
                         <td colspan="7" class="text-end">Sub Total</td>
-                        <td class="text-end fw-semibold">{{ number_format($dpTotals['subtotal'], 2, ',', '.') }}</td>
+                        <td class="text-end fw-semibold">{{ \App\Support\Number::money($dpTotals['subtotal']) }}</td>
                     </tr>
                     @if($dpTotals['ppn'] > 0)
                     <tr>
-                        <td colspan="7" class="text-end">PPN {{ rtrim(rtrim(number_format($directPurchase->ppn_percent, 2, ',', '.'), '0'), ',') }}%</td>
-                        <td class="text-end fw-semibold">{{ number_format($dpTotals['ppn'], 2, ',', '.') }}</td>
+                        <td colspan="7" class="text-end">PPN {{ \App\Support\Number::percent($directPurchase->ppn_percent) }}%</td>
+                        <td class="text-end fw-semibold">{{ \App\Support\Number::money($dpTotals['ppn']) }}</td>
                     </tr>
                     @endif
                     <tr>
                         <td colspan="7" class="text-end fw-bold">Grand Total ({{ $directPurchase->currencyCode() }})</td>
-                        <td class="text-end fw-bold">{{ number_format($dpTotals['total'], 2, ',', '.') }}</td>
+                        <td class="text-end fw-bold">{{ \App\Support\Number::money($dpTotals['total']) }}</td>
                     </tr>
                 </tfoot>
             </table>

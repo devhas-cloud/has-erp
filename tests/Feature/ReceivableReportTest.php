@@ -190,7 +190,7 @@ class ReceivableReportTest extends TestCase
     {
         $message = app(ReceivableDueNotifier::class)->buildMessage(3);
         $this->assertStringContainsString('Invoice lewat jatuh tempo', $message);
-        $this->assertStringContainsString('PT Alpha · INV-DP · Rp 333.000 (lewat 10 hari)', $message);
+        $this->assertStringContainsString('PT Alpha · INV-DP · Rp 333,000 (lewat 10 hari)', $message);
         $this->assertStringContainsString('Terlambat ditagih', $message);
         $this->assertStringContainsString('26110002 · Pembayaran Penuh 100%', $message);
 

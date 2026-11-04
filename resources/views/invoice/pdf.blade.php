@@ -3,12 +3,8 @@
     $company = $project?->company;
     $salesPerson = $project?->quotation?->opportunity?->owner?->display_name;
 
-    $money = function ($value) {
-        $value = round((float) $value, 2);
-        $decimals = fmod($value, 1) == 0 ? 0 : 2;
-
-        return number_format($value, $decimals, ',', '.');
-    };
+    // Gaya US (App\Support\Number): desimal hanya bila ada sen.
+    $money = fn ($value) => \App\Support\Number::money($value);
 
     $companyAddress = collect([
         $company?->address_billing_street,

@@ -113,7 +113,7 @@ class SupplierForeignCurrencyTest extends TestCase
 
         $this->actingAs($this->approver)->postJson(route('supplier-bill.approve', $id))->assertOk();
         $this->actingAs($this->staff)->get(route('supplier-bill.show', $id))->assertOk()
-            ->assertSee('1 USD = IDR 16.200')->assertSee('Kurs tanggal invoice supplier');
+            ->assertSee('1 USD = IDR 16,200')->assertSee('Kurs tanggal invoice supplier');
     }
 
     public function test_partial_payments_realize_fx_difference_from_bank_rate(): void
@@ -145,7 +145,7 @@ class SupplierForeignCurrencyTest extends TestCase
         $this->assertEquals(20000, $fx['realized_total']);
 
         $this->actingAs($this->approver)->get(route('supplier-payment.show', $first->id))->assertOk()
-            ->assertSee('Rugi selisih kurs IDR 80.000')->assertSee('Biaya bank IDR 25.000');
+            ->assertSee('Rugi selisih kurs IDR 80,000')->assertSee('Biaya bank IDR 25,000');
         $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'fx']))->assertOk()
             ->assertSee($first->payment_number)->assertSee('Total selisih kurs terealisasi (rugi)');
         $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => 'fx']))->assertOk();
@@ -175,7 +175,7 @@ class SupplierForeignCurrencyTest extends TestCase
         $this->assertEquals(8000000, $refund->amount_base_book);
         $this->assertEquals(8400000, $refund->amount_base);
         $this->assertEquals(-400000, $refund->fx_difference);
-        $this->actingAs($this->staff)->get(route('supplier-refund.show', $refundId))->assertOk()->assertSee('Laba IDR 400.000');
+        $this->actingAs($this->staff)->get(route('supplier-refund.show', $refundId))->assertOk()->assertSee('Laba IDR 400,000');
 
         $fx = (new PayableReport)->fx();
         $this->assertEquals(-150000, $fx['realized_total']);

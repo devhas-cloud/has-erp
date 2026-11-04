@@ -124,8 +124,8 @@ class PayableReportTest extends TestCase
         foreach (array_keys(PayableReportController::TABS) as $tab) {
             $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => $tab]))->assertOk()->assertSee('Laporan Hutang');
         }
-        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'aging']))->assertSee('PT Alpha')->assertSee('4.000');
-        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'project']))->assertSee('SPARING Gresik')->assertSee('11.500');
+        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'aging']))->assertSee('PT Alpha')->assertSee('4,000');
+        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'project']))->assertSee('SPARING Gresik')->assertSee('11,500');
 
         $export = $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => 'schedule']));
         $export->assertOk();

@@ -76,7 +76,7 @@ const srCardUrl = '{{ route("stock-report.card", "__ID__") }}';
 let srTable = null;
 
 function srEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
-function srFmt(n) { return Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
+function srFmt(n) { return Num.format(n, 2); }
 
 $(document).ready(function() {
     $('#sr-ownership').select2({ width: '100%' });

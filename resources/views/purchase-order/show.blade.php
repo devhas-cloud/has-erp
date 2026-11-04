@@ -60,8 +60,8 @@
 
 @php
     $po = $purchaseOrder;
-    $money = fn ($v) => number_format((float) $v, 2, ',', '.');
-    $percent = fn ($v) => rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',');
+    $money = fn ($v) => \App\Support\Number::money((float) $v);
+    $percent = fn ($v) => \App\Support\Number::percent((float) $v);
     $currency = $po->currencyCode();
     $poTotals = $po->totalsFrom($po->grandTotal());
     $isOwner = auth()->id() === $po->created_by || auth()->user()->role === 'Admin';

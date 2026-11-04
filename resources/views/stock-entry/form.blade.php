@@ -144,14 +144,9 @@ let sePickerInstance = null;
 let seProductPool = [];
 
 function seEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
-function seFmt(n) { return Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
-// "1.250.000,5" -> 1250000.5; kosong -> null (server memakai harga beli master).
-function seParse(v) {
-    v = String(v || '').trim();
-    if (v === '') return null;
-    var n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
-    return isNaN(n) ? null : n;
-}
+function seFmt(n) { return Num.format(n, 2); }
+// "1,250,000.5" -> 1250000.5; kosong -> null (server memakai harga beli master).
+function seParse(v) { return Num.parseOrNull(v); }
 
 function seOpenPicker() {
     $('#se-product-q').val('');

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasPurchaseDocuments;
+use App\Support\Number;
 use App\Support\NumberSequence;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -376,7 +377,7 @@ class SupplierBill extends Model
 
     public static function formatMoney(float $value): string
     {
-        return number_format($value, 2, ',', '.');
+        return Number::money($value);
     }
 
     public function documentTypes(): array

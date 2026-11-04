@@ -104,8 +104,8 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Nilai Kurs (Rate) <span style="color:var(--danger)">*</span></label>
-                                <input type="number" id="currency-rate" class="form-control" min="0.0001" step="0.0001"
-                                    placeholder="1.00" required>
+                                <input type="text" inputmode="decimal" autocomplete="off" data-number="rate" id="currency-rate" class="form-control"
+                                    placeholder="1" required>
                                 <div class="form-text">1 unit mata uang ini = berapa base (contoh: USD 20000).</div>
                             </div>
                         </div>
@@ -240,7 +240,7 @@ function openEditModal(id) {
         $('#currency-edit-is-base').val(c.is_base ? '1' : '0');
         $('#currency-name').val(c.name || '');
         $('#currency-symbol').val(c.symbol || '');
-        $('#currency-rate').val(c.rate || '');
+        $('#currency-rate').val(c.rate ? Num.rate(c.rate) : '');
         $('#currency-is-base').val(c.is_base ? '1' : '0');
         $('#currency-status').val(c.status || 'Active');
         $('#currency-description').val(c.description || '');
@@ -273,7 +273,8 @@ $(document).on('hidden.bs.modal', '#currencyModal', function() {
 
 $(document).on('click', '#btn-save-currency', function() {
     var name = $('#currency-name').val().trim();
-    var rate = $('#currency-rate').val();
+    var rate = Num.parseOrNull($('#currency-rate').val());
+    if (rate === null) rate = '';
     var status = $('#currency-status').val();
 
     if (!name) { toastr.error('Nama currency wajib diisi.'); $('#currency-name').addClass('is-invalid'); return; }

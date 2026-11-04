@@ -401,14 +401,12 @@ function poEsc(str) {
         .replace(/'/g, '&#039;');
 }
 
+// Format angka satu standar (gaya US) — lihat partials/number-input.
 function poToRaw(str) {
     return String(str == null ? '' : str).replace(/,/g, '');
 }
 
-function poFmt(v) {
-    v = Number(v) || 0;
-    return v.toLocaleString('id-ID', { maximumFractionDigits: 2 });
-}
+function poFmt(v) { return Num.format(v, 2); }
 
 function poBaseCurrency() {
     return poCurrencies.length ? poCurrencies[0].name : 'IDR';
@@ -476,7 +474,7 @@ function poRowHtml(item, groupKey) {
 
 function poFmtInput(v) {
     var n = Number(v);
-    return isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+    return isFinite(n) ? Num.format(n, 2) : '';
 }
 
 function poAddRow(item) {

@@ -109,7 +109,7 @@ class StockOpnameTest extends TestCase
             ->assertJsonPath('total_value', 34500)
             ->assertJsonPath('data.0.average_cost', 1380);
 
-        $this->actingAs($this->counter)->get(route('stock-report.card', $this->product->id))->assertOk()->assertSee('34.500');
+        $this->actingAs($this->counter)->get(route('stock-report.card', $this->product->id))->assertOk()->assertSee('34,500');
     }
 
     public function test_opname_draft_then_approver_posts_adjustments(): void

@@ -674,7 +674,7 @@ class PurchaseOrderTest extends TestCase
         $this->actingAs($this->creator)->get(route('purchase-order.show', $id))
             ->assertOk()
             ->assertSee('Sub Total 1')
-            ->assertSee('1.123.875');
+            ->assertSee('1,123,875');
         $this->actingAs($this->creator)->get(route('purchase-order.pdf', $id))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');

@@ -4,14 +4,9 @@
     <meta charset="UTF-8">
     <title>Purchase Order {{ $purchaseOrder->po_number ?: $purchaseOrder->id }}</title>
     @php
-        // Angka gaya Indonesia: 1.125.000 (desimal hanya bila ada pecahan).
-        $money = function ($value) {
-            $value = (float) $value;
-            $decimals = abs($value - round($value)) > 0.004 ? 2 : 0;
-
-            return number_format($value, $decimals, ',', '.');
-        };
-        $percent = fn ($value) => rtrim(rtrim(number_format((float) $value, 2, ',', '.'), '0'), ',');
+        // Gaya US (App\Support\Number): desimal hanya bila ada pecahan.
+        $money = fn ($value) => \App\Support\Number::money($value);
+        $percent = fn ($value) => \App\Support\Number::percent((float) $value);
 
         $totals = $purchaseOrder->printTotals();
         $groups = $purchaseOrder->hierarchyGroups();

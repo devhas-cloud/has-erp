@@ -56,7 +56,7 @@ class PayableDueReminderTest extends TestCase
     {
         $notifier = app(PayableDueNotifier::class);
         $message = $notifier->buildMessage(3);
-        $this->assertStringContainsString('Terlambat* — 1 tagihan, IDR 4.000', $message);
+        $this->assertStringContainsString('Terlambat* — 1 tagihan, IDR 4,000', $message);
         $this->assertStringContainsString('lewat 8 hari', $message);
         $this->assertStringContainsString('Jatuh tempo hari ini* — 1 tagihan', $message);
         $this->assertStringContainsString('3 hari ke depan* — 1 tagihan, IDR 900', $message);

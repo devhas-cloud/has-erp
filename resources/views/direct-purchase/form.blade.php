@@ -377,16 +377,10 @@ function dpPlainText(html) {
 }
 
 // Angka format Indonesia: "1.250.000,5" <-> 1250000.5
-function dpParse(v) {
-    v = String(v == null ? '' : v).trim();
-    if (v === '') return 0;
-    var n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-}
+// Format angka satu standar (gaya US) — lihat partials/number-input.
+function dpParse(v) { return Num.parse(v); }
 
-function dpFmt(v) {
-    return (Number(v) || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 });
-}
+function dpFmt(v) { return Num.format(v, 2); }
 
 function dpBaseCurrency() {
     return dpCurrencies.length ? dpCurrencies[0].name : 'IDR';

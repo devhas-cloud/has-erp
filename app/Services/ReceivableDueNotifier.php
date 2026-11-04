@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Services\Concerns\SendsWhatsAppDigest;
+use App\Support\Number;
 use App\Support\ReceivableReport;
 use Illuminate\Support\Collection;
 
@@ -72,7 +73,7 @@ class ReceivableDueNotifier
         }
 
         $report = new ReceivableReport;
-        $money = fn (float $v) => number_format($v, 0, ',', '.');
+        $money = fn (float $v) => Number::money($v);
 
         $lines = ['*Pengingat Piutang Customer* — '.now()->format('d/m/Y'), ''];
         $sections = [
@@ -103,7 +104,7 @@ class ReceivableDueNotifier
             $late = $groups['late_billing'];
             $lines[] = '⚪ *Terlambat ditagih* — '.$late->count().' termin, Rp '.$money($late->sum('amount')).' (sebelum PPN)';
             foreach ($late->take(self::MAX_LINES) as $row) {
-                $lines[] = '• '.$row['project']->project_number.' · '.$row['term']->name.' '.rtrim(rtrim(number_format($row['term']->percent, 2, ',', '.'), '0'), ',').'% · target '.$row['date']->format('d/m/Y');
+                $lines[] = '• '.$row['project']->project_number.' · '.$row['term']->name.' '.Number::percent($row['term']->percent).'% · target '.$row['date']->format('d/m/Y');
             }
             if ($late->count() > self::MAX_LINES) {
                 $lines[] = '• … dan '.($late->count() - self::MAX_LINES).' termin lain';

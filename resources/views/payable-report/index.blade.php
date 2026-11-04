@@ -4,7 +4,7 @@
 @section('page-title', 'Laporan Hutang')
 
 @php
-    $money = fn ($v) => number_format((float) $v, 0, ',', '.');
+    $money = fn ($v) => \App\Support\Number::money((float) $v);
 @endphp
 
 @section('styles')
@@ -91,8 +91,8 @@
                                     <td><a href="{{ route('supplier-bill.show', $bill->id) }}" class="fw-semibold">{{ $bill->bill_number }}</a>@if($bill->isAdvance()) <span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px">Uang Muka</span>@endif<div class="pr-muted">Inv. {{ $bill->supplier_invoice_number }} · {{ $bill->sourceNumber() }}</div></td>
                                     <td>{{ $bill->supplier?->name }}</td>
                                     <td>{{ $bill->due_date?->format('d/m/Y') }}@if($report->daysOverdue($bill) > 0)<div class="pr-muted text-danger">terlambat {{ $report->daysOverdue($bill) }} hari</div>@endif</td>
-                                    <td class="pr-num">{{ $bill->currency }} {{ number_format($bill->outstanding(), 2, ',', '.') }}</td>
-                                    <td class="pr-num">{{ $money($bill->outstandingBase()) }}@if($bill->isForeign())<div class="pr-muted">kurs {{ rtrim(rtrim(number_format($bill->exchange_rate, 4, ',', '.'), '0'), ',') }}</div>@endif</td>
+                                    <td class="pr-num">{{ $bill->currency }} {{ \App\Support\Number::money($bill->outstanding()) }}</td>
+                                    <td class="pr-num">{{ $money($bill->outstandingBase()) }}@if($bill->isForeign())<div class="pr-muted">kurs {{ \App\Support\Number::rate($bill->exchange_rate) }}</div>@endif</td>
                                 </tr>
                             @endforeach
                         @empty
@@ -122,8 +122,8 @@
                                 <td>{{ $r['date']?->format('d/m/Y') }}</td>
                                 <td><a href="{{ $r['url'] }}" class="fw-semibold">{{ $r['number'] }}</a><div class="pr-muted">{{ $r['reference'] }}</div></td>
                                 <td>{{ $r['supplier'] }}</td>
-                                <td class="pr-num">{{ $r['currency'] }} {{ number_format($r['amount'], 2, ',', '.') }}</td>
-                                <td class="pr-num">{{ number_format($r['book_rate'], 2, ',', '.') }} → {{ number_format($r['actual_rate'], 2, ',', '.') }}</td>
+                                <td class="pr-num">{{ $r['currency'] }} {{ \App\Support\Number::money($r['amount']) }}</td>
+                                <td class="pr-num">{{ \App\Support\Number::money($r['book_rate']) }} → {{ \App\Support\Number::money($r['actual_rate']) }}</td>
                                 <td class="pr-num">{{ $money($r['book']) }}</td>
                                 <td class="pr-num">{{ $money($r['actual']) }}</td>
                                 <td class="pr-num fw-semibold {{ $r['difference'] > 0 ? 'text-danger' : ($r['difference'] < 0 ? 'text-success' : '') }}">{{ $fxMoney($r['difference']) }}</td>
@@ -145,8 +145,8 @@
                             <tr>
                                 <td><a href="{{ route('supplier-bill.show', $u['bill']->id) }}" class="fw-semibold">{{ $u['bill']->bill_number }}</a>@if($u['bill']->rate_estimated) <span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px" title="Kurs diisi otomatis dari kurs master">kurs perkiraan</span>@endif<div class="pr-muted">Inv. {{ $u['bill']->supplier_invoice_number }}</div></td>
                                 <td>{{ $u['bill']->supplier?->name }}</td>
-                                <td class="pr-num">{{ $u['bill']->currency }} {{ number_format($u['outstanding'], 2, ',', '.') }}</td>
-                                <td class="pr-num">{{ number_format($u['book_rate'], 2, ',', '.') }} → {{ number_format($u['current_rate'], 2, ',', '.') }}</td>
+                                <td class="pr-num">{{ $u['bill']->currency }} {{ \App\Support\Number::money($u['outstanding']) }}</td>
+                                <td class="pr-num">{{ \App\Support\Number::money($u['book_rate']) }} → {{ \App\Support\Number::money($u['current_rate']) }}</td>
                                 <td class="pr-num">{{ $money($u['book']) }}</td>
                                 <td class="pr-num">{{ $money($u['current']) }}</td>
                                 <td class="pr-num fw-semibold {{ $u['difference'] > 0 ? 'text-danger' : ($u['difference'] < 0 ? 'text-success' : '') }}">{{ $fxMoney($u['difference']) }}</td>

@@ -44,7 +44,7 @@
         <div class="val">{{ $payment->currency }} {{ $money($payment->amount) }}</div>
         @php $fxTotal = round($payment->allocations->sum('fx_difference'), 2); @endphp
         @if($payment->currency !== $baseCurrency)
-            <div class="sp-muted">{{ $baseCurrency }} {{ $money($payment->amount_base) }} didebit (kurs {{ rtrim(rtrim(number_format($payment->exchange_rate, 6, ',', '.'), '0'), ',') }})</div>
+            <div class="sp-muted">{{ $baseCurrency }} {{ $money($payment->amount_base) }} didebit (kurs {{ \App\Support\Number::rate($payment->exchange_rate) }})</div>
             @if(abs($fxTotal) >= 0.01)<div class="sp-muted {{ $fxTotal > 0 ? 'text-danger' : 'text-success' }}">{{ $fxTotal > 0 ? 'Rugi' : 'Laba' }} selisih kurs {{ $baseCurrency }} {{ $money(abs($fxTotal)) }}</div>@endif
         @endif
         @if($payment->bank_charge > 0)<div class="sp-muted">Biaya bank {{ $baseCurrency }} {{ $money($payment->bank_charge) }}</div>@endif

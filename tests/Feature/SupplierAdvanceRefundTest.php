@@ -194,7 +194,7 @@ class SupplierAdvanceRefundTest extends TestCase
         $po = $this->freshPo();
         $this->assertEquals(2000, $po->refundDue());
         $this->assertSame('refund', $po->paymentStatus());
-        $this->actingAs($this->staff)->get(route('supplier-refund.index'))->assertOk()->assertSee('26110001')->assertSee('2.000,00');
+        $this->actingAs($this->staff)->get(route('supplier-refund.index'))->assertOk()->assertSee('26110001')->assertSee('2,000');
 
         $payload = ['purchase_order_id' => $this->po->id, 'refund_date' => now()->toDateString(), 'method' => 'transfer', 'reference_number' => 'RF-1'];
         $this->actingAs($this->staff)->postJson(route('supplier-refund.store'), $payload + ['amount' => 2500])->assertStatus(422);
