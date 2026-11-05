@@ -236,7 +236,8 @@
                     @php
                         $item = $row['item'];
                         $depth = $row['depth'];
-                        $price = $item->selling_price ?? $item->product?->selling_price;
+                        $qty = $item->qty;
+                        $price = $qty * ($item->selling_price ?? $item->product?->selling_price);
                     @endphp
                     <tr>
                         <td class="no-col" style="padding-left:{{ 6 + $depth * 12 }}px">{{ $item->item_no }}</td>
