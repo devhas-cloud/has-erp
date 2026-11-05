@@ -318,13 +318,8 @@ class CurrencyManagementTest extends TestCase
         $this->createProduct(['currency_id' => $usd->id]);
 
         $products = MasterProduct::with(['division', 'currency'])->get();
-        $headers = [
-            'Name', 'Code', 'Brand', 'Category', 'Division',
-            'Description', 'Price', 'Currency', 'Status',
-        ];
-
         $service = new \App\Services\ProductExportService;
-        $filePath = $service->export($products, $headers);
+        $filePath = $service->export($products);
 
         $this->assertFileExists($filePath);
         $zip = new \ZipArchive;

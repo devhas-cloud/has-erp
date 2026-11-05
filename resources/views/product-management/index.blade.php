@@ -110,6 +110,9 @@
                         <th>Tipe</th>
                         <th>Divisi</th>
                         @if($canViewPrice)
+                        <th>Harga Beli</th>
+                        @endif
+                        @if($canViewSellingPrice)
                         <th>Harga Jual</th>
                         @endif
                         <th>Status</th>
@@ -339,6 +342,8 @@
                                 <td>Harga Beli</td>
                                 <td><strong id="pd-purchase-price">—</strong></td>
                             </tr>
+                            @endif
+                            @if($canViewSellingPrice)
                             <tr>
                                 <td>Harga Jual</td>
                                 <td><strong id="pd-selling-price">—</strong><div id="pd-price-equivalent"></div></td>
@@ -462,6 +467,16 @@ function initProductTable() {
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             @if($canViewPrice)
+            { data: 'purchase_price_formatted', orderable: true, searchable: false, className: 'text-end', width: '13%',
+                // Harga beli table = apa adanya di mata uang produk.
+                render: function(data, type, row) {
+                    if (data == null) return '<span style="color:var(--text-muted)">—</span>';
+                    var cur = row.currency_name && row.currency_name !== '—' ? row.currency_name : (row.base_currency_symbol || 'Rp');
+                    return cur + ' ' + data;
+                }
+            },
+            @endif
+            @if($canViewSellingPrice)
             { data: 'selling_price_formatted', orderable: true, searchable: false, className: 'text-end', width: '15%',
                 // Harga jual table = hasil formulasi, selalu IDR (base).
                 render: function(data, type, row) {

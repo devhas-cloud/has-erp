@@ -39,20 +39,28 @@ class ProductManagementController extends Controller
 
         $recordsFiltered = $query->count();
 
-        $orderColumnIndex = $request->input('order.0.column', 0);
-        $orderDirection = $request->input('order.0.dir', 'asc');
+        // Urutan berdasarkan nama data kolom (bukan index), karena kolom Harga Jual
+        // bisa disembunyikan sehingga index kolom berikutnya bergeser.
+        $orderColumnIndex = (int) $request->input('order.0.column', 0);
+        $orderColumnData = $request->input("columns.{$orderColumnIndex}.data");
+        $orderDirection = strtolower($request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         $columnOrderMap = [
-            1 => 'name',
-            2 => 'brand',
-            3 => 'category',
-            4 => 'type',
-            6 => 'selling_price',
-            7 => 'status',
+            'name_display' => 'name',
+            'brand' => 'brand',
+            'category' => 'category',
+            'type' => 'type',
+            'status' => 'status',
         ];
+        if ($this->canViewPurchasePrice()) {
+            $columnOrderMap['purchase_price_formatted'] = 'purchase_price';
+        }
+        if ($this->canViewSellingPrice()) {
+            $columnOrderMap['selling_price_formatted'] = 'selling_price';
+        }
 
-        if (isset($columnOrderMap[$orderColumnIndex])) {
-            $query->orderBy($columnOrderMap[$orderColumnIndex], $orderDirection);
+        if (is_string($orderColumnData) && isset($columnOrderMap[$orderColumnData])) {
+            $query->orderBy($columnOrderMap[$orderColumnData], $orderDirection);
         }
         $query->orderBy('id', 'desc');
 
@@ -61,27 +69,26 @@ class ProductManagementController extends Controller
 
         $products = $query->offset($start)->limit($length)->get();
 
-        if ($this->isAdmin()) {
-            $baseSymbol = Currency::where('is_base', true)->first()?->symbol ?: 'Rp';
-            $withPrices = true;
-        } else {
-            $baseSymbol = null;
-            $withPrices = false;
-        }
+        $withPurchase = $this->canViewPurchasePrice();
+        $withSelling = $this->canViewSellingPrice();
+        $baseSymbol = $withSelling
+            ? (Currency::where('is_base', true)->first()?->symbol ?: 'Rp')
+            : null;
 
         $data = [];
         foreach ($products as $i => $product) {
             $currency = $product->currency;
-            if ($withPrices) {
-                $selling = $this->formula_selling_price($product->currency_id, $product->purchase_price);
+            $purchase = null;
+            $purchaseFormatted = null;
+            $selling = null;
+            $sellingFormatted = null;
+            if ($withPurchase) {
                 $purchase = round((float) $product->purchase_price, 2);
                 $purchaseFormatted = number_format($purchase, 2, '.', ',');
+            }
+            if ($withSelling) {
+                $selling = $this->formula_selling_price($product->currency_id, $product->purchase_price);
                 $sellingFormatted = number_format($selling);
-            } else {
-                $selling = null;
-                $purchase = null;
-                $purchaseFormatted = null;
-                $sellingFormatted = null;
             }
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
@@ -141,6 +148,11 @@ class ProductManagementController extends Controller
         ]);
 
         $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
+        // Harga beli hanya boleh diisi role Admin / divisi Admin / divisi IMS.
+        if (! $this->canViewPurchasePrice()) {
+            unset($validated['purchase_price']);
+        }
+        // Harga jual tidak pernah diterima dari input: selalu hasil formulasi harga beli.
         $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price'] ?? null);
 
         if ($request->hasFile('image')) {
@@ -176,10 +188,13 @@ class ProductManagementController extends Controller
         $data['selling_price_formula'] = $this->formula_selling_price($product->currency_id, $product->purchase_price);
         $data['selling_price_formula_formatted'] = number_format($data['selling_price_formula'], 2, '.', ',');
 
-        if (! $this->isAdmin()) {
-            // Harga hanya untuk role Admin / divisi Admin / divisi IMS.
-            $data['selling_price'] = null;
+        if (! $this->canViewPurchasePrice()) {
+            // Harga beli hanya untuk role Admin / divisi Admin / divisi IMS.
             $data['purchase_price'] = null;
+        }
+        if (! $this->canViewSellingPrice()) {
+            // Harga jual hanya untuk role Admin / divisi Admin.
+            $data['selling_price'] = null;
             $data['selling_price_formula'] = null;
             $data['selling_price_formula_formatted'] = null;
         }
@@ -219,10 +234,10 @@ class ProductManagementController extends Controller
         ]);
 
         $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
-        // Harga hanya bisa diubah role Admin / divisi Admin / divisi IMS. Lainnya tidak
-        // mengirim harga -> harga DB tetap.
-        // Form tanpa field harga (purchase_price tidak dikirim) juga mempertahankan harga DB.
-        if ($this->isAdmin() && array_key_exists('purchase_price', $validated)) {
+        // Harga beli hanya bisa diubah role Admin / divisi Admin / divisi IMS; harga jual
+        // ikut dihitung ulang dari formulasi (IMS tetap tidak bisa melihatnya).
+        // Lainnya / form tanpa field purchase_price -> harga DB tetap.
+        if ($this->canViewPurchasePrice() && array_key_exists('purchase_price', $validated)) {
             $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price']);
         } else {
             unset($validated['selling_price'], $validated['purchase_price']);
@@ -267,29 +282,18 @@ class ProductManagementController extends Controller
 
         $products = $query->orderBy('id', 'desc')->get();
 
-        $withPrices = $this->isAdmin();
+        $withPurchase = $this->canViewPurchasePrice();
+        $withSelling = $this->canViewSellingPrice();
 
         // Selling Price pada export = hasil formulasi dari harga beli.
-        if ($withPrices) {
+        if ($withSelling) {
             foreach ($products as $product) {
                 $product->selling_price = $this->formula_selling_price($product->currency_id, $product->purchase_price);
             }
         }
 
-        if ($withPrices) {
-            $headers = [
-                'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
-                'Description', 'Currency', 'Purchase Price', 'Selling Price', 'Status',
-            ];
-        } else {
-            $headers = [
-                'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
-                'Description', 'Currency', 'Status',
-            ];
-        }
-
         $service = new ProductExportService;
-        $filePath = $service->export($products, $headers, $withPrices);
+        $filePath = $service->export($products, $withPurchase, $withSelling);
 
         return response()->download($filePath, 'products-export-'.date('Y-m-d').'.xlsx')
             ->deleteFileAfterSend(true);
@@ -348,11 +352,19 @@ class ProductManagementController extends Controller
     }
 
     /**
-     * Harga beli/jual: role Admin, divisi Admin, atau divisi IMS (User::canViewProductPrice).
+     * Harga beli: role Admin, divisi Admin, atau divisi IMS (User::canViewProductPrice).
      */
-    private function isAdmin(): bool
+    private function canViewPurchasePrice(): bool
     {
         return (bool) Auth::user()?->canViewProductPrice();
+    }
+
+    /**
+     * Harga jual: hanya role Admin atau divisi Admin (User::canViewSellingPrice).
+     */
+    private function canViewSellingPrice(): bool
+    {
+        return (bool) Auth::user()?->canViewSellingPrice();
     }
 
     /**

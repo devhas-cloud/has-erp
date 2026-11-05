@@ -6,10 +6,20 @@ use ZipArchive;
 
 class ProductExportService
 {
-    private bool $withPrices = true;
+    private bool $withPurchase = true;
 
-    public function export($products, array $headers): string
+    private bool $withSelling = true;
+
+    /**
+     * Kolom harga mengikuti izin user: Purchase Price (Admin / divisi Admin / IMS),
+     * Selling Price (Admin / divisi Admin). Header & isi baris dibangun dari aturan yang sama.
+     */
+    public function export($products, bool $withPurchase = true, bool $withSelling = true): string
     {
+        $this->withPurchase = $withPurchase;
+        $this->withSelling = $withSelling;
+        $headers = $this->headers();
+
         $filePath = storage_path('app/temp/product-export-'.uniqid().'.xlsx');
         $dir = dirname($filePath);
         if (! is_dir($dir)) {
@@ -165,24 +175,26 @@ class ProductExportService
         return $xml;
     }
 
+    private function headers(): array
+    {
+        $headers = [
+            'Name', 'Code', 'Brand', 'Category', 'Type', 'Parameter', 'Division',
+            'Description', 'Currency',
+        ];
+        if ($this->withPurchase) {
+            $headers[] = 'Purchase Price';
+        }
+        if ($this->withSelling) {
+            $headers[] = 'Selling Price';
+        }
+        $headers[] = 'Status';
+
+        return $headers;
+    }
+
     private function extractRow(object $product): array
     {
-        if (! $this->withPrices) {
-            return [
-                $product->name ?? '',
-                $product->code ?? '',
-                $product->brand ?? '',
-                $product->category ?? '',
-                $product->type ?? '',
-                $product->parameter ?? '',
-                $product->division?->division_name ?? '',
-                $product->description ?? '',
-                $product->currency?->name ?? '',
-                $product->status ?? 'Active',
-            ];
-        }
-
-        return [
+        $row = [
             $product->name ?? '',
             $product->code ?? '',
             $product->brand ?? '',
@@ -192,10 +204,16 @@ class ProductExportService
             $product->division?->division_name ?? '',
             $product->description ?? '',
             $product->currency?->name ?? '',
-            number_format($product->purchase_price ?? 0, 2),
-            number_format($product->selling_price ?? 0, 2),
-            $product->status ?? 'Active',
         ];
+        if ($this->withPurchase) {
+            $row[] = number_format($product->purchase_price ?? 0, 2);
+        }
+        if ($this->withSelling) {
+            $row[] = number_format($product->selling_price ?? 0, 2);
+        }
+        $row[] = $product->status ?? 'Active';
+
+        return $row;
     }
 
     private function colLetter(int $index): string

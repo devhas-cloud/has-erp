@@ -71,8 +71,10 @@ class AppServiceProvider extends ServiceProvider
             $view->with('canUpdate', $isAdmin || ($access->can_update ?? false));
             $view->with('canDelete', $isAdmin || ($access->can_delete ?? false));
             $view->with('canApprove', $isAdmin || ($access->can_approve ?? false));
-            // Harga beli/jual master product: role Admin, divisi Admin, divisi IMS (User::canViewProductPrice).
+            // Harga beli master product: role Admin, divisi Admin, divisi IMS (User::canViewProductPrice).
             $view->with('canViewPrice', Auth::user()->canViewProductPrice());
+            // Harga jual master product: hanya role Admin atau divisi Admin (User::canViewSellingPrice).
+            $view->with('canViewSellingPrice', Auth::user()->canViewSellingPrice());
         });
     }
 }

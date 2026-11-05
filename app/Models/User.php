@@ -70,22 +70,36 @@ class User extends Authenticatable
         );
     }
 
-    /** Divisi yang boleh melihat & mengubah harga beli/jual master product. */
+    /** Divisi yang boleh melihat & mengubah harga beli master product. */
     public const PRICE_VIEWER_DIVISIONS = ['Admin', 'IMS'];
 
+    /** Divisi yang boleh melihat harga jual master product. */
+    public const SELLING_PRICE_VIEWER_DIVISIONS = ['Admin'];
+
     /**
-     * Harga beli/jual master product: role Admin, atau user berdivisi Admin / IMS.
-     * Satu-satunya aturan — dipakai view (canViewPrice) dan ProductManagementController.
+     * Harga beli master product: role Admin, atau user berdivisi Admin / IMS.
+     * Dipakai view (canViewPrice) dan ProductManagementController.
      */
     public function canViewProductPrice(): bool
     {
-        if ($this->role === 'Admin') {
-            return true;
-        }
+        return $this->role === 'Admin' || $this->inDivision(self::PRICE_VIEWER_DIVISIONS);
+    }
 
+    /**
+     * Harga jual master product: hanya role Admin atau user berdivisi Admin.
+     * Dipakai view (canViewSellingPrice) dan ProductManagementController.
+     */
+    public function canViewSellingPrice(): bool
+    {
+        return $this->role === 'Admin' || $this->inDivision(self::SELLING_PRICE_VIEWER_DIVISIONS);
+    }
+
+    /** Cek nama divisi user (tidak peka huruf besar/kecil & spasi tepi). */
+    private function inDivision(array $divisions): bool
+    {
         $division = strtolower(trim((string) $this->division?->division_name));
 
-        return in_array($division, array_map('strtolower', self::PRICE_VIEWER_DIVISIONS), true);
+        return $division !== '' && in_array($division, array_map('strtolower', $divisions), true);
     }
 
     public function division(): BelongsTo
