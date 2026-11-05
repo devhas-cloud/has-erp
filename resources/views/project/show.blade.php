@@ -162,6 +162,11 @@
             @if($project->is_retention)
                 <span class="status-badge" style="background:#fef3c7;color:#92400e;">Retensi</span>
             @endif
+            @if($project->isImsHybrid())
+                <span class="pj-pill warn" title="Dibuat dari modul IMS Project tanpa nilai kontrak & sales. Lengkapi lewat Edit.">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Nilai &amp; sales belum diisi
+                </span>
+            @endif
             @if($warranty)
                 <span class="pj-pill {{ $warrantyMeta['class'] }}" title="Masa garansi {{ $warranty->start_date->format('d M Y') }} – {{ $warranty->end_date->format('d M Y') }}">
                     <i class="fa-solid fa-shield-halved me-1"></i>Garansi {{ $warrantyMeta['label'] }} · s/d {{ $warranty->end_date->format('d M Y') }}
@@ -865,6 +870,8 @@
         </div>
     </div>
 </div>
+
+@include('ims-project._tasks', ['tasks' => $project->tasks])
 @endsection
 
 @push('modals')

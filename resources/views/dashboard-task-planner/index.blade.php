@@ -81,6 +81,52 @@
         text-align: right;
         flex-shrink: 0;
     }
+
+    /* Jadwal visit 7 hari kerja */
+    .vs-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .vs-filter select, .vs-filter input[type=text] {
+        padding: 6px 10px; border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+        font-size: 12.5px; color: var(--text-primary); background: #fff;
+    }
+    .vs-filter label.vs-check { font-size: 12.5px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 5px; margin: 0; cursor: pointer; }
+    .vs-summary { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; font-size: 13px; color: var(--text-muted); }
+    .vs-summary strong { color: var(--text-primary); font-size: 15px; }
+    .vs-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11.5px; color: var(--text-muted); margin-left: auto; }
+    .vs-legend span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; background: var(--c); }
+
+    .vs-wrap { overflow-x: auto; border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+    .vs-table { width: 100%; min-width: 980px; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+    .vs-table th, .vs-table td { border-bottom: 1px solid var(--card-border); border-right: 1px solid var(--card-border); vertical-align: top; padding: 6px; }
+    .vs-table th:last-child, .vs-table td:last-child { border-right: 0; }
+    .vs-table thead th { background: #f8fafc; text-align: center; font-weight: 600; color: var(--text-primary); position: sticky; top: 0; z-index: 2; }
+    .vs-table thead th .d { display: block; font-size: 11px; font-weight: 500; color: var(--text-muted); }
+    .vs-table .vs-person { position: sticky; left: 0; z-index: 1; background: #fff; width: 190px; min-width: 190px; }
+    .vs-table thead .vs-person { z-index: 3; background: #f8fafc; text-align: left; }
+    .vs-table .vs-person .n { font-weight: 600; color: var(--text-primary); }
+    .vs-table .vs-person .c { font-size: 11px; color: var(--text-muted); }
+    .vs-table td.vs-day { width: calc((100% - 190px) / 7); min-width: 110px; }
+    .vs-table .is-today { background: var(--accent-subtle, #f0fdfa); }
+    .vs-table thead th.is-today { background: var(--accent-soft); color: var(--accent); }
+    .vs-table tr.vs-group td { background: #f1f5f9; font-weight: 700; font-size: 12px; cursor: pointer; padding: 7px 10px; }
+    .vs-table tr.vs-group td .meta { font-weight: 500; color: var(--text-muted); margin-left: 6px; }
+    .vs-table tr.vs-group .chev { transition: transform .15s; display: inline-block; margin-right: 6px; color: var(--text-muted); }
+    .vs-table tr.vs-group.collapsed .chev { transform: rotate(-90deg); }
+    .vs-table tfoot td { background: #f8fafc; font-weight: 700; text-align: center; }
+    .vs-table tfoot td.vs-person { text-align: left; background: #f8fafc; }
+
+    .vs-chip {
+        display: block; text-decoration: none; border-radius: 6px; padding: 4px 6px; margin-bottom: 4px;
+        border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 10%, #fff); color: var(--text-primary);
+        line-height: 1.25; overflow: hidden;
+    }
+    .vs-chip:hover { box-shadow: 0 1px 6px rgba(0,0,0,.08); color: var(--text-primary); }
+    .vs-chip .t { font-weight: 700; font-size: 11px; color: var(--c); }
+    .vs-chip .l { font-weight: 600; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+    .vs-chip .g { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+    .vs-more { font-size: 11px; color: var(--accent); cursor: pointer; background: none; border: 0; padding: 0; }
+    .vs-chip.extra { display: none; }
+    .vs-day.expanded .vs-chip.extra { display: block; }
+    .vs-empty-cell { color: #cbd5e1; text-align: center; font-size: 11px; padding-top: 4px; }
 </style>
 @endsection
 
@@ -88,148 +134,173 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Dashboard Task Planner</h1>
-        <p class="page-header-sub">Monitoring tugas Anda secara real-time</p>
+        <p class="page-header-sub">Jadwal visit lintas divisi dan monitoring tugas Anda</p>
     </div>
 </div>
 
-<div class="row g-4 fade-in">
-    <div class="col-lg-3 col-md-6">
-        <div class="dash-stat-card">
-            <div class="dash-stat-icon" style="background:var(--accent-soft);color:var(--accent)">
-                <i class="fa fa-tasks"></i>
-            </div>
-            <div class="dash-stat-content">
-                <div class="dash-stat-label">Total Tasks</div>
-                <div class="dash-stat-value">{{ $totalTasks }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-3 col-md-6">
-        <div class="dash-stat-card">
-            <div class="dash-stat-icon" style="background:var(--warning-soft);color:#78350f">
-                <i class="fa fa-circle"></i>
-            </div>
-            <div class="dash-stat-content">
-                <div class="dash-stat-label">To Do</div>
-                <div class="dash-stat-value warning">{{ $todoCount }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-3 col-md-6">
-        <div class="dash-stat-card">
-            <div class="dash-stat-icon" style="background:var(--info-soft);color:#1e40af">
-                <i class="fa fa-spinner"></i>
-            </div>
-            <div class="dash-stat-content">
-                <div class="dash-stat-label">In Progress</div>
-                <div class="dash-stat-value info">{{ $inProgressCount }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-3 col-md-6">
-        <div class="dash-stat-card">
-            <div class="dash-stat-icon" style="background:#fee2e2;color:#dc3545">
-                <i class="fa fa-exclamation-triangle"></i>
-            </div>
-            <div class="dash-stat-content">
-                <div class="dash-stat-label">Overdue</div>
-                <div class="dash-stat-value danger">{{ $overdueCount }}</div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row g-4 mt-2 fade-in stagger-1">
-    <div class="col-lg-7">
-        <div class="card-custom">
-            <div class="card-header-custom">
-                <span><i class="fa fa-list me-2" style="color:var(--accent)"></i>Upcoming Tasks</span>
-                <a href="{{ route('task-planner.index') }}" class="btn btn-sm btn-ghost" style="font-size:11px">Lihat Semua</a>
+@php
+    $vs = $visit;
+    $dayNames = [1 => 'Sen', 2 => 'Sel', 3 => 'Rab', 4 => 'Kam', 5 => 'Jum'];
+    $statusColor = [
+        'todo' => '#f59e0b',
+        'in_progress' => '#3b82f6',
+        'waiting_approval' => '#a855f7',
+        'done' => '#10b981',
+    ];
+    $statusLabel = ['todo' => 'To Do', 'in_progress' => 'In Progress', 'waiting_approval' => 'Waiting Approval', 'done' => 'Done'];
+    $vsQuery = fn (array $over) => route('dashboard-task-planner.index', array_filter(array_merge([
+        'visit_start' => $vs['days'][0]->toDateString(),
+        'visit_division' => $vs['filters']['division_id'],
+        'visit_category' => $vs['filters']['category_id'],
+        'visit_status' => $vs['filters']['status'],
+        'visit_q' => $vs['filters']['q'] ?: null,
+        'visit_empty' => $vs['filters']['show_empty'] ? 1 : null,
+    ], $over), fn ($v) => $v !== null && $v !== '')).'#jadwal-visit';
+    $firstDay = $vs['days'][0];
+    $lastDay = end($vs['days']);
+@endphp
+
+<div class="card-custom fade-in mb-4" id="jadwal-visit">
+    <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+            <i class="fa fa-route me-2" style="color:var(--accent)"></i>Jadwal Visit · 7 Hari Kerja
+            <span style="font-size:12px;color:var(--text-muted);font-weight:500">{{ $firstDay->format('d M') }} – {{ $lastDay->format('d M Y') }}</span>
+        </span>
+        <div class="d-flex gap-1">
+            <a href="{{ $vsQuery(['visit_start' => $vs['prev_start']]) }}" class="btn btn-sm btn-ghost" title="7 hari kerja sebelumnya"><i class="fa fa-chevron-left"></i></a>
+            <a href="{{ $vsQuery(['visit_start' => null]) }}" class="btn btn-sm {{ $vs['is_current'] ? 'btn-accent' : 'btn-ghost' }}" style="font-size:12px">Hari ini</a>
+            <a href="{{ $vsQuery(['visit_start' => $vs['next_start']]) }}" class="btn btn-sm btn-ghost" title="7 hari kerja berikutnya"><i class="fa fa-chevron-right"></i></a>
+        </div>
+    </div>
+    <div class="card-body-custom">
+        <form method="GET" action="{{ route('dashboard-task-planner.index') }}#jadwal-visit" class="vs-filter mb-3">
+            <input type="hidden" name="visit_start" value="{{ $firstDay->toDateString() }}">
+            <select name="visit_division" onchange="this.form.submit()">
+                <option value="">Semua Divisi</option>
+                @foreach($vs['divisions'] as $d)
+                    <option value="{{ $d->id }}" @selected($vs['filters']['division_id'] === $d->id)>{{ $d->division_name }}</option>
+                @endforeach
+            </select>
+            <select name="visit_category" onchange="this.form.submit()">
+                <option value="">Semua Kategori Visit</option>
+                @foreach($vs['categories'] as $c)
+                    <option value="{{ $c->id }}" @selected($vs['filters']['category_id'] === $c->id)>{{ $c->name }}</option>
+                @endforeach
+            </select>
+            <select name="visit_status" onchange="this.form.submit()">
+                <option value="">Semua Status</option>
+                @foreach($statusLabel + ['late' => 'Terlambat'] as $key => $label)
+                    <option value="{{ $key }}" @selected($vs['filters']['status'] === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <input type="text" name="visit_q" value="{{ $vs['filters']['q'] }}" placeholder="Cari nama..." style="width:160px">
+            <label class="vs-check"><input type="checkbox" name="visit_empty" value="1" @checked($vs['filters']['show_empty']) onchange="this.form.submit()"> Tampilkan yang tidak ada visit</label>
+            <button type="submit" class="btn btn-sm btn-accent" style="font-size:12px"><i class="fa fa-search me-1"></i>Terapkan</button>
+            @if(array_filter(\Illuminate\Support\Arr::except($vs['filters'], ['show_empty'])) || $vs['filters']['show_empty'])
+                <a href="{{ route('dashboard-task-planner.index', ['visit_start' => $firstDay->toDateString()]) }}#jadwal-visit" style="font-size:12px">Reset</a>
+            @endif
+        </form>
+
+        <div class="vs-summary mb-2">
+            <span><strong>{{ $vs['summary']['tasks'] }}</strong> visit</span>
+            <span><strong>{{ $vs['summary']['people'] }}</strong> orang</span>
+            <span><strong>{{ $vs['summary']['divisions'] }}</strong> divisi</span>
+            <div class="vs-legend">
+                @foreach($statusLabel as $key => $label)
+                    <span style="--c:{{ $statusColor[$key] }}">{{ $label }}</span>
+                @endforeach
+                <span style="--c:#dc2626">Terlambat</span>
+                <span style="--c:transparent">📍 Sudah check-in</span>
             </div>
-            <div class="card-body-custom">
-                @if ($upcomingTasks->isEmpty())
-                    <div class="empty-state">
-                        <i class="fa fa-check-circle"></i>
-                        <p>Tidak ada task yang perlu dikerjakan</p>
-                    </div>
-                @else
-                    <table class="table table-custom align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Title</th>
-                                <th>Category</th>
-                                <th>Due Date</th>
-                                <th>Status</th>
-                                <th></th>
+        </div>
+
+        @if($vs['groups']->isEmpty())
+            <div class="empty-state">
+                <i class="fa fa-route"></i>
+                <p>Tidak ada task visit pada {{ $firstDay->format('d M') }} – {{ $lastDay->format('d M Y') }}{{ array_filter(\Illuminate\Support\Arr::except($vs['filters'], ['show_empty'])) ? ' dengan filter ini' : '' }}.</p>
+            </div>
+        @else
+            <div class="vs-wrap">
+                <table class="vs-table">
+                    <thead>
+                        <tr>
+                            <th class="vs-person">Orang</th>
+                            @foreach($vs['days'] as $day)
+                                <th class="{{ $day->equalTo($vs['today']) ? 'is-today' : '' }}">
+                                    {{ $dayNames[$day->dayOfWeekIso] }} {{ $day->format('d') }}
+                                    <span class="d">{{ $day->equalTo($vs['today']) ? 'Hari ini' : $day->format('M') }}</span>
+                                </th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($vs['groups'] as $gi => $group)
+                            <tr class="vs-group" data-group="{{ $gi }}" onclick="vsToggleGroup(this)">
+                                <td colspan="{{ count($vs['days']) + 1 }}">
+                                    <span class="chev"><i class="fa fa-chevron-down"></i></span>{{ $group['name'] }}
+                                    <span class="meta">{{ $group['rows']->count() }} orang · {{ $group['visits'] }} visit</span>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($upcomingTasks as $task)
-                                <tr>
-                                    <td>
-                                        <a href="{{ route('task-planner.show', $task->id) }}" style="font-weight:600;text-decoration:none;color:var(--text-primary)">
-                                            {{ $task->title }}
-                                        </a>
+                            @foreach($group['rows'] as $row)
+                                <tr data-group-row="{{ $gi }}">
+                                    <td class="vs-person">
+                                        <div class="n">{{ $row['user']->display_name }}</div>
+                                        <div class="c">{{ $row['count'] }} visit</div>
                                     </td>
-                                    <td>
-                                        <span style="font-size:12px;color:var(--text-muted)">{{ $task->category?->name ?? '—' }}</span>
-                                    </td>
-                                    <td>
-                                        @php $isOverdue = $task->due_date->endOfDay()->isPast() && $task->status !== 'done'; @endphp
-                                        <span class="{{ $isOverdue ? 'text-danger fw-bold' : '' }}" style="font-size:13px">
-                                            {{ $task->due_date->format('d M Y') }}
-                                            @if ($isOverdue)
-                                                <i class="fa fa-exclamation-circle ms-1"></i>
+                                    @foreach($vs['days'] as $day)
+                                        @php $items = $row['days'][$day->toDateString()]; @endphp
+                                        <td class="vs-day {{ $day->equalTo($vs['today']) ? 'is-today' : '' }}">
+                                            @forelse($items as $i => $item)
+                                                @php $c = $item['late'] ? '#dc2626' : ($statusColor[$item['status']] ?? '#94a3b8'); @endphp
+                                                <a href="{{ route('task-planner.show', $item['id']) }}" class="vs-chip {{ $i >= 2 ? 'extra' : '' }}" style="--c:{{ $c }}"
+                                                   title="{{ $item['title'] }} · {{ $item['category'] }} · {{ $item['late'] ? 'Terlambat' : ($statusLabel[$item['status']] ?? $item['status']) }}{{ $item['target'] ? ' · '.$item['target'] : '' }}">
+                                                    <span class="t">{{ $item['time'] ?? '—' }} · {{ $item['category'] }}</span>@if($item['checked_in']) 📍@endif
+                                                    <span class="l">{{ $item['title'] }}</span>
+                                                    @if($item['target'])<span class="g">{{ $item['target'] }}</span>@endif
+                                                </a>
+                                            @empty
+                                                <div class="vs-empty-cell">·</div>
+                                            @endforelse
+                                            @if(count($items) > 2)
+                                                <button type="button" class="vs-more" onclick="vsExpand(this)">+{{ count($items) - 2 }} lainnya</button>
                                             @endif
-                                        </span>
-                                    </td>
-                                    <td>
-                                        @if ($task->status === 'todo')
-                                            <span class="status-badge status-pending">To Do</span>
-                                        @elseif ($task->status === 'in_progress')
-                                            <span class="status-badge" style="background:var(--info-soft);color:#1e40af">In Progress</span>
-                                        @elseif ($task->status === 'waiting_approval')
-                                            <span class="status-badge" style="background:#fef3c7;color:#92400e">Waiting Approval</span>
-                                        @else
-                                            <span class="status-badge status-active">Done</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        <a href="{{ route('task-planner.show', $task->id) }}" class="btn btn-sm btn-ghost" style="font-size:11px">Detail</a>
-                                    </td>
+                                        </td>
+                                    @endforeach
                                 </tr>
                             @endforeach
-                        </tbody>
-                    </table>
-                @endif
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td class="vs-person">Total / hari</td>
+                            @foreach($vs['days'] as $day)
+                                <td class="{{ $day->equalTo($vs['today']) ? 'is-today' : '' }}">{{ $vs['day_totals'][$day->toDateString()] }}</td>
+                            @endforeach
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
-        </div>
-    </div>
-
-    <div class="col-lg-5">
-        <div class="card-custom">
-            <div class="card-header-custom">
-                <span><i class="fa fa-chart-bar me-2" style="color:var(--accent)"></i>Tasks by Category</span>
-            </div>
-            <div class="card-body-custom">
-                @if ($categories->isEmpty())
-                    <div class="empty-state">
-                        <i class="fa fa-folder-open"></i>
-                        <p>Belum ada task</p>
-                    </div>
-                @else
-                    @foreach ($categories as $cat)
-                        <div class="category-progress">
-                            <span class="cat-name">{{ $cat['name'] }}</span>
-                            <div class="cat-bar-wrap">
-                                <div class="cat-bar-fill" style="width:{{ $cat['pct'] }}%"></div>
-                            </div>
-                            <span class="cat-stat">{{ $cat['done'] }}/{{ $cat['total'] }}</span>
-                        </div>
-                    @endforeach
-                @endif
-            </div>
-        </div>
+        @endif
     </div>
 </div>
+
+@endsection
+
+@section('scripts')
+<script>
+function vsToggleGroup(tr) {
+    var group = tr.getAttribute('data-group');
+    var collapsed = tr.classList.toggle('collapsed');
+    document.querySelectorAll('tr[data-group-row="' + group + '"]').forEach(function(row) {
+        row.style.display = collapsed ? 'none' : '';
+    });
+}
+
+function vsExpand(btn) {
+    var cell = btn.closest('.vs-day');
+    var expanded = cell.classList.toggle('expanded');
+    btn.textContent = expanded ? 'Sembunyikan' : '+' + cell.querySelectorAll('.vs-chip.extra').length + ' lainnya';
+}
+</script>
 @endsection

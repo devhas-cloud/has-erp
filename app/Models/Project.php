@@ -127,6 +127,12 @@ class Project extends Model
         return $this->hasOne(ProjectWarranty::class);
     }
 
+    /** Task Planner yang dikaitkan ke project ini. */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class)->orderByDesc('id');
+    }
+
     public function billingTerms(): HasMany
     {
         return $this->hasMany(ProjectBillingTerm::class)->orderBy('sort_order')->orderBy('id');
@@ -222,6 +228,43 @@ class Project extends Model
     public function hasManualBreakdown(): bool
     {
         return ! $this->quotation_id && $this->manual_subtotal !== null;
+    }
+
+    /**
+     * Project hybrid dari modul IMS Project: data PO & garansi saja, belum punya
+     * quotation maupun nilai kontrak. Tidak ada kolom penanda; kriterianya
+     * tanpa quotation, tanpa rincian manual, dan nilai 0. Project manual lama
+     * bernilai 0 ikut terhitung. Begitu nilai kontrak dilengkapi di modul
+     * Project, project keluar dari daftar ini.
+     */
+    public function scopeImsHybrid($query)
+    {
+        return $query->whereNull('quotation_id')
+            ->whereNull('manual_subtotal')
+            ->where('total_sale_amount', 0)
+            ->where('net_sale_amount', 0);
+    }
+
+    public function isImsHybrid(): bool
+    {
+        return ! $this->quotation_id
+            && $this->manual_subtotal === null
+            && (float) $this->total_sale_amount == 0.0
+            && (float) $this->net_sale_amount == 0.0;
+    }
+
+    /**
+     * Masa garansi: kedua tanggal diisi -> simpan/perbarui; salah satu kosong -> hapus.
+     */
+    public function syncWarranty(?string $start, ?string $end): void
+    {
+        if (! $start || ! $end) {
+            $this->warranty()->delete();
+
+            return;
+        }
+
+        $this->warranty()->updateOrCreate([], ['start_date' => $start, 'end_date' => $end]);
     }
 
     /**

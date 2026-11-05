@@ -166,6 +166,7 @@ class TaskExportService
         return [
             $task->id,
             $task->title,
+            $task->project ? $task->project->project_number.' — '.$task->project->project_name : '',
             $task->description ?? '',
             $task->category?->name ?? '—',
             $task->status,

@@ -3,6 +3,15 @@
 @section('title', 'Project')
 @section('page-title', 'Project')
 
+@section('styles')
+<style>
+    .pj-tag-ok, .pj-tag-warn, .pj-tag-danger { display: inline-block; margin-top: 2px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .pj-tag-ok { background: var(--accent-soft); color: var(--accent); }
+    .pj-tag-warn { background: #fef3c7; color: #92400e; }
+    .pj-tag-danger { background: var(--danger-soft); color: #7f1d1d; }
+</style>
+@endsection
+
 @section('content')
 <div class="page-header">
     <div>
@@ -52,6 +61,7 @@
                                 <th>Tgl PO</th>
                                 <th class="text-end">Net Sale</th>
                                 <th>Tipe</th>
+                                <th>Garansi</th>
                                 <th>Status</th>
                                 <th class="text-center" style="width:120px">Aksi</th>
                             </tr>
@@ -118,7 +128,14 @@ function initPjTable() {
             { data: 'project_number', orderable: false, searchable: true,
                 render: function(data) { return '<strong style="color:var(--text-primary)">' + data + '</strong>'; }
             },
-            { data: 'project_name', orderable: false, searchable: true },
+            { data: 'project_name', orderable: false, searchable: true,
+                render: function(data, type, row) {
+                    var name = $('<div>').text(data).html();
+                    return row.is_hybrid
+                        ? name + '<div><span class="pj-tag-warn" title="Dibuat dari IMS Project, nilai kontrak &amp; sales belum diisi">Belum lengkap</span></div>'
+                        : name;
+                }
+            },
             { data: 'quotation_number', orderable: false, searchable: true },
             { data: 'company_name', orderable: false, searchable: true },
             { data: 'po_number_company', orderable: false, searchable: true },
@@ -127,6 +144,13 @@ function initPjTable() {
                 render: function(data) { return pjFormatMoney(data); }
             },
             { data: 'type_label', orderable: false, searchable: false },
+            { data: 'warranty_label', orderable: false, searchable: false,
+                render: function(data, type, row) {
+                    if (!data) return '<span style="color:var(--text-muted)">—</span>';
+                    return '<span class="pj-tag-' + row.warranty_class + '">' + data + '</span>'
+                        + '<div style="font-size:11.5px;color:var(--text-muted);white-space:nowrap">s/d ' + row.warranty_end + '</div>';
+                }
+            },
             { data: 'status_badge', orderable: false, searchable: false },
             {
                 data: 'id', orderable: false, searchable: false, className: 'text-center',

@@ -175,6 +175,14 @@
                             <label class="form-label">Description</label>
                             <textarea name="description" class="form-control" rows="3" placeholder="Deskripsi tugas...">{{ old('description', $task->description) }}</textarea>
                         </div>
+                        <div class="col-12">
+                            <label class="form-label">Project<span class="field-optional">(opsional, hanya project aktif)</span></label>
+                            <select name="project_id" id="edit_project" class="form-select" style="width:100%">
+                                @if ($task->project)
+                                    <option value="{{ $task->project->id }}" selected>{{ \App\Http\Controllers\TaskPlannerController::projectLabel($task->project) }}</option>
+                                @endif
+                            </select>
+                        </div>
                         <div class="col-md-6">
                             <label class="form-label">Category<span class="field-required">*</span></label>
                             <select name="category_id" id="edit_category_id" class="form-select" required>
@@ -323,6 +331,19 @@
     $(function() {
         toggleAccountContact();
         $(document).on('change', '#edit_category_id', toggleAccountContact);
+
+        $('#edit_project').select2({
+            placeholder: 'Cari no / nama project, PO, atau company...',
+            allowClear: true,
+            ajax: {
+                url: '{{ route('task-planner.fetch-projects') }}',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(data) { return { results: data.results }; }
+            },
+            minimumInputLength: 0
+        });
 
         $('#edit_account_contact').select2({
             placeholder: 'Cari kontak yang dikunjungi...',

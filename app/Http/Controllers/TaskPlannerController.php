@@ -6,6 +6,7 @@ use App\Models\AccountContact;
 use App\Models\HandlingGroup;
 use App\Models\Log;
 use App\Models\Notification;
+use App\Models\Project;
 use App\Models\QuoteConfiguration;
 use App\Models\Quotation;
 use App\Models\Task;
@@ -14,6 +15,7 @@ use App\Models\TaskCategory;
 use App\Models\TaskProposal;
 use App\Models\TaskVisit;
 use App\Models\User;
+use App\Models\UserAccessControl;
 use App\Models\WhatsAppGroup;
 use App\Services\MentionParser;
 use App\Services\TaskExportService;
@@ -26,6 +28,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class TaskPlannerController extends Controller
@@ -37,12 +40,8 @@ class TaskPlannerController extends Controller
 
         $user = Auth::user();
         $userId = $user->id;
-        $userDivisionId = $user->division_id;
 
-        $categories = TaskCategory::where(function ($q) use ($userDivisionId) {
-            $q->whereNull('division_id')
-                ->orWhere('division_id', $userDivisionId);
-        })->get();
+        $categories = self::categoriesFor($user);
 
         return view('task-planner.index', compact(
             'whatsappGroups', 'users', 'categories', 'userId'
@@ -56,7 +55,7 @@ class TaskPlannerController extends Controller
         $userRole = $user->hierarchyRole;
         $userDivisionId = $user->division_id;
 
-        $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees']);
+        $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees', 'project']);
 
         if ($userRole && $userRole->is_global_delegator) {
         } elseif ($userRole) {
@@ -86,6 +85,10 @@ class TaskPlannerController extends Controller
                     ->orWhereHas('category', function ($q) use ($searchValue) {
                         $q->where('name', 'like', "%{$searchValue}%");
                     })
+                    ->orWhereHas('project', function ($q) use ($searchValue) {
+                        $q->where('project_number', 'like', "%{$searchValue}%")
+                            ->orWhere('project_name', 'like', "%{$searchValue}%");
+                    })
                     ->orWhereHas('assignees', function ($q) use ($searchValue) {
                         $q->where('username', 'like', "%{$searchValue}%")
                             ->orWhere('full_name', 'like', "%{$searchValue}%");
@@ -101,6 +104,11 @@ class TaskPlannerController extends Controller
         $categoryFilter = $request->input('category_id');
         if ($categoryFilter) {
             $query->where('category_id', $categoryFilter);
+        }
+
+        $projectFilter = $request->input('project_id');
+        if ($projectFilter) {
+            $query->where('project_id', $projectFilter);
         }
 
         $dueDateFrom = $request->input('due_date_from');
@@ -144,6 +152,9 @@ class TaskPlannerController extends Controller
                 'id' => $task->id,
                 'creator_id' => $task->creator_id,
                 'title' => $task->title,
+                'project_id' => $task->project_id,
+                'project_number' => $task->project?->project_number,
+                'project_name' => $task->project?->project_name,
                 'category_name' => $task->category?->name ?? '—',
                 'status_label' => $this->renderStatusBadge($task->status),
                 'creator_name' => $task->creator?->display_name ?? '—',
@@ -268,6 +279,103 @@ class TaskPlannerController extends Controller
      * Picker "Account Contact" (kontak yang dikunjungi) — hanya relevan
      * untuk task kategori Visit, opsional.
      */
+    /**
+     * Pilihan project untuk task: hanya project Active. Terbuka untuk semua
+     * pengguna Task Planner (tidak perlu akses modul Project).
+     */
+    public function fetchProjects(Request $request): JsonResponse
+    {
+        $q = trim((string) $request->get('q', ''));
+
+        $projects = Project::with('company')
+            ->where('status', Project::STATUS_ACTIVE)
+            ->when($q !== '', fn ($query) => $query->where(function ($qry) use ($q) {
+                $qry->where('project_number', 'like', "%{$q}%")
+                    ->orWhere('project_name', 'like', "%{$q}%")
+                    ->orWhere('po_number_company', 'like', "%{$q}%")
+                    ->orWhereHas('company', fn ($c) => $c->where('account_name', 'like', "%{$q}%"));
+            }))
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get();
+
+        return response()->json([
+            'results' => $projects->map(fn (Project $p) => [
+                'id' => $p->id,
+                'text' => self::projectLabel($p),
+            ])->values(),
+        ]);
+    }
+
+    /** Kategori task yang bisa dipakai user: global + divisinya. */
+    public static function categoriesFor(User $user)
+    {
+        return TaskCategory::with('division')->where(function ($q) use ($user) {
+            $q->whereNull('division_id')->orWhere('division_id', $user->division_id);
+        })->get();
+    }
+
+    /**
+     * Data form "Tambah Task" di halaman detail Project / IMS Project. Task
+     * disimpan lewat task-planner.store, jadi tombol hanya untuk pengguna
+     * dengan can_create Task Planner dan project yang masih Active.
+     */
+    public static function projectTaskContext(Project $project): array
+    {
+        $user = Auth::user();
+        $canCreate = $user->role === 'Admin' || UserAccessControl::where('user_id', $user->id)
+            ->whereHas('module', fn ($q) => $q->where('route_name', 'task-planner'))
+            ->where('can_create', true)
+            ->exists();
+
+        return [
+            'canCreateTask' => $canCreate,
+            'projectActive' => $project->status === Project::STATUS_ACTIVE,
+            'taskCategories' => $canCreate ? self::categoriesFor($user) : collect(),
+        ];
+    }
+
+    public static function projectLabel(Project $project): string
+    {
+        return $project->project_number.' — '.$project->project_name
+            .($project->company ? ' · '.$project->company->account_name : '');
+    }
+
+    /**
+     * Tautan detail project sesuai hak akses: modul Project, atau IMS Project
+     * untuk project hybrid. Tanpa akses keduanya -> null (label saja).
+     */
+    private function projectUrl(Project $project): ?string
+    {
+        $user = Auth::user();
+        $canRead = fn (string $route) => $user->role === 'Admin' || UserAccessControl::where('user_id', $user->id)
+            ->whereHas('module', fn ($q) => $q->where('route_name', $route))
+            ->where('can_read', true)
+            ->exists();
+
+        if ($canRead('project')) {
+            return route('project.show', $project->id);
+        }
+        if ($project->isImsHybrid() && $canRead('ims-project')) {
+            return route('ims-project.show', $project->id);
+        }
+
+        return null;
+    }
+
+    /**
+     * Project baru harus Active; project yang sudah terpasang di task boleh
+     * dipertahankan walau statusnya berubah (Completed/Cancelled).
+     */
+    private function projectRule(?int $currentProjectId): array
+    {
+        return [
+            'nullable', 'integer',
+            Rule::exists('projects', 'id')->where(fn ($q) => $q->where('status', Project::STATUS_ACTIVE)
+                ->when($currentProjectId, fn ($qq) => $qq->orWhere('id', $currentProjectId))),
+        ];
+    }
+
     public function fetchAccountContacts(Request $request): JsonResponse
     {
 
@@ -306,6 +414,7 @@ class TaskPlannerController extends Controller
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
             'account_contact_id' => 'nullable|exists:account_contacts,id',
+            'project_id' => $this->projectRule(null),
             'handling_group_id' => 'nullable|exists:handling_groups,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
@@ -315,6 +424,8 @@ class TaskPlannerController extends Controller
             'alert_type' => 'required|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
             'alert_time' => 'nullable|date',
+        ], [
+            'project_id.exists' => 'Project tidak ditemukan atau sudah tidak aktif.',
         ]);
 
         $validated['creator_id'] = Auth::id();
@@ -364,7 +475,7 @@ class TaskPlannerController extends Controller
 
     public function edit($id)
     {
-        $task = Task::with(['assignees', 'category', 'whatsappGroup', 'accountContact'])->findOrFail($id);
+        $task = Task::with(['assignees', 'category', 'whatsappGroup', 'accountContact', 'project.company'])->findOrFail($id);
         $whatsappGroups = WhatsAppGroup::with('division')->where('status', 'Active')->get();
         $categories = TaskCategory::all();
         $users = User::all();
@@ -384,6 +495,7 @@ class TaskPlannerController extends Controller
             'description' => 'nullable|string',
             'category_id' => 'required|exists:task_categories,id',
             'account_contact_id' => 'nullable|exists:account_contacts,id',
+            'project_id' => $this->projectRule($task->project_id),
             'handling_group_id' => 'nullable|exists:handling_groups,id',
             'whatsapp_group_id' => 'nullable|exists:whatsapp_groups,id',
             'due_date' => 'required|date',
@@ -394,7 +506,12 @@ class TaskPlannerController extends Controller
             'alert_type' => 'required|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
             'alert_time' => 'nullable|date',
+        ], [
+            'project_id.exists' => 'Project tidak ditemukan atau sudah tidak aktif.',
         ]);
+
+        // Select project yang dikosongkan tidak terkirim -> lepas kaitan project.
+        $validated['project_id'] = $validated['project_id'] ?? null;
 
         $userId = Auth::id();
         $isCreator = $task->creator_id === $userId;
@@ -459,6 +576,7 @@ class TaskPlannerController extends Controller
             'assignees.hierarchyRole',
             'proposals.uploader',
             'handlingGroup.users',
+            'project.company',
         ])->findOrFail($id);
 
         // Config terbaru per group (riwayat/versi) untuk task ini.
@@ -497,7 +615,9 @@ class TaskPlannerController extends Controller
                 ->first();
         }
 
-        return view('task-planner.show', compact('task', 'quoteConfigurations', 'quotations', 'finalQuotation'));
+        $projectUrl = $task->project ? $this->projectUrl($task->project) : null;
+
+        return view('task-planner.show', compact('task', 'quoteConfigurations', 'quotations', 'finalQuotation', 'projectUrl'));
     }
 
     public function approve($id): JsonResponse
@@ -923,7 +1043,7 @@ class TaskPlannerController extends Controller
         $user = Auth::user()->load('hierarchyRole');
         $userRole = $user->hierarchyRole;
 
-        $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees']);
+        $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees', 'project']);
 
         if ($userRole && $userRole->is_global_delegator) {
         } elseif ($userRole) {
@@ -950,6 +1070,11 @@ class TaskPlannerController extends Controller
             $query->where('category_id', $categoryFilter);
         }
 
+        $projectFilter = $request->input('project_id');
+        if ($projectFilter) {
+            $query->where('project_id', $projectFilter);
+        }
+
         $dueDateFrom = $request->input('due_date_from');
         if ($dueDateFrom) {
             $query->where('due_date', '>=', $dueDateFrom);
@@ -963,7 +1088,7 @@ class TaskPlannerController extends Controller
         $tasks = $query->orderBy('id', 'desc')->get();
 
         $headers = [
-            'ID', 'Title', 'Description', 'Category', 'Status',
+            'ID', 'Title', 'Project', 'Description', 'Category', 'Status',
             'Creator', 'Assignees', 'WhatsApp Group', 'Due Date', 'Time',
             'Requires Approval', 'Alert Type', 'Alert Target', 'Alert Time', 'Created At',
         ];

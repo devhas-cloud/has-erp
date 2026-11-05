@@ -681,6 +681,15 @@
                         <span><i class="fa fa-folder me-1"></i>
                             <span style="font-weight:600; font-weight: bold;">{{ $task->category?->name ?? '—' }}</span>
                         </span>
+                        @if ($task->project)
+                            <span><i class="fa fa-diagram-project me-1"></i>
+                                @if ($projectUrl)
+                                    <a href="{{ $projectUrl }}" style="font-weight:600;color:var(--accent);text-decoration:none">{{ \App\Http\Controllers\TaskPlannerController::projectLabel($task->project) }}</a>
+                                @else
+                                    <span style="font-weight:600">{{ \App\Http\Controllers\TaskPlannerController::projectLabel($task->project) }}</span>
+                                @endif
+                            </span>
+                        @endif
                         <span><i class="fa fa-building me-1"></i> {{ $task->whatsappGroup?->group_name ?? '—' }}</span>
                         <span><i class="fa fa-calendar-check me-1"></i> Due:
                             {{ $task->due_date->format('d M Y') }}</span>

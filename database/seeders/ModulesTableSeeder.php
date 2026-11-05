@@ -209,6 +209,16 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'IMS',
             ],
             [
+                // Modul sementara: input project hybrid yang sudah berjalan (PO, dokumen,
+                // garansi) untuk pemetaan maintenance. Nilai & sales dilengkapi di modul Project.
+                'module_code' => 'MOD_IMS_PROJECT',
+                'module_name' => 'IMS Project',
+                'description' => 'Input project hybrid IMS: data PO customer, dokumen, dan masa garansi untuk pemetaan maintenance',
+                'route_name' => 'ims-project',
+                'icon' => 'fa fa-shield-halved',
+                'group' => 'IMS',
+            ],
+            [
                 'module_code' => 'MOD_ENVIRO_CONFIGURATION',
                 'module_name' => 'Enviro Configuration',
                 'description' => 'Menu quotation Enviro configuration',

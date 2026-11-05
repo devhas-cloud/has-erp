@@ -18,6 +18,7 @@ class Task extends Model
         'creator_id',
         'lead_id',
         'opportunity_id',
+        'project_id',
         'activity_id',
         'category_id',
         'account_contact_id',
@@ -90,6 +91,24 @@ class Task extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
+    }
+
+    /**
+     * Task milik suatu divisi: pembuat atau salah satu assignee berada di divisi itu.
+     */
+    public function scopeForDivision($query, string $divisionName)
+    {
+        $inDivision = fn ($u) => $u->whereHas('division', fn ($d) => $d->where('division_name', $divisionName));
+
+        return $query->where(fn ($q) => $q->whereHas('creator', $inDivision)->orWhereHas('assignees', $inDivision));
+    }
+
+    /**
+     * Project terkait (opsional), mis. task instalasi / maintenance.
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     public function opportunity(): BelongsTo

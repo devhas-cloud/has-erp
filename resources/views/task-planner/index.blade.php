@@ -78,6 +78,13 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
     }
+    .task-project-tag {
+        display: inline-flex; align-items: center; gap: 4px; margin-top: 3px;
+        font-size: 11px; font-weight: 600; color: var(--accent);
+        background: var(--accent-soft); border-radius: 999px; padding: 1px 8px;
+        max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .filter-bar .select2-container { min-width: 200px; font-size: 12px; }
     select.is-invalid + .select2-container .select2-selection {
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
@@ -115,6 +122,7 @@
                     <option value="waiting_approval">Waiting Approval</option>
                     <option value="done">Done</option>
                 </select>
+                <select id="filter-project" style="width:220px"></select>
                 <select id="filter-category" onchange="taskTable.ajax.reload(null, false)">
                     <option value="">All Categories</option>
                     @foreach($categories as $cat)
@@ -200,6 +208,12 @@
                                 <div class="form-group" id="task-account-contact-container" style="display:none">
                                     <label>Account Contact <span style="font-size:11px;color:var(--text-muted);text-transform:none;font-weight:500">(yang dikunjungi, opsional)</span></label>
                                     <select name="account_contact_id" id="task-account-contact" style="width:100%"></select>
+                                </div>
+                            </div>
+                            <div class="task-form-row">
+                                <div class="form-group">
+                                    <label>Project <span style="font-size:11px;color:var(--text-muted);text-transform:none;font-weight:500">(opsional, hanya project aktif)</span></label>
+                                    <select name="project_id" id="task-project" style="width:100%"></select>
                                 </div>
                             </div>
                             <div class="task-form-row">
@@ -328,6 +342,7 @@ const showUrl = '{{ route("task-planner.show", "__ID__") }}';
 const editUrl = '{{ route("task-planner.edit", "__ID__") }}';
 const exportUrl = '{{ route("task-planner.export") }}';
 const importUrl = '{{ route("task-planner.import") }}';
+const fetchProjectsUrl = '{{ route("task-planner.fetch-projects") }}';
 
 function toggleTaskSection(header) {
     header.closest('.task-form-section').classList.toggle('open');
@@ -355,6 +370,7 @@ function resetTaskForm() {
     $('#whatsapp-group-container').hide();
     $('#task-account-contact').val(null).trigger('change');
     $('#task-account-contact-container').hide();
+    $('#task-project').val(null).trigger('change');
     $('#task-alert-target').val('personal');
 }
 
@@ -381,6 +397,7 @@ function initTasksTable() {
             data: function(d) {
                 d.status = $('#filter-status').val();
                 d.category_id = $('#filter-category').val();
+                d.project_id = $('#filter-project').val();
                 d.due_date_from = $('#filter-due-from').val();
                 d.due_date_to = $('#filter-due-to').val();
             }
@@ -389,7 +406,16 @@ function initTasksTable() {
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
 
             { data: 'creator_name', orderable: true },
-            { data: 'title', orderable: true, searchable: true },
+            { data: 'title', orderable: true, searchable: true,
+                render: function(data, type, row) {
+                    var html = $('<div>').text(data).html();
+                    if (row.project_number) {
+                        var label = row.project_number + ' — ' + (row.project_name || '');
+                        html += '<div><span class="task-project-tag" title="' + $('<div>').text(label).html() + '"><i class="fa fa-diagram-project"></i>' + $('<div>').text(label).html() + '</span></div>';
+                    }
+                    return html;
+                }
+            },
 
             { data: 'assignees', orderable: true },
             {
@@ -601,6 +627,24 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
         });
     }
 
+    if (!$('#task-project').hasClass('select2-hidden-accessible')) {
+        $('#task-project').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Cari no / nama project, PO, atau company...',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#taskModal'),
+            ajax: {
+                url: fetchProjectsUrl,
+                dataType: 'json',
+                delay: 300,
+                data: function(params) { return { q: params.term }; },
+                processResults: function(data) { return { results: data.results }; }
+            },
+            minimumInputLength: 0
+        });
+    }
+
     if (!$('#task-account-contact').hasClass('select2-hidden-accessible')) {
         $('#task-account-contact').select2({
             theme: 'bootstrap-5',
@@ -631,6 +675,20 @@ $(document).on('change', '#task-alert-target', function() {
 
 $(document).on('change', '#task-category-id', taskToggleAccountContact);
 
+$('#filter-project').select2({
+    theme: 'bootstrap-5',
+    placeholder: 'All Projects',
+    allowClear: true,
+    width: '220px',
+    ajax: {
+        url: fetchProjectsUrl,
+        dataType: 'json',
+        delay: 300,
+        data: function(params) { return { q: params.term }; },
+        processResults: function(data) { return { results: data.results }; }
+    }
+}).on('change', function() { if (taskTable) taskTable.ajax.reload(null, false); });
+
 initTasksTable();
 
 function openImportModal() {
@@ -643,10 +701,12 @@ function exportTasks() {
     var params = new URLSearchParams();
     var status = $('#filter-status').val();
     var category = $('#filter-category').val();
+    var project = $('#filter-project').val();
     var dueFrom = $('#filter-due-from').val();
     var dueTo = $('#filter-due-to').val();
     if (status) params.set('status', status);
     if (category) params.set('category_id', category);
+    if (project) params.set('project_id', project);
     if (dueFrom) params.set('due_date_from', dueFrom);
     if (dueTo) params.set('due_date_to', dueTo);
     window.open(exportUrl + '?' + params.toString(), '_blank');

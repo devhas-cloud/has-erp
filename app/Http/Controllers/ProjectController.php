@@ -50,7 +50,7 @@ class ProjectController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = Project::with(['company', 'quotation', 'creator']);
+        $query = Project::with(['company', 'quotation', 'creator', 'warranty']);
 
         $recordsTotal = (clone $query)->count();
 
@@ -87,6 +87,10 @@ class ProjectController extends Controller
                 'total_sale_amount' => $project->total_sale_amount,
                 'net_sale_amount' => $project->net_sale_amount,
                 'type_label' => $project->type_label,
+                'is_hybrid' => $project->isImsHybrid(),
+                'warranty_end' => $project->warranty?->end_date->format('d/m/Y'),
+                'warranty_label' => $project->warranty?->statusMeta()['label'],
+                'warranty_class' => $project->warranty?->statusMeta()['class'],
                 'status' => $project->status,
                 'status_badge' => $project->statusBadgeHtml(),
                 'creator_name' => $project->creator?->display_name ?? '—',
@@ -216,7 +220,7 @@ class ProjectController extends Controller
             'company', 'quotation.opportunity', 'quotation.profitEstimate', 'creator', 'updater', 'poUploader',
             'achievements.division', 'salesAchievements.salesPerson', 'invoices',
             'documents.uploader', 'billingTerms.invoices', 'billingTerms.documents.uploader', 'billingTerms.unlocker',
-            'deliveryOrders.warehouse', 'warranty',
+            'deliveryOrders.warehouse', 'warranty', 'tasks.creator', 'tasks.category', 'tasks.assignees',
         ])->findOrFail($id);
 
         $user = Auth::user();
@@ -232,6 +236,7 @@ class ProjectController extends Controller
             ->exists();
 
         return view('project.show', [
+            ...TaskPlannerController::projectTaskContext($project),
             'projectGoods' => $this->projectGoods($project),
             'purchaseCost' => (new PayableReport)->projectCosts($project->id)->first(),
             'canCreateDeliveryOrder' => $canCreateDeliveryOrder,
@@ -428,7 +433,8 @@ class ProjectController extends Controller
                 'invoice_number' => $term->activeInvoice()?->invoice_number,
             ])->values()->all(),
             'billingBase' => $project->billingBaseAmount(),
-            'manualValues' => $project->quotation_id ? null : $project->manualValues(),
+            // Project hybrid IMS belum punya nilai: form mulai kosong (PPN default 11%).
+            'manualValues' => $project->quotation_id || $project->isImsHybrid() ? null : $project->manualValues(),
             // Project manual: net sale terkunci bila sudah ada invoice termin.
             'netLocked' => ! $project->quotation_id && $project->billingTerms->contains(fn (ProjectBillingTerm $term) => $term->hasActiveInvoice()),
             'agreements' => $project->documents->where('type', Document::TYPE_AGREEMENT)
@@ -1075,16 +1081,7 @@ class ProjectController extends Controller
      */
     private function syncWarranty(Project $project, array $validated): void
     {
-        $start = $validated['warranty_start_date'] ?? null;
-        $end = $validated['warranty_end_date'] ?? null;
-
-        if (! $start || ! $end) {
-            $project->warranty()->delete();
-
-            return;
-        }
-
-        $project->warranty()->updateOrCreate([], ['start_date' => $start, 'end_date' => $end]);
+        $project->syncWarranty($validated['warranty_start_date'] ?? null, $validated['warranty_end_date'] ?? null);
     }
 
     private function storeAgreements(Project $project, Request $request): void

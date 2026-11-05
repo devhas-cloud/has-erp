@@ -17,6 +17,7 @@ use App\Http\Controllers\GoodsReceiptController;
 use App\Http\Controllers\GoodsRequestController;
 use App\Http\Controllers\IhConfigurationController;
 use App\Http\Controllers\ImsConfigurationController;
+use App\Http\Controllers\ImsProjectController;
 use App\Http\Controllers\CustomerReceiptController;
 use App\Http\Controllers\FinanceNotificationController;
 use App\Http\Controllers\InvoiceController;
@@ -127,6 +128,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('task-planner/fetch-assignees', [TaskPlannerController::class, 'fetchAssignees'])->name('task-planner.fetch-assignees');
     Route::get('task-planner/fetch-handling-group-users', [TaskPlannerController::class, 'fetchHandlingGroupUsers'])->name('task-planner.fetch-handling-group-users');
     Route::get('task-planner/fetch-whatsapp-groups', [TaskPlannerController::class, 'fetchWhatsAppGroups'])->name('task-planner.fetch-whatsapp-groups');
+    Route::get('task-planner/fetch-projects', [TaskPlannerController::class, 'fetchProjects'])->name('task-planner.fetch-projects');
     Route::get('task-planner/fetch-account-contacts', [TaskPlannerController::class, 'fetchAccountContacts'])->name('task-planner.fetch-account-contacts');
     Route::post('task-planner/{id}/approve', [TaskPlannerController::class, 'approve'])->name('task-planner.approve');
     Route::post('task-planner/{id}/reject', [TaskPlannerController::class, 'reject'])->name('task-planner.reject');
@@ -279,6 +281,14 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::put('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateUpdate'])->name('ims-configuration.template-update');
     Route::delete('ims-configuration/template/{id}', [ImsConfigurationController::class, 'templateDestroy'])->name('ims-configuration.template-destroy');
     Route::resource('ims-configuration', ImsConfigurationController::class);
+
+    // Modul sementara IMS Project: input project hybrid (PO, dokumen, garansi).
+    Route::get('ims-project/data', [ImsProjectController::class, 'data'])->name('ims-project.data');
+    Route::get('ims-project/search-companies', [ImsProjectController::class, 'searchCompanies'])->name('ims-project.search-companies');
+    Route::get('ims-project/{id}/po', [ImsProjectController::class, 'viewPo'])->name('ims-project.po');
+    Route::get('ims-project/{id}/documents/{document}', [ImsProjectController::class, 'viewDocument'])->name('ims-project.documents.show');
+    Route::delete('ims-project/{id}/documents/{document}', [ImsProjectController::class, 'deleteDocument'])->name('ims-project.documents.destroy');
+    Route::resource('ims-project', ImsProjectController::class);
 
     Route::get('quotation/data', [QuotationController::class, 'data'])->name('quotation.data');
     Route::get('quotation/fetch-task', [QuotationController::class, 'fetchTask'])->name('quotation.fetch-task');
