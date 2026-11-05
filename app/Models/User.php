@@ -26,6 +26,7 @@ class User extends Authenticatable
         'role',
         'task_role_id',
         'icon',
+        'salesperson',
     ];
 
     protected $hidden = [
@@ -41,6 +42,7 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'salesperson' => 'boolean',
         ];
     }
 

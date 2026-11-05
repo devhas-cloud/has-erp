@@ -234,6 +234,15 @@
                     </select>
                     @error('role') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
+                <div class="col-md-6">
+                    <label class="form-label">Salesperson</label>
+                    <div class="form-check form-switch" style="padding-top:6px">
+                        <input type="hidden" name="salesperson" value="0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="salesperson" name="salesperson" value="1" {{ old('salesperson', false) ? 'checked' : '' }}>
+                        <label class="form-check-label" for="salesperson" style="font-size:13px">Ya, user ini salesperson</label>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Jadwal &amp; perhitungan visit user ini tampil di Dashboard Task Planner.</div>
+                </div>
             </div>
 
             <!-- Access Control -->

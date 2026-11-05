@@ -66,7 +66,7 @@ class DashboardTaskPlannerController extends Controller
         return view('dashboard-task-planner.index', compact(
             'totalTasks', 'todoCount', 'inProgressCount', 'overdueCount', 'doneCount',
             'upcomingTasks', 'categories'
-        ) + ['visit' => $this->visitSchedule($request)]);
+        ) + ['visit' => $this->visitSchedule($request), 'visitDone' => $this->visitDone($request)]);
     }
 
     /** Jumlah hari kerja (Senin–Jumat) yang ditampilkan di jadwal visit. */
@@ -74,13 +74,15 @@ class DashboardTaskPlannerController extends Controller
 
     /**
      * Jadwal visit 7 hari kerja: task berkategori visit (task_categories.visit = true),
-     * satu baris per assignee, dikelompokkan per divisi. Terlihat oleh semua
+     * satu baris per assignee salesperson (users.salesperson = true), dikelompokkan per divisi. Terlihat oleh semua
      * pengguna dashboard (lintas divisi). Sabtu/Minggu tidak ditampilkan;
      * task Done tetap tampil untuk memantau realisasi & check-in.
      */
     private function visitSchedule(Request $request): array
     {
-        $start = $this->nextWorkday(rescue(fn () => Carbon::parse($request->input('visit_start')), now(), false)->startOfDay());
+        $start = $this->nextWorkday(($request->filled('visit_start')
+            ? rescue(fn () => Carbon::parse($request->input('visit_start')), now(), false)
+            : now())->startOfDay());
         $days = $this->workdays($start, self::VISIT_WORKDAYS);
         $first = $days[0];
         $last = end($days);
@@ -92,13 +94,13 @@ class DashboardTaskPlannerController extends Controller
             'status' => in_array($request->input('visit_status'), ['todo', 'in_progress', 'waiting_approval', 'done', 'late'], true)
                 ? $request->input('visit_status') : null,
             'q' => trim((string) $request->input('visit_q', '')),
-            'show_empty' => $request->boolean('visit_empty'),
         ];
 
         $visitCategories = TaskCategory::where('visit', true)->orderBy('name')->get(['id', 'name']);
 
         $tasks = Task::query()
             ->whereHas('category', fn ($q) => $q->where('visit', true))
+            ->whereHas('assignees', fn ($q) => $q->where('salesperson', true))
             ->whereDate('due_date', '>=', $first->toDateString())
             ->whereDate('due_date', '<=', $last->toDateString())
             ->when($filters['category_id'], fn ($q, $id) => $q->where('category_id', $id))
@@ -111,7 +113,8 @@ class DashboardTaskPlannerController extends Controller
 
         $dayKeys = array_map(fn (Carbon $d) => $d->toDateString(), $days);
         $emptyDays = array_fill_keys($dayKeys, []);
-        $matches = fn (User $u) => (! $filters['division_id'] || (int) $u->division_id === $filters['division_id'])
+        $matches = fn (User $u) => $u->salesperson
+            && (! $filters['division_id'] || (int) $u->division_id === $filters['division_id'])
             && ($filters['q'] === '' || stripos($u->display_name, $filters['q']) !== false);
 
         $rows = [];
@@ -143,17 +146,6 @@ class DashboardTaskPlannerController extends Controller
             }
         }
 
-        if ($filters['show_empty']) {
-            User::with('division')->whereNotNull('division_id')
-                ->when($filters['division_id'], fn ($q, $id) => $q->where('division_id', $id))
-                ->whereNotIn('id', array_keys($rows))
-                ->get()
-                ->filter($matches)
-                ->each(function (User $u) use (&$rows, $emptyDays) {
-                    $rows[$u->id] = ['user' => $u, 'days' => $emptyDays, 'count' => 0];
-                });
-        }
-
         $groups = collect($rows)
             ->groupBy(fn ($r) => $r['user']->division?->division_name ?? 'Tanpa Divisi')
             ->map(fn ($items, $name) => [
@@ -178,11 +170,98 @@ class DashboardTaskPlannerController extends Controller
             ],
             'filters' => $filters,
             'categories' => $visitCategories,
-            'divisions' => Division::whereIn('id', User::whereNotNull('division_id')->distinct()->pluck('division_id'))
+            'divisions' => Division::whereIn('id', User::where('salesperson', true)->whereNotNull('division_id')->distinct()->pluck('division_id'))
                 ->orderBy('division_name')->get(['id', 'division_name']),
             'prev_start' => $this->workdaysBack($first, self::VISIT_WORKDAYS)->toDateString(),
             'next_start' => $this->nextWorkday($last->copy()->addDay())->toDateString(),
             'is_current' => $first->equalTo($this->nextWorkday($today->copy())),
+        ];
+    }
+
+    /**
+     * Rekap visit selesai (task kategori visit berstatus Done) per periode jatuh tempo,
+     * hanya task yang punya assignee salesperson; per orang/divisi hanya salesperson.
+     * Default Senin–Jumat minggu ini; bisa per kuartal atau rentang tanggal bebas.
+     */
+    private function visitDone(Request $request): array
+    {
+        $period = in_array($request->input('done_period'), ['week', 'quarter', 'custom'], true) ? $request->input('done_period') : 'week';
+        $year = (int) $request->input('done_year', now()->year);
+        $year = $year >= 2000 && $year <= 2100 ? $year : now()->year;
+        $quarter = (int) $request->input('done_quarter', now()->quarter);
+        $quarter = $quarter >= 1 && $quarter <= 4 ? $quarter : now()->quarter;
+
+        $weekStart = now()->startOfWeek(Carbon::MONDAY)->startOfDay();
+        [$start, $end] = [$weekStart, $weekStart->copy()->addDays(4)];
+
+        if ($period === 'quarter') {
+            $start = Carbon::create($year, ($quarter - 1) * 3 + 1, 1)->startOfDay();
+            $end = $start->copy()->addMonthsNoOverflow(3)->subDay();
+        } elseif ($period === 'custom') {
+            $parse = fn (string $key) => $request->filled($key)
+                ? rescue(fn () => Carbon::parse($request->input($key))->startOfDay(), null, false)
+                : null;
+            $from = $parse('done_start');
+            $to = $parse('done_end');
+            if ($from && $to) {
+                [$start, $end] = $from->lte($to) ? [$from, $to] : [$to, $from];
+            } else {
+                $period = 'week';
+            }
+        }
+
+        $inRange = Task::query()
+            ->whereHas('category', fn ($q) => $q->where('visit', true))
+            ->whereHas('assignees', fn ($q) => $q->where('salesperson', true))
+            ->whereDate('due_date', '>=', $start->toDateString())
+            ->whereDate('due_date', '<=', $end->toDateString());
+
+        $tasks = (clone $inRange)->with(['assignees', 'visits'])->get();
+        $planned = $tasks->count();
+        $done = $tasks->where('status', 'done');
+
+        // Semua salesperson tampil (termasuk 0 visit) agar yang belum visit ikut terpantau.
+        $people = User::with('division')->where('salesperson', true)->get()
+            ->mapWithKeys(fn (User $u) => [$u->id => [
+                'user' => $u,
+                'division' => $u->division?->division_name ?? 'Tanpa Divisi',
+                'done' => 0,
+                'planned' => 0,
+                'checked_in' => 0,
+            ]])->all();
+
+        foreach ($tasks as $task) {
+            foreach ($task->assignees as $user) {
+                if (! isset($people[$user->id])) {
+                    continue;
+                }
+                $people[$user->id]['planned']++;
+                if ($task->status === 'done') {
+                    $people[$user->id]['done']++;
+                    if ($task->visits->contains('user_id', $user->id)) {
+                        $people[$user->id]['checked_in']++;
+                    }
+                }
+            }
+        }
+
+        $total = $done->count();
+
+        return [
+            'period' => $period,
+            'year' => $year,
+            'quarter' => $quarter,
+            'start' => $start,
+            'end' => $end,
+            'total' => $total,
+            'planned' => $planned,
+            'rate' => $planned > 0 ? (int) round($total / $planned * 100) : null,
+            'checked_in' => $done->filter(fn (Task $t) => $t->visits->whereIn('user_id', $t->assignees->where('salesperson', true)->pluck('id'))->isNotEmpty())->count(),
+            'people' => collect($people)->sortBy([
+                ['done', 'desc'],
+                ['planned', 'desc'],
+                fn ($a, $b) => strcasecmp($a['user']->display_name, $b['user']->display_name),
+            ])->values(),
         ];
     }
 

@@ -74,6 +74,7 @@ class UserManagementController extends Controller
                 'division_name' => $user->division?->division_name,
                 'role' => $user->role,
                 'task_role_name' => $user->hierarchyRole?->role_name,
+                'salesperson' => (bool) $user->salesperson,
                 'created_at' => $user->created_at->format('d M Y'),
                 'created_at_raw' => $user->created_at->toISOString(),
             ];
@@ -107,7 +108,9 @@ class UserManagementController extends Controller
             'division_id' => 'nullable|exists:divisions,id',
             'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
+            'salesperson' => 'nullable|boolean',
         ]);
+        $validated['salesperson'] = $request->boolean('salesperson');
 
         $roleRecord = TaskRole::where('role_name', $validated['role'])->first();
         if ($roleRecord) {
@@ -164,7 +167,9 @@ class UserManagementController extends Controller
             'division_id' => 'nullable|exists:divisions,id',
             'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
+            'salesperson' => 'nullable|boolean',
         ]);
+        $validated['salesperson'] = $request->boolean('salesperson');
 
         if ($request->filled('password')) {
             $validated['password'] = $request->validate(['password' => 'string|min:6'])['password'];

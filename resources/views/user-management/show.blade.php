@@ -266,6 +266,17 @@
                     </div>
                 </div>
                 <div class="detail-row">
+                    <div class="detail-icon"><i class="fa-solid fa-briefcase"></i></div>
+                    <div class="detail-label">Salesperson</div>
+                    <div class="detail-value">
+                        @if ($user->salesperson)
+                            <span style="color:#059669;font-weight:700;">Ya</span>
+                        @else
+                            <span style="color:var(--text-muted)">Tidak</span>
+                        @endif
+                    </div>
+                </div>
+                <div class="detail-row">
                     <div class="detail-icon"><i class="fa-solid fa-sitemap"></i></div>
                     <div class="detail-label">Task Role</div>
                     <div class="detail-value">

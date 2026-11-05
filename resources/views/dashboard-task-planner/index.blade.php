@@ -127,6 +127,20 @@
     .vs-chip.extra { display: none; }
     .vs-day.expanded .vs-chip.extra { display: block; }
     .vs-empty-cell { color: #cbd5e1; text-align: center; font-size: 11px; padding-top: 4px; }
+
+
+    /* Report visit per salesperson */
+    .vd-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .vd-person {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 12px 14px; border: 1px solid var(--card-border); border-left: 3px solid #10b981;
+        border-radius: var(--radius-sm); background: #fff;
+    }
+    .vd-person .n { font-size: 13.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vd-person .d { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vd-person .c { font-size: 24px; font-weight: 700; line-height: 1; color: #10b981; flex-shrink: 0; }
+    .vd-person.zero { border-left-color: var(--card-border); background: #f8fafc; }
+    .vd-person.zero .c { color: var(--text-muted); }
 </style>
 @endsection
 
@@ -149,13 +163,14 @@
         'done' => '#10b981',
     ];
     $statusLabel = ['todo' => 'To Do', 'in_progress' => 'In Progress', 'waiting_approval' => 'Waiting Approval', 'done' => 'Done'];
-    $vsQuery = fn (array $over) => route('dashboard-task-planner.index', array_filter(array_merge([
+    $doneParams = request()->only(['done_period', 'done_year', 'done_quarter', 'done_start', 'done_end']);
+    $visitParams = request()->only(['visit_start', 'visit_division', 'visit_category', 'visit_status', 'visit_q']);
+    $vsQuery = fn (array $over) => route('dashboard-task-planner.index', array_filter(array_merge($doneParams, [
         'visit_start' => $vs['days'][0]->toDateString(),
         'visit_division' => $vs['filters']['division_id'],
         'visit_category' => $vs['filters']['category_id'],
         'visit_status' => $vs['filters']['status'],
         'visit_q' => $vs['filters']['q'] ?: null,
-        'visit_empty' => $vs['filters']['show_empty'] ? 1 : null,
     ], $over), fn ($v) => $v !== null && $v !== '')).'#jadwal-visit';
     $firstDay = $vs['days'][0];
     $lastDay = end($vs['days']);
@@ -176,6 +191,7 @@
     <div class="card-body-custom">
         <form method="GET" action="{{ route('dashboard-task-planner.index') }}#jadwal-visit" class="vs-filter mb-3">
             <input type="hidden" name="visit_start" value="{{ $firstDay->toDateString() }}">
+            @foreach($doneParams as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
             <select name="visit_division" onchange="this.form.submit()">
                 <option value="">Semua Divisi</option>
                 @foreach($vs['divisions'] as $d)
@@ -195,16 +211,15 @@
                 @endforeach
             </select>
             <input type="text" name="visit_q" value="{{ $vs['filters']['q'] }}" placeholder="Cari nama..." style="width:160px">
-            <label class="vs-check"><input type="checkbox" name="visit_empty" value="1" @checked($vs['filters']['show_empty']) onchange="this.form.submit()"> Tampilkan yang tidak ada visit</label>
             <button type="submit" class="btn btn-sm btn-accent" style="font-size:12px"><i class="fa fa-search me-1"></i>Terapkan</button>
-            @if(array_filter(\Illuminate\Support\Arr::except($vs['filters'], ['show_empty'])) || $vs['filters']['show_empty'])
-                <a href="{{ route('dashboard-task-planner.index', ['visit_start' => $firstDay->toDateString()]) }}#jadwal-visit" style="font-size:12px">Reset</a>
+            @if(array_filter($vs['filters']))
+                <a href="{{ route('dashboard-task-planner.index', ['visit_start' => $firstDay->toDateString()] + $doneParams) }}#jadwal-visit" style="font-size:12px">Reset</a>
             @endif
         </form>
 
         <div class="vs-summary mb-2">
             <span><strong>{{ $vs['summary']['tasks'] }}</strong> visit</span>
-            <span><strong>{{ $vs['summary']['people'] }}</strong> orang</span>
+            <span><strong>{{ $vs['summary']['people'] }}</strong> salesperson</span>
             <span><strong>{{ $vs['summary']['divisions'] }}</strong> divisi</span>
             <div class="vs-legend">
                 @foreach($statusLabel as $key => $label)
@@ -218,7 +233,7 @@
         @if($vs['groups']->isEmpty())
             <div class="empty-state">
                 <i class="fa fa-route"></i>
-                <p>Tidak ada task visit pada {{ $firstDay->format('d M') }} – {{ $lastDay->format('d M Y') }}{{ array_filter(\Illuminate\Support\Arr::except($vs['filters'], ['show_empty'])) ? ' dengan filter ini' : '' }}.</p>
+                <p>Tidak ada task visit salesperson pada {{ $firstDay->format('d M') }} – {{ $lastDay->format('d M Y') }}{{ array_filter($vs['filters']) ? ' dengan filter ini' : '' }}.</p>
             </div>
         @else
             <div class="vs-wrap">
@@ -285,10 +300,98 @@
     </div>
 </div>
 
+{{-- Report visit per salesperson --}}
+@php
+    $vd = $visitDone;
+    $vdLabel = match ($vd['period']) {
+        'quarter' => 'Q'.$vd['quarter'].' '.$vd['year'],
+        'custom' => 'Rentang tanggal',
+        default => 'Minggu ini',
+    };
+@endphp
+<div class="card-custom fade-in mb-4" id="report-visit">
+    <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+            <i class="fa fa-clipboard-list me-2" style="color:var(--accent)"></i>Report Visit
+            <span style="font-size:12px;color:var(--text-muted);font-weight:500">{{ $vdLabel }} · {{ $vd['start']->format('d M Y') }} – {{ $vd['end']->format('d M Y') }}</span>
+        </span>
+        <form method="GET" action="{{ route('dashboard-task-planner.index') }}#report-visit" class="vs-filter" id="vd-form">
+            @foreach($visitParams as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+            <select name="done_period" id="vd-period">
+                <option value="week" @selected($vd['period'] === 'week')>Minggu ini (Sen–Jum)</option>
+                <option value="quarter" @selected($vd['period'] === 'quarter')>Per kuartal</option>
+                <option value="custom" @selected($vd['period'] === 'custom')>Rentang tanggal</option>
+            </select>
+            <span class="vd-opt" data-for="quarter">
+                <select name="done_quarter">
+                    @foreach([1, 2, 3, 4] as $q)
+                        <option value="{{ $q }}" @selected($vd['quarter'] === $q)>Q{{ $q }}</option>
+                    @endforeach
+                </select>
+                <select name="done_year">
+                    @foreach(range(now()->year, now()->year - 4) as $y)
+                        <option value="{{ $y }}" @selected($vd['year'] === $y)>{{ $y }}</option>
+                    @endforeach
+                </select>
+            </span>
+            <span class="vd-opt" data-for="custom">
+                <input type="date" name="done_start" value="{{ $vd['start']->toDateString() }}">
+                <span style="font-size:12px;color:var(--text-muted)">s/d</span>
+                <input type="date" name="done_end" value="{{ $vd['end']->toDateString() }}">
+            </span>
+            <button type="submit" class="btn btn-sm btn-accent" style="font-size:12px">Terapkan</button>
+        </form>
+    </div>
+    <div class="card-body-custom">
+        @if($vd['people']->isEmpty())
+            <div class="empty-state">
+                <i class="fa fa-user-tie"></i>
+                <p>Belum ada user bertanda Salesperson. Atur di User Management.</p>
+            </div>
+        @else
+            <div class="vd-people">
+                @foreach($vd['people'] as $p)
+                    <div class="vd-person {{ $p['done'] === 0 ? 'zero' : '' }}">
+                        <div style="min-width:0;flex:1">
+                            <div class="n" title="{{ $p['user']->display_name }}">{{ $p['user']->display_name }}</div>
+                            <div class="d">{{ $p['division'] }}</div>
+                        </div>
+                        <div class="text-end">
+                            <div class="c">{{ $p['done'] }}</div>
+                            <div class="d">visit</div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:10px">
+            Jumlah visit selesai (task kategori visit berstatus Done) per salesperson pada periode ini, berdasarkan jatuh tempo task.
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')
 <script>
+function vdSyncPeriod() {
+    var period = document.getElementById('vd-period').value;
+    document.querySelectorAll('#vd-form .vd-opt').forEach(function(el) {
+        var active = el.getAttribute('data-for') === period;
+        el.style.display = active ? '' : 'none';
+        el.querySelectorAll('input, select').forEach(function(input) { input.disabled = !active; });
+    });
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var period = document.getElementById('vd-period');
+    if (!period) return;
+    period.addEventListener('change', function() {
+        vdSyncPeriod();
+        if (this.value === 'week') this.form.submit();
+    });
+    vdSyncPeriod();
+});
+
 function vsToggleGroup(tr) {
     var group = tr.getAttribute('data-group');
     var collapsed = tr.classList.toggle('collapsed');

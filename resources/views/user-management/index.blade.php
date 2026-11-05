@@ -91,10 +91,13 @@ function initUsersTable() {
             },
             {
                 data: 'division_name', orderable: false, searchable: true,
-                render: function(data) {
-                    return data
-                        ? data
-                        : '<span style="color:var(--text-muted)">—</span>';
+                render: function(data, type, row) {
+                    var html = data ? data : '<span style="color:var(--text-muted)">—</span>';
+                    if (row.salesperson) {
+                        html += ' <span class="status-badge" style="background:var(--success-soft);color:#065f46;font-size:10.5px" title="Dipantau di Dashboard Task Planner">'
+                            + '<i class="fa-solid fa-briefcase" style="font-size:9px"></i> Salesperson</span>';
+                    }
+                    return html;
                 }
             },
             {
