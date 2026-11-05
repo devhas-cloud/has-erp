@@ -367,6 +367,69 @@ class ProjectTest extends TestCase
             ->assertSee($used->quotation_number);
     }
 
+    public function test_show_page_breaks_down_sale_value_and_billing_base_after_discount(): void
+    {
+        // Subtotal 1,000,000 − diskon 5% = 950,000 (dasar penagihan); PPN 11% = 104,500.
+        $quotation = $this->makeQuotation(1054500, null);
+        $quotation->update(['subtotal' => 1000000, 'discount_percent' => 5, 'discount_amount' => 50000, 'ppn' => 104500]);
+        ProfitEstimate::create([
+            'quotation_id' => $quotation->id,
+            'opportunity_id' => $quotation->opportunity_id,
+            'nilai_awal' => 1054500,
+            'ppn_amount' => 104500,
+            'subtotal_1' => 950000,
+            'discount_amount' => 50000,
+            'subtotal_2' => 900000,
+            'referral_percent' => 10,
+            'referral_amount' => 90000,
+            'real_project_value' => 810000,
+            'created_by' => $this->admin->id,
+        ]);
+
+        $this->actingAs($this->creator)->postJson(route('project.store'), $this->payload($quotation))->assertOk();
+        $project = Project::firstOrFail();
+
+        // Dasar penagihan = sesudah diskon, PPN tidak ikut.
+        $this->assertSame(950000.0, $project->billingBaseAmount());
+        $billing = $project->billingBaseBreakdown();
+        $this->assertSame(1000000.0, $billing['subtotal']);
+        $this->assertSame(50000.0, $billing['discount']);
+        $this->assertSame(104500.0, $billing['ppn']);
+
+        $sale = $project->saleValueBreakdown();
+        $this->assertSame('profit_estimate', $sale['source']);
+        $this->assertSame(810000.0, $sale['net_sale']);
+        $this->assertFalse($sale['differs']);
+
+        $this->actingAs($this->creator)->get(route('project.show', $project->id))
+            ->assertOk()
+            ->assertSee('Rincian Nilai Project')
+            ->assertSeeInOrder(['Total Sale Amount', '1,054,500', 'PPN', '104,500', 'Sub Total I', '950,000',
+                'Discount', '50,000', 'Sub Total II', '900,000', 'Referen 10%', '90,000', 'Net Sale Amount', '810,000'])
+            ->assertSeeInOrder(['Dasar Timeline Penagihan', 'Subtotal Quotation', '1,000,000', 'Diskon 5%', '50,000',
+                'Nilai Sesudah Diskon', '950,000', 'PPN', '104,500', 'Grand Total Quotation', '1,054,500']);
+    }
+
+    public function test_show_page_breakdown_for_manual_project(): void
+    {
+        $payload = $this->payload($this->makeQuotation(), [
+            'quotation_id' => null,
+            'po_document' => null,
+            'company_id' => $this->company->id,
+            'project_name' => 'Project Lama',
+            'total_sale_amount' => 555000,
+            'net_sale_amount' => 500000,
+        ]);
+        $this->actingAs($this->creator)->postJson(route('project.store'), $payload)->assertOk();
+        $project = Project::firstOrFail();
+
+        $this->actingAs($this->creator)->get(route('project.show', $project->id))
+            ->assertOk()
+            ->assertSeeInOrder(['Total Sale Amount', '555,000', 'PPN', '55,000', 'Net Sale Amount', '500,000'])
+            ->assertSeeInOrder(['Subtotal Kontrak', '500,000', 'Nilai Sesudah Diskon', '500,000'])
+            ->assertSee('Rincian diisi manual (tanpa quotation).', false);
+    }
+
     public function test_legacy_project_without_quotation_uses_manual_values(): void
     {
         $payload = $this->payload($this->makeQuotation(), [

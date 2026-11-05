@@ -607,6 +607,7 @@ class InvoiceController extends Controller
                 'project_name' => $project->project_name,
                 'company_name' => $company?->account_name,
                 'ship_to' => $company?->address_billing_province,
+                'quotation_subtotal' => $quotationTotals['subtotal'],
                 'before_ppn' => $quotationTotals['before_ppn'],
                 'discount_percent' => $quotationTotals['discount_percent'],
                 'discount_amount' => $quotationTotals['discount_amount'],
@@ -757,12 +758,37 @@ class InvoiceController extends Controller
 
         $project = Project::with(['quotation', 'billingTerms.invoices'])->findOrFail($validated['project_id']);
         $baseCents = (int) round($project->billingBaseAmount() * 100);
+
+        // Project dari quotation / manual ber-rincian: sub total item wajib = subtotal kontrak
+        // (sebelum diskon), dan diskon selalu diskon kontrak, sehingga diskon tetap tampil di
+        // invoice dan nilai sesudah diskon otomatis sama dengan nilai kontrak project.
+        $quote = $this->quotationTotals($project);
+        if ($quote['subtotal'] !== null) {
+            $totals = $this->calculateTotals(
+                $validated['items'],
+                (float) $validated['percent_payment'],
+                (float) $validated['ppn'],
+                $quote['discount_percent'],
+                (float) $quote['discount_amount']
+            );
+
+            $subtotalCents = (int) round($totals['subtotal'] * 100);
+            $quoteSubtotalCents = (int) round((float) $quote['subtotal'] * 100);
+            if ($subtotalCents !== $quoteSubtotalCents) {
+                throw ValidationException::withMessages([
+                    'items' => 'Sub total invoice termin ('.Invoice::formatMoney($subtotalCents / 100).') harus sama dengan subtotal '
+                        .($project->quotation ? 'quotation' : 'kontrak project').' ('.Invoice::formatMoney($quoteSubtotalCents / 100).', sebelum diskon). '
+                        .($project->quotation ? 'Ambil semua item dari quotation; ' : '').'perubahan nilai dilakukan lewat revisi quotation/project.',
+                ]);
+            }
+        }
+
         $netCents = (int) round(($totals['subtotal'] - $totals['discount_amount']) * 100);
 
         if ($netCents !== $baseCents) {
             throw ValidationException::withMessages([
-                'items' => 'Nilai sebelum PPN invoice termin ('.Invoice::formatMoney($netCents / 100).') harus sama dengan nilai kontrak project ('
-                    .Invoice::formatMoney($baseCents / 100).'). Muat item dari quotation; perubahan nilai dilakukan lewat revisi quotation/project.',
+                'items' => 'Nilai sesudah diskon invoice termin ('.Invoice::formatMoney($netCents / 100).') harus sama dengan nilai kontrak project sesudah diskon, sebelum PPN ('
+                    .Invoice::formatMoney($baseCents / 100).'). Muat item dari quotation dan pakai diskon quotation; perubahan nilai dilakukan lewat revisi quotation/project.',
             ]);
         }
 
@@ -874,7 +900,20 @@ class InvoiceController extends Controller
         $quotation = $project->quotation;
 
         if (! $quotation) {
+            // Project manual dengan rincian: subtotal & diskon kontrak manual.
+            if ($project->hasManualBreakdown()) {
+                $m = $project->manualValues();
+
+                return [
+                    'subtotal' => $m['subtotal'],
+                    'before_ppn' => $m['base'],
+                    'discount_percent' => $m['discount_percent'],
+                    'discount_amount' => $m['discount_amount'],
+                ];
+            }
+
             return [
+                'subtotal' => null,
                 'before_ppn' => $project->billingBaseAmount(),
                 'discount_percent' => null,
                 'discount_amount' => 0.0,
@@ -888,6 +927,7 @@ class InvoiceController extends Controller
             : round((float) $quotation->discount_amount, 2);
 
         return [
+            'subtotal' => round($subtotal, 2),
             'before_ppn' => round($subtotal - $discount, 2),
             'discount_percent' => $discountPercent,
             'discount_amount' => $discount,

@@ -230,12 +230,54 @@ class ProjectBillingTimelineTest extends TestCase
             'items' => [['description' => 'Paket SPARING', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 2000000]],
         ]))->assertStatus(422)->assertJsonValidationErrors('items');
 
-        // Diskon yang membuat nilai sebelum PPN berbeda juga ditolak.
+        // Item senilai 1.400.000 + diskon klien 100.000 juga ditolak: subtotal wajib = subtotal kontrak.
         $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'items' => [['description' => 'Paket SPARING', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 1400000]],
             'discount_amount' => 100000,
         ]))->assertStatus(422)->assertJsonValidationErrors('items');
 
         $this->assertSame(0, Invoice::count());
+
+        // Diskon dari klien diabaikan: invoice termin selalu memakai diskon kontrak (di sini 0).
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'discount_amount' => 100000,
+        ]))->assertOk();
+        $this->assertSame(0.0, (float) Invoice::firstOrFail()->discount_amount);
+    }
+
+    public function test_term_invoice_from_quotation_must_match_quotation_subtotal_and_keeps_discount(): void
+    {
+        $project = $this->createProjectWithTerms();
+        $quotation = \App\Models\Quotation::create([
+            'status' => \App\Models\Quotation::STATUS_FINISH,
+            'created_by' => $this->admin->id,
+            'quotation_number' => '009/HAS/QT-T/X/2026',
+            'to_name' => 'PT Maju Bersama',
+            'subtotal' => 2000000,
+            'discount_percent' => 10,
+            'ppn' => 198000,
+            'grand_total' => 1998000,
+        ]);
+        $project->update(['quotation_id' => $quotation->id]);
+        $dp = $project->billingTerms->first();
+
+        // Item senilai nilai sesudah diskon (1.800.000) tanpa diskon: ditolak, harus subtotal quotation.
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'items' => [['description' => 'Paket SPARING', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 1800000]],
+        ]))->assertStatus(422)->assertJsonValidationErrors('items')
+            ->assertJsonFragment(['items' => ['Sub total invoice termin (Rp 1,800,000) harus sama dengan subtotal quotation (Rp 2,000,000, sebelum diskon). Ambil semua item dari quotation; perubahan nilai dilakukan lewat revisi quotation/project.']]);
+
+        // Subtotal = subtotal quotation; diskon dari client diabaikan, selalu diskon quotation 10%.
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'percent_payment' => 30,
+            'discount_amount' => 0,
+            'items' => [['description' => 'Paket SPARING', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 2000000]],
+        ]))->assertOk();
+
+        $invoice = Invoice::firstOrFail();
+        $this->assertSame(2000000.0, (float) $invoice->subtotal);
+        $this->assertSame(200000.0, (float) $invoice->discount_amount);
+        $this->assertSame(540000.0, (float) $invoice->amount_payment);
     }
 
     public function test_last_term_bills_remaining_contract_value_without_rounding_gap(): void
@@ -280,7 +322,7 @@ class ProjectBillingTimelineTest extends TestCase
         $project = $this->createProjectWithTerms();
         $this->assertSame(1500000.0, $project->billingBaseAmount());
         $this->actingAs($this->staff)->get(route('project.show', $project->id))
-            ->assertOk()->assertSee('Rp 450,000')->assertSee('(Net Sale Amount)');
+            ->assertOk()->assertSee('Rp 450,000');
 
         // Sebelum ada invoice termin, net sale masih boleh diubah.
         $update = fn (array $overrides) => $this->actingAs($this->staff)->post(route('project.update', $project->id), array_merge($this->projectPayload([
@@ -295,10 +337,138 @@ class ProjectBillingTimelineTest extends TestCase
         $this->assertSame(450000.0, $invoice->amount_payment);
 
         $update(['net_sale_amount' => 1600000])
-            ->assertStatus(422)->assertJsonPath('message', 'Net Sale Amount terkunci karena sudah ada invoice termin '.$invoice->invoice_number.'. Batalkan invoice tersebut dulu bila nilai project berubah.');
+            ->assertStatus(422)->assertJsonPath('message', 'Nilai project terkunci karena sudah ada invoice termin '.$invoice->invoice_number.'. Batalkan invoice tersebut dulu bila nilai project berubah.');
         // Field lain tetap bisa diubah selama net sale sama.
         $update(['project_name' => 'Project SPARING Revisi'])->assertOk();
-        $this->actingAs($this->staff)->get(route('project.edit', $project->id))->assertOk()->assertSee('Terkunci karena sudah ada invoice termin');
+        $this->actingAs($this->staff)->get(route('project.edit', $project->id))->assertOk()->assertSee('Nilai terkunci karena sudah ada invoice termin');
+    }
+
+    public function test_manual_project_breakdown_computes_values_and_invoice_keeps_discount(): void
+    {
+        // Subtotal 1.000.000 − diskon 10% = 900.000 (dasar tagih); PPN 11% = 99.000; referen 5% = 45.000.
+        $id = $this->actingAs($this->staff)->post(route('project.store'), $this->projectPayload([
+            'total_sale_amount' => null,
+            'net_sale_amount' => 1, // nilai klien diabaikan bila rincian dikirim
+            'manual_subtotal' => 1000000,
+            'manual_discount_percent' => 10,
+            'manual_ppn_percent' => 11,
+            'manual_referral_percent' => 5,
+            'billing_terms' => $this->termsPayload(),
+        ]), ['Accept' => 'application/json'])->assertOk()->json('id');
+
+        $project = Project::with('billingTerms')->findOrFail($id);
+        $this->assertSame(999000.0, $project->total_sale_amount);
+        $this->assertSame(855000.0, $project->net_sale_amount);
+        $this->assertSame(900000.0, $project->billingBaseAmount());
+        $this->assertSame(100000.0, $project->manual_discount_amount);
+
+        $this->actingAs($this->staff)->get(route('project.show', $project->id))->assertOk()
+            ->assertSeeInOrder(['Total Sale Amount', '999,000', 'PPN', '99,000', 'Nilai Sesudah Diskon', '900,000', 'Referen 5%', '45,000', 'Net Sale Amount', '855,000'])
+            ->assertSeeInOrder(['Subtotal Kontrak', '1,000,000', 'Diskon 10%', '100,000', 'Nilai Sesudah Diskon', '900,000']);
+        $this->actingAs($this->staff)->get(route('project.edit', $project->id))->assertOk()
+            ->assertSee('id="pj-m-subtotal" class="form-control pj-number pj-manual-input text-end" value="1,000,000"', false);
+
+        $this->actingAs($this->staff)->getJson(route('invoice.fetch-project', $project->id))->assertOk()
+            ->assertJsonPath('data.quotation_subtotal', 1000000)
+            ->assertJsonPath('data.before_ppn', 900000)
+            ->assertJsonPath('data.discount_percent', 10);
+
+        foreach ($project->billingTerms as $term) {
+            $this->setTermAccess($project, $term, false)->assertOk();
+        }
+        $dp = $project->billingTerms->first();
+
+        // Item = nilai sesudah diskon tanpa diskon -> ditolak; harus subtotal kontrak.
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'items' => [['description' => 'Paket', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 900000]],
+        ]))->assertStatus(422)->assertJsonValidationErrors('items');
+
+        $this->actingAs($this->staff)->postJson(route('invoice.store'), $this->invoicePayload($project, $dp->id, [
+            'percent_payment' => 30,
+            'items' => [['description' => 'Paket', 'qty' => 1, 'unit' => 'lot', 'unit_price' => 1000000]],
+        ]))->assertOk();
+        $invoice = Invoice::firstOrFail();
+        $this->assertSame(100000.0, (float) $invoice->discount_amount);
+        $this->assertSame(270000.0, (float) $invoice->amount_payment);
+
+        // Sudah ada invoice termin: rincian nilai terkunci, field lain bebas.
+        $update = fn (array $overrides) => $this->actingAs($this->staff)->post(route('project.update', $project->id), array_merge($this->projectPayload([
+            'po_number_company' => $project->po_number_company,
+            'manual_subtotal' => 1000000, 'manual_discount_percent' => 10, 'manual_ppn_percent' => 11, 'manual_referral_percent' => 5,
+            'billing_terms' => $project->billingTerms->map(fn ($t) => ['id' => $t->id, 'name' => $t->name, 'percent' => $t->percent])->all(),
+        ]), ['_method' => 'PUT'], $overrides), ['Accept' => 'application/json']);
+        $update(['manual_discount_percent' => 5])->assertStatus(422);
+        $update(['project_name' => 'Revisi'])->assertOk();
+        $this->assertSame(900000.0, $project->fresh()->billingBaseAmount());
+    }
+
+    public function test_legacy_manual_project_without_breakdown_keeps_values(): void
+    {
+        $project = $this->createProjectWithTerms();
+        // Simulasikan data lama: kolom rincian kosong.
+        $project->update(['manual_subtotal' => null, 'manual_discount_amount' => null, 'manual_ppn_amount' => null, 'manual_ppn_percent' => null]);
+        $project = $project->fresh();
+
+        $this->assertSame(1500000.0, $project->billingBaseAmount());
+        $legacy = $project->manualValues();
+        $this->assertSame(1500000.0, $legacy['subtotal']);
+        $this->assertSame(500000.0, $legacy['ppn_amount']);
+        $this->assertSame(2000000.0, $legacy['total_sale']);
+        $this->assertSame(1500000.0, $legacy['net_sale']);
+
+        $this->actingAs($this->staff)->get(route('project.show', $project->id))->assertOk()
+            ->assertSee('Project lama tanpa rincian');
+        $this->actingAs($this->staff)->get(route('project.edit', $project->id))->assertOk()
+            ->assertSee('value="1,500,000"', false)->assertSee('value="500,000"', false);
+    }
+
+    public function test_project_warranty_is_saved_updated_cleared_and_shown(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-05'));
+
+        // Hanya satu tanggal -> ditolak.
+        $this->actingAs($this->staff)->post(route('project.store'), $this->projectPayload([
+            'warranty_start_date' => '2026-11-01',
+        ]), ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors('warranty_end_date');
+
+        // Akhir sebelum mulai -> ditolak.
+        $this->actingAs($this->staff)->post(route('project.store'), $this->projectPayload([
+            'warranty_start_date' => '2026-11-01', 'warranty_end_date' => '2026-10-01',
+        ]), ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors('warranty_end_date');
+
+        $id = $this->actingAs($this->staff)->post(route('project.store'), $this->projectPayload([
+            'warranty_start_date' => '2026-11-01', 'warranty_end_date' => '2027-11-01',
+        ]), ['Accept' => 'application/json'])->assertOk()->json('id');
+
+        $project = Project::findOrFail($id);
+        $warranty = $project->warranty;
+        $this->assertSame('2026-11-01', $warranty->start_date->toDateString());
+        $this->assertSame('2027-11-01', $warranty->end_date->toDateString());
+        $this->assertSame(\App\Models\ProjectWarranty::STATUS_ACTIVE, $warranty->status());
+        $this->assertSame(12, $warranty->durationMonths());
+        $this->assertSame(361, $warranty->daysLeft());
+
+        $this->actingAs($this->staff)->get(route('project.show', $id))->assertOk()
+            ->assertSee('Garansi Aktif · s/d 01 Nov 2027')
+            ->assertSeeInOrder(['Mulai Garansi', '01 Nov 2026', 'Akhir Garansi', '(12 bulan)', '01 Nov 2027', '361 hari lagi']);
+        $this->actingAs($this->staff)->get(route('project.edit', $id))->assertOk()
+            ->assertSee('id="pj-warranty-start" class="form-control" value="2026-11-01"', false)
+            ->assertSee('id="pj-warranty-end" class="form-control" value="2027-11-01"', false);
+
+        $update = fn (array $overrides) => $this->actingAs($this->staff)->post(route('project.update', $id), array_merge($this->projectPayload([
+            'po_number_company' => $project->po_number_company,
+        ]), ['_method' => 'PUT'], $overrides), ['Accept' => 'application/json']);
+
+        // Diubah: tetap satu baris garansi per project.
+        $update(['warranty_start_date' => '2025-01-01', 'warranty_end_date' => '2026-01-01'])->assertOk();
+        $this->assertSame(1, \App\Models\ProjectWarranty::where('project_id', $id)->count());
+        $this->assertSame(\App\Models\ProjectWarranty::STATUS_EXPIRED, $project->fresh()->warranty->status());
+        $this->actingAs($this->staff)->get(route('project.show', $id))->assertOk()->assertSee('Garansi Berakhir');
+
+        // Dikosongkan -> dihapus.
+        $update(['warranty_start_date' => '', 'warranty_end_date' => ''])->assertOk();
+        $this->assertNull($project->fresh()->warranty);
+        $this->actingAs($this->staff)->get(route('project.show', $id))->assertOk()->assertSee('Isi masa garansi');
     }
 
     public function test_cancelled_invoice_reopens_term(): void

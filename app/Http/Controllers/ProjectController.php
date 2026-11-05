@@ -118,6 +118,7 @@ class ProjectController extends Controller
             'salesOptions' => [],
             'billingTerms' => [],
             'billingBase' => 0,
+            'manualValues' => null,
             'netLocked' => false,
             'agreements' => [],
         ]);
@@ -141,13 +142,14 @@ class ProjectController extends Controller
             ], 422);
         }
 
-        $total = $quotation ? (float) $quotation->grand_total : (float) $validated['total_sale_amount'];
+        $manual = $quotation ? null : $this->manualValuesFromRequest($validated);
+        $total = $quotation ? (float) $quotation->grand_total : $manual['total_sale'];
         $net = $quotation
             ? (float) $quotation->profitEstimate->real_project_value
-            : (float) $validated['net_sale_amount'];
+            : $manual['net_sale'];
 
         if (! $quotation) {
-            $this->assertManualAmounts($total, $net, null);
+            $this->assertManualAmounts($manual, null);
         }
 
         $file = null;
@@ -157,7 +159,7 @@ class ProjectController extends Controller
             $path = $file->store('project-po', 'public');
         }
 
-        $project = DB::transaction(function () use ($validated, $quotation, $total, $net, $file, $path, $terms, $request) {
+        $project = DB::transaction(function () use ($validated, $quotation, $total, $net, $manual, $file, $path, $terms, $request) {
             $project = Project::create([
                 'project_number' => (new Project)->generateProjectNumber(),
                 'project_name' => $validated['project_name'],
@@ -170,6 +172,7 @@ class ProjectController extends Controller
                 'po_due_date' => $validated['po_due_date'],
                 'total_sale_amount' => $total,
                 'net_sale_amount' => $net,
+                ...$this->manualColumns($manual),
                 'is_retention' => $validated['is_retention'],
                 'type_of_achievement' => $validated['type_of_achievement'],
                 'status' => Project::STATUS_ACTIVE,
@@ -183,6 +186,7 @@ class ProjectController extends Controller
 
             $this->syncSalesAchievements($project, $validated['sales'], $net);
             $this->syncBillingTerms($project, $terms);
+            $this->syncWarranty($project, $validated);
             $this->storeAgreements($project, $request);
 
             if ($quotation && $quotation->status !== Quotation::STATUS_FINISH) {
@@ -209,10 +213,10 @@ class ProjectController extends Controller
     public function show($id)
     {
         $project = Project::with([
-            'company', 'quotation.opportunity', 'creator', 'updater', 'poUploader',
+            'company', 'quotation.opportunity', 'quotation.profitEstimate', 'creator', 'updater', 'poUploader',
             'achievements.division', 'salesAchievements.salesPerson', 'invoices',
             'documents.uploader', 'billingTerms.invoices', 'billingTerms.documents.uploader', 'billingTerms.unlocker',
-            'deliveryOrders.warehouse',
+            'deliveryOrders.warehouse', 'warranty',
         ])->findOrFail($id);
 
         $user = Auth::user();
@@ -234,6 +238,8 @@ class ProjectController extends Controller
             'project' => $project,
             'canCreateInvoice' => $canCreateInvoice,
             'billingBase' => $billingBase,
+            'billingBreakdown' => $project->billingBaseBreakdown(),
+            'saleBreakdown' => $project->saleValueBreakdown(),
             'termDocuments' => $project->billingTerms->mapWithKeys(fn (ProjectBillingTerm $term) => [
                 $term->id => $term->documents->map(fn (Document $doc) => $this->documentItem($project, $doc, $term))->values(),
             ]),
@@ -422,6 +428,7 @@ class ProjectController extends Controller
                 'invoice_number' => $term->activeInvoice()?->invoice_number,
             ])->values()->all(),
             'billingBase' => $project->billingBaseAmount(),
+            'manualValues' => $project->quotation_id ? null : $project->manualValues(),
             // Project manual: net sale terkunci bila sudah ada invoice termin.
             'netLocked' => ! $project->quotation_id && $project->billingTerms->contains(fn (ProjectBillingTerm $term) => $term->hasActiveInvoice()),
             'agreements' => $project->documents->where('type', Document::TYPE_AGREEMENT)
@@ -444,13 +451,14 @@ class ProjectController extends Controller
         $validated = $this->validateProject($request, $project->id);
         $terms = $this->validatedBillingTerms($validated['billing_terms'] ?? [], $project);
 
-        $total = $quotation ? (float) $quotation->grand_total : (float) $validated['total_sale_amount'];
+        $manual = $quotation ? null : $this->manualValuesFromRequest($validated);
+        $total = $quotation ? (float) $quotation->grand_total : $manual['total_sale'];
         $net = $quotation
             ? (float) $quotation->profitEstimate->real_project_value
-            : (float) $validated['net_sale_amount'];
+            : $manual['net_sale'];
 
         if (! $quotation) {
-            $this->assertManualAmounts($total, $net, $project);
+            $this->assertManualAmounts($manual, $project);
         }
 
         $newPath = null;
@@ -459,7 +467,7 @@ class ProjectController extends Controller
             $newPath = $file->store('project-po', 'public');
         }
 
-        DB::transaction(function () use ($project, $validated, $total, $net, $newPath, $request, $terms) {
+        DB::transaction(function () use ($project, $validated, $total, $net, $manual, $newPath, $request, $terms) {
             $fields = [
                 'project_name' => $validated['project_name'],
                 'project_description' => $validated['project_description'] ?? null,
@@ -470,6 +478,7 @@ class ProjectController extends Controller
                 'po_due_date' => $validated['po_due_date'],
                 'total_sale_amount' => $total,
                 'net_sale_amount' => $net,
+                ...$this->manualColumns($manual),
                 'is_retention' => $validated['is_retention'],
                 'type_of_achievement' => $validated['type_of_achievement'],
                 'updated_by' => Auth::id(),
@@ -489,6 +498,7 @@ class ProjectController extends Controller
 
             $this->syncSalesAchievements($project, $validated['sales'], $net);
             $this->syncBillingTerms($project, $terms);
+            $this->syncWarranty($project, $validated);
             $this->storeAgreements($project, $request);
         });
 
@@ -854,13 +864,24 @@ class ProjectController extends Controller
             'po_date' => 'required|date',
             'po_date_received' => 'required|date',
             'po_due_date' => 'required|date',
-            'total_sale_amount' => 'required_without:quotation_id|nullable|numeric|min:0',
-            'net_sale_amount' => 'required_without:quotation_id|nullable|numeric|min:0',
+            // Project manual: rincian subtotal/diskon/PPN/referen. total/net hanya untuk
+            // klien lama (tanpa rincian) dan diubah menjadi rincian setara.
+            'manual_subtotal' => 'nullable|numeric|min:0',
+            'manual_discount_percent' => 'nullable|numeric|min:0|max:100',
+            'manual_discount_amount' => 'nullable|numeric|min:0',
+            'manual_ppn_percent' => 'nullable|numeric|min:0|max:100',
+            'manual_ppn_amount' => 'nullable|numeric|min:0',
+            'manual_referral_percent' => 'nullable|numeric|min:0|max:100',
+            'total_sale_amount' => 'nullable|numeric|min:0',
+            'net_sale_amount' => 'nullable|numeric|min:0',
             'is_retention' => 'required|boolean',
             'type_of_achievement' => 'required|in:project,retail',
             'po_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
             'sales' => 'required|array|min:1',
             'sales.*' => 'required|integer|distinct|exists:users,id',
+            // Masa garansi (opsional): isi keduanya atau kosongkan keduanya.
+            'warranty_start_date' => 'nullable|required_with:warranty_end_date|date',
+            'warranty_end_date' => 'nullable|required_with:warranty_start_date|date|after_or_equal:warranty_start_date',
             'billing_terms' => 'nullable|array|max:20',
             'billing_terms.*.id' => 'nullable|integer',
             'billing_terms.*.name' => 'required|string|max:100',
@@ -875,6 +896,9 @@ class ProjectController extends Controller
             'billing_terms.*.percent.required' => 'Persentase pada timeline wajib diisi.',
             'billing_terms.*.percent.gt' => 'Persentase pada timeline harus lebih dari 0.',
             'po_number_company.unique' => 'Nomor PO customer sudah dipakai project lain.',
+            'warranty_start_date.required_with' => 'Tanggal mulai garansi wajib diisi bila tanggal akhir diisi.',
+            'warranty_end_date.required_with' => 'Tanggal akhir garansi wajib diisi bila tanggal mulai diisi.',
+            'warranty_end_date.after_or_equal' => 'Tanggal akhir garansi tidak boleh sebelum tanggal mulai.',
             'po_document.mimes' => 'File PO harus berformat PDF, JPG, atau PNG.',
             'po_document.max' => 'Ukuran file tidak boleh lebih dari 10MB.',
             'sales.required' => 'Pilih minimal satu sales.',
@@ -882,23 +906,89 @@ class ProjectController extends Controller
     }
 
     /**
-     * Project manual: net sale (sebelum PPN) menjadi dasar penagihan, jadi tidak
-     * boleh melebihi total sale dan terkunci begitu ada invoice termin aktif
-     * (nilai invoice termin harus sama dengan nilai kontrak).
+     * Nilai project manual dari request. Rincian (manual_subtotal dst.) diutamakan;
+     * klien lama yang hanya mengirim total & net dibentuk menjadi rincian setara
+     * (subtotal = net, PPN nominal = total − net) agar nilainya tidak berubah.
      */
-    private function assertManualAmounts(float $total, float $net, ?Project $project): void
+    private function manualValuesFromRequest(array $validated): array
     {
         $fail = fn (string $message) => throw new HttpResponseException(response()->json(['success' => false, 'message' => $message], 422));
 
-        if ($net > $total) {
-            $fail('Net Sale Amount (sebelum PPN) tidak boleh melebihi Total Sale Amount.');
+        if (isset($validated['manual_subtotal']) && $validated['manual_subtotal'] !== '') {
+            $values = Project::computeManualValues([
+                'subtotal' => $validated['manual_subtotal'],
+                'discount_percent' => $validated['manual_discount_percent'] ?? null,
+                'discount_amount' => $validated['manual_discount_amount'] ?? null,
+                'ppn_percent' => $validated['manual_ppn_percent'] ?? null,
+                'ppn_amount' => $validated['manual_ppn_amount'] ?? null,
+                'referral_percent' => $validated['manual_referral_percent'] ?? null,
+            ]);
+        } elseif (isset($validated['total_sale_amount'], $validated['net_sale_amount'])) {
+            $total = (float) $validated['total_sale_amount'];
+            $net = (float) $validated['net_sale_amount'];
+            if ($net > $total) {
+                $fail('Net Sale Amount (sebelum PPN) tidak boleh melebihi Total Sale Amount.');
+            }
+            $values = Project::computeManualValues(['subtotal' => $net, 'ppn_amount' => round($total - $net, 2)]);
+        } else {
+            $fail('Subtotal project wajib diisi untuk project tanpa quotation.');
         }
 
-        if ($project && abs($net - (float) $project->net_sale_amount) > 0.005) {
-            $billed = $project->billingTerms()->with('invoices')->get()->first(fn (ProjectBillingTerm $term) => $term->hasActiveInvoice());
-            if ($billed) {
-                $fail('Net Sale Amount terkunci karena sudah ada invoice termin '.$billed->activeInvoice()->invoice_number.'. Batalkan invoice tersebut dulu bila nilai project berubah.');
+        if ($values['subtotal'] <= 0) {
+            $fail('Subtotal project harus lebih dari 0.');
+        }
+        if ($values['discount_amount'] > $values['subtotal']) {
+            $fail('Diskon tidak boleh melebihi subtotal.');
+        }
+
+        return $values;
+    }
+
+    /** Kolom rincian manual; project dari quotation mengosongkannya. */
+    private function manualColumns(?array $manual): array
+    {
+        return [
+            'manual_subtotal' => $manual['subtotal'] ?? null,
+            'manual_discount_percent' => $manual['discount_percent'] ?? null,
+            'manual_discount_amount' => $manual ? $manual['discount_amount'] : null,
+            'manual_ppn_percent' => $manual['ppn_percent'] ?? null,
+            'manual_ppn_amount' => $manual ? $manual['ppn_amount'] : null,
+            'manual_referral_percent' => $manual['referral_percent'] ?? null,
+        ];
+    }
+
+    /**
+     * Project manual: nilai sesudah diskon menjadi dasar penagihan, jadi nilai project
+     * terkunci begitu ada invoice termin aktif (invoice termin harus sama dengan
+     * subtotal & diskon kontrak).
+     */
+    private function assertManualAmounts(array $manual, ?Project $project): void
+    {
+        if (! $project) {
+            return;
+        }
+
+        $current = $project->manualValues();
+        $changed = false;
+        foreach (['subtotal', 'discount_amount', 'ppn_amount', 'referral_amount'] as $key) {
+            if (abs($manual[$key] - $current[$key]) > 0.005) {
+                $changed = true;
             }
+        }
+        $changed = $changed
+            || abs($manual['total_sale'] - (float) $project->total_sale_amount) > 0.005
+            || abs($manual['net_sale'] - (float) $project->net_sale_amount) > 0.005;
+
+        if (! $changed) {
+            return;
+        }
+
+        $billed = $project->billingTerms()->with('invoices')->get()->first(fn (ProjectBillingTerm $term) => $term->hasActiveInvoice());
+        if ($billed) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => 'Nilai project terkunci karena sudah ada invoice termin '.$billed->activeInvoice()->invoice_number.'. Batalkan invoice tersebut dulu bila nilai project berubah.',
+            ], 422));
         }
     }
 
@@ -978,6 +1068,23 @@ class ProjectController extends Controller
                 $term->documents->each->delete();
                 $term->delete();
             });
+    }
+
+    /**
+     * Masa garansi project: tanggal diisi -> simpan/perbarui; dikosongkan -> hapus.
+     */
+    private function syncWarranty(Project $project, array $validated): void
+    {
+        $start = $validated['warranty_start_date'] ?? null;
+        $end = $validated['warranty_end_date'] ?? null;
+
+        if (! $start || ! $end) {
+            $project->warranty()->delete();
+
+            return;
+        }
+
+        $project->warranty()->updateOrCreate([], ['start_date' => $start, 'end_date' => $end]);
     }
 
     private function storeAgreements(Project $project, Request $request): void

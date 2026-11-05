@@ -216,6 +216,7 @@
                             <input type="text" inputmode="decimal" autocomplete="off" id="inv-disc-amt" class="form-control inv-number-input text-end" placeholder="Nominal diskon" value="{{ $invoice && ! $invoice->discount_percent ? $invoice->discount_amount : '' }}">
                         </div>
                         <small style="color:var(--text-muted)" id="inv-disc-hint">Default mengikuti diskon penawaran. Isi persen atau nominal.</small>
+                        <small style="color:var(--text-muted);display:none" id="inv-disc-lock"><i class="fa fa-lock me-1"></i>Invoice termin: diskon mengikuti kontrak (quotation / rincian project) agar nilai sesudah diskon sama dengan nilai kontrak project.</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Persentase Pembayaran (%)</label>
@@ -248,7 +249,7 @@
             <div class="card-body-custom">
                 <div class="inv-summary-row"><span class="lbl">Sub Total</span><span class="val" id="inv-subtotal">Rp 0</span></div>
                 <div class="inv-summary-row" id="inv-discount-row"><span class="lbl" id="inv-discount-label">Diskon</span><span class="val text-danger" id="inv-discount">- Rp 0</span></div>
-                <div class="inv-summary-row"><span class="lbl">Nilai Sebelum PPN</span><span class="val" id="inv-net-subtotal">Rp 0</span></div>
+                <div class="inv-summary-row"><span class="lbl" id="inv-net-label">Nilai Sebelum PPN</span><span class="val" id="inv-net-subtotal">Rp 0</span></div>
                 <div class="inv-base-warn" id="inv-base-warn" style="display:none"></div>
                 <div class="inv-summary-row"><span class="lbl" id="inv-amount-label">Pembayaran</span><span class="val" id="inv-amount-payment">Rp 0</span></div>
                 <div class="inv-summary-row"><span class="lbl" id="inv-ppn-label">PPN (11%)</span><span class="val" id="inv-ppn-amount">Rp 0</span></div>
@@ -316,7 +317,8 @@ const invInvoiceId = {{ $invoice?->id ?? 'null' }};
 let invInitialTermId = @json($selectedTermId ?? null);
 let invTerms = {};
 let invQuoteItems = [];
-let invProjectBase = null; // nilai kontrak project sebelum PPN (acuan invoice termin)
+let invProjectBase = null; // nilai kontrak project sesudah diskon, sebelum PPN (acuan invoice termin)
+let invProjectQuote = null; // { subtotal, discount_percent, discount_amount } quotation project; null = project manual
 let invQuoteModalInstance = null;
 
 function invToRaw(value) {
@@ -449,11 +451,19 @@ function invApplyTerm(fillNoted) {
         $percent.prop('readonly', false).removeClass('inv-locked');
         $('#inv-percent-lock').hide();
         $('#inv-term-info').hide();
+        invLockDiscount(false);
         invRecalc();
         return;
     }
 
     $percent.val(invFormatStored(t.percent)).prop('readonly', true).addClass('inv-locked');
+    // Invoice termin dari project ber-quotation: diskon wajib sama dengan quotation.
+    if (invProjectQuote) {
+        invApplyQuoteDiscount(invProjectQuote);
+        invLockDiscount(true);
+    } else {
+        invLockDiscount(false);
+    }
     $('#inv-percent-lock').show();
     if (fillNoted) $('#inv-noted').val(t.name);
 
@@ -470,7 +480,13 @@ function invFetchProject(id, fillShipTo) {
         var d = res.data;
         var html = '<strong style="color:var(--text-primary)">' + invEsc(d.project_number) + '</strong> — ' + invEsc(d.project_name);
         html += '<div>' + invEsc(d.company_name || '—') + '</div>';
-        html += '<div>Nilai Kontrak (sebelum PPN): ' + invMoney(d.before_ppn) + '</div>';
+        if (d.quotation_subtotal != null && parseFloat(d.discount_amount) > 0) {
+            html += '<div>Subtotal ' + (d.quotation_number ? 'Quote' : 'Kontrak') + ': ' + invMoney(d.quotation_subtotal) + '</div>';
+            html += '<div>Diskon' + (parseFloat(d.discount_percent) > 0 ? ' ' + invNumber(d.discount_percent) + '%' : '') + ': <span class="text-danger">- ' + invMoney(d.discount_amount) + '</span></div>';
+            html += '<div><strong style="color:var(--text-primary)">Nilai Kontrak (sesudah diskon, sebelum PPN): ' + invMoney(d.before_ppn) + '</strong></div>';
+        } else {
+            html += '<div>Nilai Kontrak (sebelum PPN): ' + invMoney(d.before_ppn) + '</div>';
+        }
         html += '<div>Quote: ' + invEsc(d.quotation_number || '—') + ' (' + (d.quotation_items || []).length + ' item)</div>';
         $('#inv-project-info').html(html);
 
@@ -485,6 +501,9 @@ function invFetchProject(id, fillShipTo) {
 
         invQuoteItems = d.quotation_items || [];
         invProjectBase = d.before_ppn;
+        invProjectQuote = d.quotation_subtotal != null
+            ? { subtotal: d.quotation_subtotal, discount_percent: d.discount_percent, discount_amount: d.discount_amount, manual: !d.quotation_number }
+            : null;
         $('#inv-load-quote').prop('disabled', invQuoteItems.length === 0);
 
         // Termin awal hanya dipakai sekali (dari tombol "Buat Invoice" di timeline / data edit).
@@ -495,6 +514,14 @@ function invFetchProject(id, fillShipTo) {
     }).fail(function() {
         $('#inv-project-info').text('Gagal memuat informasi project.');
     });
+}
+
+function invLockDiscount(locked) {
+    $('#inv-disc-pct, #inv-disc-amt').toggleClass('inv-locked', locked).data('locked', locked ? 1 : 0);
+    $('#inv-disc-pct').prop('readonly', locked);
+    $('#inv-disc-hint').toggle(!locked);
+    $('#inv-disc-lock').toggle(locked);
+    invRecalc();
 }
 
 function invApplyQuoteDiscount(d) {
@@ -682,7 +709,7 @@ function invRecalc() {
         : invCents($('#inv-disc-amt').val());
     var netCents = subtotalCents - discountCents;
 
-    $('#inv-disc-amt').prop('readonly', discPct > 0);
+    $('#inv-disc-amt').prop('readonly', discPct > 0 || !!$('#inv-disc-amt').data('locked'));
     if (discPct > 0) $('#inv-disc-amt').val(invFormatStored(discountCents / 100));
 
     var percent = parseFloat(invToRaw($('#inv-percent-payment').val())) || 0;
@@ -697,6 +724,7 @@ function invRecalc() {
     $('#inv-discount-row').toggle(discountCents !== 0);
     $('#inv-discount-label').text('Diskon' + (discPct > 0 ? ' (' + invNumber(discPct) + '%)' : ''));
     $('#inv-discount').text('- ' + invMoney(discountCents / 100));
+    $('#inv-net-label').text(discountCents !== 0 ? 'Nilai Sesudah Diskon (sebelum PPN)' : 'Nilai Sebelum PPN');
     $('#inv-net-subtotal').text(invMoney(netCents / 100)).toggleClass('text-danger', netCents < 0);
     $('#inv-amount-label').text(termLabel + ' (' + invNumber(percent) + '%)');
     $('#inv-amount-payment').text(invMoney(amountCents / 100));
@@ -704,15 +732,24 @@ function invRecalc() {
     $('#inv-ppn-amount').text(invMoney(ppnCents / 100));
     $('#inv-total-payment').text(invMoney(totalCents / 100));
 
-    var baseMismatch = invTermBaseMismatch(netCents);
-    $('#inv-base-warn').toggle(baseMismatch).html(baseMismatch
-        ? '<i class="fa fa-triangle-exclamation me-1"></i>Invoice termin harus bernilai sama dengan nilai kontrak project (' + invMoney(invProjectBase) + ' sebelum PPN). Gunakan item dari quotation.'
-        : '');
+    var baseMismatch = invTermBaseMismatch(subtotalCents, netCents);
+    var warn = '';
+    if (baseMismatch && invProjectQuote) {
+        warn = '<i class="fa fa-triangle-exclamation me-1"></i>Sub total invoice termin (' + invMoney(subtotalCents / 100)
+            + ') harus sama dengan subtotal ' + (invProjectQuote.manual ? 'kontrak project' : 'quotation') + ' (' + invMoney(invProjectQuote.subtotal) + ', sebelum diskon).'
+            + (invProjectQuote.manual ? '' : ' Ambil semua item dari quotation.');
+    } else if (baseMismatch) {
+        warn = '<i class="fa fa-triangle-exclamation me-1"></i>Invoice termin harus bernilai sama dengan nilai kontrak project ('
+            + invMoney(invProjectBase) + ' sebelum PPN).';
+    }
+    $('#inv-base-warn').toggle(baseMismatch).html(warn);
 }
 
-// Invoice termin: sub total - diskon wajib sama dengan nilai kontrak project.
-function invTermBaseMismatch(netCents) {
+// Invoice termin: project ber-quotation -> sub total item wajib = subtotal quotation
+// (sebelum diskon; diskon mengikuti quotation). Project manual -> nilai = nilai kontrak project.
+function invTermBaseMismatch(subtotalCents, netCents) {
     if (!$('#inv-term').val() || invProjectBase === null) return false;
+    if (invProjectQuote) return subtotalCents !== Math.round(parseFloat(invProjectQuote.subtotal) * 100);
     return netCents !== Math.round(parseFloat(invProjectBase) * 100);
 }
 
@@ -754,7 +791,9 @@ function invValidate() {
 
     invRecalc();
     if ($('#inv-base-warn').is(':visible')) {
-        toastr.error('Nilai sebelum PPN invoice termin harus sama dengan nilai kontrak project.');
+        toastr.error(invProjectQuote
+            ? 'Sub total invoice termin harus sama dengan subtotal ' + (invProjectQuote.manual ? 'kontrak project' : 'quotation') + ' (sebelum diskon).'
+            : 'Nilai invoice termin harus sama dengan nilai kontrak project.');
         return false;
     }
 

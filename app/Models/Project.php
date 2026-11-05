@@ -9,6 +9,7 @@ use App\Traits\Notifiable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\DB;
 
@@ -50,6 +51,12 @@ class Project extends Model
         'po_due_date',
         'total_sale_amount',
         'net_sale_amount',
+        'manual_subtotal',
+        'manual_discount_percent',
+        'manual_discount_amount',
+        'manual_ppn_percent',
+        'manual_ppn_amount',
+        'manual_referral_percent',
         'is_retention',
         'type_of_achievement',
         'status',
@@ -70,6 +77,12 @@ class Project extends Model
             'is_retention' => 'boolean',
             'total_sale_amount' => 'float',
             'net_sale_amount' => 'float',
+            'manual_subtotal' => 'float',
+            'manual_discount_percent' => 'float',
+            'manual_discount_amount' => 'float',
+            'manual_ppn_percent' => 'float',
+            'manual_ppn_amount' => 'float',
+            'manual_referral_percent' => 'float',
             'po_uploaded_at' => 'datetime',
         ];
     }
@@ -109,6 +122,11 @@ class Project extends Model
         return $this->hasMany(SalesAchievement::class)->orderBy('id');
     }
 
+    public function warranty(): HasOne
+    {
+        return $this->hasOne(ProjectWarranty::class);
+    }
+
     public function billingTerms(): HasMany
     {
         return $this->hasMany(ProjectBillingTerm::class)->orderBy('sort_order')->orderBy('id');
@@ -136,16 +154,89 @@ class Project extends Model
     }
 
     /**
-     * Dasar persentase penagihan: nilai sebelum PPN. Project dari quotation =
-     * sub total - diskon quotation; project manual (tanpa quotation) = net sale
-     * amount, karena total sale amount sudah termasuk PPN.
+     * Hitung nilai project manual (tanpa quotation), skema sama dengan quotation:
+     *   diskon        = subtotal x persen (bila persen diisi), selain itu nominal
+     *   sesudah diskon= subtotal − diskon  (dasar timeline penagihan)
+     *   PPN           = sesudah diskon x persen (bila persen diisi), selain itu nominal
+     *   total sale    = sesudah diskon + PPN
+     *   referen       = sesudah diskon x persen referen
+     *   net sale      = sesudah diskon − referen (dasar achievement sales)
+     *
+     * @param  array{subtotal: float|int|string|null, discount_percent?: mixed, discount_amount?: mixed, ppn_percent?: mixed, ppn_amount?: mixed, referral_percent?: mixed}  $input
+     */
+    public static function computeManualValues(array $input): array
+    {
+        $subtotal = round((float) ($input['subtotal'] ?? 0), 2);
+        $discountPercent = (float) ($input['discount_percent'] ?? 0) > 0 ? (float) $input['discount_percent'] : null;
+        $discount = $discountPercent
+            ? round($subtotal * $discountPercent / 100, 2)
+            : round((float) ($input['discount_amount'] ?? 0), 2);
+        $base = round($subtotal - $discount, 2);
+
+        $ppnPercent = (float) ($input['ppn_percent'] ?? 0) > 0 ? (float) $input['ppn_percent'] : null;
+        $ppn = $ppnPercent
+            ? round($base * $ppnPercent / 100, 2)
+            : round((float) ($input['ppn_amount'] ?? 0), 2);
+
+        $referralPercent = (float) ($input['referral_percent'] ?? 0) > 0 ? (float) $input['referral_percent'] : null;
+        $referral = $referralPercent ? round($base * $referralPercent / 100, 2) : 0.0;
+
+        return [
+            'subtotal' => $subtotal,
+            'discount_percent' => $discountPercent,
+            'discount_amount' => $discount,
+            'base' => $base,
+            'ppn_percent' => $ppnPercent,
+            'ppn_amount' => $ppn,
+            'total_sale' => round($base + $ppn, 2),
+            'referral_percent' => $referralPercent,
+            'referral_amount' => $referral,
+            'net_sale' => round($base - $referral, 2),
+        ];
+    }
+
+    /**
+     * Rincian input project manual untuk form. Project lama (belum punya rincian)
+     * dibentuk dari nilai tersimpan: subtotal = net sale, PPN = total − net,
+     * tanpa diskon/referen, sehingga nilai dan dasar penagihannya tidak berubah.
+     */
+    public function manualValues(): array
+    {
+        if ($this->manual_subtotal !== null) {
+            return self::computeManualValues([
+                'subtotal' => $this->manual_subtotal,
+                'discount_percent' => $this->manual_discount_percent,
+                'discount_amount' => $this->manual_discount_amount,
+                'ppn_percent' => $this->manual_ppn_percent,
+                'ppn_amount' => $this->manual_ppn_amount,
+                'referral_percent' => $this->manual_referral_percent,
+            ]);
+        }
+
+        return self::computeManualValues([
+            'subtotal' => $this->net_sale_amount,
+            'ppn_amount' => max(0, round((float) $this->total_sale_amount - (float) $this->net_sale_amount, 2)),
+        ]);
+    }
+
+    public function hasManualBreakdown(): bool
+    {
+        return ! $this->quotation_id && $this->manual_subtotal !== null;
+    }
+
+    /**
+     * Dasar persentase penagihan: nilai sesudah diskon, sebelum PPN. Project dari
+     * quotation = sub total − diskon quotation; project manual = subtotal − diskon
+     * manual; project manual lama tanpa rincian = net sale amount.
      */
     public function billingBaseAmount(): float
     {
         $quotation = $this->quotation;
 
         if (! $quotation) {
-            return (float) $this->net_sale_amount;
+            return $this->hasManualBreakdown()
+                ? $this->manualValues()['base']
+                : (float) $this->net_sale_amount;
         }
 
         $subtotal = (float) $quotation->subtotal;
@@ -154,6 +245,99 @@ class Project extends Model
             : round((float) $quotation->discount_amount, 2);
 
         return round($subtotal - $discount, 2);
+    }
+
+    /**
+     * Rincian dasar penagihan (timeline termin): subtotal quotation − diskon =
+     * nilai sesudah diskon (DPP, sebelum PPN). PPN hanya ditampilkan sebagai
+     * informasi; tidak mengubah dasar penagihan. Project manual: Net Sale Amount.
+     *
+     * @return array{source: string, subtotal: ?float, discount_percent: ?float, discount: ?float, base: float, ppn: ?float, grand_total: ?float}
+     */
+    public function billingBaseBreakdown(): array
+    {
+        $quotation = $this->quotation;
+
+        if (! $quotation) {
+            $manual = $this->hasManualBreakdown() ? $this->manualValues() : null;
+
+            return [
+                'source' => 'manual',
+                'subtotal' => $manual['subtotal'] ?? null,
+                'discount_percent' => $manual['discount_percent'] ?? null,
+                'discount' => $manual['discount_amount'] ?? null,
+                'base' => $this->billingBaseAmount(),
+                'ppn' => round((float) $this->total_sale_amount - (float) $this->net_sale_amount, 2),
+                'grand_total' => (float) $this->total_sale_amount,
+            ];
+        }
+
+        $base = $this->billingBaseAmount();
+        $subtotal = round((float) $quotation->subtotal, 2);
+
+        return [
+            'source' => 'quotation',
+            'subtotal' => $subtotal,
+            'discount_percent' => (float) $quotation->discount_percent > 0 ? (float) $quotation->discount_percent : null,
+            'discount' => round($subtotal - $base, 2),
+            'base' => $base,
+            'ppn' => round((float) $quotation->ppn, 2),
+            'grand_total' => round((float) $quotation->grand_total, 2),
+        ];
+    }
+
+    /**
+     * Rincian Total Sale Amount → Net Sale Amount. Project dari quotation memakai
+     * Estimasi PL (Nilai Awal → PPN → Discount → Referen); project manual hanya
+     * Total Sale − PPN = Net Sale. Null bila PL quotation tidak tersedia.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function saleValueBreakdown(): ?array
+    {
+        if (! $this->quotation_id) {
+            if ($this->hasManualBreakdown()) {
+                $m = $this->manualValues();
+
+                return [
+                    'source' => 'manual',
+                    'total_sale' => (float) $this->total_sale_amount,
+                    'ppn' => $m['ppn_amount'],
+                    'base' => $m['base'],
+                    'referral_percent' => $m['referral_percent'],
+                    'referral' => $m['referral_amount'],
+                    'net_sale' => (float) $this->net_sale_amount,
+                ];
+            }
+
+            return [
+                'source' => 'manual',
+                'total_sale' => (float) $this->total_sale_amount,
+                'ppn' => round((float) $this->total_sale_amount - (float) $this->net_sale_amount, 2),
+                'net_sale' => (float) $this->net_sale_amount,
+            ];
+        }
+
+        $estimate = $this->quotation?->profitEstimate;
+        if (! $estimate) {
+            return null;
+        }
+
+        return [
+            'source' => 'profit_estimate',
+            'total_sale' => (float) $estimate->nilai_awal,
+            'ppn' => (float) $estimate->ppn_amount,
+            'subtotal_1' => (float) $estimate->subtotal_1,
+            'discount' => (float) $estimate->discount_amount,
+            'subtotal_2' => (float) $estimate->subtotal_2,
+            'referral_percent' => (float) $estimate->referral_percent,
+            'referral' => (float) $estimate->referral_amount,
+            'net_sale' => (float) $estimate->real_project_value,
+            'estimate_id' => $estimate->id,
+            // Nilai project tersimpan bisa berbeda bila PL disinkron ulang setelah project dibuat.
+            'differs' => abs((float) $estimate->real_project_value - (float) $this->net_sale_amount) >= 0.01
+                || abs((float) $estimate->nilai_awal - (float) $this->total_sale_amount) >= 0.01,
+        ];
     }
 
     /**

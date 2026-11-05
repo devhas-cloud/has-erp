@@ -81,6 +81,27 @@
     .pj-doc-item .name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pj-doc-type { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
     .pj-table tfoot tr:first-child td { border-top: 2px solid var(--card-border); }
+
+    /* Rincian nilai: Total Sale → Net Sale dan dasar penagihan */
+    .pj-breakdown-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+    .pj-breakdown { width: 100%; font-size: 13.5px; border-collapse: collapse; }
+    .pj-breakdown td { padding: 6px 4px; vertical-align: middle; }
+    .pj-breakdown td.op { width: 18px; color: var(--text-muted); font-weight: 700; text-align: center; }
+    .pj-breakdown td.k { color: var(--text-muted); }
+    .pj-breakdown td.v { text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+    .pj-breakdown .tag { display: block; font-size: 11px; font-weight: 400; color: var(--text-muted); }
+    .pj-breakdown tr.start td.k { color: var(--text-primary); font-weight: 600; }
+    .pj-breakdown tr.minus td.v { color: var(--danger); font-weight: 500; }
+    .pj-breakdown tr.info td { color: var(--text-muted); font-size: 12.5px; }
+    .pj-breakdown tr.info td.v { color: var(--text-muted); font-weight: 500; }
+    .pj-breakdown tr.sub td { border-top: 1px dashed var(--card-border); }
+    .pj-breakdown tr.sub td.k { color: var(--text-primary); font-weight: 600; }
+    .pj-breakdown tr.final td { background: var(--accent-soft); color: var(--accent); font-weight: 700; padding-top: 9px; padding-bottom: 9px; }
+    .pj-breakdown tr.final td.k, .pj-breakdown tr.final td.v { color: var(--accent); }
+    .pj-breakdown tr.final td:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    .pj-breakdown tr.final td:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 15px; }
+    .pj-breakdown tr.final .tag { color: var(--accent); opacity: .8; }
+    .pj-breakdown-note { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
 </style>
 @endsection
 
@@ -107,6 +128,8 @@
     $termOpenCount = $terms->filter(fn ($t) => $t->isOpen())->count();
     $termLockedCount = $terms->count() - $termBilledCount - $termOpenCount;
     $canUploadDocs = $canCreate ?? false;
+    $warranty = $project->warranty;
+    $warrantyMeta = $warranty?->statusMeta();
 
     $initials = function ($name) {
         $parts = preg_split('/\s+/', trim((string) $name)) ?: [];
@@ -138,6 +161,11 @@
             <span class="status-badge" style="background:var(--accent-soft);color:var(--accent)">{{ $project->type_label }}</span>
             @if($project->is_retention)
                 <span class="status-badge" style="background:#fef3c7;color:#92400e;">Retensi</span>
+            @endif
+            @if($warranty)
+                <span class="pj-pill {{ $warrantyMeta['class'] }}" title="Masa garansi {{ $warranty->start_date->format('d M Y') }} – {{ $warranty->end_date->format('d M Y') }}">
+                    <i class="fa-solid fa-shield-halved me-1"></i>Garansi {{ $warrantyMeta['label'] }} · s/d {{ $warranty->end_date->format('d M Y') }}
+                </span>
             @endif
             <div class="spacer"></div>
             {{-- @if($project->hasPoDocument())
@@ -195,6 +223,132 @@
     </div>
 </div>
 
+{{-- Rincian nilai: dari Total Sale Amount sampai Net Sale Amount, plus dasar timeline penagihan --}}
+@php
+    $money = fn ($v) => \App\Models\Project::formatMoney($v);
+    $sb = $saleBreakdown;
+    $bb = $billingBreakdown;
+@endphp
+<div class="card-custom fade-in mb-3">
+    <div class="card-header-custom">
+        <span><i class="fa-solid fa-calculator me-2" style="color:var(--accent)"></i>Rincian Nilai Project</span>
+    </div>
+    <div class="card-body-custom">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="pj-breakdown-title">Total Sale → Net Sale</div>
+                @if($sb)
+                    <table class="pj-breakdown">
+                        <tr class="start">
+                            <td class="op"></td>
+                            <td class="k">Total Sale Amount<span class="tag">{{ $sb['source'] === 'manual' ? 'Nilai PO customer' : 'Nilai quotation' }}, termasuk PPN</span></td>
+                            <td class="v">{{ $money($sb['total_sale']) }}</td>
+                        </tr>
+                        <tr class="minus">
+                            <td class="op">−</td>
+                            <td class="k">PPN</td>
+                            <td class="v">− {{ $money($sb['ppn']) }}</td>
+                        </tr>
+                        @if($sb['source'] === 'manual' && isset($sb['base']))
+                            <tr class="sub">
+                                <td class="op">=</td>
+                                <td class="k">Nilai Sesudah Diskon</td>
+                                <td class="v">{{ $money($sb['base']) }}</td>
+                            </tr>
+                            <tr class="minus">
+                                <td class="op">−</td>
+                                <td class="k">Referen {{ \App\Models\Project::formatNumber($sb['referral_percent'] ?? 0) }}%</td>
+                                <td class="v">{{ $sb['referral'] > 0 ? '− '.$money($sb['referral']) : '—' }}</td>
+                            </tr>
+                        @endif
+                        @if($sb['source'] === 'profit_estimate')
+                            <tr class="sub">
+                                <td class="op">=</td>
+                                <td class="k">Sub Total I</td>
+                                <td class="v">{{ $money($sb['subtotal_1']) }}</td>
+                            </tr>
+                            <tr class="minus">
+                                <td class="op">−</td>
+                                <td class="k">Discount</td>
+                                <td class="v">− {{ $money($sb['discount']) }}</td>
+                            </tr>
+                            <tr class="sub">
+                                <td class="op">=</td>
+                                <td class="k">Sub Total II</td>
+                                <td class="v">{{ $money($sb['subtotal_2']) }}</td>
+                            </tr>
+                            <tr class="minus">
+                                <td class="op">−</td>
+                                <td class="k">Referen {{ \App\Models\Project::formatNumber($sb['referral_percent']) }}%</td>
+                                <td class="v">− {{ $money($sb['referral']) }}</td>
+                            </tr>
+                        @endif
+                        <tr class="final">
+                            <td class="op">=</td>
+                            <td class="k">Net Sale Amount<span class="tag">Nilai riil project · dasar achievement sales</span></td>
+                            <td class="v">{{ $money($sb['net_sale']) }}</td>
+                        </tr>
+                    </table>
+                    <div class="pj-breakdown-note">
+                        @if($sb['source'] === 'profit_estimate')
+                            <i class="fa fa-lock me-1"></i>Dari Estimasi PL.
+                            <a href="{{ route('profit-estimate.show', $sb['estimate_id']) }}" target="_blank" class="text-decoration-none">Lihat Estimasi PL <i class="fa fa-arrow-up-right-from-square ms-1" style="font-size:10px"></i></a>
+                            @if($sb['differs'])
+                                <div class="text-danger mt-1"><i class="fa fa-triangle-exclamation me-1"></i>Estimasi PL sudah berubah sejak project disimpan (project: Total {{ $money($project->total_sale_amount) }}, Net {{ $money($project->net_sale_amount) }}).</div>
+                            @endif
+                        @else
+                            <i class="fa fa-pen me-1"></i>Project tanpa quotation: nilai diisi manual.
+                        @endif
+                    </div>
+                @else
+                    <div class="pj-muted py-3"><i class="fa fa-circle-info me-1"></i>Estimasi PL quotation tidak tersedia, rincian tidak bisa ditampilkan.</div>
+                @endif
+            </div>
+
+            <div class="col-lg-6">
+                <div class="pj-breakdown-title">Dasar Timeline Penagihan</div>
+                <table class="pj-breakdown">
+                    @if($bb['subtotal'] !== null)
+                        <tr class="start">
+                            <td class="op"></td>
+                            <td class="k">Subtotal {{ $bb['source'] === 'quotation' ? 'Quotation' : 'Kontrak' }}<span class="tag">Sebelum diskon &amp; PPN</span></td>
+                            <td class="v">{{ $money($bb['subtotal']) }}</td>
+                        </tr>
+                        <tr class="minus">
+                            <td class="op">−</td>
+                            <td class="k">Diskon{{ $bb['discount_percent'] ? ' '.\App\Models\Project::formatNumber($bb['discount_percent']).'%' : '' }}</td>
+                            <td class="v">{{ $bb['discount'] > 0 ? '− '.$money($bb['discount']) : '—' }}</td>
+                        </tr>
+                    @endif
+                    <tr class="final">
+                        <td class="op">{{ $bb['subtotal'] !== null ? '=' : '' }}</td>
+                        <td class="k">Nilai Sesudah Diskon<span class="tag">Sebelum PPN · dasar % tiap termin</span></td>
+                        <td class="v">{{ $money($bb['base']) }}</td>
+                    </tr>
+                    <tr class="info">
+                        <td class="op">+</td>
+                        <td class="k">PPN <span class="tag">Tidak memengaruhi dasar penagihan</span></td>
+                        <td class="v">{{ $money($bb['ppn']) }}</td>
+                    </tr>
+                    <tr class="info">
+                        <td class="op">=</td>
+                        <td class="k">Grand Total{{ $bb['source'] === 'quotation' ? ' Quotation' : '' }}</td>
+                        <td class="v">{{ $money($bb['grand_total']) }}</td>
+                    </tr>
+                </table>
+                <div class="pj-breakdown-note">
+                    @if($bb['subtotal'] !== null)
+                        Persentase termin dihitung dari nilai sesudah diskon. Ada atau tidaknya PPN, dasar penagihan tetap sama.
+                        @if($bb['source'] === 'manual') Rincian diisi manual (tanpa quotation). @endif
+                    @else
+                        Project lama tanpa rincian: dasar penagihan = Net Sale Amount. Lengkapi rincian lewat Edit agar diskon tampil di invoice.
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3 mb-3">
     <div class="col-lg-7">
         <div class="card-custom fade-in h-100">
@@ -235,7 +389,7 @@
     <div class="col-lg-5">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-calendar-days me-2" style="color:var(--accent)"></i>Timeline PO</span>
+                <span><i class="fa-solid fa-calendar-days me-2" style="color:var(--accent)"></i>Timeline PO &amp; Garansi</span>
             </div>
             <div class="card-body-custom">
                 <ul class="pj-timeline">
@@ -264,6 +418,37 @@
                             @endif
                         </div>
                     </li>
+                    @if($warranty)
+                        <li class="{{ $warranty->status() === \App\Models\ProjectWarranty::STATUS_UPCOMING ? 'future' : '' }}">
+                            <div class="pj-label mb-0">Mulai Garansi</div>
+                            <div class="when">{{ $warranty->start_date->format('d M Y') }}</div>
+                        </li>
+                        <li class="{{ $warranty->status() !== \App\Models\ProjectWarranty::STATUS_EXPIRED ? 'future' : '' }}">
+                            <div class="pj-label mb-0">Akhir Garansi <span class="pj-muted">({{ $warranty->durationMonths() > 0 ? $warranty->durationMonths().' bulan' : $warranty->start_date->diffInDays($warranty->end_date).' hari' }})</span></div>
+                            <div class="when">
+                                {{ $warranty->end_date->format('d M Y') }}
+                                <span class="pj-pill {{ $warrantyMeta['class'] }} ms-1">
+                                    @if($warranty->status() === \App\Models\ProjectWarranty::STATUS_ACTIVE)
+                                        {{ $warranty->daysLeft() === 0 ? 'Berakhir hari ini' : $warranty->daysLeft().' hari lagi' }}
+                                    @elseif($warranty->status() === \App\Models\ProjectWarranty::STATUS_EXPIRED)
+                                        Berakhir {{ abs($warranty->daysLeft()) }} hari lalu
+                                    @else
+                                        Belum mulai
+                                    @endif
+                                </span>
+                            </div>
+                        </li>
+                    @else
+                        <li class="future">
+                            <div class="pj-label mb-0">Masa Garansi</div>
+                            <div class="when pj-muted" style="font-weight:400">
+                                Belum diisi.
+                                @if($canUpdate ?? false)
+                                    <a href="{{ route('project.edit', $project->id) }}#pj-warranty-start" class="text-decoration-none">Isi masa garansi</a>
+                                @endif
+                            </div>
+                        </li>
+                    @endif
                 </ul>
 
             </div>
@@ -386,7 +571,7 @@
                             <td colspan="2" class="text-end pj-muted" style="font-size:13px">Total</td>
                             <td class="text-end">{{ \App\Models\Project::formatNumber($termTotal) }}%</td>
                             <td class="text-end">{{ \App\Models\Project::formatMoney(round($billingBase * $termTotal / 100, 2)) }}</td>
-                            <td colspan="4" class="pj-muted" style="font-size:12px;font-weight:400">Dari nilai kontrak sebelum PPN {{ \App\Models\Project::formatMoney($billingBase) }}{{ $project->quotation_id ? '' : ' (Net Sale Amount)' }}</td>
+                            <td colspan="4" class="pj-muted" style="font-size:12px;font-weight:400">Dari nilai sesudah diskon (sebelum PPN) {{ \App\Models\Project::formatMoney($billingBase) }}{{ $project->quotation_id || $project->hasManualBreakdown() ? '' : ' (Net Sale Amount)' }}</td>
                         </tr>
                     </tfoot>
                 </table>

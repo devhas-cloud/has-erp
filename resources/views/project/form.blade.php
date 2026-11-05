@@ -50,7 +50,7 @@
     .pj-breakdown tr.sub td { border-top: 1px dashed var(--card-border); }
     .pj-breakdown tr.sub td.k { color: var(--text-primary); font-weight: 600; }
     .pj-breakdown tr.start td.k { color: var(--text-primary); font-weight: 600; }
-    .pj-breakdown tr.start td .tag, .pj-breakdown tr.final td .tag {
+    .pj-breakdown td .tag {
         display: block; font-size: 10.5px; font-weight: 500; color: var(--text-muted);
     }
     .pj-breakdown tr.final td { background: var(--accent-soft); color: var(--accent); font-weight: 700; padding-top: 9px; padding-bottom: 9px; }
@@ -105,6 +105,16 @@
         border: 1px dashed var(--card-border); color: var(--text-muted); background: transparent;
     }
     .pj-template-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Nilai kontrak project manual */
+    .pj-mv-field .form-label { margin-bottom: 4px; }
+    .pj-mv-field .input-group > .btn { min-width: 42px; font-weight: 600; font-size: 13px; }
+    .pj-mv-field .input-group > .btn-check:checked + .btn { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .pj-mv-calc { font-size: 12px; color: var(--text-muted); margin-top: 4px; min-height: 18px; font-variant-numeric: tabular-nums; }
+    .pj-mv-calc strong { color: var(--text-primary); font-weight: 600; }
+    .pj-mv-calc.minus strong { color: var(--danger); }
+    .pj-mv-subtotal .input-group-text, .pj-mv-subtotal input { font-size: 17px; font-weight: 700; }
+    .pj-mv-locked { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 8px 12px; border-radius: var(--radius-sm); background: #fef3c7; color: #92400e; margin-bottom: 12px; }
 </style>
 @endsection
 
@@ -229,6 +239,8 @@
             </div>
         </div>
 
+
+
         {{-- 3. Kontrak / perjanjian --}}
         <div class="card-custom fade-in mt-3">
             <div class="card-header-custom">
@@ -263,6 +275,74 @@
             </div>
         </div>
 
+        {{-- Nilai kontrak project manual (tanpa quotation): skema sama dengan quotation --}}
+        @php
+            $mv = $manualValues ?? null;
+            $mvFmt = fn ($v) => $v === null ? '' : \App\Models\Project::formatNumber($v);
+            $discMode = $mv && ! $mv['discount_percent'] && $mv['discount_amount'] > 0 ? 'amt' : 'pct';
+            $discVal = $discMode === 'amt' ? $mvFmt($mv['discount_amount']) : ($mv && $mv['discount_percent'] ? $mvFmt($mv['discount_percent']) : '');
+            $ppnMode = $mv && ! $mv['ppn_percent'] && $mv['ppn_amount'] > 0 ? 'amt' : 'pct';
+            $ppnVal = $ppnMode === 'amt' ? $mvFmt($mv['ppn_amount']) : ($mv ? ($mv['ppn_percent'] ? $mvFmt($mv['ppn_percent']) : '') : '11');
+        @endphp
+        <div class="card-custom fade-in mt-3" id="pj-manual-card" @if($initialQuotationId) style="display:none" @endif>
+            <div class="card-header-custom">
+                <span><i class="fa-solid fa-calculator me-2" style="color:var(--accent)"></i>Nilai Kontrak <span class="pj-hint ms-1">project tanpa quotation</span></span>
+            </div>
+            <div class="card-body-custom">
+                @if($netLocked ?? false)
+                    <div class="pj-mv-locked"><i class="fa fa-lock"></i> Nilai terkunci karena sudah ada invoice termin. Batalkan invoice tersebut dulu bila nilai project berubah.</div>
+                @endif
+                <div class="row g-3">
+                    <div class="col-12 pj-mv-field pj-mv-subtotal">
+                        <label class="form-label" for="pj-m-subtotal">Subtotal <span class="text-danger">*</span> <span class="pj-hint">nilai PO sebelum diskon &amp; PPN</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">Rp</span>
+                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-m-subtotal" class="form-control pj-number pj-manual-input text-end" value="{{ $mv ? $mvFmt($mv['subtotal']) : '' }}" placeholder="0">
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 pj-mv-field">
+                        <label class="form-label" for="pj-m-disc-val">Diskon <span class="pj-hint">opsional</span></label>
+                        <div class="input-group">
+                            <input type="radio" class="btn-check pj-manual-input" name="pj-m-disc-mode" id="pj-m-disc-mode-pct" value="pct" @checked($discMode === 'pct')>
+                            <label class="btn btn-outline-secondary" for="pj-m-disc-mode-pct" title="Diskon dalam persen">%</label>
+                            <input type="radio" class="btn-check pj-manual-input" name="pj-m-disc-mode" id="pj-m-disc-mode-amt" value="amt" @checked($discMode === 'amt')>
+                            <label class="btn btn-outline-secondary" for="pj-m-disc-mode-amt" title="Diskon dalam Rupiah">Rp</label>
+                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-m-disc-val" class="form-control pj-number pj-manual-input text-end" value="{{ $discVal }}" placeholder="0">
+                        </div>
+                        <div class="pj-mv-calc minus" id="pj-m-disc-calc"></div>
+                    </div>
+
+                    <div class="col-md-4 pj-mv-field">
+                        <label class="form-label" for="pj-m-ppn-val">PPN</label>
+                        <div class="input-group">
+                            <input type="radio" class="btn-check pj-manual-input" name="pj-m-ppn-mode" id="pj-m-ppn-mode-pct" value="pct" @checked($ppnMode === 'pct')>
+                            <label class="btn btn-outline-secondary" for="pj-m-ppn-mode-pct" title="PPN dalam persen">%</label>
+                            <input type="radio" class="btn-check pj-manual-input" name="pj-m-ppn-mode" id="pj-m-ppn-mode-amt" value="amt" @checked($ppnMode === 'amt')>
+                            <label class="btn btn-outline-secondary" for="pj-m-ppn-mode-amt" title="PPN dalam Rupiah">Rp</label>
+                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-m-ppn-val" class="form-control pj-number pj-manual-input text-end" value="{{ $ppnVal }}" placeholder="0">
+                        </div>
+                        <div class="pj-mv-calc" id="pj-m-ppn-calc"></div>
+                    </div>
+
+                    <div class="col-md-4 pj-mv-field">
+                        <label class="form-label" for="pj-m-ref-pct">Referen <span class="pj-hint">opsional</span></label>
+                        <div class="input-group">
+                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-m-ref-pct" class="form-control pj-number pj-manual-input text-end" value="{{ $mv && $mv['referral_percent'] ? $mvFmt($mv['referral_percent']) : '' }}" placeholder="0">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <div class="pj-mv-calc minus" id="pj-m-ref-calc"></div>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <div class="pj-hint">
+                            <i class="fa fa-circle-info me-1"></i>Nilai sesudah diskon menjadi dasar timeline penagihan;
+                            Net Sale (sesudah referen) menjadi dasar achievement sales. Lihat ringkasan di kanan.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- 4. Timeline penagihan --}}
         <div class="card-custom fade-in mt-3">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -271,7 +351,7 @@
             </div>
             <div class="card-body-custom">
                 <div class="pj-hint mb-2">
-                    Bagi nilai sebelum PPN (<strong id="pj-billing-base-label">Rp 0</strong>) menjadi beberapa tahap pembayaran.
+                    Bagi nilai sesudah diskon, sebelum PPN (<strong id="pj-billing-base-label">Rp 0</strong>) menjadi beberapa tahap pembayaran.
                     <span id="pj-billing-base-source"></span>
                     Invoice nantinya dibuat langsung dari tiap baris, dan persentasenya mengikuti baris tersebut.
                 </div>
@@ -307,6 +387,36 @@
                 </div>
             </div>
         </div>
+
+        {{-- 5. Masa garansi --}}
+        <div class="card-custom fade-in mt-3">
+            <div class="card-header-custom">
+                <span><i class="fa-solid fa-shield-halved me-2" style="color:var(--accent)"></i>Masa Garansi <span class="pj-hint ms-1">opsional, isi setelah implementasi / BAST</span></span>
+            </div>
+            <div class="card-body-custom">
+                <div class="row g-3 align-items-start">
+                    <div class="col-md-4">
+                        <label class="form-label" for="pj-warranty-start">Mulai Garansi</label>
+                        <input type="date" id="pj-warranty-start" class="form-control" value="{{ $project?->warranty?->start_date?->format('Y-m-d') }}">
+                        <div class="pj-hint mt-1">Mis. tanggal instalasi selesai / BAST.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="pj-warranty-end">Akhir Garansi</label>
+                        <input type="date" id="pj-warranty-end" class="form-control" value="{{ $project?->warranty?->end_date?->format('Y-m-d') }}">
+                        <div class="pj-hint mt-1" id="pj-warranty-hint"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Durasi cepat</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="pj-template-chip" onclick="pjWarrantyMonths(6)">6 bulan</button>
+                            <button type="button" class="pj-template-chip" onclick="pjWarrantyMonths(12)">1 tahun</button>
+                            <button type="button" class="pj-template-chip" onclick="pjWarrantyMonths(24)">2 tahun</button>
+                            <button type="button" class="pj-template-chip" onclick="pjClearWarranty()" title="Kosongkan masa garansi"><i class="fa fa-xmark"></i> Kosongkan</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- 3. Ringkasan: nilai, klasifikasi, sales --}}
@@ -328,31 +438,17 @@
                         </div>
                     </div>
 
-                    {{-- Project tanpa quotation: nilai diisi manual --}}
-                    {{-- Urutan sama dengan rincian Estimasi PL: total (termasuk PPN) dulu, lalu net (sebelum PPN). --}}
-                    <div id="pj-value-manual">
-                    <div class="pj-amount-box secondary mb-2">
-                        <div class="lbl">Total Sale Amount <span class="text-danger">*</span> <span class="pj-hint">termasuk PPN</span></div>
-                        <div class="d-flex align-items-center">
-                            <span class="prefix">Rp</span>
-                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-total-sale" class="form-control pj-number pj-readonly text-end" value="{{ $project ? \App\Models\Project::formatNumber($project->total_sale_amount) : '' }}" placeholder="0" readonly>
+                    {{-- Project tanpa quotation: ringkasan live dari kartu "Nilai Kontrak" (diisi di kolom kiri). --}}
+                    <div id="pj-value-manual" class="mb-3">
+                        <table class="pj-breakdown">
+                            <tbody id="pj-manual-summary"></tbody>
+                        </table>
+                        <div class="pj-breakdown-source">
+                            <span id="pj-manual-summary-note"><i class="fa fa-pen me-1"></i>Isi di kartu Nilai Kontrak.</span>
+                            <a href="#pj-manual-card" class="text-decoration-none" onclick="pjFocusManual(); return false;">Ubah <i class="fa fa-arrow-left ms-1" style="font-size:10px"></i></a>
                         </div>
-                        <div class="pj-hint" id="pj-sync-note">Nilai PO customer termasuk PPN.</div>
-                    </div>
-                    <div class="pj-amount-box mb-3">
-                        <div class="lbl">Net Sale Amount <span class="text-danger">*</span> <span class="pj-hint">sebelum PPN</span></div>
-                        <div class="d-flex align-items-center">
-                            <span class="prefix">Rp</span>
-                            <input type="text" inputmode="decimal" autocomplete="off" id="pj-net-sale" class="form-control pj-number pj-readonly text-end" value="{{ $project ? \App\Models\Project::formatNumber($project->net_sale_amount) : '' }}" placeholder="0" readonly>
-                        </div>
-                        <div class="pj-hint" id="pj-net-note">
-                            @if($netLocked ?? false)
-                                <i class="fa fa-lock me-1"></i> Terkunci karena sudah ada invoice termin.
-                            @else
-                                Nilai riil project: dasar timeline penagihan dan pembagian achievement sales.
-                            @endif
-                        </div>
-                    </div>
+                        <input type="hidden" id="pj-total-sale" value="{{ $project ? \App\Models\Project::formatNumber($project->total_sale_amount) : '' }}">
+                        <input type="hidden" id="pj-net-sale" value="{{ $project ? \App\Models\Project::formatNumber($project->net_sale_amount) : '' }}">
                     </div>
 
                     <label class="form-label">Retensi <span class="text-danger">*</span></label>
@@ -492,8 +588,101 @@ function pjApplyTermTemplate(name) {
 }
 
 function pjCurrentBillingBase() {
-    // Tanpa quotation: dasar penagihan = net sale (sebelum PPN) yang diisi manual.
-    return $('#pj-quotation-id').val() ? pjBillingBase : (parseFloat(pjToRaw($('#pj-net-sale').val())) || 0);
+    // Tanpa quotation: dasar penagihan = subtotal − diskon (sebelum PPN) dari rincian manual.
+    return $('#pj-quotation-id').val() ? pjBillingBase : pjManualValues().base;
+}
+
+// ── Rincian nilai project manual (sama dengan Project::computeManualValues di server) ──
+function pjNum(selector) {
+    return parseFloat(pjToRaw($(selector).val())) || 0;
+}
+
+function pjMode(name) {
+    return $('input[name="' + name + '"]:checked').val() || 'pct';
+}
+
+function pjManualValues() {
+    var subtotal = pjCents($('#pj-m-subtotal').val());
+    var discMode = pjMode('pj-m-disc-mode');
+    var discPct = discMode === 'pct' ? pjNum('#pj-m-disc-val') : 0;
+    var discount = discMode === 'pct' ? Math.round(subtotal * discPct / 100) : pjCents($('#pj-m-disc-val').val());
+    var base = subtotal - discount;
+    var ppnMode = pjMode('pj-m-ppn-mode');
+    var ppnPct = ppnMode === 'pct' ? pjNum('#pj-m-ppn-val') : 0;
+    var ppn = ppnMode === 'pct' ? Math.round(base * ppnPct / 100) : pjCents($('#pj-m-ppn-val').val());
+    var refPct = pjNum('#pj-m-ref-pct');
+    var referral = refPct > 0 ? Math.round(base * refPct / 100) : 0;
+
+    return {
+        subtotal: subtotal / 100, discMode: discMode, discountPct: discPct, discount: discount / 100, base: base / 100,
+        ppnMode: ppnMode, ppnPct: ppnPct, ppn: ppn / 100, total: (base + ppn) / 100,
+        refPct: refPct, referral: referral / 100, net: (base - referral) / 100
+    };
+}
+
+function pjRecalcManual() {
+    if ($('#pj-quotation-id').val()) return;
+    var m = pjManualValues();
+
+    // Keterangan hasil hitung di bawah tiap input.
+    $('#pj-m-disc-calc').html(m.discount > 0
+        ? (m.discMode === 'pct' ? '= <strong>− ' + pjFormatMoney(m.discount) + '</strong>' : '≈ ' + pjFormatNumber(m.subtotal > 0 ? Math.round(m.discount / m.subtotal * 10000) / 100 : 0) + '% dari subtotal')
+        : 'Tanpa diskon');
+    $('#pj-m-ppn-calc').html(m.ppn > 0
+        ? (m.ppnMode === 'pct' ? '= <strong>' + pjFormatMoney(m.ppn) + '</strong> dari nilai sesudah diskon' : '≈ ' + pjFormatNumber(m.base > 0 ? Math.round(m.ppn / m.base * 10000) / 100 : 0) + '% dari nilai sesudah diskon')
+        : 'Tanpa PPN');
+    $('#pj-m-ref-calc').html(m.referral > 0 ? '= <strong>− ' + pjFormatMoney(m.referral) + '</strong>' : 'Tanpa referen');
+    $('#pj-m-disc-val').attr('placeholder', m.discMode === 'pct' ? '0 %' : 'Rp 0');
+    $('#pj-m-ppn-val').attr('placeholder', m.ppnMode === 'pct' ? '0 %' : 'Rp 0');
+
+    // Ringkasan sidebar: urutan sama dengan rincian Estimasi PL.
+    var row = function(cls, op, label, value, tag) {
+        return '<tr class="' + cls + '"><td class="op">' + op + '</td><td class="k">' + label
+            + (tag ? '<span class="tag">' + tag + '</span>' : '') + '</td><td class="v">' + value + '</td></tr>';
+    };
+    var html = '';
+    html += row('start', '', 'Subtotal', pjFormatMoney(m.subtotal), 'Sebelum diskon & PPN');
+    if (m.discount > 0) html += row('minus', '−', 'Diskon' + (m.discountPct > 0 ? ' ' + pjFormatNumber(m.discountPct) + '%' : ''), '− ' + pjFormatMoney(m.discount));
+    html += row('sub', '=', 'Nilai Sesudah Diskon', pjFormatMoney(m.base));
+    html += row('', '+', 'PPN' + (m.ppnPct > 0 ? ' ' + pjFormatNumber(m.ppnPct) + '%' : ''), pjFormatMoney(m.ppn));
+    html += row('sub', '=', 'Total Sale Amount', pjFormatMoney(m.total), 'Termasuk PPN');
+    if (m.referral > 0) html += row('minus', '−', 'Referen ' + pjFormatNumber(m.refPct) + '% <span class="pj-hint">dari nilai sesudah diskon</span>', '− ' + pjFormatMoney(m.referral));
+    html += row('final', '=', 'Net Sale Amount', pjFormatMoney(m.net), 'Dasar achievement sales');
+    $('#pj-manual-summary').html(html);
+    $('#pj-manual-summary-note').html(pjNetLocked
+        ? '<i class="fa fa-lock me-1"></i>Terkunci: sudah ada invoice termin.'
+        : '<i class="fa fa-pen me-1"></i>Isi di kartu Nilai Kontrak.');
+
+    $('#pj-total-sale').val(pjFormatStored(m.total));
+    $('#pj-net-sale').val(pjFormatStored(m.net));
+    pjRenderSalesSplit();
+    pjRecalcTerms();
+}
+
+// Ganti mode % <-> Rp: isi nilai setara agar hasil tidak melompat.
+let pjModeBefore = null;
+function pjSwitchMode(prefix) {
+    var before = pjModeBefore || pjManualValues();
+    pjModeBefore = null;
+    var mode = pjMode('pj-m-' + prefix + '-mode');
+    var $val = $('#pj-m-' + prefix + '-val');
+    if (prefix === 'disc') {
+        $val.val(mode === 'pct'
+            ? (before.subtotal > 0 && before.discount > 0 ? pjFormatStored(Math.round(before.discount / before.subtotal * 10000) / 100) : '')
+            : (before.discount > 0 ? pjFormatStored(before.discount) : ''));
+    } else {
+        $val.val(mode === 'pct'
+            ? (before.base > 0 && before.ppn > 0 ? pjFormatStored(Math.round(before.ppn / before.base * 10000) / 100) : '')
+            : (before.ppn > 0 ? pjFormatStored(before.ppn) : ''));
+    }
+    pjRecalcManual();
+    $val.trigger('focus');
+}
+
+function pjFocusManual() {
+    var $card = $('#pj-manual-card');
+    $('html, body').animate({ scrollTop: Math.max(($card.offset() || { top: 0 }).top - 100, 0) }, 250);
+    $('#pj-m-subtotal').trigger('focus');
 }
 
 function pjRecalcTerms() {
@@ -519,8 +708,8 @@ function pjRecalcTerms() {
     $('#pj-term-bar').css('width', Math.min(total, 100) + '%');
     $('#pj-billing-base-label').text(pjFormatMoney(base));
     $('#pj-billing-base-source').text($('#pj-quotation-id').val()
-        ? '(sub total − diskon quotation)'
-        : '(Net Sale Amount)');
+        ? '(subtotal quotation − diskon; PPN tidak memengaruhi)'
+        : '(subtotal − diskon; PPN tidak memengaruhi)');
     $('#pj-term-total-label').text(pjFormatNumber(total) + '% terjadwal');
 
     var text;
@@ -650,10 +839,12 @@ function pjSetCompany(id, name, locked) {
 }
 
 function pjLockAmounts(locked) {
-    $('#pj-total-sale').prop('readonly', locked).toggleClass('pj-readonly', locked);
-    // Net sale project manual terkunci bila sudah ada invoice termin.
-    var netLocked = locked || pjNetLocked;
-    $('#pj-net-sale').prop('readonly', netLocked).toggleClass('pj-readonly', netLocked);
+    // Project dari quotation: kartu Nilai Kontrak disembunyikan (nilai dari Estimasi PL).
+    // Project manual: input terkunci bila sudah ada invoice termin.
+    $('#pj-manual-card').toggle(!locked);
+    $('#pj-m-subtotal, #pj-m-disc-val, #pj-m-ppn-val, #pj-m-ref-pct').prop('readonly', pjNetLocked).toggleClass('pj-readonly', pjNetLocked);
+    $('input[name="pj-m-disc-mode"], input[name="pj-m-ppn-mode"]').prop('disabled', pjNetLocked);
+    if (!locked) pjRecalcManual();
 }
 
 // Rincian nilai project dari Estimasi PL (urutan sama dengan halaman Estimasi PL).
@@ -705,7 +896,7 @@ function pjApplyQuotation(id) {
         //pjRenderQuotationInfo(null);
         $('#pj-company').prop('disabled', false).trigger('change.select2');
         $('#pj-company-hint').text('Pilih company secara manual (tanpa quotation).');
-        $('#pj-sync-note').text('Nilai PO customer termasuk PPN.');
+        $('#pj-sync-note').text('Dihitung otomatis.');
         $('#pj-po-file-required').toggle(false);
         pjRenderSalesSplit();
         return;
@@ -802,6 +993,47 @@ function pjUpdateDueHint() {
     }
 }
 
+// ── Masa garansi ──
+function pjWarrantyMonths(months) {
+    var start = $('#pj-warranty-start').val();
+    if (!start) {
+        toastr.info('Isi tanggal mulai garansi dulu.');
+        $('#pj-warranty-start').trigger('focus');
+        return;
+    }
+    var d = new Date(start + 'T00:00:00');
+    var day = d.getDate();
+    d.setMonth(d.getMonth() + months);
+    if (d.getDate() !== day) d.setDate(0); // mis. 31 Jan + 1 bulan -> akhir Februari
+    var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+    $('#pj-warranty-end').val(d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()));
+    pjUpdateWarrantyHint();
+}
+
+function pjClearWarranty() {
+    $('#pj-warranty-start, #pj-warranty-end').val('');
+    pjUpdateWarrantyHint();
+}
+
+function pjUpdateWarrantyHint() {
+    var start = $('#pj-warranty-start').val();
+    var end = $('#pj-warranty-end').val();
+    var $hint = $('#pj-warranty-hint');
+    if (!start || !end) { $hint.text(start || end ? 'Isi kedua tanggal.' : ''); return; }
+
+    var s = new Date(start + 'T00:00:00');
+    var e = new Date(end + 'T00:00:00');
+    if (e < s) {
+        $hint.html('<span class="text-danger"><i class="fa fa-triangle-exclamation me-1"></i>Sebelum tanggal mulai.</span>');
+        return;
+    }
+    var months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) - (e.getDate() < s.getDate() ? 1 : 0);
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var left = Math.round((e - today) / 86400000);
+    var status = today < s ? 'belum mulai' : (left < 0 ? 'sudah berakhir' : 'sisa ' + left + ' hari');
+    $hint.text((months > 0 ? '± ' + months + ' bulan' : Math.round((e - s) / 86400000) + ' hari') + ' · ' + status + '.');
+}
+
 function pjFieldTarget(selector) {
     var $el = $(selector);
     return $el.hasClass('select2-hidden-accessible') ? $el.next('.select2-container').find('.select2-selection') : $el;
@@ -841,11 +1073,12 @@ function pjValidate() {
     if (file && file.size > pjMaxFileSize) return pjFail('#pj-po-file', 'Ukuran file tidak boleh lebih dari 10MB.');
 
     if (!quotationId) {
-        if (!$('#pj-total-sale').val()) return pjFail('#pj-total-sale', 'Total Sale Amount wajib diisi.');
-        if (!$('#pj-net-sale').val()) return pjFail('#pj-net-sale', 'Net Sale Amount wajib diisi.');
-        if (pjCents($('#pj-net-sale').val()) > pjCents($('#pj-total-sale').val())) {
-            return pjFail('#pj-net-sale', 'Net Sale Amount (sebelum PPN) tidak boleh melebihi Total Sale Amount.');
-        }
+        var m = pjManualValues();
+        if (!(m.subtotal > 0)) return pjFail('#pj-m-subtotal', 'Subtotal project wajib diisi.');
+        if (m.discountPct > 100) return pjFail('#pj-m-disc-val', 'Diskon persen maksimal 100.');
+        if (m.discount > m.subtotal) return pjFail('#pj-m-disc-val', 'Diskon tidak boleh melebihi subtotal.');
+        if (m.ppnPct > 100) return pjFail('#pj-m-ppn-val', 'PPN persen maksimal 100.');
+        if (m.refPct > 100) return pjFail('#pj-m-ref-pct', 'Referen persen maksimal 100.');
     }
 
     if (($('#pj-sales').val() || []).length === 0) return pjFail('#pj-sales', 'Pilih minimal satu sales.');
@@ -855,6 +1088,12 @@ function pjValidate() {
     for (var f = 0; f < agreementFiles.length; f++) {
         if (agreementFiles[f].size > pjMaxFileSize) return pjFail('#pj-agreement-files', 'File "' + agreementFiles[f].name + '" lebih dari 10MB.');
     }
+
+    var wStart = $('#pj-warranty-start').val();
+    var wEnd = $('#pj-warranty-end').val();
+    if (wStart && !wEnd) return pjFail('#pj-warranty-end', 'Tanggal akhir garansi wajib diisi bila tanggal mulai diisi.');
+    if (wEnd && !wStart) return pjFail('#pj-warranty-start', 'Tanggal mulai garansi wajib diisi bila tanggal akhir diisi.');
+    if (wStart && wEnd && wEnd < wStart) return pjFail('#pj-warranty-end', 'Tanggal akhir garansi tidak boleh sebelum tanggal mulai.');
 
     var termTotal = 0;
     var $termRows = $('#pj-term-body tr');
@@ -897,9 +1136,19 @@ function pjSave() {
     fd.append('po_date', $('#pj-po-date').val());
     fd.append('po_date_received', $('#pj-po-date-received').val());
     fd.append('po_due_date', $('#pj-po-due-date').val());
-    fd.append('total_sale_amount', pjToRaw($('#pj-total-sale').val()));
-    fd.append('net_sale_amount', pjToRaw($('#pj-net-sale').val()));
+    if (!$('#pj-quotation-id').val()) {
+        // Server menghitung ulang total, net, dan dasar penagihan dari rincian ini.
+        var mv = pjManualValues();
+        fd.append('manual_subtotal', pjToRaw($('#pj-m-subtotal').val()));
+        fd.append('manual_discount_percent', mv.discMode === 'pct' && mv.discountPct > 0 ? mv.discountPct : '');
+        fd.append('manual_discount_amount', mv.discMode === 'amt' ? (pjToRaw($('#pj-m-disc-val').val()) || 0) : '');
+        fd.append('manual_ppn_percent', mv.ppnMode === 'pct' && mv.ppnPct > 0 ? mv.ppnPct : '');
+        fd.append('manual_ppn_amount', mv.ppnMode === 'amt' ? (pjToRaw($('#pj-m-ppn-val').val()) || 0) : '');
+        fd.append('manual_referral_percent', pjNum('#pj-m-ref-pct') || '');
+    }
     fd.append('is_retention', $('#pj-is-retention').val());
+    fd.append('warranty_start_date', $('#pj-warranty-start').val());
+    fd.append('warranty_end_date', $('#pj-warranty-end').val());
     fd.append('type_of_achievement', $('#pj-type').val());
 
     ($('#pj-sales').val() || []).forEach(function(id, i) {
@@ -961,17 +1210,23 @@ $(document).ready(function() {
     $('input[name="pj-type-opt"]').on('change', function() { $('#pj-type').val(this.value); });
 
     $(document).on('input', '.pj-number:not([readonly])', function() { pjFormatNum(this); });
-    $(document).on('input', '#pj-net-sale', pjRenderSalesSplit);
+    $(document).on('input', '.pj-manual-input', pjRecalcManual);
+    // Simpan nilai sebelum mode diganti, lalu konversi ke mode baru.
+    $(document).on('mousedown keydown', 'label[for^="pj-m-disc-mode"], label[for^="pj-m-ppn-mode"], input[name="pj-m-disc-mode"], input[name="pj-m-ppn-mode"]', function() { pjModeBefore = pjManualValues(); });
+    $('input[name="pj-m-disc-mode"]').on('change', function() { pjSwitchMode('disc'); });
+    $('input[name="pj-m-ppn-mode"]').on('change', function() { pjSwitchMode('ppn'); });
     $(document).on('input change', 'input, textarea', function() { pjClearInvalid(this); });
     $(document).on('change', '#pj-po-date, #pj-po-due-date', pjUpdateDueHint);
 
     pjUpdateDueHint();
     pjRenderSalesSplit();
+    pjUpdateWarrantyHint();
+    $(document).on('change', '#pj-warranty-start, #pj-warranty-end', pjUpdateWarrantyHint);
 
     (pjInitialTerms || []).forEach(function(t) { pjAddTerm(t); });
     pjRecalcTerms();
     $(document).on('input', '.pj-term-percent', pjRecalcTerms);
-    $(document).on('input', '#pj-net-sale', pjRecalcTerms);
+
     $(document).on('input', '.pj-term-name, .pj-term-percent', function() { $(this).removeClass('is-invalid'); });
     $('#pj-agreement-files').on('change', pjRenderPendingAgreements);
 });

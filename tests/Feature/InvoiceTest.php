@@ -326,6 +326,7 @@ class InvoiceTest extends TestCase
 
         $this->actingAs($this->creator)->getJson(route('invoice.fetch-project', $this->project->id))
             ->assertOk()
+            ->assertJsonPath('data.quotation_subtotal', 2000000)
             ->assertJsonPath('data.before_ppn', 1800000)
             ->assertJsonPath('data.discount_percent', 10)
             ->assertJsonPath('data.discount_amount', 200000);
