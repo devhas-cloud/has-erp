@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Satu approval Permintaan Barang oleh satu user can_approve. Permintaan
  * menjadi Approved (boleh diproses PO) setelah GoodsRequest::REQUIRED_APPROVALS
- * user berbeda menyetujui.
+ * user menyetujui (saat ini 1).
  */
 class GoodsRequestApproval extends Model
 {

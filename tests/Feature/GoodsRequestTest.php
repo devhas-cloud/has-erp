@@ -421,8 +421,9 @@ class GoodsRequestTest extends TestCase
         return Division::firstOrCreate(['division_name' => 'IMS'], ['description' => 'IMS', 'type' => 'Internal', 'status' => 'Active']);
     }
 
-    public function test_request_is_approved_after_two_different_approvers(): void
+    public function test_request_is_approved_by_a_single_approver(): void
     {
+        $this->assertSame(1, GoodsRequest::REQUIRED_APPROVALS);
         $gr = $this->waitingRequest();
         $secondApprover = $this->makeUser('approver2', Module::where('module_code', GoodsRequest::MODULE_CODE)->first(), ['can_approve' => true]);
 
@@ -431,28 +432,38 @@ class GoodsRequestTest extends TestCase
         $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))
             ->assertOk()
             ->assertJsonPath('approval_count', 1)
-            ->assertJsonPath('approved', false);
-        $this->assertSame(GoodsRequest::STATUS_WAITING_APPROVAL, $gr->fresh()->status);
-
-        // User yang sama tidak terhitung dua kali.
-        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))->assertStatus(422);
-        $this->assertSame(1, $gr->approvals()->count());
-
-        $this->actingAs($secondApprover)->postJson(route('goods-request.approve', $gr->id))
-            ->assertOk()
-            ->assertJsonPath('approval_count', 2)
-            ->assertJsonPath('approved', true);
+            ->assertJsonPath('approved', true)
+            ->assertJsonPath('message', 'Permintaan barang Approved dan siap diproses PO.');
 
         $fresh = $gr->fresh();
         $this->assertSame(GoodsRequest::STATUS_APPROVED, $fresh->status);
-        $this->assertSame($secondApprover->id, $fresh->final_checked_by);
+        $this->assertSame($this->approver->id, $fresh->final_checked_by);
         $this->assertNotNull($fresh->approved_at);
-        $this->assertEqualsCanonicalizing([$this->approver->id, $secondApprover->id], $fresh->approvals->pluck('user_id')->all());
+        $this->assertSame([$this->approver->id], $fresh->approvals->pluck('user_id')->all());
+
+        // Sudah Approved: approver lain tidak bisa menambah approval.
+        $this->actingAs($secondApprover)->postJson(route('goods-request.approve', $gr->id))->assertStatus(422);
+        $this->assertSame(1, $gr->approvals()->count());
 
         $this->actingAs($secondApprover)->get(route('goods-request.show', $gr->id))
             ->assertOk()
             ->assertSee('approver')
-            ->assertSee('approver2');
+            ->assertDontSee('1/1');
+    }
+
+    public function test_creator_with_approve_access_can_approve_own_request(): void
+    {
+        $gr = $this->waitingRequest();
+        $gr->update(['created_by' => $this->approver->id]);
+
+        $this->actingAs($this->approver)->get(route('goods-request.show', $gr->id))
+            ->assertOk()
+            ->assertSee('grApprove()', false);
+
+        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))
+            ->assertOk()
+            ->assertJsonPath('approved', true);
+        $this->assertSame(GoodsRequest::STATUS_APPROVED, $gr->fresh()->status);
     }
 
     private function financeDivision(): Division
@@ -473,17 +484,17 @@ class GoodsRequestTest extends TestCase
         $this->assertSame(1, $gr->approvals()->count());
     }
 
-    public function test_reject_after_first_approval_stops_the_request(): void
+    public function test_reject_stops_the_request(): void
     {
         $gr = $this->waitingRequest();
-        $this->actingAs($this->approver)->postJson(route('goods-request.approve', $gr->id))->assertOk();
 
-        $this->actingAs($this->admin)->postJson(route('goods-request.reject', $gr->id), [
+        $this->actingAs($this->approver)->postJson(route('goods-request.reject', $gr->id), [
             'approval_note' => 'Anggaran belum tersedia',
         ])->assertOk();
         $this->assertSame(GoodsRequest::STATUS_REJECTED, $gr->fresh()->status);
 
         $this->actingAs($this->admin)->postJson(route('goods-request.approve', $gr->id))->assertStatus(422);
+        $this->assertSame(0, $gr->approvals()->count());
     }
 
     public function test_only_finance_approvers_see_all_divisions(): void

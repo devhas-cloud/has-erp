@@ -166,7 +166,8 @@ function initGrTable() {
             { data: 'status_badge', orderable: false, searchable: false,
                 render: function(data, type, row) {
                     if (row.status === 'waiting_approval') {
-                        return data + '<div class="gr-cell-sub mt-1"><i class="fa fa-user-check me-1"></i>Approval ' + row.approval_count + '/' + row.required_approvals + '</div>';
+                        var progress = row.required_approvals > 1 ? ' ' + row.approval_count + '/' + row.required_approvals : '';
+                        return data + '<div class="gr-cell-sub mt-1"><i class="fa fa-user-check me-1"></i>Menunggu approval' + progress + '</div>';
                     }
                     if (row.fulfillment) {
                         var labels = { none: 'Belum diproses', partial: 'Terpenuhi sebagian', done: 'Terpenuhi' };
@@ -187,7 +188,8 @@ function initGrTable() {
                         btn += '<button class="btn-icon text-danger" title="Hapus" onclick="deleteGr(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
                     if (row.can_approve) {
-                        btn += '<button class="btn-icon text-success" title="Approve (' + row.approval_count + '/' + row.required_approvals + ')" onclick="approveGr(' + data + ')"><i class="fa fa-check"></i></button>';
+                        var approveTitle = row.required_approvals > 1 ? 'Approve (' + (row.approval_count + 1) + '/' + row.required_approvals + ')' : 'Approve';
+                        btn += '<button class="btn-icon text-success" title="' + approveTitle + '" onclick="approveGr(' + data + ')"><i class="fa fa-check"></i></button>';
                     }
                     btn += '</div>';
                     return btn;
@@ -227,7 +229,7 @@ function approveGr(id) {
     Swal.fire({
         title: 'Approve Permintaan Barang?',
         text: isLast
-            ? 'Ini approval terakhir — permintaan barang menjadi Approved dan siap diproses PO.'
+            ? 'Permintaan barang menjadi Approved dan siap diproses PO.'
             : 'Approval ' + (row.approval_count + 1) + '/' + row.required_approvals + '. Masih menunggu approver berikutnya.',
         icon: 'question',
         showCancelButton: true,

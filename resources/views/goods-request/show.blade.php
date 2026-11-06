@@ -36,10 +36,12 @@
             : 'Periksa kembali item, lalu klik Submit Approval.',
         GoodsRequest::STATUS_WAITING_APPROVAL => $myApproval
             ? 'Anda sudah approve. Menunggu '.$remaining.' approver lain.'
-            : 'Menunggu '.$remaining.' approval lagi dari user yang punya hak approve.',
+            : ($required > 1
+                ? 'Menunggu '.$remaining.' approval lagi dari user yang punya hak approve.'
+                : 'Menunggu approval dari user yang punya hak approve.'),
         GoodsRequest::STATUS_APPROVED => $orderedCount === $items->count() && $items->isNotEmpty()
             ? 'Semua item sudah terpenuhi (Purchase Order / Keluar Stok).'
-            : 'Disetujui '.$required.' approver — item siap diproses Purchase Order atau dikeluarkan dari stok.',
+            : 'Disetujui'.($required > 1 ? ' '.$required.' approver' : '').' — item siap diproses Purchase Order atau dikeluarkan dari stok.',
         GoodsRequest::STATUS_REJECTED => 'Permintaan ditolak. Buat permintaan baru bila masih dibutuhkan.',
         default => '',
     };
@@ -53,7 +55,7 @@
     $stepDefs = [1 => ['Draft', null]];
     for ($i = 0; $i < $required; $i++) {
         $approval = $approvals->get($i);
-        $stepDefs[$i + 2] = ['Approval '.($i + 1), $approval ? $approval->user?->display_name : null];
+        $stepDefs[$i + 2] = [$required > 1 ? 'Approval '.($i + 1) : 'Approval', $approval ? $approval->user?->display_name : null];
     }
     $stepDefs[$lastStep] = ['Approved', null];
     if ($isRejected) $stepDefs[$step][1] = 'Ditolak — '.($goodsRequest->finalChecker?->display_name ?? '—');
@@ -172,7 +174,7 @@
                         <i class="fa fa-xmark me-1"></i> Reject
                     </button>
                     <button type="button" class="btn btn-success btn-sm" onclick="grApprove()">
-                        <i class="fa fa-check me-1"></i> Approve ({{ $approvals->count() + 1 }}/{{ $required }})
+                        <i class="fa fa-check me-1"></i> Approve{{ $required > 1 ? ' ('.($approvals->count() + 1).'/'.$required.')' : '' }}
                     </button>
                 @endif
             </div>
@@ -277,7 +279,7 @@
                         @empty
                             <span class="muted">Belum ada</span>
                         @endforelse
-                        @if($status === GoodsRequest::STATUS_WAITING_APPROVAL)
+                        @if($status === GoodsRequest::STATUS_WAITING_APPROVAL && $required > 1)
                             <div class="muted mt-1">{{ $approvals->count() }}/{{ $required }} approval terkumpul</div>
                         @endif
                     </dd>

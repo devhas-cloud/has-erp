@@ -33,8 +33,8 @@ use Illuminate\Support\Facades\DB;
  * Stok / alokasi) dan/atau PO — lihat GoodsRequestItem::remainingQty(). Sisa yang
  * tidak dibutuhkan lagi bisa "Tutup Sisa" oleh pembuat atau approver.
  *
- * Approval kuorum 2 user can_approve berbeda (lihat GoodsRequest); setelah
- * terpenuhi status Approved dan item boleh diproses Purchase Order. Semua
+ * Approval cukup 1 user can_approve (GoodsRequest::REQUIRED_APPROVALS), termasuk
+ * pembuatnya sendiri; setelah itu status Approved dan item boleh diproses Purchase Order. Semua
  * akses per-ID memakai findVisible(): user tanpa can_approve hanya bisa
  * membuka permintaan divisinya.
  */
@@ -317,8 +317,8 @@ class GoodsRequestController extends Controller
     }
 
     /**
-     * Satu approval per user can_approve. Setelah REQUIRED_APPROVALS user
-     * berbeda menyetujui, status menjadi Approved (boleh diproses PO).
+     * Satu approval per user can_approve. Setelah REQUIRED_APPROVALS (1) approval
+     * terkumpul, status menjadi Approved (boleh diproses PO).
      */
     public function approve($id): JsonResponse
     {
@@ -359,7 +359,7 @@ class GoodsRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => $approved
-                ? 'Approval tercatat. Permintaan barang Approved dan siap diproses PO ('.GoodsRequest::REQUIRED_APPROVALS.' approver terpenuhi).'
+                ? 'Permintaan barang Approved dan siap diproses PO.'
                 : 'Approval tercatat ('.$count.'/'.GoodsRequest::REQUIRED_APPROVALS.'). Menunggu approver berikutnya.',
             'approval_count' => $count,
             'approved' => $approved,

@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Approval memakai kuorum: permintaan Waiting Approval menjadi Approved (boleh
- * diproses PO) setelah REQUIRED_APPROVALS user can_approve BERBEDA menyetujui
- * (pola sama dengan PO Supplier Approval). Satu reject dari approver mana pun
- * langsung menolak permintaan.
+ * Approval cukup oleh 1 user can_approve (REQUIRED_APPROVALS): permintaan Waiting
+ * Approval langsung Approved (boleh diproses PO). Pembuat yang punya can_approve
+ * boleh menyetujui permintaannya sendiri (keputusan 2026-11-06). Satu reject dari
+ * approver mana pun langsung menolak permintaan.
  *
  * Visibilitas (scopeVisibleTo):
  *   - Admin, atau user divisi Finance yang punya can_approve -> semua permintaan;
@@ -39,7 +39,8 @@ class GoodsRequest extends Model
         self::PURPOSE_INTERNAL => 'Stok / Internal',
     ];
 
-    public const REQUIRED_APPROVALS = 2;
+    /** Jumlah approver yang dibutuhkan (dulu 2, kini 1). */
+    public const REQUIRED_APPROVALS = 1;
 
     /**
      * Nama divisi yang approver-nya boleh melihat semua permintaan. Dicocokkan
