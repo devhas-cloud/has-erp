@@ -11,13 +11,13 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Direct Purchase</h1>
-        <p class="page-header-sub">Pembelian langsung tanpa Permintaan Barang / PO — untuk stok, project, atau langsung pakai</p>
+        <p class="page-header-sub">Direct purchase without Goods Request / PO — for stock, project, or direct use</p>
     </div>
     @if($canCreate ?? false)
     <div class="page-header-actions">
         <a href="{{ route('direct-purchase.create') }}" class="btn-accent">
             <i class="fa fa-plus"></i>
-            <span>Buat Direct Purchase</span>
+            <span>Create Direct Purchase</span>
         </a>
     </div>
     @endif
@@ -25,43 +25,43 @@
 
 <div class="card-custom fade-in">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span><i class="fa-solid fa-basket-shopping me-2" style="color:var(--accent)"></i>Daftar Direct Purchase</span>
+        <span><i class="fa-solid fa-basket-shopping me-2" style="color:var(--accent)"></i>Direct Purchase List</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="list-toolbar" id="dp-toolbar">
             <div class="lt-search">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="search" class="form-control" data-search placeholder="Cari no. dokumen, supplier, part number, pembuat…" autocomplete="off">
-                <button type="button" class="lt-clear" title="Hapus pencarian"><i class="fa fa-xmark"></i></button>
+                <input type="search" class="form-control" data-search placeholder="Search no. document, supplier, part number, creator…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
             </div>
             <select class="form-select" data-filter="status" data-status-select aria-label="Status">
-                <option value="">Semua Status</option>
+                <option value="">All Statuses</option>
                 @foreach(\App\Models\DirectPurchase::STATUS_LABELS as $key => $label)
                     <option value="{{ $key }}" data-label="{{ $label }}" @selected(request('status') === $key)>{{ $label }}</option>
                 @endforeach
             </select>
-            <select class="form-select" data-filter="purpose" aria-label="Tujuan">
-                <option value="">Semua Tujuan</option>
+            <select class="form-select" data-filter="purpose" aria-label="Purpose">
+                <option value="">All Purposes</option>
                 @foreach(\App\Models\DirectPurchase::PURPOSE_LABELS as $key => $label)
                     <option value="{{ $key }}">{{ $label }}</option>
                 @endforeach
             </select>
             @if($suppliers->count() > 1)
             <select class="form-select" data-filter="supplier" data-searchable aria-label="Supplier">
-                <option value="">Semua Supplier</option>
+                <option value="">All Suppliers</option>
                 @foreach($suppliers as $supplier)
                     <option value="{{ $supplier }}">{{ $supplier }}</option>
                 @endforeach
             </select>
             @endif
-            <div class="lt-date" title="Rentang tanggal">
-                <input type="date" class="form-control" data-filter="date_from" aria-label="Dari tanggal">
+            <div class="lt-date" title="Date range">
+                <input type="date" class="form-control" data-filter="date_from" aria-label="From date">
                 <span>–</span>
-                <input type="date" class="form-control" data-filter="date_to" aria-label="Sampai tanggal">
+                <input type="date" class="form-control" data-filter="date_to" aria-label="To date">
             </div>
-            <select class="form-select" data-filter="mine" aria-label="Pembuat">
-                <option value="">Semua Pembuat</option>
-                <option value="1">Dibuat oleh Saya</option>
+            <select class="form-select" data-filter="mine" aria-label="Creator">
+                <option value="">All Creators</option>
+                <option value="1">Created by Me</option>
             </select>
             <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
         </div>
@@ -70,15 +70,15 @@
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
-                        <th>No. Dokumen</th>
+                        <th>No. Document</th>
                         <th>Supplier</th>
-                        <th>Tanggal</th>
-                        <th>Tujuan</th>
-                        <th class="text-center">Jml Item</th>
+                        <th>Date</th>
+                        <th>Purpose</th>
+                        <th class="text-center">Items</th>
                         <th class="text-end">Total</th>
-                        <th>Dibuat Oleh</th>
+                        <th>Created By</th>
                         <th>Status</th>
-                        <th class="text-center" style="width:160px">Aksi</th>
+                        <th class="text-center" style="width:160px">Action</th>
                     </tr>
                 </thead>
             </table>
@@ -135,7 +135,7 @@ function initDpTable() {
                     if (row.status === 'draft' && row.is_creator) {
                         btn += '<a href="' + dpEditUrl.replace('__ID__', data) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
                         btn += '<button class="btn-icon" title="Submit Approval" onclick="submitDp(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
-                        btn += '<button class="btn-icon text-danger" title="Hapus" onclick="deleteDp(' + data + ')"><i class="fa fa-trash"></i></button>';
+                        btn += '<button class="btn-icon text-danger" title="Delete" onclick="deleteDp(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
                     if (dpCanApprove && row.status === 'waiting_approval') {
                         btn += '<button class="btn-icon" title="Approve" onclick="approveDp(' + data + ')"><i class="fa fa-check"></i></button>';
@@ -152,19 +152,19 @@ function initDpTable() {
 function submitDp(id) {
     Swal.fire({
         title: 'Submit Approval?',
-        text: 'Direct purchase akan dikirim untuk approval.',
+        text: 'Direct purchase will be submitted for approval.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Submit',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Submit',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(dpSubmitUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Dikirim untuk approval.');
+                toastr.success(res.message || 'Submitted for approval.');
                 dpTable.ajax.reload();
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal submit.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to submit.');
             });
     });
 }
@@ -174,28 +174,28 @@ function approveDp(id) {
         title: 'Approve Direct Purchase?',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Approve',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Approve',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(dpApproveUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Disetujui.');
+                toastr.success(res.message || 'Approved.');
                 dpTable.ajax.reload();
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal approve.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to approve.');
             });
     });
 }
 
 function deleteDp(id) {
     Swal.fire({
-        title: 'Hapus Direct Purchase?',
-        text: 'Direct purchase #' + id + ' akan dihapus permanen.',
+        title: 'Delete Direct Purchase?',
+        text: 'Direct purchase #' + id + ' will be permanently deleted.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.ajax({
@@ -203,10 +203,10 @@ function deleteDp(id) {
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
         }).done(function(res) {
-            toastr.success(res.message || 'Dihapus.');
+            toastr.success(res.message || 'Deleted.');
             dpTable.ajax.reload();
         }).fail(function(xhr) {
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to delete.');
         });
     });
 }

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Detail Direct Purchase')
-@section('page-title', 'Detail Direct Purchase')
+@section('title', 'Direct Purchase Detail')
+@section('page-title', 'Direct Purchase Detail')
 
 @section('styles')
 <style>
@@ -33,15 +33,15 @@
     <div>
         <h1 class="page-header-title">Direct Purchase #{{ $directPurchase->id }}</h1>
         <p class="page-header-sub">
-            {{ $directPurchase->dp_number ?: 'Belum ada No. Dokumen' }} &middot; {{ $directPurchase->supplier_name }}
+            {{ $directPurchase->dp_number ?: 'No Document yet' }} &middot; {{ $directPurchase->supplier_name }}
         </p>
     </div>
     <div class="page-header-actions">
         <a href="{{ route('direct-purchase.pdf', $directPurchase->id) }}" target="_blank" class="btn btn-secondary btn-sm">
-            <i class="fa fa-print me-1"></i> Cetak PDF
+            <i class="fa fa-print me-1"></i> Print PDF
         </a>
         <a href="{{ route('direct-purchase.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
+            <i class="fa fa-arrow-left me-1"></i> Back
         </a>
     </div>
 </div>
@@ -67,7 +67,7 @@
     @endif
     @if($directPurchase->isReceivable())
         <a href="{{ route('goods-receipt.create', ['source_type' => 'dp', 'source_id' => $directPurchase->id]) }}" class="btn btn-primary btn-sm">
-            <i class="fa fa-truck-ramp-box me-1"></i> Terima Barang
+            <i class="fa fa-truck-ramp-box me-1"></i> Receive Goods
         </a>
     @endif
 </div>
@@ -76,7 +76,7 @@
 <div class="qt-action-bar" style="border-color:#fecaca;background:#fef2f2;">
     <i class="fa fa-circle-exclamation" style="color:#b91c1c"></i>
     <div>
-        <div style="font-weight:600;font-size:13px;color:#7f1d1d">Alasan Penolakan</div>
+        <div style="font-weight:600;font-size:13px;color:#7f1d1d">Rejection Reason</div>
         <div style="font-size:13px;color:#7f1d1d">{{ $directPurchase->approval_note }}</div>
     </div>
 </div>
@@ -84,7 +84,7 @@
 
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Informasi Direct Purchase</span>
+        <span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Direct Purchase Information</span>
     </div>
     <div class="card-body-custom">
         <table class="info-table" style="width:100%">
@@ -96,44 +96,44 @@
                 </td>
             </tr>
             <tr>
-                <td>No. Dokumen</td>
+                <td>No. Document</td>
                 <td>{{ $directPurchase->dp_number ?: '—' }}</td>
             </tr>
             <tr>
-                <td>Tanggal</td>
+                <td>Date</td>
                 <td>{{ $directPurchase->date?->format('d/m/Y') ?? '—' }}</td>
             </tr>
             @if($directPurchase->payment_term_days !== null)
             <tr>
-                <td>Termin Bayar</td>
+                <td>Payment Terms</td>
                 <td>{{ \App\Models\Supplier::termLabel($directPurchase->payment_term_days) }}</td>
             </tr>
             @endif
             <tr>
-                <td>Tujuan Barang</td>
+                <td>Goods Purpose</td>
                 <td>
                     <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px">{{ $directPurchase->purpose_label }}</span>
                     @if($directPurchase->purpose === 'project')
                         {{ $directPurchase->project ? $directPurchase->project->project_number.' — '.$directPurchase->project->project_name : '—' }}
                     @elseif($directPurchase->purpose === 'stock')
-                        <span style="font-size:12px;color:var(--text-muted)">masuk gudang sebagai stok bebas</span>
+                        <span style="font-size:12px;color:var(--text-muted)">into warehouse as free stock</span>
                     @else
-                        <span style="font-size:12px;color:var(--text-muted)">konfirmasi terima, tidak masuk stok</span>
+                        <span style="font-size:12px;color:var(--text-muted)">confirm receipt, not into stock</span>
                     @endif
                 </td>
             </tr>
             <tr>
-                <td>Dibuat Oleh</td>
+                <td>Created By</td>
                 <td>{{ $directPurchase->creator?->display_name ?? '—' }} &middot; {{ $directPurchase->created_at?->format('d/m/Y H:i') }}</td>
             </tr>
             @if($directPurchase->final_checked_by)
             <tr>
-                <td>{{ $directPurchase->status === 'approved' ? 'Disetujui Oleh' : 'Ditolak Oleh' }}</td>
+                <td>{{ $directPurchase->status === 'approved' ? 'Approved By' : 'Rejected By' }}</td>
                 <td>{{ $directPurchase->finalChecker?->display_name ?? '—' }} &middot; {{ ($directPurchase->approved_at ?? $directPurchase->rejected_at)?->format('d/m/Y H:i') }}</td>
             </tr>
             @endif
             <tr>
-                <td>Catatan</td>
+                <td>Notes</td>
                 <td>{{ $directPurchase->notes ?: '—' }}</td>
             </tr>
         </table>
@@ -142,7 +142,7 @@
 
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Daftar Item</span>
+        <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item List</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -151,11 +151,11 @@
                     <tr>
                         <th style="width:50px">#</th>
                         <th>Part Number</th>
-                        <th>Deskripsi / Nama Barang</th>
+                        <th>Description / Item Name</th>
                         <th class="text-center">Qty</th>
                         <th>Unit</th>
-                        <th class="text-center">Diterima</th>
-                        <th class="text-end">Harga Satuan</th>
+                        <th class="text-center">Received</th>
+                        <th class="text-end">Unit Price</th>
                         <th class="text-end">Subtotal ({{ $directPurchase->currencyCode() }})</th>
                     </tr>
                 </thead>
@@ -179,19 +179,19 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center" style="color:var(--text-muted)">Belum ada item.</td>
+                            <td colspan="8" class="text-center" style="color:var(--text-muted)">No items yet.</td>
                         </tr>
                     @endforelse
                 </tbody>
                 <tfoot>
                     @php($dpTotals = $directPurchase->totalsFrom($directPurchase->grandTotal()))
                     <tr>
-                        <td colspan="7" class="text-end">Sub Total</td>
+                        <td colspan="7" class="text-end">Subtotal</td>
                         <td class="text-end fw-semibold">{{ \App\Support\Number::money($dpTotals['subtotal']) }}</td>
                     </tr>
                     @if($dpTotals['ppn'] > 0)
                     <tr>
-                        <td colspan="7" class="text-end">PPN {{ \App\Support\Number::percent($directPurchase->ppn_percent) }}%</td>
+                        <td colspan="7" class="text-end">VAT {{ \App\Support\Number::percent($directPurchase->ppn_percent) }}%</td>
                         <td class="text-end fw-semibold">{{ \App\Support\Number::money($dpTotals['ppn']) }}</td>
                     </tr>
                     @endif
@@ -208,16 +208,16 @@
 @if($directPurchase->status === 'approved')
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-truck-ramp-box me-2" style="color:var(--accent)"></i>Penerimaan Barang</span>
+        <span><i class="fa-solid fa-truck-ramp-box me-2" style="color:var(--accent)"></i>Goods Receiving</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
             <table class="table table-custom align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>No. Penerimaan</th>
-                        <th>Tanggal</th>
-                        <th>Gudang</th>
+                        <th>No. Receipt</th>
+                        <th>Date</th>
+                        <th>Warehouse</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -226,12 +226,12 @@
                         <tr>
                             <td><a href="{{ route('goods-receipt.show', $receipt->id) }}">{{ $receipt->receipt_number }}</a></td>
                             <td>{{ $receipt->received_date?->format('d/m/Y') }}</td>
-                            <td>{{ $receipt->warehouse?->name ?? 'Langsung pakai' }}</td>
+                            <td>{{ $receipt->warehouse?->name ?? 'Use directly' }}</td>
                             <td>{!! $receipt->statusBadgeHtml() !!}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="text-center" style="color:var(--text-muted)">Belum ada penerimaan.</td>
+                            <td colspan="4" class="text-center" style="color:var(--text-muted)">No receiving yet.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -243,15 +243,15 @@
 
 @if($directPurchase->supplierBills->isNotEmpty())
 <div class="card-custom fade-in mb-3">
-    <div class="card-header-custom"><span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Tagihan &amp; Pembayaran</span></div>
+    <div class="card-header-custom"><span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Bills &amp; Payments</span></div>
     <div class="card-body-custom p-2">
         <table class="table table-custom align-middle mb-0">
             <tbody>
                 @foreach($directPurchase->supplierBills as $bill)
                     <tr @if($bill->isVoid()) style="opacity:.55" @endif>
                         <td><a href="{{ route('supplier-bill.show', $bill->id) }}" class="fw-semibold">{{ $bill->bill_number }}</a></td>
-                        <td>Jatuh tempo {{ $bill->due_date?->format('d/m/Y') }}</td>
-                        <td class="text-end" style="white-space:nowrap">{{ $bill->currency }} {{ \App\Models\SupplierBill::formatMoney($bill->total) }}<div style="font-size:12px;color:var(--text-muted)">Sisa {{ \App\Models\SupplierBill::formatMoney($bill->outstanding()) }}</div></td>
+                        <td>Due {{ $bill->due_date?->format('d/m/Y') }}</td>
+                        <td class="text-end" style="white-space:nowrap">{{ $bill->currency }} {{ \App\Models\SupplierBill::formatMoney($bill->total) }}<div style="font-size:12px;color:var(--text-muted)">Balance {{ \App\Models\SupplierBill::formatMoney($bill->outstanding()) }}</div></td>
                         <td class="text-end">{!! $bill->statusBadgeHtml() !!}</td>
                     </tr>
                 @endforeach
@@ -266,7 +266,7 @@
     'types' => $directPurchase->documentTypes(),
     'uploadUrl' => route('direct-purchase.documents.store', $directPurchase->id),
     'canUpload' => $canCreate,
-    'hint' => 'Opsional — penawaran / nota supplier. Setelah diputuskan, dokumen hanya bisa ditambah.',
+    'hint' => 'Optional — supplier quote / note. Once decided, documents can only be added.',
 ])
 @endsection
 
@@ -275,19 +275,19 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">Tolak Direct Purchase</h6>
+                <h6 class="modal-title">Reject Direct Purchase</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-2">
-                    <label class="form-label">Alasan Penolakan <span class="text-danger">*</span></label>
-                    <textarea id="dp-reject-note" class="form-control" rows="3" placeholder="Wajib diisi alasan penolakan"></textarea>
+                    <label class="form-label">Rejection Reason <span class="text-danger">*</span></label>
+                    <textarea id="dp-reject-note" class="form-control" rows="3" placeholder="Rejection reason required"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger btn-sm" id="dp-btn-reject">
-                    <i class="fa fa-xmark me-1"></i> Tolak
+                    <i class="fa fa-xmark me-1"></i> Reject
                 </button>
             </div>
         </div>
@@ -306,19 +306,19 @@ const dpRejectUrl = '{{ route("direct-purchase.reject", $directPurchase->id) }}'
 function dpSubmit() {
     Swal.fire({
         title: 'Submit Approval?',
-        text: 'Direct purchase akan dikirim untuk approval.',
+        text: 'Direct purchase will be submitted for approval.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Submit',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Submit',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(dpSubmitUrl, { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Dikirim untuk approval.');
+                toastr.success(res.message || 'Submitted for approval.');
                 setTimeout(function() { window.location.reload(); }, 800);
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal submit.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to submit.');
             });
     });
 }
@@ -328,16 +328,16 @@ function dpApprove() {
         title: 'Approve Direct Purchase?',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Approve',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Approve',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(dpApproveUrl, { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Disetujui.');
+                toastr.success(res.message || 'Approved.');
                 setTimeout(function() { window.location.reload(); }, 800);
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal approve.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to approve.');
             });
     });
 }
@@ -353,7 +353,7 @@ function dpOpenReject() {
 $(document).on('click', '#dp-btn-reject', function() {
     var note = $('#dp-reject-note').val().trim();
     if (!note) {
-        toastr.error('Alasan penolakan wajib diisi.');
+        toastr.error('Rejection reason is required.');
         return;
     }
     $('#dp-btn-reject').prop('disabled', true);
@@ -362,11 +362,11 @@ $(document).on('click', '#dp-btn-reject', function() {
         method: 'POST',
         data: { _token: '{{ csrf_token() }}', approval_note: note }
     }).done(function(res) {
-        toastr.success(res.message || 'Ditolak.');
+        toastr.success(res.message || 'Rejected.');
         dpRejectModalInstance.hide();
         setTimeout(function() { window.location.reload(); }, 800);
     }).fail(function(xhr) {
-        toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menolak.');
+        toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to reject.');
     }).always(function() {
         $('#dp-btn-reject').prop('disabled', false);
     });

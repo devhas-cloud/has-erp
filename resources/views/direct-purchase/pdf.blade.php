@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Direct Purchase {{ $directPurchase->dp_number ?: $directPurchase->id }}</title>
@@ -133,7 +133,7 @@
         <table style="width:100%">
             <tr>
                 <td>Direct Purchase {{ $directPurchase->dp_number ?: '#'.$directPurchase->id }}</td>
-                <td class="pg">Hal. </td>
+                <td class="pg">Page </td>
             </tr>
         </table>
     </div>
@@ -217,7 +217,7 @@
                 </tr>
             @endforeach
             @if($directPurchase->items->isEmpty())
-                <tr><td colspan="5" class="c" style="color:#999">Belum ada item.</td></tr>
+                <tr><td colspan="5" class="c" style="color:#999">No items yet.</td></tr>
             @endif
             <tr class="filler">
                 @if($directPurchase->notes)
@@ -253,13 +253,13 @@
                             <table class="totals">
                                 @if($totals['ppn'] > 0)
                                 <tr>
-                                    <td class="k" style="width:47.06%">Sub Total</td>
+                                    <td class="k" style="width:47.06%">Subtotal</td>
                                     <td class="amt" style="width:52.94%"><span class="rp">{{ $currencySymbol }}</span><div class="val">{{ $money($totals['subtotal']) }}</div></td>
                                 </tr>
                                 @endif
                                 @if($totals['ppn'] > 0)
                                     <tr>
-                                        <td class="k">PPN</td>
+                                        <td class="k">VAT</td>
                                         <td class="amt"><span class="rp">{{ $currencySymbol }}</span><div class="val">{{ $money($totals['ppn']) }}</div></td>
                                     </tr>
                                 @endif

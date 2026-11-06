@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', $directPurchase ? 'Edit Direct Purchase' : 'Buat Direct Purchase')
-@section('page-title', $directPurchase ? 'Edit Direct Purchase' : 'Buat Direct Purchase')
+@section('title', $directPurchase ? 'Edit Direct Purchase' : 'Create Direct Purchase')
+@section('page-title', $directPurchase ? 'Edit Direct Purchase' : 'Create Direct Purchase')
 
 @section('styles')
 <style>
@@ -90,12 +90,12 @@
 @php($dpPurpose = $directPurchase?->purpose ?? \App\Models\DirectPurchase::PURPOSE_STOCK)
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">{{ $directPurchase ? 'Edit Direct Purchase '.($directPurchase->dp_number ?: '') : 'Buat Direct Purchase' }}</h1>
-        <p class="page-header-sub">Pembelian langsung tanpa Permintaan Barang / PO — pilih supplier dan tujuan barang, lalu tambahkan item dari katalog produk.</p>
+        <h1 class="page-header-title">{{ $directPurchase ? 'Edit Direct Purchase '.($directPurchase->dp_number ?: '') : 'Create Direct Purchase' }}</h1>
+        <p class="page-header-sub">Direct purchase without Goods Request / PO — select a supplier and goods purpose, then add items from the product catalog.</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ $directPurchase ? route('direct-purchase.show', $directPurchase->id) : route('direct-purchase.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
+            <i class="fa fa-arrow-left me-1"></i> Back
         </a>
     </div>
 </div>
@@ -105,7 +105,7 @@
         {{-- 1. Supplier & tujuan --}}
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Informasi Pembelian</span>
+                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Purchase Information</span>
             </div>
             <div class="card-body-custom">
                 <div class="row g-3">
@@ -118,32 +118,32 @@
                         </select>
                         <input type="hidden" id="dp-supplier-id" value="{{ $directPurchase?->supplier_id }}">
                         <input type="hidden" id="dp-supplier-name" value="{{ $directPurchase?->supplier_name }}">
-                        <small class="dp-hint">Dari master Supplier. Belum ada? Tambahkan lewat menu Supplier.</small>
+                        <small class="dp-hint">From Supplier master. None yet? Add via the Supplier menu.</small>
                     </div>
                     <div class="col-lg-3 col-sm-4">
-                        <label class="form-label">Telepon Supplier</label>
-                        <input type="text" class="form-control" id="dp-supplier-phone" maxlength="50" value="{{ $directPurchase?->supplier_phone }}" placeholder="Otomatis dari supplier">
+                        <label class="form-label">Supplier Phone</label>
+                        <input type="text" class="form-control" id="dp-supplier-phone" maxlength="50" value="{{ $directPurchase?->supplier_phone }}" placeholder="Auto from supplier">
                     </div>
                     <div class="col-lg-2 col-sm-4">
-                        <label class="form-label">Tanggal</label>
+                        <label class="form-label">Date</label>
                         <input type="date" class="form-control" id="dp-date" value="{{ $directPurchase ? $directPurchase->date?->format('Y-m-d') : now()->toDateString() }}">
                     </div>
                     <div class="col-lg-2 col-sm-4">
-                        <label class="form-label">Termin Bayar</label>
+                        <label class="form-label">Payment Terms</label>
                         <div class="input-group">
-                            <input type="number" class="form-control" id="dp-payment-term-days" min="0" max="365" step="1" placeholder="Ikut supplier" value="{{ $directPurchase?->payment_term_days }}">
-                            <span class="input-group-text">hari</span>
+                            <input type="number" class="form-control" id="dp-payment-term-days" min="0" max="365" step="1" placeholder="Follow supplier" value="{{ $directPurchase?->payment_term_days }}">
+                            <span class="input-group-text">days</span>
                         </div>
-                        <small class="dp-hint">0 = tunai.</small>
+                        <small class="dp-hint">0 = cash.</small>
                     </div>
 
                     <div class="col-12">
-                        <label class="form-label">Tujuan Barang <span class="text-danger">*</span></label>
+                        <label class="form-label">Goods Purpose <span class="text-danger">*</span></label>
                         <div class="dp-purpose">
                             @foreach([
-                                'stock' => ['fa-warehouse', 'Untuk Stok', 'Diterima ke gudang sebagai stok bebas.'],
-                                'project' => ['fa-diagram-project', 'Untuk Project', 'Diterima ke gudang (umumnya transit) & dialokasikan ke project.'],
-                                'direct' => ['fa-hand-holding', 'Langsung Pakai', 'Cukup konfirmasi terima, tidak masuk stok.'],
+                                'stock' => ['fa-warehouse', 'For Stock', 'Received into warehouse as free stock.'],
+                                'project' => ['fa-diagram-project', 'For Project', 'Received into warehouse (usually transit) & allocated to a project.'],
+                                'direct' => ['fa-hand-holding', 'Use Directly', 'Just confirm receipt, not into stock.'],
                             ] as $purposeKey => [$purposeIcon, $purposeLabel, $purposeHint])
                                 <div>
                                     <input type="radio" name="dp-purpose" id="dp-purpose-{{ $purposeKey }}" value="{{ $purposeKey }}" @checked($dpPurpose === $purposeKey)>
@@ -155,15 +155,15 @@
                     <div class="col-lg-8" id="dp-project-wrap" style="{{ $dpPurpose === 'project' ? '' : 'display:none' }}">
                         <label class="form-label">Project <span class="text-danger">*</span></label>
                         <select id="dp-project" class="form-select" style="width:100%">
-                            <option value="">Pilih project...</option>
+                            <option value="">Select project...</option>
                             @foreach($projects as $projectOption)
                                 <option value="{{ $projectOption['id'] }}" @selected((int) $directPurchase?->project_id === $projectOption['id'])>{{ $projectOption['text'] }}</option>
                             @endforeach
                         </select>
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Catatan <span class="dp-section-sub">opsional, tercetak di bawah item</span></label>
-                        <textarea id="dp-notes" class="form-control" rows="2" placeholder="Contoh: Pembelian consumable untuk site Gresik">{{ $directPurchase?->notes }}</textarea>
+                        <label class="form-label">Notes <span class="dp-section-sub">optional, printed below items</span></label>
+                        <textarea id="dp-notes" class="form-control" rows="2" placeholder="Example: Consumable purchase for Gresik site">{{ $directPurchase?->notes }}</textarea>
                     </div>
                 </div>
             </div>
@@ -173,12 +173,12 @@
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>
-                    <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Daftar Item
-                    <span class="dp-chip ms-1" id="dp-items-count">0 item</span>
-                    <span class="dp-chip muted ms-1" id="dp-doc-currency" style="display:none" title="Satu dokumen satu mata uang, mengikuti produk"></span>
+                    <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item List
+                    <span class="dp-chip ms-1" id="dp-items-count">0 items</span>
+                    <span class="dp-chip muted ms-1" id="dp-doc-currency" style="display:none" title="One document one currency, following the product"></span>
                 </span>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="dpOpenProductPicker()">
-                    <i class="fa fa-magnifying-glass me-1"></i> Tambah dari Katalog
+                    <i class="fa fa-magnifying-glass me-1"></i> Add from Catalog
                 </button>
             </div>
             <div class="card-body-custom p-2">
@@ -187,11 +187,11 @@
                         <thead>
                             <tr>
                                 <th style="width:40px" class="text-center">#</th>
-                                <th style="width:20%">Produk</th>
-                                <th>Nama Barang / Deskripsi</th>
+                                <th style="width:20%">Product</th>
+                                <th>Item Name / Description</th>
                                 <th style="width:120px" class="text-center">Qty</th>
                                 <th style="width:90px">Unit</th>
-                                <th style="width:160px" class="text-end">Harga Satuan</th>
+                                <th style="width:160px" class="text-end">Unit Price</th>
                                 <th style="width:130px" class="text-end">Subtotal</th>
                                 <th class="text-center" style="width:44px"></th>
                             </tr>
@@ -200,16 +200,16 @@
                     </table>
                 </div>
                 <div class="config-card-empty" id="dp-items-empty">
-                    <i class="fa-solid fa-inbox"></i> Belum ada item.
+                    <i class="fa-solid fa-inbox"></i> No items yet.
                     <div class="dp-empty-actions">
                         <button type="button" class="btn btn-secondary btn-sm" onclick="dpOpenProductPicker()">
-                            <i class="fa fa-magnifying-glass me-1"></i> Cari di Katalog
+                            <i class="fa fa-magnifying-glass me-1"></i> Search Catalog
                         </button>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between flex-wrap gap-2 px-2 pt-2" id="dp-items-footer" style="display:none !important">
-                    <small class="dp-hint"><i class="fa fa-circle-info me-1"></i>Item wajib dari katalog produk (untuk pencatatan stok). Harga terisi dari harga beli master — sesuaikan dengan nota.</small>
-                    <small class="dp-hint">Deskripsi bisa diformat: <b>Ctrl+B</b> tebal, <i>Ctrl+I</i> miring.</small>
+                    <small class="dp-hint"><i class="fa fa-circle-info me-1"></i>Items must come from the product catalog (for stock records). Price filled from master purchase price — adjust to the note.</small>
+                    <small class="dp-hint">Description can be formatted: <b>Ctrl+B</b> bold, <i>Ctrl+I</i> italic.</small>
                 </div>
             </div>
         </div>
@@ -217,22 +217,22 @@
         {{-- 3. Penanda tangan (opsional, dilipat) --}}
         <details class="card-custom fade-in dp-sign" @if($directPurchase?->request_by_name || $directPurchase?->finance_name || $directPurchase?->accounting_name) open @endif>
             <summary class="card-header-custom d-flex justify-content-between align-items-center">
-                <span><i class="fa-solid fa-signature me-2" style="color:var(--accent)"></i>Penanda Tangan <span class="dp-section-sub">opsional, tercetak di PDF</span></span>
+                <span><i class="fa-solid fa-signature me-2" style="color:var(--accent)"></i>Signatories <span class="dp-section-sub">optional, printed on PDF</span></span>
                 <i class="fa fa-chevron-down chev" style="color:var(--text-muted);font-size:12px"></i>
             </summary>
             <div class="card-body-custom">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Request By</label>
-                        <input type="text" class="form-control" id="dp-request-by" placeholder="Nama pemohon" value="{{ $directPurchase?->request_by_name }}">
+                        <input type="text" class="form-control" id="dp-request-by" placeholder="Requester name" value="{{ $directPurchase?->request_by_name }}">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Finance Dept</label>
-                        <input type="text" class="form-control" id="dp-finance-name" placeholder="Nama penanggung jawab Finance" value="{{ $directPurchase?->finance_name }}">
+                        <input type="text" class="form-control" id="dp-finance-name" placeholder="Finance responsible person" value="{{ $directPurchase?->finance_name }}">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Accounting Dept</label>
-                        <input type="text" class="form-control" id="dp-accounting-name" placeholder="Nama penanggung jawab Accounting" value="{{ $directPurchase?->accounting_name }}">
+                        <input type="text" class="form-control" id="dp-accounting-name" placeholder="Accounting responsible person" value="{{ $directPurchase?->accounting_name }}">
                     </div>
                 </div>
             </div>
@@ -243,19 +243,19 @@
     <div class="col-xl-3">
         <div class="card-custom fade-in dp-summary-sticky">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Ringkasan</span>
+                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Summary</span>
             </div>
             <div class="card-body-custom">
                 <div class="dp-summary-number">
-                    <div class="lbl">No. Dokumen</div>
+                    <div class="lbl">No. Document</div>
                     <div class="val" id="dp-sum-number">—</div>
                 </div>
                 <div class="dp-summary-row"><span class="lbl">Supplier</span><span class="val" id="dp-sum-supplier" title="">—</span></div>
-                <div class="dp-summary-row"><span class="lbl">Tujuan</span><span class="val" id="dp-sum-purpose">—</span></div>
+                <div class="dp-summary-row"><span class="lbl">Purpose</span><span class="val" id="dp-sum-purpose">—</span></div>
                 <div class="dp-summary-row"><span class="lbl">Item</span><span class="val" id="dp-sum-items">0</span></div>
-                <div class="dp-summary-row"><span class="lbl">Sub Total</span><span class="val" id="dp-sum-subtotal">0</span></div>
+                <div class="dp-summary-row"><span class="lbl">Subtotal</span><span class="val" id="dp-sum-subtotal">0</span></div>
                 <div class="dp-summary-row">
-                    <span class="lbl d-flex align-items-center gap-1">PPN
+                    <span class="lbl d-flex align-items-center gap-1">VAT
                         <span class="input-group input-group-sm" style="width:auto">
                             <input type="number" class="form-control dp-ppn-input" id="dp-ppn-percent" min="0" max="100" step="any" placeholder="0" value="{{ $directPurchase ? $directPurchase->ppn_percent : \App\Models\DirectPurchase::DEFAULT_PPN_PERCENT }}">
                             <span class="input-group-text">%</span>
@@ -266,11 +266,11 @@
                 <div class="dp-summary-total"><span>Total</span><span class="val" id="dp-sum-total">0</span></div>
 
                 <button type="button" class="btn btn-primary w-100 mt-3" id="dp-save-btn" onclick="dpSave()">
-                    <i class="fa fa-save me-1"></i> Simpan {{ $directPurchase ? 'Perubahan' : 'Draft' }}
+                    <i class="fa fa-save me-1"></i> Save {{ $directPurchase ? 'Changes' : 'Draft' }}
                 </button>
                 <div class="dp-summary-note">
                     <i class="fa-solid fa-circle-info me-1"></i>
-                    Disimpan sebagai <strong>Draft</strong>. Ajukan approval dari halaman detail setelah harga lengkap.
+                    Saved as <strong>Draft</strong>. Submit for approval from the detail page once prices are complete.
                 </div>
             </div>
         </div>
@@ -279,7 +279,7 @@
 
 <datalist id="dp-unit-options">
     <option value="Unit"><option value="Pcs"><option value="Set"><option value="Lot">
-    <option value="Paket"><option value="Box"><option value="Meter"><option value="Roll">
+    <option value="Pack"><option value="Box"><option value="Meter"><option value="Roll">
 </datalist>
 @endsection
 
@@ -288,63 +288,63 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="dp-picker-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Tambah dari Katalog Product</h6>
+                <h6 class="modal-title" id="dp-picker-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Add from Product Catalog</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="dp-pp-toolbar mb-2">
                     <div class="dp-pp-search">
                         <i class="fa fa-magnifying-glass"></i>
-                        <input type="text" class="form-control form-control-sm" id="dp-product-search" placeholder="Cari nama, part number, brand, atau deskripsi..." autocomplete="off">
+                        <input type="text" class="form-control form-control-sm" id="dp-product-search" placeholder="Search name, part number, brand, or description..." autocomplete="off">
                     </div>
                     <select id="dp-product-division" class="form-select form-select-sm">
-                        <option value="">Semua Divisi</option>
+                        <option value="">All Divisions</option>
                     </select>
                     <select id="dp-product-category" style="width:100%">
-                        <option value="">Semua Kategori</option>
+                        <option value="">All Categories</option>
                     </select>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                    <span class="dp-pp-footer-info" id="dp-product-info">Memuat...</span>
+                    <span class="dp-pp-footer-info" id="dp-product-info">Loading...</span>
                     <div class="d-flex align-items-center gap-2">
-                        <span class="dp-chip" id="dp-product-selected">0 dipilih</span>
-                        <button type="button" class="btn btn-link btn-sm p-0" id="dp-product-clear" style="display:none">Kosongkan pilihan</button>
+                        <span class="dp-chip" id="dp-product-selected">0 selected</span>
+                        <button type="button" class="btn btn-link btn-sm p-0" id="dp-product-clear" style="display:none">Clear selection</button>
                     </div>
                 </div>
                 <div class="dp-pp-table-wrap">
                     <table class="table table-custom align-middle mb-0">
                         <thead>
                             <tr>
-                                <th style="width:36px" class="text-center"><input type="checkbox" id="dp-product-check-all" title="Pilih semua di halaman ini"></th>
+                                <th style="width:36px" class="text-center"><input type="checkbox" id="dp-product-check-all" title="Select all on this page"></th>
                                 <th style="width:150px">Part Number</th>
-                                <th>Nama Barang / Deskripsi</th>
-                                <th style="width:120px">Divisi</th>
-                                <th style="width:150px" class="text-end">Harga Beli</th>
+                                <th>Item Name / Description</th>
+                                <th style="width:120px">Division</th>
+                                <th style="width:150px" class="text-end">Purchase Price</th>
                             </tr>
                         </thead>
                         <tbody id="dp-product-body">
-                            <tr><td colspan="5" class="config-card-empty"><span class="config-spinner"></span>Memuat...</td></tr>
+                            <tr><td colspan="5" class="config-card-empty"><span class="config-spinner"></span>Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2">
                     <div class="d-flex align-items-center gap-2 dp-pp-footer-info">
-                        Tampilkan
+                        Show
                         <select id="dp-product-per-page" class="form-select form-select-sm" style="width:auto">
                             <option value="10">10</option>
                             <option value="15" selected>15</option>
                             <option value="25">25</option>
                             <option value="50">50</option>
                         </select>
-                        per halaman
+                        per page
                     </div>
                     <nav><ul class="pagination pagination-sm mb-0 dp-pp-pager" id="dp-product-pager"></ul></nav>
                 </div>
             </div>
             <div class="modal-footer justify-content-between">
-                <small class="dp-hint" id="dp-picker-hint"><i class="fa fa-circle-info me-1"></i>Barang belum ada di katalog? Tambahkan dulu di Master Produk.</small>
+                <small class="dp-hint" id="dp-picker-hint"><i class="fa fa-circle-info me-1"></i>Item not in catalog yet? Add it in Product Master first.</small>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary btn-sm" id="dp-product-apply" onclick="dpApplyProductPicked()" disabled></button>
                 </div>
             </div>
@@ -364,7 +364,7 @@ const dpSearchProductsUrl = '{{ route("direct-purchase.search-products") }}';
 const dpCurrencies = @json($currencies ?? []);
 const dpInitialItems = @json($items ?? []);
 const dpCurrentNumber = @json($directPurchase?->dp_number);
-const dpSaveLabel = '<i class="fa fa-save me-1"></i> Simpan {{ $directPurchase ? 'Perubahan' : 'Draft' }}';
+const dpSaveLabel = '<i class="fa fa-save me-1"></i> Save {{ $directPurchase ? 'Changes' : 'Draft' }}';
 
 function dpEsc(str) {
     return String(str == null ? '' : str)
@@ -408,7 +408,7 @@ function dpExistingProductIds() {
 function dpProductCell(item) {
     return '<div class="dp-product-cell"><div style="font-weight:600;font-size:13px">' + dpEsc(item.part_number || '—') + '</div>'
         + '<div class="dp-hint">' + dpEsc(item.product_name || '') + '</div>'
-        + '<a href="javascript:void(0)" class="dp-product-link" onclick="dpPickProductForRow(this)"><i class="fa fa-arrows-rotate me-1"></i>Ganti produk</a></div>';
+        + '<a href="javascript:void(0)" class="dp-product-link" onclick="dpPickProductForRow(this)"><i class="fa fa-arrows-rotate me-1"></i>Replace product</a></div>';
 }
 
 function dpRowHtml(item) {
@@ -418,7 +418,7 @@ function dpRowHtml(item) {
     html += '<td><input type="hidden" class="dp-pn" value="' + dpEsc(item.part_number || '') + '">'
         + '<input type="hidden" class="dp-currency" value="' + dpEsc(currency) + '">' + dpProductCell(item) + '</td>';
     {{-- Deskripsi sudah HTML tersanitasi dari server (Quotation::renderDescription) --}}
-    html += '<td><div class="form-control form-control-sm dp-desc" contenteditable="true" data-placeholder="Nama barang / deskripsi (wajib)">' + (item.description || '') + '</div></td>';
+    html += '<td><div class="form-control form-control-sm dp-desc" contenteditable="true" data-placeholder="Item name / description (required)">' + (item.description || '') + '</div></td>';
     html += '<td><div class="input-group input-group-sm dp-qty-group">';
     html += '<button type="button" class="btn btn-outline-secondary dp-qty-step" data-step="-1" tabindex="-1">−</button>';
     html += '<input type="text" inputmode="numeric" class="form-control dp-qty" value="' + (item.qty != null && item.qty !== '' ? parseInt(item.qty, 10) || '' : '') + '">';
@@ -428,7 +428,7 @@ function dpRowHtml(item) {
     html += '<td><div class="input-group input-group-sm dp-price-group"><span class="input-group-text dp-price-currency">' + dpEsc(currency) + '</span>'
         + '<input type="text" inputmode="decimal" class="form-control text-end dp-price" value="' + (item.price != null && item.price !== '' ? dpFmt(item.price) : '') + '" placeholder="0"></div></td>';
     html += '<td class="text-end dp-amount">0</td>';
-    html += '<td class="text-center"><button type="button" class="btn-icon text-danger mt-1" title="Hapus baris" onclick="dpRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
+    html += '<td class="text-center"><button type="button" class="btn-icon text-danger mt-1" title="Delete row" onclick="dpRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
     html += '</tr>';
     return html;
 }
@@ -445,12 +445,12 @@ function dpRemoveRow(btn) {
     if (!label) { remove(); return; }
 
     Swal.fire({
-        title: 'Hapus item?',
+        title: 'Delete item?',
         text: label.length > 80 ? label.slice(0, 80) + '…' : label,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel'
     }).then(function(result) { if (result.isConfirmed) remove(); });
 }
 
@@ -468,7 +468,7 @@ function dpRecalc() {
     var n = $rows.length;
     $('#dp-items-empty').toggle(n === 0);
     $('#dp-items-footer').attr('style', n === 0 ? 'display:none !important' : '');
-    $('#dp-items-count').text(n + ' item');
+    $('#dp-items-count').text(n + ' items');
     $('#dp-sum-items').text(n);
 
     var code = dpDocCurrency() || dpBaseCurrency();
@@ -516,14 +516,14 @@ function dpPickProductForRow(el) {
 function dpOpenProductPicker($row) {
     dpPickerTargetRow = $row || null;
     $('#dp-picker-title').html(dpPickerTargetRow
-        ? '<i class="fa-solid fa-arrows-rotate me-2" style="color:var(--accent)"></i>Ganti Produk Baris'
-        : '<i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Tambah dari Katalog Product');
+        ? '<i class="fa-solid fa-arrows-rotate me-2" style="color:var(--accent)"></i>Replace Product Row'
+        : '<i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Add from Product Catalog');
 
     if (!dpPickerInstance) {
         dpPickerInstance = new bootstrap.Modal(document.getElementById('dpProductPickerModal'));
         $('#dp-product-category').select2({
             theme: 'bootstrap-5', width: '100%', dropdownParent: $('#dpProductPickerModal'),
-            placeholder: 'Semua Kategori', allowClear: true,
+            placeholder: 'All Categories', allowClear: true,
             selectionCssClass: 'select2--small', dropdownCssClass: 'select2--small'
         });
     }
@@ -538,7 +538,7 @@ function dpOpenProductPicker($row) {
 
 function dpLoadProducts() {
     if (dpProductRequest) dpProductRequest.abort();
-    $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><span class="config-spinner"></span>Memuat...</td></tr>');
+    $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><span class="config-spinner"></span>Loading...</td></tr>');
 
     var params = $.extend({}, dpProductState);
     if (!dpProductFiltersLoaded) params.with_filters = 1;
@@ -551,16 +551,16 @@ function dpLoadProducts() {
         })
         .fail(function(xhr, status) {
             if (status === 'abort') return;
-            $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Gagal memuat product.</td></tr>');
+            $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load products.</td></tr>');
         });
 }
 
 function dpFillProductFilters(filters) {
     dpProductFiltersLoaded = true;
-    var divHtml = '<option value="">Semua Divisi</option>';
+    var divHtml = '<option value="">All Divisions</option>';
     (filters.divisions || []).forEach(function(d) { divHtml += '<option value="' + d.id + '">' + dpEsc(d.name) + '</option>'; });
     $('#dp-product-division').html(divHtml);
-    var catHtml = '<option value="">Semua Kategori</option>';
+    var catHtml = '<option value="">All Categories</option>';
     (filters.categories || []).forEach(function(c) { catHtml += '<option value="' + dpEsc(c) + '">' + dpEsc(c) + '</option>'; });
     $('#dp-product-category').html(catHtml).trigger('change.select2');
 }
@@ -570,7 +570,7 @@ function dpRenderProductPool(meta) {
     var docCurrency = dpDocCurrency(dpPickerTargetRow);
 
     if (dpProductPool.length === 0) {
-        $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><i class="fa-solid fa-inbox"></i>Product tidak ditemukan. Coba kata kunci atau filter lain.</td></tr>');
+        $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><i class="fa-solid fa-inbox"></i>Product not found. Try another keyword or filter.</td></tr>');
     } else {
         var html = '';
         dpProductPool.forEach(function(p, idx) {
@@ -582,14 +582,14 @@ function dpRenderProductPool(meta) {
 
             html += '<tr data-idx="' + idx + '" class="' + (isAdded ? 'is-added' : (isLocked ? 'is-locked' : (isSelected ? 'is-selected' : ''))) + '">';
             html += '<td class="text-center">';
-            if (isAdded) html += '<i class="fa fa-check" style="color:var(--accent)" title="Sudah ada di daftar"></i>';
-            else if (isLocked) html += '<i class="fa fa-lock" style="color:var(--text-muted)" title="Mata uang berbeda dengan dokumen"></i>';
+            if (isAdded) html += '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>';
+            else if (isLocked) html += '<i class="fa fa-lock" style="color:var(--text-muted)" title="Currency differs from document"></i>';
             else html += '<input type="' + (dpPickerTargetRow ? 'radio' : 'checkbox') + '" name="dp-product-pick" class="dp-product-check" data-idx="' + idx + '"' + (isSelected ? ' checked' : '') + '>';
             html += '</td>';
             html += '<td style="font-size:12.5px">' + dpEsc(p.code || '—') + '</td>';
             html += '<td><div class="dp-pp-name">' + dpEsc(p.name || desc || '—')
-                + (isAdded ? ' <span class="dp-chip muted">Sudah ditambahkan</span>' : '')
-                + (isLocked ? ' <span class="dp-chip warn">Mata uang ' + dpEsc(p.currency) + ' — beda dengan dokumen (' + dpEsc(docCurrency) + ')</span>' : '') + '</div>';
+                + (isAdded ? ' <span class="dp-chip muted">Already added</span>' : '')
+                + (isLocked ? ' <span class="dp-chip warn">Currency ' + dpEsc(p.currency) + ' — different from document (' + dpEsc(docCurrency) + ')</span>' : '') + '</div>';
             if (desc && desc !== p.name) html += '<div class="dp-pp-desc">' + dpEsc(desc) + '</div>';
             if (meta) html += '<div class="dp-pp-meta"><i class="fa fa-tag me-1"></i>' + dpEsc(meta) + '</div>';
             html += '</td>';
@@ -601,8 +601,8 @@ function dpRenderProductPool(meta) {
     }
 
     $('#dp-product-info').text(meta && meta.total
-        ? 'Menampilkan ' + dpFmt(meta.from) + '–' + dpFmt(meta.to) + ' dari ' + dpFmt(meta.total) + ' product'
-        : '0 product');
+        ? 'Showing ' + dpFmt(meta.from) + '–' + dpFmt(meta.to) + ' of ' + dpFmt(meta.total) + ' products'
+        : '0 products');
     $('#dp-product-check-all').closest('th').toggle(!dpPickerTargetRow);
     dpRenderProductPager(meta || { page: 1, last_page: 1 });
     dpSyncProductSelection();
@@ -630,11 +630,11 @@ function dpRenderProductPager(meta) {
 
 function dpSyncProductSelection() {
     var n = Object.keys(dpProductSelected).length;
-    $('#dp-product-selected').text(n + ' dipilih');
+    $('#dp-product-selected').text(n + ' selected');
     $('#dp-product-clear').toggle(n > 0);
     $('#dp-product-apply').prop('disabled', n === 0).html(dpPickerTargetRow
-        ? '<i class="fa fa-check me-1"></i> Pakai Produk Terpilih'
-        : '<i class="fa fa-plus me-1"></i> Tambahkan ' + n + ' Item');
+        ? '<i class="fa fa-check me-1"></i> Use Selected Product'
+        : '<i class="fa fa-plus me-1"></i> Add ' + n + ' Items');
     var $checks = $('#dp-product-body .dp-product-check');
     $('#dp-product-check-all').prop('checked', $checks.length > 0 && $checks.filter(':checked').length === $checks.length);
 }
@@ -652,13 +652,13 @@ function dpToggleProduct(idx, checked) {
 
 function dpApplyProductPicked() {
     var picked = Object.keys(dpProductSelected).map(function(id) { return dpProductSelected[id]; });
-    if (!picked.length) { toastr.error('Pilih minimal satu product.'); return; }
+    if (!picked.length) { toastr.error('Select at least one product.'); return; }
 
     // Satu dokumen satu mata uang — termasuk di antara produk yang dipilih sekaligus.
     var currencies = picked.map(function(p) { return p.currency; }).filter(function(c, i, all) { return all.indexOf(c) === i; });
     var docCurrency = dpDocCurrency(dpPickerTargetRow);
     if (currencies.length > 1 || (docCurrency && currencies[0] !== docCurrency)) {
-        toastr.error('Satu dokumen hanya boleh satu mata uang (' + (docCurrency || currencies.join(', ')) + '). Buat dokumen terpisah untuk mata uang lain.');
+        toastr.error('One document may only use one currency (' + (docCurrency || currencies.join(', ')) + '). Create a separate document for other currencies.');
         return;
     }
 
@@ -673,12 +673,12 @@ function dpApplyProductPicked() {
         if (!dpPlainText($row.find('.dp-desc').html())) $row.find('.dp-desc').html(p.description || dpEsc(p.name || ''));
         if (p.price) $row.find('.dp-price').val(dpFmt(p.price));
         dpRecalc();
-        toastr.success('Produk baris diganti.');
+        toastr.success('Row product replaced.');
     } else {
         picked.forEach(function(p) {
             dpAddRow({ master_product_id: p.id, part_number: p.code, product_name: p.name, description: p.description || dpEsc(p.name || ''), qty: 1, unit: 'Unit', currency: p.currency, price: p.price || null });
         });
-        toastr.success(picked.length + ' item ditambahkan. Sesuaikan qty dan harga bila perlu.');
+        toastr.success(picked.length + ' items added. Adjust qty and price as needed.');
     }
     dpPickerInstance.hide();
 }
@@ -708,33 +708,33 @@ function dpValidate() {
     $('#dp-items-body .is-invalid, #dp-ppn-percent').removeClass('is-invalid');
 
     if (!$('#dp-supplier-name').val()) {
-        toastr.error('Supplier wajib dipilih.');
+        toastr.error('Supplier is required.');
         $('#dp-supplier-select').select2('open');
         return false;
     }
     if (dpPurpose() === 'project' && !$('#dp-project').val()) {
-        toastr.error('Pilih project untuk pembelian bertujuan project.');
+        toastr.error('Select a project for project-purpose purchases.');
         $('#dp-project').select2('open');
         return false;
     }
     var ppnPct = parseFloat($('#dp-ppn-percent').val()) || 0;
-    if (ppnPct < 0 || ppnPct > 100) return dpFail('PPN harus 0 sampai 100%.', $('#dp-ppn-percent'));
+    if (ppnPct < 0 || ppnPct > 100) return dpFail('VAT must be 0 to 100%.', $('#dp-ppn-percent'));
 
     var $rows = $('#dp-items-body tr');
-    if ($rows.length === 0) return dpFail('Tambahkan minimal satu item dari katalog.');
+    if ($rows.length === 0) return dpFail('Add at least one item from the catalog.');
 
     var ok = true;
     $rows.each(function(i) {
         var $row = $(this);
-        if (!$row.attr('data-master-product-id')) { ok = dpFail('Baris ' + (i + 1) + ' belum terhubung master produk.', $row.find('.dp-product-cell')); return false; }
-        if (!dpPlainText($row.find('.dp-desc').html())) { ok = dpFail('Nama barang / deskripsi baris ' + (i + 1) + ' wajib diisi.', $row.find('.dp-desc')); return false; }
-        if (!((parseInt($row.find('.dp-qty').val(), 10) || 0) >= 1)) { ok = dpFail('Qty baris ' + (i + 1) + ' minimal 1.', $row.find('.dp-qty')); return false; }
+        if (!$row.attr('data-master-product-id')) { ok = dpFail('Row ' + (i + 1) + ' is not linked to a master product.', $row.find('.dp-product-cell')); return false; }
+        if (!dpPlainText($row.find('.dp-desc').html())) { ok = dpFail('Item name / description on row ' + (i + 1) + ' is required.', $row.find('.dp-desc')); return false; }
+        if (!((parseInt($row.find('.dp-qty').val(), 10) || 0) >= 1)) { ok = dpFail('Qty on row ' + (i + 1) + ' must be at least 1.', $row.find('.dp-qty')); return false; }
     });
     return ok;
 }
 
 function dpSetSaving(saving) {
-    $('#dp-save-btn').prop('disabled', saving).html(saving ? '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...' : dpSaveLabel);
+    $('#dp-save-btn').prop('disabled', saving).html(saving ? '<span class="spinner-border spinner-border-sm me-1"></span> Saving...' : dpSaveLabel);
 }
 
 function dpSave() {
@@ -760,14 +760,14 @@ function dpSave() {
     dpSetSaving(true);
     $.ajax({ url: dpUpdateUrl || dpStoreUrl, method: dpUpdateUrl ? 'PUT' : 'POST', data: payload })
         .done(function(res) {
-            toastr.success(res.message || 'Tersimpan.');
+            toastr.success(res.message || 'Saved.');
             setTimeout(function() {
                 window.location.href = dpUpdateUrl ? dpShowUrl : '{{ route("direct-purchase.index") }}';
             }, 800);
         })
         .fail(function(xhr) {
             dpSetSaving(false);
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menyimpan.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to save.');
         });
 }
 
@@ -816,9 +816,9 @@ $(document).ready(function() {
     dpRecalc();
 
     if (dpCurrentNumber) $('#dp-sum-number').text(dpCurrentNumber);
-    else $('#dp-sum-number').addClass('pending').text('Otomatis saat disimpan');
+    else $('#dp-sum-number').addClass('pending').text('Auto on save');
 
-    $('#dp-project').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Pilih project...' });
+    $('#dp-project').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Select project...' });
     $(document).on('change', 'input[name="dp-purpose"]', dpSyncPurpose);
     dpSyncPurpose();
 
@@ -827,7 +827,7 @@ $(document).ready(function() {
         $('#dp-sum-supplier').text(name || '—').attr('title', name || '');
     };
     $('#dp-supplier-select').select2({
-        theme: 'bootstrap-5', placeholder: 'Cari supplier...', allowClear: true, width: '100%', minimumInputLength: 0,
+        theme: 'bootstrap-5', placeholder: 'Search supplier...', allowClear: true, width: '100%', minimumInputLength: 0,
         ajax: {
             url: '{{ route("supplier.search") }}', dataType: 'json', delay: 250,
             data: function(params) { return { q: params.term || '' }; },
