@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Purchase Order {{ $purchaseOrder->po_number ?: $purchaseOrder->id }}</title>
@@ -147,7 +147,7 @@
         <table style="width:100%">
             <tr>
                 <td>{{ $purchaseOrder->po_number ?: 'PO #'.$purchaseOrder->id }}</td>
-                <td class="pg">Hal. </td>
+                <td class="pg">Page </td>
             </tr>
         </table>
     </div>
@@ -252,7 +252,7 @@
                 @endforeach
             @endforeach
             @if($itemCount === 0)
-                <tr><td colspan="5" class="c" style="color:#999">Belum ada item.</td></tr>
+                <tr><td colspan="5" class="c" style="color:#999">No items yet.</td></tr>
             @endif
             <tr class="filler">
                 @if($purchaseOrder->notes)
@@ -297,17 +297,17 @@
                                 @endif
                                 @if($totals['discount'] > 0)
                                     <tr>
-                                        <td class="k">Diskon {{ $percent($purchaseOrder->discount_percent) }}%</td>
+                                        <td class="k">Discount {{ $percent($purchaseOrder->discount_percent) }}%</td>
                                         <td class="amt"><span class="rp">{{ $currencySymbol }}</span><div class="val">{{ $money($totals['discount']) }}</div></td>
                                     </tr>
                                     <tr>
-                                        <td class="k">Sub Total 1</td>
+                                        <td class="k">Subtotal 1</td>
                                         <td class="amt"><span class="rp">{{ $currencySymbol }}</span><div class="val">{{ $money($totals['after_discount']) }}</div></td>
                                     </tr>
                                 @endif
                                 @if($totals['ppn'] > 0)
                                     <tr>
-                                        <td class="k">PPN</td>
+                                        <td class="k">VAT</td>
                                         <td class="amt"><span class="rp">{{ $currencySymbol }}</span><div class="val">{{ $money($totals['ppn']) }}</div></td>
                                     </tr>
                                 @endif

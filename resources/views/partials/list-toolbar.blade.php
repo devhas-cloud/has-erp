@@ -116,7 +116,7 @@ function ListToolbar(rootSelector, getTable) {
                 var $opt = $root.find('[data-status-select] option[value="' + key + '"]');
                 $opt.text($opt.data('label') + ' (' + total + ')');
             });
-            $root.find('[data-status-select] option[value=""]').text('Semua Status (' + all + ')');
+            $root.find('[data-status-select] option[value=""]').text('All Statuses (' + all + ')');
         }
     };
 }
@@ -124,8 +124,8 @@ function ListToolbar(rootSelector, getTable) {
 // Search bawaan DataTables diganti kotak cari toolbar.
 ListToolbar.layout = { topStart: null, topEnd: null, bottomStart: ['pageLength', 'info'], bottomEnd: 'paging' };
 ListToolbar.language = {
-    zeroRecords: '<span style="color:var(--text-muted)"><i class="fa-solid fa-filter-circle-xmark me-1"></i>Tidak ada data yang cocok dengan pencarian / filter.</span>',
-    emptyTable: '<span style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i>Belum ada data.</span>'
+    zeroRecords: '<span style="color:var(--text-muted)"><i class="fa-solid fa-filter-circle-xmark me-1"></i>No data matches the search / filter.</span>',
+    emptyTable: '<span style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i>No data yet.</span>'
 };
 </script>
 @endpush

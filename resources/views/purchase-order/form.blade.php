@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', $purchaseOrder ? 'Edit Purchase Order' : 'Buat Purchase Order')
-@section('page-title', $purchaseOrder ? 'Edit Purchase Order' : 'Buat Purchase Order')
+@section('title', $purchaseOrder ? 'Edit Purchase Order' : 'Create Purchase Order')
+@section('page-title', $purchaseOrder ? 'Edit Purchase Order' : 'Create Purchase Order')
 
 @section('styles')
 <style>
@@ -85,19 +85,19 @@
 @php
     $poType = $purchaseOrder?->po_type ?? \App\Models\PurchaseOrder::TYPE_MANUFACTURE;
     $typeMeta = [
-        'manufacture' => ['fa-industry', 'Pembelian dari pabrikan / principal'],
-        'local' => ['fa-store', 'Pembelian dari supplier lokal'],
-        'calibration' => ['fa-scale-balanced', 'Jasa kalibrasi alat'],
+        'manufacture' => ['fa-industry', 'Purchase from manufacturer / principal'],
+        'local' => ['fa-store', 'Purchase from local supplier'],
+        'calibration' => ['fa-scale-balanced', 'Equipment calibration service'],
     ];
 @endphp
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">{{ $purchaseOrder ? 'Edit Purchase Order' : 'Buat Purchase Order' }}</h1>
-        <p class="page-header-sub">Pilih supplier dan jenis PO, lalu ambil item dari Permintaan Barang yang sudah Approved — satu PO boleh menggabungkan beberapa project.</p>
+        <h1 class="page-header-title">{{ $purchaseOrder ? 'Edit Purchase Order' : 'Create Purchase Order' }}</h1>
+        <p class="page-header-sub">Select a supplier and PO type, then take items from Approved Goods Requests — one PO can combine multiple projects.</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ $purchaseOrder ? route('purchase-order.show', $purchaseOrder->id) : route('purchase-order.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
+            <i class="fa fa-arrow-left me-1"></i> Back
         </a>
     </div>
 </div>
@@ -106,10 +106,10 @@
     <div class="col-xl-9">
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Jenis &amp; Detail PO</span>
+                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Type &amp; PO Details</span>
             </div>
             <div class="card-body-custom">
-                <label class="form-label">Jenis PO <span class="text-danger">*</span></label>
+                <label class="form-label">PO Type <span class="text-danger">*</span></label>
                 <div class="po-type-cards mb-1" role="radiogroup">
                     @foreach(\App\Models\PurchaseOrder::TYPE_LABELS as $typeKey => $typeLabel)
                         <input type="radio" class="btn-check" name="po-type" id="po-type-{{ $typeKey }}" value="{{ $typeKey }}" autocomplete="off" @checked($poType === $typeKey)>
@@ -126,50 +126,50 @@
 
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <label class="form-label">Tanggal PO</label>
+                        <label class="form-label">PO Date</label>
                         <input type="date" class="form-control" id="po-date" value="{{ $purchaseOrder ? $purchaseOrder->date?->format('Y-m-d') : now()->toDateString() }}">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Terms</label>
-                        <input type="text" class="form-control" id="po-terms" list="po-terms-options" placeholder="Contoh: TT" value="{{ $purchaseOrder?->terms }}">
+                        <input type="text" class="form-control" id="po-terms" list="po-terms-options" placeholder="Example: TT" value="{{ $purchaseOrder?->terms }}">
                         <datalist id="po-terms-options">
                             <option value="TT"><option value="TT in Advance"><option value="COD">
                             <option value="Net 14 Days"><option value="Net 30 Days"><option value="DP 50%">
                         </datalist>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Termin Bayar <span class="po-section-sub">dasar jatuh tempo tagihan</span></label>
+                        <label class="form-label">Payment Terms <span class="po-section-sub">basis for bill due date</span></label>
                         <div class="input-group">
-                            <input type="number" class="form-control" id="po-payment-term-days" min="0" max="365" step="1" placeholder="Ikut supplier" value="{{ $purchaseOrder?->payment_term_days }}">
-                            <span class="input-group-text">hari</span>
+                            <input type="number" class="form-control" id="po-payment-term-days" min="0" max="365" step="1" placeholder="Follow supplier" value="{{ $purchaseOrder?->payment_term_days }}">
+                            <span class="input-group-text">days</span>
                         </div>
-                        <small class="po-hint">Terisi dari master supplier. 0 = tunai / bayar di muka.</small>
+                        <small class="po-hint">Filled from supplier master. 0 = cash / advance payment.</small>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Delivery <span class="po-section-sub">opsional</span></label>
-                        <input type="text" class="form-control" id="po-delivery" maxlength="150" placeholder="Contoh: Franco Jakarta" value="{{ $purchaseOrder?->delivery }}">
+                        <label class="form-label">Delivery <span class="po-section-sub">optional</span></label>
+                        <input type="text" class="form-control" id="po-delivery" maxlength="150" placeholder="Example: Franco Jakarta" value="{{ $purchaseOrder?->delivery }}">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Your Ref <span class="po-section-sub">no. penawaran supplier</span></label>
-                        <input type="text" class="form-control" id="po-your-ref" maxlength="100" placeholder="Contoh: 1055/TSC/10/2026" value="{{ $purchaseOrder?->your_ref }}">
+                        <label class="form-label">Your Ref <span class="po-section-sub">supplier quote no.</span></label>
+                        <input type="text" class="form-control" id="po-your-ref" maxlength="100" placeholder="Example: 1055/TSC/10/2026" value="{{ $purchaseOrder?->your_ref }}">
                     </div>
                     <div class="col-md-2 col-6">
-                        <label class="form-label">Diskon</label>
+                        <label class="form-label">Discount</label>
                         <div class="input-group">
                             <input type="number" class="form-control po-percent-input" id="po-discount-percent" min="0" max="100" step="any" placeholder="0" value="{{ $purchaseOrder?->discount_percent }}">
                             <span class="input-group-text">%</span>
                         </div>
                     </div>
                     <div class="col-md-2 col-6">
-                        <label class="form-label">PPN</label>
+                        <label class="form-label">VAT</label>
                         <div class="input-group">
                             <input type="number" class="form-control po-percent-input" id="po-ppn-percent" min="0" max="100" step="any" placeholder="0" value="{{ $purchaseOrder ? $purchaseOrder->ppn_percent : \App\Models\PurchaseOrder::DEFAULT_PPN_PERCENT }}">
                             <span class="input-group-text">%</span>
                         </div>
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Catatan <span class="po-section-sub">opsional, tercetak di bawah item</span></label>
-                        <textarea id="po-notes" class="form-control" rows="2" placeholder="Contoh: Freight to Jakarta using FedEx account ...">{{ $purchaseOrder?->notes }}</textarea>
+                        <label class="form-label">Notes <span class="po-section-sub">optional, printed below items</span></label>
+                        <textarea id="po-notes" class="form-control" rows="2" placeholder="Example: Freight to Jakarta using FedEx account ...">{{ $purchaseOrder?->notes }}</textarea>
                     </div>
                 </div>
             </div>
@@ -191,20 +191,20 @@
                         <input type="hidden" id="po-supplier-id" value="{{ $purchaseOrder?->supplier_id }}">
                         <input type="hidden" id="po-supplier-name" value="{{ $purchaseOrder?->supplier_name }}">
                         @if($purchaseOrder && ! $purchaseOrder->supplier_id)
-                            <small class="po-hint">PO ini dibuat sebelum modul Supplier ada ("{{ $purchaseOrder->supplier_name }}") — pilih ulang dari master untuk menautkan.</small>
+                            <small class="po-hint">This PO was created before the Supplier module existed ("{{ $purchaseOrder->supplier_name }}") — re-select from master to link.</small>
                         @else
-                            <small class="po-hint">Kontak terisi otomatis dari master Supplier. Belum ada? Tambahkan lewat menu Supplier.</small>
+                            <small class="po-hint">Contact auto-filled from Supplier master. None yet? Add via the Supplier menu.</small>
                         @endif
                     </div>
                     <div class="col-lg-7">
                         <div class="po-supplier-box">
                             <div class="row g-2">
                                 <div class="col-12">
-                                    <label class="form-label mb-1" style="font-size:12px">Alamat</label>
-                                    <textarea id="po-supplier-address" class="form-control form-control-sm" rows="2" placeholder="Terisi otomatis saat memilih supplier, bisa disesuaikan">{{ $purchaseOrder?->supplier_address }}</textarea>
+                                    <label class="form-label mb-1" style="font-size:12px">Address</label>
+                                    <textarea id="po-supplier-address" class="form-control form-control-sm" rows="2" placeholder="Auto-filled when selecting a supplier, can be adjusted">{{ $purchaseOrder?->supplier_address }}</textarea>
                                 </div>
                                 <div class="col-sm-4">
-                                    <label class="form-label mb-1" style="font-size:12px">Telepon</label>
+                                    <label class="form-label mb-1" style="font-size:12px">Phone</label>
                                     <input type="text" class="form-control form-control-sm" id="po-supplier-phone" value="{{ $purchaseOrder?->supplier_phone }}">
                                 </div>
                                 <div class="col-sm-4">
@@ -225,12 +225,12 @@
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>
-                    <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Daftar Item
+                    <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item List
                     <span class="badge ms-1" style="background:var(--accent-soft);color:var(--accent);font-size:11px" id="po-items-count">0 item</span>
                 </span>
                 <div class="d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-soft btn-sm" onclick="poLoadPicker()">
-                        <i class="fa fa-dolly me-1"></i> Ambil dari Permintaan Barang
+                        <i class="fa fa-dolly me-1"></i> Take from Goods Request
                     </button>
                 </div>
             </div>
@@ -240,13 +240,13 @@
                         <thead>
                             <tr>
                                 <th style="width:40px" class="text-center">#</th>
-                                <th style="width:11%">Asal</th>
+                                <th style="width:11%">Source</th>
                                 <th style="width:15%">Part Number</th>
-                                <th>Nama Barang / Deskripsi</th>
+                                <th>Item Name / Description</th>
                                 <th style="width:7%">Qty</th>
                                 <th style="width:7%">Unit</th>
-                                <th style="width:9%">Mata Uang</th>
-                                <th style="width:11%" class="text-end">Harga Satuan</th>
+                                <th style="width:9%">Currency</th>
+                                <th style="width:11%" class="text-end">Unit Price</th>
                                 <th style="width:12%" class="text-end">Subtotal</th>
                                 <th class="text-center" style="width:70px"></th>
                             </tr>
@@ -262,37 +262,37 @@
                     </table>
                 </div>
                 <div class="config-card-empty" id="po-items-empty">
-                    <i class="fa-solid fa-inbox"></i> Belum ada item.
+                    <i class="fa-solid fa-inbox"></i> No items yet.
                     <div class="po-empty-actions">
                         <button type="button" class="btn btn-soft btn-sm" onclick="poLoadPicker()">
-                            <i class="fa fa-dolly me-1"></i> Ambil dari Permintaan Barang
+                            <i class="fa fa-dolly me-1"></i> Take from Goods Request
                         </button>
                     </div>
                 </div>
                 <div class="px-2 pt-2 po-hint">
                     <i class="fa fa-circle-info me-1"></i>
-                    Item PO hanya dari Permintaan Barang Approved, dikelompokkan per project. Qty boleh lebih kecil dari sisa kebutuhan (PO dipecah). Pembelian tanpa permintaan gunakan Direct Purchase.
+                    PO items come only from Approved Goods Requests, grouped per project. Qty may be smaller than remaining need (PO split). For purchases without a request, use Direct Purchase.
                 </div>
             </div>
         </div>
 
         <div class="card-custom fade-in">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-signature me-2" style="color:var(--accent)"></i>Penanda Tangan <span class="po-section-sub">tercetak di PDF</span></span>
+                <span><i class="fa-solid fa-signature me-2" style="color:var(--accent)"></i>Signatories <span class="po-section-sub">printed on PDF</span></span>
             </div>
             <div class="card-body-custom">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Request By</label>
-                        <input type="text" class="form-control" id="po-request-by" placeholder="Nama pemohon" value="{{ $purchaseOrder?->request_by_name }}">
+                        <input type="text" class="form-control" id="po-request-by" placeholder="Requester name" value="{{ $purchaseOrder?->request_by_name }}">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Finance Dept</label>
-                        <input type="text" class="form-control" id="po-finance-name" placeholder="Nama penanggung jawab Finance" value="{{ $purchaseOrder?->finance_name }}">
+                        <input type="text" class="form-control" id="po-finance-name" placeholder="Finance responsible person" value="{{ $purchaseOrder?->finance_name }}">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Accounting Dept</label>
-                        <input type="text" class="form-control" id="po-accounting-name" placeholder="Nama penanggung jawab Accounting" value="{{ $purchaseOrder?->accounting_name }}">
+                        <input type="text" class="form-control" id="po-accounting-name" placeholder="Accounting responsible person" value="{{ $purchaseOrder?->accounting_name }}">
                     </div>
                 </div>
             </div>
@@ -302,29 +302,29 @@
     <div class="col-xl-3">
         <div class="card-custom fade-in po-summary-sticky">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Ringkasan</span>
+                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Summary</span>
             </div>
             <div class="card-body-custom">
                 <div class="po-summary-number">
                     <div class="lbl">No. PO</div>
                     <div class="val" id="po-sum-number">—</div>
                 </div>
-                <div class="po-summary-row"><span class="lbl">Jenis</span><span class="val" id="po-sum-type">—</span></div>
+                <div class="po-summary-row"><span class="lbl">Type</span><span class="val" id="po-sum-type">—</span></div>
                 <div class="po-summary-row"><span class="lbl">Supplier</span><span class="val" id="po-sum-supplier" title="">—</span></div>
-                <div class="po-summary-row"><span class="lbl">Mata Uang</span><span class="val" id="po-sum-currency">—</span></div>
+                <div class="po-summary-row"><span class="lbl">Currency</span><span class="val" id="po-sum-currency">—</span></div>
                 <div class="po-summary-row"><span class="lbl">Jumlah Item</span><span class="val" id="po-sum-items">0</span></div>
                 <div class="po-summary-row"><span class="lbl">Project</span><span class="val" id="po-sum-projects">0</span></div>
-                <div class="po-summary-row"><span class="lbl">Sub Total</span><span class="val" id="po-sum-subtotal">Rp 0</span></div>
-                <div class="po-summary-row" id="po-sum-discount-row"><span class="lbl" id="po-sum-discount-label">Diskon</span><span class="val text-danger" id="po-sum-discount">- Rp 0</span></div>
-                <div class="po-summary-row" id="po-sum-ppn-row"><span class="lbl" id="po-sum-ppn-label">PPN</span><span class="val" id="po-sum-ppn">Rp 0</span></div>
+                <div class="po-summary-row"><span class="lbl">Subtotal</span><span class="val" id="po-sum-subtotal">Rp 0</span></div>
+                <div class="po-summary-row" id="po-sum-discount-row"><span class="lbl" id="po-sum-discount-label">Discount</span><span class="val text-danger" id="po-sum-discount">- Rp 0</span></div>
+                <div class="po-summary-row" id="po-sum-ppn-row"><span class="lbl" id="po-sum-ppn-label">VAT</span><span class="val" id="po-sum-ppn">Rp 0</span></div>
                 <div class="po-summary-total"><span>Total</span><span class="val" id="po-sum-total">0</span></div>
 
                 <button type="button" class="btn btn-primary w-100 mt-3" id="po-save-btn" onclick="poSave()">
-                    <i class="fa fa-save me-1"></i> Simpan {{ $purchaseOrder ? 'Perubahan' : 'Draft' }}
+                    <i class="fa fa-save me-1"></i> Save {{ $purchaseOrder ? 'Changes' : 'Draft' }}
                 </button>
                 <div class="po-summary-note">
                     <i class="fa-solid fa-circle-info me-1"></i>
-                    Disimpan sebagai <strong>Draft</strong>. Ajukan approval dari halaman detail setelah harga lengkap.
+                    Saved as <strong>Draft</strong>. Submit for approval from the detail page once prices are complete.
                 </div>
             </div>
         </div>
@@ -337,30 +337,30 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-dolly me-2" style="color:var(--accent)"></i>Ambil Item dari Permintaan Barang</h6>
+                <h6 class="modal-title"><i class="fa-solid fa-dolly me-2" style="color:var(--accent)"></i>Take Items from Goods Request</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="po-picker-toolbar mb-2">
                     <select id="po-picker-project" style="width:100%">
-                        <option value="">Semua tujuan</option>
+                        <option value="">All destinations</option>
                     </select>
-                    <input type="text" class="form-control form-control-sm" id="po-picker-search" placeholder="Cari part number / nama barang..." autocomplete="off">
+                    <input type="text" class="form-control form-control-sm" id="po-picker-search" placeholder="Search part number / item name..." autocomplete="off">
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <label class="d-flex align-items-center gap-2 mb-0" style="font-size:12px;color:var(--text-muted);cursor:pointer">
-                        <input type="checkbox" id="po-picker-check-all"> Pilih Semua
+                        <input type="checkbox" id="po-picker-check-all"> Select All
                     </label>
-                    <small style="color:var(--text-muted)">Hanya item Approved yang masih punya sisa kebutuhan. Stok bebas hanya informasi — tetap boleh dibeli.</small>
+                    <small style="color:var(--text-muted)">Only Approved items with remaining need. Free stock is informational only — still purchasable.</small>
                 </div>
                 <div id="po-picker-body">
-                    <div class="config-card-empty"><span class="config-spinner"></span>Memuat...</div>
+                    <div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" onclick="poApplyPicked()">
-                    <i class="fa fa-plus me-1"></i> Tambahkan Terpilih
+                    <i class="fa fa-plus me-1"></i> Add Selected
                 </button>
             </div>
         </div>
@@ -384,7 +384,7 @@ const poInitialItems = @json($items ?? []);
 const poCurrentNumber = @json($purchaseOrder?->po_number);
 const poTypeSuffixes = @json(\App\Models\PurchaseOrder::TYPE_SUFFIXES);
 const poTypeLabels = @json(\App\Models\PurchaseOrder::TYPE_LABELS);
-const poSaveLabel = '<i class="fa fa-save me-1"></i> Simpan {{ $purchaseOrder ? 'Perubahan' : 'Draft' }}';
+const poSaveLabel = '<i class="fa fa-save me-1"></i> Save {{ $purchaseOrder ? 'Changes' : 'Draft' }}';
 let poPickerProjectsLoaded = false;
 
 
@@ -456,18 +456,18 @@ function poRowHtml(item, groupKey) {
     var html = '<tr class="po-line" data-group="' + groupKey + '" data-goods-request-item-id="' + item.goods_request_item_id + '"';
     html += ' data-currency="' + poEsc(item.currency || poBaseCurrency()) + '" data-max="' + max + '">';
     html += '<td class="text-center po-row-num"></td>';
-    html += '<td><span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px;white-space:normal">' + poEsc(item.source_label || ('Permintaan ' + (item.request_number || ''))) + '</span></td>';
+    html += '<td><span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px;white-space:normal">' + poEsc(item.source_label || ('Request ' + (item.request_number || ''))) + '</span></td>';
     html += '<td style="font-size:12.5px"><div class="fw-semibold">' + poEsc(item.part_number || '—') + '</div>';
     if (item.product_name) html += '<div class="po-hint">' + poEsc(item.product_name) + '</div>';
     html += '</td>';
-    html += '<td><div class="form-control form-control-sm po-desc" contenteditable="true" data-placeholder="Deskripsi untuk supplier">' + (item.description || '') + '</div></td>';
+    html += '<td><div class="form-control form-control-sm po-desc" contenteditable="true" data-placeholder="Description for supplier">' + (item.description || '') + '</div></td>';
     html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm po-qty text-center" value="' + (item.qty != null ? item.qty : max) + '">';
-    html += '<div class="po-hint text-center">maks ' + max + '</div></td>';
+    html += '<div class="po-hint text-center">max ' + max + '</div></td>';
     html += '<td style="font-size:12.5px;padding-top:12px">' + poEsc(item.unit || '—') + '</td>';
-    html += '<td style="padding-top:10px"><span class="badge" style="background:#f3f4f6;color:#374151" title="Mengikuti mata uang Permintaan Barang"><i class="fa fa-lock me-1" style="font-size:9px"></i>' + poEsc(item.currency || poBaseCurrency()) + '</span></td>';
+    html += '<td style="padding-top:10px"><span class="badge" style="background:#f3f4f6;color:#374151" title="Follows Goods Request currency"><i class="fa fa-lock me-1" style="font-size:9px"></i>' + poEsc(item.currency || poBaseCurrency()) + '</span></td>';
     html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-end po-price" placeholder="0" value="' + (item.price != null && item.price !== '' ? poFmtInput(item.price) : '') + '"></td>';
     html += '<td class="text-end po-amount">0</td>';
-    html += '<td class="text-center"><button type="button" class="btn-icon text-danger" title="Hapus" onclick="poRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
+    html += '<td class="text-center"><button type="button" class="btn-icon text-danger" title="Delete" onclick="poRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
     html += '</tr>';
     return html;
 }
@@ -478,7 +478,7 @@ function poFmtInput(v) {
 }
 
 function poAddRow(item) {
-    var groupKey = poEnsureGroup(item.project_name || 'Stok / Internal');
+    var groupKey = poEnsureGroup(item.project_name || 'Stock / Internal');
     var $last = $('#po-items-body tr[data-group="' + groupKey + '"]').last();
     $(poRowHtml(item, groupKey)).insertAfter($last);
     poRenumber();
@@ -535,10 +535,10 @@ function poUpdateSummary(grand) {
     $('.po-currency-code').text(code ? '(' + code + ')' : '');
     $('#po-sum-subtotal').text(code + ' ' + poFmt(grand));
     $('#po-sum-discount-row').toggle(discPct > 0);
-    $('#po-sum-discount-label').text('Diskon ' + poFmt(discPct) + '%');
+    $('#po-sum-discount-label').text('Discount ' + poFmt(discPct) + '%');
     $('#po-sum-discount').text('- ' + code + ' ' + poFmt(discount));
     $('#po-sum-ppn-row').toggle(ppnPct > 0);
-    $('#po-sum-ppn-label').text('PPN ' + poFmt(ppnPct) + '%');
+    $('#po-sum-ppn-label').text('VAT ' + poFmt(ppnPct) + '%');
     $('#po-sum-ppn').text(code + ' ' + poFmt(ppn));
     $('#po-sum-total').text(code + ' ' + poFmt(grand - discount + ppn));
 }
@@ -561,7 +561,7 @@ function poCollectItems() {
     }).get();
 }
 
-// ── Picker: Ambil dari Permintaan Barang (stok tersedia hanya informasi) ──
+// ── Picker: Take from Goods Request (stok tersedia hanya informasi) ──
 
 function poBuildPickerGroupsHtml(groups) {
     var html = '';
@@ -569,8 +569,8 @@ function poBuildPickerGroupsHtml(groups) {
 
     groups.forEach(function(gr, gIdx) {
         var group = 'g' + gIdx;
-        var title = (gr.project_number ? gr.project_number + ' — ' : '') + gr.project_name + ' · ' + (gr.division_name || 'Tanpa Divisi') + ' · Permintaan ' + gr.request_number;
-        var sourceLabel = 'Permintaan ' + gr.request_number + ' / ' + (gr.division_name || '-');
+        var title = (gr.project_number ? gr.project_number + ' — ' : '') + gr.project_name + ' · ' + (gr.division_name || 'No Division') + ' · Request ' + gr.request_number;
+        var sourceLabel = 'Request ' + gr.request_number + ' / ' + (gr.division_name || '-');
 
         html += '<div class="po-picker-group mb-3" style="border:1px solid var(--card-border);border-radius:var(--radius);overflow:hidden">';
         html += '<div class="d-flex justify-content-between align-items-center px-3 py-2" style="background:var(--bg);border-bottom:1px solid var(--card-border)">';
@@ -581,8 +581,8 @@ function poBuildPickerGroupsHtml(groups) {
         html += '<span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px">' + gr.items.length + ' item</span>';
         html += '</div>';
         html += '<div class="table-responsive"><table class="table table-custom align-middle mb-0"><thead><tr>';
-        html += '<th style="width:36px"></th><th style="width:18%">Produk</th><th>Deskripsi</th>';
-        html += '<th class="text-center" style="width:90px">Sisa Kebutuhan</th><th style="width:80px">Mata Uang</th><th style="width:150px">Stok Bebas</th>';
+        html += '<th style="width:36px"></th><th style="width:18%">Product</th><th>Description</th>';
+        html += '<th class="text-center" style="width:90px">Remaining Need</th><th style="width:80px">Currency</th><th style="width:150px">Free Stock</th>';
         html += '</tr></thead><tbody>';
 
         gr.items.forEach(function(it) {
@@ -593,15 +593,15 @@ function poBuildPickerGroupsHtml(groups) {
 
             html += '<tr class="po-picker-item-row" data-group="' + group + '" data-search="' + poEsc(((it.part_number || '') + ' ' + (it.product_name || '') + ' ' + desc).toLowerCase()) + '">';
             html += '<td>' + (otherCurrency
-                ? '<i class="fa fa-ban" style="color:var(--text-muted)" title="Mata uang berbeda dengan PO ini"></i>'
+                ? '<i class="fa fa-ban" style="color:var(--text-muted)" title="Currency differs from this PO"></i>'
                 : '<input type="checkbox" class="po-picker-check" data-idx="' + poolIdx + '" data-currency="' + poEsc(it.currency || '') + '">') + '</td>';
             html += '<td style="font-size:12.5px"><div class="fw-semibold">' + poEsc(it.part_number || '—') + '</div><div class="po-hint">' + poEsc(it.product_name || '') + '</div></td>';
             html += '<td style="font-size:12.5px">' + poEsc(desc.length > 120 ? desc.slice(0, 120) + '…' : desc) + '</td>';
             html += '<td class="text-center fw-semibold">' + it.remaining_qty + ' <span class="po-hint">/ ' + it.requested_qty + ' ' + poEsc(it.unit || '') + '</span></td>';
-            html += '<td>' + poEsc(it.currency || '') + (otherCurrency ? '<div class="po-hint">PO terpisah</div>' : '') + '</td>';
+            html += '<td>' + poEsc(it.currency || '') + (otherCurrency ? '<div class="po-hint">Separate PO</div>' : '') + '</td>';
             html += '<td style="font-size:12px">' + (it.free_stock > 0
-                ? '<span class="badge" style="background:#dcfce7;color:#166534">Tersedia ' + it.free_stock + '</span><div class="po-hint">Bisa dipenuhi dari stok — tetap boleh dibeli</div>'
-                : '<span class="po-hint">Tidak ada stok bebas</span>') + '</td>';
+                ? '<span class="badge" style="background:#dcfce7;color:#166534">Available ' + it.free_stock + '</span><div class="po-hint">Can be fulfilled from stock — still purchasable</div>'
+                : '<span class="po-hint">No free stock</span>') + '</td>';
             html += '</tr>';
         });
 
@@ -628,7 +628,7 @@ function poLoadPicker() {
             theme: 'bootstrap-5',
             width: '100%',
             dropdownParent: $('#poPickerModal'),
-            placeholder: 'Semua tujuan',
+            placeholder: 'All destinations',
             allowClear: true
         }).on('change', poFetchPickerItems);
     }
@@ -639,7 +639,7 @@ function poLoadPicker() {
 }
 
 function poFetchPickerItems() {
-    $('#po-picker-body').html('<div class="config-card-empty"><span class="config-spinner"></span>Memuat...</div>');
+    $('#po-picker-body').html('<div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>');
     $('#po-picker-check-all').prop('checked', false);
     $('#po-picker-search').val('');
     poPickerPool = [];
@@ -650,7 +650,7 @@ function poFetchPickerItems() {
         .done(function(res) {
             if (!poPickerProjectsLoaded) {
                 poPickerProjectsLoaded = true;
-                var opts = '<option value="">Semua tujuan</option><option value="internal">Stok / Internal</option>';
+                var opts = '<option value="">All destinations</option><option value="internal">Stock / Internal</option>';
                 (res.projects || []).forEach(function(p) {
                     opts += '<option value="' + p.id + '">' + poEsc(p.text) + '</option>';
                 });
@@ -658,13 +658,13 @@ function poFetchPickerItems() {
             }
             var groups = res.data || [];
             if (groups.length === 0) {
-                $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>Tidak ada item Permintaan Barang Approved yang masih punya sisa kebutuhan.</div>');
+                $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>No Approved Goods Request items with remaining need.</div>');
                 return;
             }
             $('#po-picker-body').html(poBuildPickerGroupsHtml(groups));
         })
         .fail(function() {
-            $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Gagal memuat item.</div>');
+            $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load items.</div>');
         });
 }
 
@@ -677,8 +677,8 @@ function poApplyPicked() {
     var chosenCurrencies = Object.keys(chosen);
     var active = poActiveCurrency();
     if (chosenCurrencies.length > 1 || (active && chosenCurrencies.length && chosenCurrencies[0] !== active)) {
-        toastr.error('Satu PO hanya boleh satu mata uang. Item terpilih: ' + chosenCurrencies.join(', ')
-            + (active ? ' (PO ini ' + active + ')' : '') + '. Pilih item dengan mata uang yang sama.');
+        toastr.error('A PO may only use one currency. Selected items: ' + chosenCurrencies.join(', ')
+            + (active ? ' (this PO ' + active + ')' : '') + '. Select items with the same currency.');
         return;
     }
 
@@ -690,10 +690,10 @@ function poApplyPicked() {
         picked++;
     });
     if (picked === 0) {
-        toastr.error('Pilih minimal satu item.');
+        toastr.error('Select at least one item.');
         return;
     }
-    toastr.success(picked + ' item ditambahkan. Qty terisi sisa kebutuhan — sesuaikan bila PO dipecah.');
+    toastr.success(picked + ' items added. Qty filled from remaining need — adjust if PO is split.');
     if (poPickerInstance) poPickerInstance.hide();
 }
 
@@ -706,16 +706,16 @@ function poUpdateNumberPreview() {
     if (poCurrentNumber) {
         var number = String(poCurrentNumber).replace(/-[A-Z]+$/, '') + suffix;
         $('#po-number-preview').html('No. PO: <strong>' + poEsc(number) + '</strong>'
-            + (number !== poCurrentNumber ? ' <span>(sebelumnya ' + poEsc(poCurrentNumber) + ')</span>' : ''));
+            + (number !== poCurrentNumber ? ' <span>(previously ' + poEsc(poCurrentNumber) + ')</span>' : ''));
     } else {
-        $('#po-number-preview').html('No. PO dibuat otomatis saat disimpan' + (suffix ? ', berakhiran <strong>' + suffix + '</strong>' : '') + '.');
+        $('#po-number-preview').html('PO no. is auto-generated on save' + (suffix ? ', ending with <strong>' + suffix + '</strong>' : '') + '.');
     }
 
     $('#po-sum-type').text(poTypeLabels[poSelectedType()] || '—');
     if (poCurrentNumber) {
         $('#po-sum-number').removeClass('pending').text(String(poCurrentNumber).replace(/-[A-Z]+$/, '') + suffix);
     } else {
-        $('#po-sum-number').addClass('pending').text('Otomatis saat disimpan');
+        $('#po-sum-number').addClass('pending').text('Auto on save');
     }
 }
 
@@ -733,19 +733,19 @@ function poValidate() {
     $('#po-items-body .is-invalid').removeClass('is-invalid');
 
     if (!$('#po-supplier-name').val()) {
-        toastr.error('Supplier wajib dipilih.');
+        toastr.error('Supplier is required.');
         $('#po-supplier-select').select2('open');
         return false;
     }
 
     var discPct = parseFloat($('#po-discount-percent').val()) || 0;
     var ppnPct = parseFloat($('#po-ppn-percent').val()) || 0;
-    if (discPct < 0 || discPct > 100) return poFail('Diskon harus 0 sampai 100%.', $('#po-discount-percent'));
-    if (ppnPct < 0 || ppnPct > 100) return poFail('PPN harus 0 sampai 100%.', $('#po-ppn-percent'));
+    if (discPct < 0 || discPct > 100) return poFail('Discount must be 0 to 100%.', $('#po-discount-percent'));
+    if (ppnPct < 0 || ppnPct > 100) return poFail('VAT must be 0 to 100%.', $('#po-ppn-percent'));
 
     var currencies = poItemCurrencies();
     if (currencies.length > 1) {
-        return poFail('Semua item dalam satu PO harus memakai mata uang yang sama (ditemukan ' + currencies.join(', ') + ').');
+        return poFail('All items in a PO must use the same currency (found ' + currencies.join(', ') + ').');
     }
 
     var ok = true;
@@ -756,11 +756,11 @@ function poValidate() {
         var qty = parseInt(poToRaw($row.find('.po-qty').val()), 10) || 0;
         var max = parseInt($row.attr('data-max'), 10) || 0;
         if (qty < 1) {
-            ok = poFail('Qty baris ' + n + ' minimal 1.', $row.find('.po-qty'));
+            ok = poFail('Qty on row ' + n + ' must be at least 1.', $row.find('.po-qty'));
             return false;
         }
         if (qty > max) {
-            ok = poFail('Qty baris ' + n + ' melebihi sisa kebutuhan (' + max + ').', $row.find('.po-qty'));
+            ok = poFail('Qty on row ' + n + ' exceeds remaining need (' + max + ').', $row.find('.po-qty'));
             return false;
         }
     });
@@ -770,7 +770,7 @@ function poValidate() {
 
 function poSetSaving(saving) {
     $('#po-save-btn').prop('disabled', saving).html(saving
-        ? '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...'
+        ? '<span class="spinner-border spinner-border-sm me-1"></span> Saving...'
         : poSaveLabel);
 }
 
@@ -807,14 +807,14 @@ function poSave() {
     poSetSaving(true);
     $.ajax({ url: url, method: method, data: payload })
         .done(function(res) {
-            toastr.success(res.message || 'Tersimpan.');
+            toastr.success(res.message || 'Saved.');
             setTimeout(function() {
                 window.location.href = poUpdateUrl ? poShowUrl : '{{ route("purchase-order.index") }}';
             }, 800);
         })
         .fail(function(xhr) {
             poSetSaving(false);
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menyimpan.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to save.');
         });
 }
 
@@ -852,7 +852,7 @@ $(document).ready(function() {
 
     $('#po-supplier-select').select2({
         theme: 'bootstrap-5',
-        placeholder: 'Cari supplier...',
+        placeholder: 'Search supplier...',
         allowClear: true,
         width: '100%',
         minimumInputLength: 0,
