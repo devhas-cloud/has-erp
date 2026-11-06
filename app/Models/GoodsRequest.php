@@ -36,7 +36,7 @@ class GoodsRequest extends Model
 
     public const PURPOSE_LABELS = [
         self::PURPOSE_PROJECT => 'Project',
-        self::PURPOSE_INTERNAL => 'Stok / Internal',
+        self::PURPOSE_INTERNAL => 'Stock / Internal',
     ];
 
     /** Jumlah approver yang dibutuhkan (dulu 2, kini 1). */
@@ -128,7 +128,7 @@ class GoodsRequest extends Model
     }
 
     /**
-     * Label tujuan untuk tampilan: nomor & nama project, atau "Stok / Internal".
+     * Label tujuan untuk tampilan: nomor & nama project, atau "Stock / Internal".
      */
     public function destinationLabel(): string
     {
@@ -246,8 +246,8 @@ class GoodsRequest extends Model
     }
 
     public const FULFILLMENT_LABELS = [
-        'none' => 'Belum diproses',
-        'partial' => 'Sebagian',
-        'done' => 'Terpenuhi',
+        'none' => 'Not processed',
+        'partial' => 'Partial',
+        'done' => 'Fulfilled',
     ];
 }

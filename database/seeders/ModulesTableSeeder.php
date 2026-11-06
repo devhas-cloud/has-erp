@@ -276,7 +276,7 @@ class ModulesTableSeeder extends Seeder
             ],
             [
                 'module_code' => 'MOD_GOODS_REQUEST',
-                'module_name' => 'Permintaan Barang',
+                'module_name' => 'Purchase Request',
                 'description' => 'Menu pengajuan permintaan barang ke purchasing, terikat pada quotation yang PO Supplier Approval-nya sudah disetujui 2 approver',
                 'route_name' => 'goods-request',
                 'icon' => 'fa fa-dolly',

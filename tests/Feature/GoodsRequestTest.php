@@ -1003,6 +1003,6 @@ class GoodsRequestTest extends TestCase
             ->assertOk()
             ->assertJsonPath('recordsFiltered', 1)
             ->assertJsonPath('data.0.request_number', $prefix.'0002');
-        $this->actingAs($this->creator)->get(route('goods-request.show', $second->id))->assertOk()->assertSee('Permintaan Barang '.$prefix.'0002');
+        $this->actingAs($this->creator)->get(route('goods-request.show', $second->id))->assertOk()->assertSee('Purchase Request '.$prefix.'0002');
     }
 }

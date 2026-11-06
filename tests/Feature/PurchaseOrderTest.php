@@ -635,7 +635,7 @@ class PurchaseOrderTest extends TestCase
         $id = $this->storePo([$this->line($grProject->items->first()), $this->line($grInternal->items->first())])->assertOk()->json('id');
         $po = PurchaseOrder::with('items.goodsRequestItem.goodsRequest.project')->findOrFail($id);
 
-        $this->assertSame(['SPARING Gresik', 'Stok / Internal'], $po->projectLabels());
+        $this->assertSame(['SPARING Gresik', 'Stock / Internal'], $po->projectLabels());
         $this->actingAs($this->creator)->get(route('purchase-order.show', $id))->assertOk()->assertSee('SPARING Gresik');
         $this->actingAs($this->creator)->get(route('purchase-order.edit', $id))->assertOk();
         $this->actingAs($this->creator)->get(route('purchase-order.pdf', $id))->assertOk()->assertHeader('content-type', 'application/pdf');

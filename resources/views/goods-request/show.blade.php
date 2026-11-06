@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Detail Permintaan Barang')
-@section('page-title', 'Detail Permintaan Barang')
+@section('title', 'Purchase Request Detail')
+@section('page-title', 'Purchase Request Detail')
 
 @php
     use App\Models\GoodsRequest;
@@ -32,17 +32,17 @@
 
     $nextHint = match ($status) {
         GoodsRequest::STATUS_DRAFT => $items->isEmpty()
-            ? 'Tambahkan item terlebih dahulu, lalu ajukan approval.'
-            : 'Periksa kembali item, lalu klik Submit Approval.',
+            ? 'Add items first, then submit for approval.'
+            : 'Review the items, then click Submit Approval.',
         GoodsRequest::STATUS_WAITING_APPROVAL => $myApproval
-            ? 'Anda sudah approve. Menunggu '.$remaining.' approver lain.'
+            ? 'You have approved. Waiting for '.$remaining.' more approver(s).'
             : ($required > 1
-                ? 'Menunggu '.$remaining.' approval lagi dari user yang punya hak approve.'
-                : 'Menunggu approval dari user yang punya hak approve.'),
+                ? 'Waiting for '.$remaining.' more approval(s) from users with approval rights.'
+                : 'Waiting for approval from a user with approval rights.'),
         GoodsRequest::STATUS_APPROVED => $orderedCount === $items->count() && $items->isNotEmpty()
-            ? 'Semua item sudah terpenuhi (Purchase Order / Keluar Stok).'
-            : 'Disetujui'.($required > 1 ? ' '.$required.' approver' : '').' — item siap diproses Purchase Order atau dikeluarkan dari stok.',
-        GoodsRequest::STATUS_REJECTED => 'Permintaan ditolak. Buat permintaan baru bila masih dibutuhkan.',
+            ? 'All items have been fulfilled (Purchase Order / Stock Issue).'
+            : 'Approved'.($required > 1 ? ' by '.$required.' approvers' : '').' — items are ready for Purchase Order or stock issue.',
+        GoodsRequest::STATUS_REJECTED => 'Request rejected. Create a new request if still needed.',
         default => '',
     };
 
@@ -58,9 +58,9 @@
         $stepDefs[$i + 2] = [$required > 1 ? 'Approval '.($i + 1) : 'Approval', $approval ? $approval->user?->display_name : null];
     }
     $stepDefs[$lastStep] = ['Approved', null];
-    if ($isRejected) $stepDefs[$step][1] = 'Ditolak — '.($goodsRequest->finalChecker?->display_name ?? '—');
+    if ($isRejected) $stepDefs[$step][1] = 'Rejected — '.($goodsRequest->finalChecker?->display_name ?? '—');
     $sourceOf = fn ($item) => $item->quote_configuration_item_id ? 'config' : ($item->master_product_id ? 'catalog' : 'manual');
-    $sourceLabels = ['config' => 'Configuration', 'catalog' => 'Katalog', 'manual' => 'Manual'];
+    $sourceLabels = ['config' => 'Configuration', 'catalog' => 'Catalog', 'manual' => 'Manual'];
 @endphp
 
 @section('styles')
@@ -120,7 +120,7 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Permintaan Barang {{ $goodsRequest->number_label }}</h1>
+        <h1 class="page-header-title">Purchase Request {{ $goodsRequest->number_label }}</h1>
         <p class="page-header-sub">
             {{ $goodsRequest->destinationLabel() }}
             @if($goodsRequest->isForProject() && $project?->company) &middot; {{ $project->company->account_name }} @endif
@@ -128,7 +128,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ route('goods-request.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
+            <i class="fa fa-arrow-left me-1"></i> Back
         </a>
     </div>
 </div>
@@ -162,7 +162,7 @@
                     </a>
                     @if($canDelete ?? false)
                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="grDelete()">
-                        <i class="fa fa-trash me-1"></i> Hapus
+                        <i class="fa fa-trash me-1"></i> Delete
                     </button>
                     @endif
                     <button type="button" class="btn btn-primary btn-sm" onclick="grSubmit()" @disabled($items->isEmpty())>
@@ -182,7 +182,7 @@
 
         <div class="gr-facts">
             <div class="gr-fact">
-                <div class="lbl">Jumlah Item</div>
+                <div class="lbl">Items</div>
                 <div class="val">{{ number_format($items->count()) }}</div>
             </div>
             <div class="gr-fact">
@@ -191,12 +191,12 @@
             </div>
             @if($showPoColumn)
             <div class="gr-fact">
-                <div class="lbl">Sudah di-PO</div>
+                <div class="lbl">Ordered (PO)</div>
                 <div class="val">{{ $orderedCount }} <span class="sub">/ {{ $items->count() }} item</span></div>
             </div>
             @endif
             <div class="gr-fact">
-                <div class="lbl">Diajukan</div>
+                <div class="lbl">Requested</div>
                 <div class="val" style="font-size:14px">{{ $goodsRequest->created_at?->format('d M Y') ?? '—' }}</div>
                 <div class="sub">{{ $goodsRequest->creator?->display_name ?? '—' }}</div>
             </div>
@@ -208,7 +208,7 @@
 <div class="gr-banner danger">
     <i class="fa fa-circle-exclamation mt-1"></i>
     <div>
-        <div class="title">Alasan Penolakan</div>
+        <div class="title">Rejection Reason</div>
         <div>{{ $goodsRequest->approval_note }}</div>
     </div>
 </div>
@@ -223,7 +223,7 @@
             <div class="card-body-custom">
                 @php $quotation = $goodsRequest->quotation(); @endphp
                 <dl class="gr-dl">
-                    <dt>Tujuan</dt>
+                    <dt>Purpose</dt>
                     <dd><span class="gr-chip {{ $goodsRequest->isForProject() ? 'config' : 'catalog' }}">{{ $goodsRequest->purpose_label }}</span></dd>
                     @if($goodsRequest->isForProject())
                     <dt>Project</dt>
@@ -244,12 +244,12 @@
                         @if($quotation)
                             <a href="{{ route('quotation.show', $quotation->id) }}">{{ $quotation->quotation_number ?? '#'.$quotation->id }}</a>
                         @else
-                            <span class="gr-chip warn">Project tanpa quotation</span>
+                            <span class="gr-chip warn">Project without quotation</span>
                         @endif
                     </dd>
                     @else
-                    <dt>Keterangan</dt>
-                    <dd>Kebutuhan stok / internal. Barang yang dibeli masuk gudang stok sebagai stok bebas.</dd>
+                    <dt>Remarks</dt>
+                    <dd>Stock / internal needs. Purchased items go into the warehouse as free stock.</dd>
                     @endif
                 </dl>
             </div>
@@ -258,13 +258,13 @@
     <div class="col-lg-6">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-user-check me-2" style="color:var(--accent)"></i>Pengajuan &amp; Persetujuan</span>
+                <span><i class="fa-solid fa-user-check me-2" style="color:var(--accent)"></i>Request &amp; Approval</span>
             </div>
             <div class="card-body-custom">
                 <dl class="gr-dl">
-                    <dt>Divisi Pemohon</dt>
+                    <dt>Requesting Division</dt>
                     <dd>{{ $goodsRequest->division?->division_name ?? '—' }}</dd>
-                    <dt>Dibuat Oleh</dt>
+                    <dt>Requested By</dt>
                     <dd>
                         {{ $goodsRequest->creator?->display_name ?? '—' }}
                         <div class="muted">{{ $goodsRequest->created_at?->format('d M Y H:i') }}</div>
@@ -277,20 +277,20 @@
                                 <span class="muted">· {{ $approval->approved_at?->format('d M Y H:i') }}</span>
                             </div>
                         @empty
-                            <span class="muted">Belum ada</span>
+                            <span class="muted">None yet</span>
                         @endforelse
                         @if($status === GoodsRequest::STATUS_WAITING_APPROVAL && $required > 1)
-                            <div class="muted mt-1">{{ $approvals->count() }}/{{ $required }} approval terkumpul</div>
+                            <div class="muted mt-1">{{ $approvals->count() }}/{{ $required }} approvals collected</div>
                         @endif
                     </dd>
                     @if($isRejected)
-                    <dt>Ditolak Oleh</dt>
+                    <dt>Rejected By</dt>
                     <dd>
                         {{ $goodsRequest->finalChecker?->display_name ?? '—' }}
                         <div class="muted">{{ $goodsRequest->rejected_at?->format('d M Y H:i') }}</div>
                     </dd>
                     @endif
-                    <dt>Catatan</dt>
+                    <dt>Notes</dt>
                     <dd style="white-space:pre-line">{{ $goodsRequest->notes ?: '—' }}</dd>
                 </dl>
             </div>
@@ -306,17 +306,17 @@
 <div class="card-custom fade-in mb-4">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
-            <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Daftar Item <span class="gr-chip ms-1">{{ $items->count() }} item</span>
+            <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Items <span class="gr-chip ms-1">{{ $items->count() }} item</span>
             @if($fulfillment)
-                <span class="gr-chip ms-1 {{ $fulfillment === 'done' ? 'catalog' : ($fulfillment === 'partial' ? 'warn' : 'manual') }}">Pemenuhan: {{ \App\Models\GoodsRequest::FULFILLMENT_LABELS[$fulfillment] }}</span>
+                <span class="gr-chip ms-1 {{ $fulfillment === 'done' ? 'catalog' : ($fulfillment === 'partial' ? 'warn' : 'manual') }}">Fulfillment: {{ \App\Models\GoodsRequest::FULFILLMENT_LABELS[$fulfillment] }}</span>
             @endif
         </span>
         <div class="d-flex gap-2">
             @if($hasRemaining && $canCloseRemaining)
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="grOpenClose(null, 'semua sisa kebutuhan')"><i class="fa fa-ban me-1"></i> Tutup Semua Sisa</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="grOpenClose(null, 'all remaining quantities')"><i class="fa fa-ban me-1"></i> Close All Remaining</button>
             @endif
             @if($canModify)
-                <a href="{{ route('goods-request.edit', $goodsRequest->id) }}" class="btn btn-soft btn-sm"><i class="fa fa-pen me-1"></i> Ubah Item</a>
+                <a href="{{ route('goods-request.edit', $goodsRequest->id) }}" class="btn btn-soft btn-sm"><i class="fa fa-pen me-1"></i> Edit Items</a>
             @endif
         </div>
     </div>
@@ -324,8 +324,8 @@
         <div class="gr-banner danger mx-3 mt-3 mb-0">
             <i class="fa fa-triangle-exclamation mt-1"></i>
             <div>
-                <div class="title">{{ $unmappedCount }} item belum terhubung master produk</div>
-                <div>Item tanpa master produk tidak bisa dipenuhi dari stok, di-PO, atau diterima ke gudang. Klik <strong>Petakan</strong> pada item terkait — sistem menyarankan produk berdasarkan part number.</div>
+                <div class="title">{{ $unmappedCount }} item(s) not linked to a master product</div>
+                <div>Items without a master product cannot be fulfilled from stock, ordered via PO, or received into the warehouse. Click <strong>Map</strong> on the item — the system suggests a product based on the part number.</div>
             </div>
         </div>
     @endif
@@ -335,11 +335,11 @@
                 <thead>
                     <tr>
                         <th style="width:40px" class="text-center">#</th>
-                        <th style="width:20%">Produk</th>
-                        <th>Nama Barang / Deskripsi</th>
-                        <th class="text-center" style="width:80px">Diminta</th>
-                        <th style="width:80px">Mata Uang</th>
-                        @if($showPoColumn)<th style="width:250px">Pemenuhan</th>@endif
+                        <th style="width:20%">Product</th>
+                        <th>Item Name / Description</th>
+                        <th class="text-center" style="width:80px">Requested</th>
+                        <th style="width:80px">Currency</th>
+                        @if($showPoColumn)<th style="width:250px">Fulfillment</th>@endif
                     </tr>
                 </thead>
                 <tbody>
@@ -358,11 +358,11 @@
                                 @if($item->masterProduct)
                                     <div class="muted">{{ $item->masterProduct->name }}</div>
                                 @else
-                                    <span class="gr-chip warn mt-1"><i class="fa fa-triangle-exclamation"></i> Belum ada produk</span>
+                                    <span class="gr-chip warn mt-1"><i class="fa fa-triangle-exclamation"></i> No product yet</span>
                                     <div class="mt-1">
                                         <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
                                             onclick="grOpenMap({{ $item->id }}, @js($item->part_number), @js($suggestion ? ['id' => $suggestion->id, 'text' => $suggestion->code.' — '.$suggestion->name] : null))">
-                                            <i class="fa fa-link me-1"></i> Petakan
+                                            <i class="fa fa-link me-1"></i> Map
                                         </button>
                                     </div>
                                 @endif
@@ -377,7 +377,7 @@
                             @if($showPoColumn)
                             <td style="font-size:12.5px">
                                 @if($stockQty > 0)
-                                    <div><span class="gr-chip catalog">Dari stok {{ $stockQty }}</span></div>
+                                    <div><span class="gr-chip catalog">From stock {{ $stockQty }}</span></div>
                                 @endif
                                 @foreach($poLines as $line)
                                     <div class="mt-1">
@@ -387,19 +387,19 @@
                                     </div>
                                 @endforeach
                                 @if($item->closed_qty > 0)
-                                    <div class="mt-1"><span class="gr-chip manual" title="{{ $item->closed_reason }}">Ditutup {{ $item->closed_qty }}</span> <span class="muted">{{ $item->closed_reason }}</span></div>
+                                    <div class="mt-1"><span class="gr-chip manual" title="{{ $item->closed_reason }}">Closed {{ $item->closed_qty }}</span> <span class="muted">{{ $item->closed_reason }}</span></div>
                                 @endif
                                 @if($remainingQty > 0)
                                     <div class="mt-1 d-flex align-items-center gap-2">
-                                        <span class="gr-chip warn">Sisa {{ $remainingQty }}</span>
+                                        <span class="gr-chip warn">Remaining {{ $remainingQty }}</span>
                                         @if($canCloseRemaining)
-                                            <a href="javascript:void(0)" class="muted" onclick="grOpenClose({{ $item->id }}, @js($item->part_number ?: 'item ini'))"><i class="fa fa-ban me-1"></i>Tutup sisa</a>
+                                            <a href="javascript:void(0)" class="muted" onclick="grOpenClose({{ $item->id }}, @js($item->part_number ?: 'this item'))"><i class="fa fa-ban me-1"></i>Close remaining</a>
                                         @endif
                                     </div>
                                 @elseif($stockQty <= 0 && $poLines->isEmpty() && $item->closed_qty <= 0)
-                                    <span class="gr-chip warn">Belum diproses</span>
+                                    <span class="gr-chip warn">Not processed</span>
                                 @else
-                                    <div class="mt-1"><span class="gr-chip catalog"><i class="fa fa-check"></i> Terpenuhi</span></div>
+                                    <div class="mt-1"><span class="gr-chip catalog"><i class="fa fa-check"></i> Fulfilled</span></div>
                                 @endif
                             </td>
                             @endif
@@ -407,8 +407,8 @@
                     @empty
                         <tr>
                             <td colspan="{{ $showPoColumn ? 6 : 5 }}" class="text-center py-4" style="color:var(--text-muted)">
-                                <i class="fa-solid fa-inbox me-1"></i> Belum ada item.
-                                @if($canModify)<a href="{{ route('goods-request.edit', $goodsRequest->id) }}">Tambahkan sekarang</a>@endif
+                                <i class="fa-solid fa-inbox me-1"></i> No items yet.
+                                @if($canModify)<a href="{{ route('goods-request.edit', $goodsRequest->id) }}">Add now</a>@endif
                             </td>
                         </tr>
                     @endforelse
@@ -426,7 +426,7 @@
         </div>
         @if($showPoColumn)
             <div class="px-2 pt-2 muted">
-                <i class="fa fa-circle-info me-1"></i>Pemenuhan adalah pilihan: ambil dari stok (menu Pemenuhan dari Stok) dan/atau beli lewat Purchase Order. Sisa yang tidak diperlukan lagi bisa ditutup.
+                <i class="fa fa-circle-info me-1"></i>Fulfillment is optional: take from stock (Stock Fulfillment menu) and/or buy via Purchase Order. Remaining quantities no longer needed can be closed.
             </div>
         @endif
     </div>
@@ -438,17 +438,17 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">Tutup Sisa Kebutuhan</h6>
+                <h6 class="modal-title">Close Remaining Quantity</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="muted mb-2">Sisa kebutuhan <strong id="gr-close-label"></strong> tidak bisa dipenuhi dari stok atau di-PO lagi.</p>
-                <label class="form-label">Alasan <span class="text-danger">*</span></label>
-                <textarea id="gr-close-reason" class="form-control" rows="2" maxlength="255" placeholder="Contoh: customer mengurangi qty"></textarea>
+                <p class="muted mb-2">The remaining quantity of <strong id="gr-close-label"></strong> will no longer be fulfilled from stock or ordered via PO.</p>
+                <label class="form-label">Reason <span class="text-danger">*</span></label>
+                <textarea id="gr-close-reason" class="form-control" rows="2" maxlength="255" placeholder="e.g. customer reduced the quantity"></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-close-remaining"><i class="fa fa-ban me-1"></i> Tutup Sisa</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-close-remaining"><i class="fa fa-ban me-1"></i> Close Remaining</button>
             </div>
         </div>
     </div>
@@ -457,18 +457,18 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">Petakan ke Master Produk</h6>
+                <h6 class="modal-title">Map to Master Product</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p class="muted mb-2">Part number: <strong id="gr-map-pn"></strong></p>
-                <label class="form-label">Master Produk <span class="text-danger">*</span></label>
+                <label class="form-label">Master Product <span class="text-danger">*</span></label>
                 <select id="gr-map-product" style="width:100%"></select>
                 <div class="muted mt-1" id="gr-map-hint"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-map"><i class="fa fa-link me-1"></i> Petakan</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-map"><i class="fa fa-link me-1"></i> Map</button>
             </div>
         </div>
     </div>
@@ -477,19 +477,19 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">Tolak Permintaan Barang</h6>
+                <h6 class="modal-title">Reject Purchase Request</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-2">
-                    <label class="form-label">Alasan Penolakan <span class="text-danger">*</span></label>
-                    <textarea id="gr-reject-note" class="form-control" rows="3" placeholder="Wajib diisi alasan penolakan"></textarea>
+                    <label class="form-label">Rejection Reason <span class="text-danger">*</span></label>
+                    <textarea id="gr-reject-note" class="form-control" rows="3" placeholder="Rejection reason is required"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger btn-sm" id="gr-btn-reject">
-                    <i class="fa fa-xmark me-1"></i> Tolak
+                    <i class="fa fa-xmark me-1"></i> Reject
                 </button>
             </div>
         </div>
@@ -524,11 +524,11 @@ function grOpenClose(itemId, label) {
 
 $(document).on('click', '#gr-btn-close-remaining', function() {
     var reason = $.trim($('#gr-close-reason').val());
-    if (!reason) { toastr.error('Alasan wajib diisi.'); return; }
+    if (!reason) { toastr.error('Reason is required.'); return; }
     var $btn = $(this).prop('disabled', true);
     $.ajax({ url: grCloseUrl, method: 'POST', data: { _token: '{{ csrf_token() }}', _method: 'PATCH', item_id: grCloseItemId || '', reason: reason } })
         .done(function(res) { toastr.success(res.message); setTimeout(function() { location.reload(); }, 600); })
-        .fail(function(xhr) { toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menutup sisa.'); })
+        .fail(function(xhr) { toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to close the remaining quantity.'); })
         .always(function() { $btn.prop('disabled', false); });
 });
 
@@ -540,7 +540,7 @@ function grOpenMap(itemId, partNumber, suggestion) {
         grMapModal = new bootstrap.Modal(document.getElementById('grMapModal'));
         $('#gr-map-product').select2({
             theme: 'bootstrap-5', width: '100%', dropdownParent: $('#grMapModal'),
-            placeholder: 'Cari kode / nama produk...', minimumInputLength: 0,
+            placeholder: 'Search product code / name...', minimumInputLength: 0,
             ajax: {
                 url: grSearchProductUrl, dataType: 'json', delay: 250,
                 data: function(params) { return { q: params.term || '', per_page: 20 }; },
@@ -553,31 +553,31 @@ function grOpenMap(itemId, partNumber, suggestion) {
     $('#gr-map-product').empty();
     if (suggestion) {
         $('#gr-map-product').append(new Option(suggestion.text, suggestion.id, true, true)).trigger('change');
-        $('#gr-map-hint').html('<i class="fa fa-wand-magic-sparkles me-1"></i>Disarankan: part number cocok dengan kode produk. Periksa lalu klik Petakan.');
+        $('#gr-map-hint').html('<i class="fa fa-wand-magic-sparkles me-1"></i>Suggested: the part number matches a product code. Review it, then click Map.');
     } else {
-        $('#gr-map-hint').text('Tidak ada produk dengan kode yang sama. Cari produk secara manual.');
+        $('#gr-map-hint').text('No product with the same code. Search for the product manually.');
     }
     grMapModal.show();
 }
 
 $(document).on('click', '#gr-btn-map', function() {
     var productId = $('#gr-map-product').val();
-    if (!productId) { toastr.error('Pilih master produk.'); return; }
+    if (!productId) { toastr.error('Select a master product.'); return; }
     var $btn = $(this).prop('disabled', true);
     $.ajax({ url: grMapUrl.replace('__ITEM__', grMapItemId), method: 'POST', data: { _token: '{{ csrf_token() }}', _method: 'PATCH', master_product_id: productId } })
         .done(function(res) { toastr.success(res.message); setTimeout(function() { location.reload(); }, 600); })
-        .fail(function(xhr) { toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memetakan produk.'); })
+        .fail(function(xhr) { toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to map the product.'); })
         .always(function() { $btn.prop('disabled', false); });
 });
 
 function grDelete() {
     Swal.fire({
-        title: 'Hapus Permintaan Barang?',
-        text: 'Permintaan barang #' + grId + ' akan dihapus permanen.',
+        title: 'Delete Purchase Request?',
+        text: 'Purchase request #' + grId + ' will be permanently deleted.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.ajax({
@@ -585,10 +585,10 @@ function grDelete() {
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
         }).done(function(res) {
-            toastr.success(res.message || 'Dihapus.');
+            toastr.success(res.message || 'Deleted.');
             setTimeout(function() { window.location.href = '{{ route("goods-request.index") }}'; }, 800);
         }).fail(function(xhr) {
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to delete.');
         });
     });
 }
@@ -596,41 +596,41 @@ function grDelete() {
 function grSubmit() {
     Swal.fire({
         title: 'Submit Approval?',
-        text: 'Permintaan barang akan dikirim untuk approval.',
+        text: 'The purchase request will be submitted for approval.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Submit',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Submit',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(grSubmitUrl, { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Dikirim untuk approval.');
+                toastr.success(res.message || 'Submitted for approval.');
                 setTimeout(function() { window.location.reload(); }, 800);
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal submit.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to submit.');
             });
     });
 }
 
 function grApprove() {
     Swal.fire({
-        title: 'Approve Permintaan Barang?',
+        title: 'Approve Purchase Request?',
         text: grIsLastApproval
-            ? 'Ini approval terakhir — permintaan barang menjadi Approved dan siap diproses PO.'
-            : 'Approval Anda tercatat, masih menunggu approver berikutnya.',
+            ? 'The purchase request will be Approved and ready for PO processing.'
+            : 'Your approval will be recorded; the next approver is still required.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Approve',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Approve',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(grApproveUrl, { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Disetujui.');
+                toastr.success(res.message || 'Approved.');
                 setTimeout(function() { window.location.reload(); }, 800);
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal approve.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to approve.');
             });
     });
 }
@@ -646,7 +646,7 @@ function grOpenReject() {
 $(document).on('click', '#gr-btn-reject', function() {
     var note = $('#gr-reject-note').val().trim();
     if (!note) {
-        toastr.error('Alasan penolakan wajib diisi.');
+        toastr.error('Rejection reason is required.');
         return;
     }
     $('#gr-btn-reject').prop('disabled', true);
@@ -655,11 +655,11 @@ $(document).on('click', '#gr-btn-reject', function() {
         method: 'POST',
         data: { _token: '{{ csrf_token() }}', approval_note: note }
     }).done(function(res) {
-        toastr.success(res.message || 'Ditolak.');
+        toastr.success(res.message || 'Rejected.');
         grRejectModalInstance.hide();
         setTimeout(function() { window.location.reload(); }, 800);
     }).fail(function(xhr) {
-        toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menolak.');
+        toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to reject.');
     }).always(function() {
         $('#gr-btn-reject').prop('disabled', false);
     });

@@ -79,6 +79,6 @@ class PurchasingListFilterTest extends TestCase
             ->assertOk()->assertJsonPath('recordsFiltered', 0);
         // Filter hanya tampil bila relevan: satu divisi saja -> select Divisi disembunyikan.
         $this->actingAs($this->admin)->get(route('goods-request.index'))->assertOk()
-            ->assertSee('Semua Tujuan')->assertSee('data-search', false)->assertDontSee('Semua Divisi');
+            ->assertSee('All Purposes')->assertSee('data-search', false)->assertDontSee('All Divisions');
     }
 }

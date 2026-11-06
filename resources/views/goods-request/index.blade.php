@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Permintaan Barang')
-@section('page-title', 'Permintaan Barang')
+@section('title', 'Purchase Request')
+@section('page-title', 'Purchase Request')
 
 @section('styles')
 @include('partials.list-toolbar')
@@ -14,14 +14,14 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Permintaan Barang</h1>
-        <p class="page-header-sub">Pengajuan permintaan barang ke purchasing, terikat pada project yang PO Supplier Approval-nya sudah disetujui 2 approver</p>
+        <h1 class="page-header-title">Purchase Request</h1>
+        <p class="page-header-sub">Item requests to Purchasing, linked to projects whose PO Supplier Approval has been approved by 2 approvers</p>
     </div>
     @if($canCreate ?? false)
     <div class="page-header-actions">
         <a href="{{ route('goods-request.create') }}" class="btn-accent">
             <i class="fa fa-plus"></i>
-            <span>Buat Permintaan Barang</span>
+            <span>New Purchase Request</span>
         </a>
     </div>
     @endif
@@ -29,51 +29,51 @@
 
 <div class="card-custom fade-in">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span><i class="fa-solid fa-dolly me-2" style="color:var(--accent)"></i>Daftar Permintaan Barang</span>
+        <span><i class="fa-solid fa-dolly me-2" style="color:var(--accent)"></i>Purchase Request List</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="list-toolbar" id="gr-toolbar">
             <div class="lt-search">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="search" class="form-control" data-search placeholder="Cari no. permintaan, project, customer, divisi, pembuat…" autocomplete="off">
-                <button type="button" class="lt-clear" title="Hapus pencarian"><i class="fa fa-xmark"></i></button>
+                <input type="search" class="form-control" data-search placeholder="Search request no., project, customer, division, requester…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
             </div>
             <select class="form-select" data-filter="status" data-status-select aria-label="Status">
-                <option value="">Semua Status</option>
+                <option value="">All Statuses</option>
                 @foreach(\App\Models\GoodsRequest::STATUS_LABELS as $key => $label)
                     <option value="{{ $key }}" data-label="{{ $label }}" @selected(request('status') === $key)>{{ $label }}</option>
                 @endforeach
             </select>
-            <select class="form-select" data-filter="purpose" aria-label="Tujuan">
-                <option value="">Semua Tujuan</option>
+            <select class="form-select" data-filter="purpose" aria-label="Purpose">
+                <option value="">All Purposes</option>
                 @foreach(\App\Models\GoodsRequest::PURPOSE_LABELS as $key => $label)
                     <option value="{{ $key }}">{{ $label }}</option>
                 @endforeach
             </select>
             @if($projects->isNotEmpty())
             <select class="form-select" data-filter="project_id" data-searchable data-hide-when="purpose:internal" aria-label="Project">
-                <option value="">Semua Project</option>
+                <option value="">All Projects</option>
                 @foreach($projects as $p)
                     <option value="{{ $p->id }}">{{ $p->project_number }} — {{ $p->project_name }}</option>
                 @endforeach
             </select>
             @endif
             @if($divisions->count() > 1)
-            <select class="form-select" data-filter="division_id" aria-label="Divisi">
-                <option value="">Semua Divisi</option>
+            <select class="form-select" data-filter="division_id" aria-label="Division">
+                <option value="">All Divisions</option>
                 @foreach($divisions as $d)
                     <option value="{{ $d->id }}">{{ $d->division_name }}</option>
                 @endforeach
             </select>
             @endif
-            <div class="lt-date" title="Rentang tanggal">
-                <input type="date" class="form-control" data-filter="date_from" aria-label="Dari tanggal">
+            <div class="lt-date" title="Date range">
+                <input type="date" class="form-control" data-filter="date_from" aria-label="From date">
                 <span>–</span>
-                <input type="date" class="form-control" data-filter="date_to" aria-label="Sampai tanggal">
+                <input type="date" class="form-control" data-filter="date_to" aria-label="To date">
             </div>
-            <select class="form-select" data-filter="mine" aria-label="Pembuat">
-                <option value="">Semua Pembuat</option>
-                <option value="1">Dibuat oleh Saya</option>
+            <select class="form-select" data-filter="mine" aria-label="Requester">
+                <option value="">All Requesters</option>
+                <option value="1">Created by Me</option>
             </select>
             <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
         </div>
@@ -82,14 +82,14 @@
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
-                        <th>No. Permintaan</th>
+                        <th>Request No.</th>
                         <th>Project</th>
                         <th>Customer</th>
-                        <th>Divisi</th>
+                        <th>Division</th>
                         <th class="text-center">Item</th>
-                        <th>Dibuat</th>
+                        <th>Requested By</th>
                         <th>Status</th>
-                        <th class="text-center" style="width:150px">Aksi</th>
+                        <th class="text-center" style="width:150px">Actions</th>
                     </tr>
                 </thead>
             </table>
@@ -141,7 +141,7 @@ function initGrTable() {
                 render: function(data, type, row) {
                     var html = '<div class="gr-cell-main">' + grEsc(data) + '</div>';
                     html += '<div style="font-size:13px">' + grEsc(row.project_name) + '</div>';
-                    if (row.purpose === 'internal') html += '<div class="gr-cell-sub"><i class="fa fa-warehouse me-1"></i>Tujuan stok / internal</div>';
+                    if (row.purpose === 'internal') html += '<div class="gr-cell-sub"><i class="fa fa-warehouse me-1"></i>Purpose: stock / internal</div>';
                     if (row.opportunity_name) html += '<div class="gr-cell-sub"><i class="fa fa-bullseye me-1"></i>' + grEsc(row.opportunity_name) + '</div>';
                     return html;
                 }
@@ -167,10 +167,10 @@ function initGrTable() {
                 render: function(data, type, row) {
                     if (row.status === 'waiting_approval') {
                         var progress = row.required_approvals > 1 ? ' ' + row.approval_count + '/' + row.required_approvals : '';
-                        return data + '<div class="gr-cell-sub mt-1"><i class="fa fa-user-check me-1"></i>Menunggu approval' + progress + '</div>';
+                        return data + '<div class="gr-cell-sub mt-1"><i class="fa fa-user-check me-1"></i>Awaiting approval' + progress + '</div>';
                     }
                     if (row.fulfillment) {
-                        var labels = { none: 'Belum diproses', partial: 'Terpenuhi sebagian', done: 'Terpenuhi' };
+                        var labels = { none: 'Not processed', partial: 'Partially fulfilled', done: 'Fulfilled' };
                         var colors = { none: '#6b7280', partial: '#b45309', done: '#166534' };
                         return data + '<div class="gr-cell-sub mt-1" style="color:' + colors[row.fulfillment] + '"><i class="fa fa-boxes-stacked me-1"></i>' + labels[row.fulfillment] + '</div>';
                     }
@@ -185,7 +185,7 @@ function initGrTable() {
                     if (row.status === 'draft' && row.is_creator) {
                         btn += '<a href="' + grEditUrl.replace('__ID__', data) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
                         btn += '<button class="btn-icon" title="Submit Approval" onclick="submitGr(' + data + ')"><i class="fa fa-paper-plane"></i></button>';
-                        btn += '<button class="btn-icon text-danger" title="Hapus" onclick="deleteGr(' + data + ')"><i class="fa fa-trash"></i></button>';
+                        btn += '<button class="btn-icon text-danger" title="Delete" onclick="deleteGr(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
                     if (row.can_approve) {
                         var approveTitle = row.required_approvals > 1 ? 'Approve (' + (row.approval_count + 1) + '/' + row.required_approvals + ')' : 'Approve';
@@ -204,19 +204,19 @@ function initGrTable() {
 function submitGr(id) {
     Swal.fire({
         title: 'Submit Approval?',
-        text: 'Permintaan barang akan dikirim untuk approval.',
+        text: 'The purchase request will be submitted for approval.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Submit',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Submit',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(grSubmitUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Dikirim untuk approval.');
+                toastr.success(res.message || 'Submitted for approval.');
                 grTable.ajax.reload();
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal submit.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to submit.');
             });
     });
 }
@@ -227,34 +227,34 @@ function approveGr(id) {
     var isLast = row.approval_count + 1 >= row.required_approvals;
 
     Swal.fire({
-        title: 'Approve Permintaan Barang?',
+        title: 'Approve Purchase Request?',
         text: isLast
-            ? 'Permintaan barang menjadi Approved dan siap diproses PO.'
-            : 'Approval ' + (row.approval_count + 1) + '/' + row.required_approvals + '. Masih menunggu approver berikutnya.',
+            ? 'The purchase request will be Approved and ready for PO processing.'
+            : 'Approval ' + (row.approval_count + 1) + '/' + row.required_approvals + '. Still waiting for the next approver.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Approve',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Approve',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.post(grApproveUrl.replace('__ID__', id), { _token: '{{ csrf_token() }}' })
             .done(function(res) {
-                toastr.success(res.message || 'Disetujui.');
+                toastr.success(res.message || 'Approved.');
                 grTable.ajax.reload();
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal approve.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to approve.');
             });
     });
 }
 
 function deleteGr(id) {
     Swal.fire({
-        title: 'Hapus Permintaan Barang?',
-        text: 'Permintaan barang #' + id + ' akan dihapus permanen.',
+        title: 'Delete Purchase Request?',
+        text: 'Purchase request #' + id + ' will be permanently deleted.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.ajax({
@@ -262,10 +262,10 @@ function deleteGr(id) {
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
         }).done(function(res) {
-            toastr.success(res.message || 'Dihapus.');
+            toastr.success(res.message || 'Deleted.');
             grTable.ajax.reload();
         }).fail(function(xhr) {
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to delete.');
         });
     });
 }
