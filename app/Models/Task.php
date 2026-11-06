@@ -116,6 +116,15 @@ class Task extends Model
         return $this->belongsTo(Opportunity::class);
     }
 
+    /**
+     * Kolom DB bertipe TIME tersimpan "HH:MM:SS"; tampilkan & gunakan "HH:MM"
+     * agar input time lintas browser konsisten.
+     */
+    public function getTimeAttribute($value)
+    {
+        return $value ? substr($value, 0, 5) : null;
+    }
+
     public function sourceActivity(): BelongsTo
     {
         return $this->belongsTo(Activity::class, 'activity_id');

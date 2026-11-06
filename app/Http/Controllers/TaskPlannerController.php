@@ -244,6 +244,23 @@ class TaskPlannerController extends Controller
         return array_values(array_unique(array_map('intval', array_filter((array) $ids, fn ($id) => $id !== null && $id !== ''))));
     }
 
+    /**
+     * Normalisasi input "time" lintas browser: "H:MM" / "HH:MM" / "HH:MM:SS"
+     * menjadi "HH:MM". Nilai tak valid dibiarkan agar validasi memberi pesan.
+     */
+    private function normalizeTime(?string $time): ?string
+    {
+        $time = trim((string) $time);
+        if ($time === '') {
+            return null;
+        }
+        if (preg_match('/^(\d{1,2}):(\d{2})/', $time, $m)) {
+            return sprintf('%02d:%02d', (int) $m[1], (int) $m[2]);
+        }
+
+        return $time;
+    }
+
     private function renderStatusBadge(string $status): string
     {
         return match ($status) {
@@ -474,6 +491,10 @@ class TaskPlannerController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if ($request->has('time')) {
+            $request->merge(['time' => $this->normalizeTime($request->input('time'))]);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:150',
             'description' => 'nullable|string',
@@ -554,6 +575,10 @@ class TaskPlannerController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $task = Task::findOrFail($id);
+
+        if ($request->has('time')) {
+            $request->merge(['time' => $this->normalizeTime($request->input('time'))]);
+        }
 
         $validated = $request->validate([
             'title' => 'required|string|max:150',
