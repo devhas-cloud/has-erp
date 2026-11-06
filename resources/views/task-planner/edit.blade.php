@@ -375,7 +375,7 @@
                     return { results: data.results };
                 }
             },
-            minimumInputLength: 1
+            minimumInputLength: 0
         });
 
         $('#edit_whatsapp_group').select2({

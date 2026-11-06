@@ -48,32 +48,29 @@ class TaskPlannerController extends Controller
         ));
     }
 
-    public function data(Request $request): JsonResponse
+    /**
+     * Query task yang terlihat oleh user (pembuat / assignee; global delegator
+     * melihat semua) beserta filter daftar. Dipakai tabel dan Kanban.
+     *
+     * @return array{0: \Illuminate\Database\Eloquent\Builder, 1: int} query & jumlah sebelum filter
+     */
+    private function visibleTaskQuery(Request $request, bool $applyStatus = true): array
     {
         $userId = Auth::id();
-        $user = Auth::user()->load('hierarchyRole', 'division');
-        $userRole = $user->hierarchyRole;
-        $userDivisionId = $user->division_id;
+        $userRole = Auth::user()->load('hierarchyRole')->hierarchyRole;
 
         $query = Task::with(['creator', 'category', 'whatsappGroup.division', 'assignees', 'project']);
 
-        if ($userRole && $userRole->is_global_delegator) {
-        } elseif ($userRole) {
-            $level = $userRole->hierarchy_level;
-            $query->where(function ($q) use ($userId) {
-                $q->where('creator_id', $userId)
-                    ->orWhereHas('assignees', fn ($q) => $q->where('user_id', $userId));
-            });
-        } else {
+        if (! ($userRole && $userRole->is_global_delegator)) {
             $query->where(function ($q) use ($userId) {
                 $q->where('creator_id', $userId)
                     ->orWhereHas('assignees', fn ($q) => $q->where('user_id', $userId));
             });
         }
 
-        $recordsTotal = $query->count();
+        $recordsTotal = (clone $query)->count();
 
-        $searchValue = $request->input('search.value');
+        $searchValue = $request->input('search.value', $request->input('q'));
         if ($searchValue) {
             $query->where(function ($q) use ($searchValue) {
                 $q->where('title', 'like', "%{$searchValue}%")
@@ -96,30 +93,28 @@ class TaskPlannerController extends Controller
             });
         }
 
-        $statusFilter = $request->input('status');
-        if ($statusFilter) {
-            $query->where('status', $statusFilter);
+        if ($applyStatus && $request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->input('category_id'));
+        }
+        if ($request->filled('project_id')) {
+            $query->where('project_id', $request->input('project_id'));
+        }
+        if ($request->filled('due_date_from')) {
+            $query->where('due_date', '>=', $request->input('due_date_from'));
+        }
+        if ($request->filled('due_date_to')) {
+            $query->where('due_date', '<=', $request->input('due_date_to').' 23:59:59');
         }
 
-        $categoryFilter = $request->input('category_id');
-        if ($categoryFilter) {
-            $query->where('category_id', $categoryFilter);
-        }
+        return [$query, $recordsTotal];
+    }
 
-        $projectFilter = $request->input('project_id');
-        if ($projectFilter) {
-            $query->where('project_id', $projectFilter);
-        }
-
-        $dueDateFrom = $request->input('due_date_from');
-        if ($dueDateFrom) {
-            $query->where('due_date', '>=', $dueDateFrom);
-        }
-
-        $dueDateTo = $request->input('due_date_to');
-        if ($dueDateTo) {
-            $query->where('due_date', '<=', $dueDateTo.' 23:59:59');
-        }
+    public function data(Request $request): JsonResponse
+    {
+        [$query, $recordsTotal] = $this->visibleTaskQuery($request);
 
         $recordsFiltered = $query->count();
 
@@ -174,6 +169,59 @@ class TaskPlannerController extends Controller
         ]);
     }
 
+    /** Kolom Kanban Done hanya menampilkan task yang selesai dalam N hari terakhir. */
+    public const KANBAN_DONE_DAYS = 30;
+
+    /**
+     * Data tampilan Kanban: task terlihat (filter sama dengan tabel, tanpa status)
+     * dikelompokkan per status. Kolom Done dibatasi 30 hari terakhir berdasarkan
+     * waktu task terakhir diubah (tidak ada kolom tanggal selesai).
+     */
+    public function kanban(Request $request): JsonResponse
+    {
+        [$query] = $this->visibleTaskQuery($request, false);
+        $userId = Auth::id();
+        $today = now()->startOfDay();
+
+        $tasks = $query
+            ->where(fn ($q) => $q->where('status', '!=', 'done')
+                ->orWhere('updated_at', '>=', now()->subDays(self::KANBAN_DONE_DAYS)))
+            ->orderBy('due_date')
+            ->orderByRaw('time IS NULL, time')
+            ->orderBy('id')
+            ->limit(500)
+            ->get();
+
+        $columns = array_fill_keys(['todo', 'in_progress', 'waiting_approval', 'done'], []);
+        foreach ($tasks as $task) {
+            if (! array_key_exists($task->status, $columns)) {
+                continue;
+            }
+            $category = strtolower((string) $task->category?->name);
+            $columns[$task->status][] = [
+                'id' => $task->id,
+                'title' => $task->title,
+                'category' => $task->category?->name,
+                'is_visit' => (bool) $task->category?->visit,
+                // Selesai lewat halaman detail (lokasi / quotation / proposal).
+                'needs_detail' => (bool) $task->category?->visit || in_array($category, ['quote', 'proposal'], true),
+                'project_number' => $task->project?->project_number,
+                'due_date' => $task->due_date?->format('d M Y'),
+                'time' => $task->time ? substr($task->time, 0, 5) : null,
+                'is_overdue' => $task->status !== 'done' && $task->due_date && $task->due_date->lt($today),
+                'assignees' => $task->assignees->map(fn ($u) => ['id' => $u->id, 'name' => $u->display_name])->values(),
+                'is_creator' => $task->creator_id === $userId,
+                'is_assignee' => $task->assignees->contains('id', $userId),
+                'requires_approval' => (bool) $task->requires_approval,
+            ];
+        }
+
+        return response()->json([
+            'columns' => $columns,
+            'done_days' => self::KANBAN_DONE_DAYS,
+        ]);
+    }
+
     private function mergeHandlingGroupAssignees(array $assigneeIds, $handlingGroupId): array
     {
         if (! $handlingGroupId) {
@@ -188,6 +236,12 @@ class TaskPlannerController extends Controller
         $roster = $group->users->pluck('id')->all();
 
         return array_values(array_unique(array_merge($assigneeIds, $roster)));
+    }
+
+    /** ID assignee unik (integer), agar pembuat yang memilih dirinya tidak tercatat dobel. */
+    private function uniqueIds($ids): array
+    {
+        return array_values(array_unique(array_map('intval', array_filter((array) $ids, fn ($id) => $id !== null && $id !== ''))));
     }
 
     private function renderStatusBadge(string $status): string
@@ -236,7 +290,18 @@ class TaskPlannerController extends Controller
                 'text' => $u->display_name.($u->hierarchyRole ? ' ('.$u->hierarchyRole->role_name.')' : ''),
             ]);
 
-        return response()->json(['results' => $results]);
+        // Pembuat boleh ikut menjadi assignee: tampil paling atas, di luar filter
+        // hierarki. Query di atas sudah mengecualikan diri sendiri, jadi tidak dobel.
+        $term = mb_strtolower(trim((string) $request->get('q', '')));
+        $selfMatches = $term === ''
+            || str_contains(mb_strtolower((string) $user->username), $term)
+            || str_contains(mb_strtolower((string) $user->full_name), $term)
+            || str_contains(mb_strtolower((string) $user->email), $term);
+        if ($selfMatches) {
+            $results->prepend(['id' => $user->id, 'text' => $user->display_name.' (Saya)']);
+        }
+
+        return response()->json(['results' => $results->unique('id')->values()]);
     }
 
     public function fetchHandlingGroupUsers(Request $request): JsonResponse
@@ -431,7 +496,7 @@ class TaskPlannerController extends Controller
         $validated['creator_id'] = Auth::id();
         $validated['status'] = 'todo';
 
-        $assigneeIds = $request->input('assignees', []);
+        $assigneeIds = $this->uniqueIds($request->input('assignees', []));
         $assigneeIds = $this->mergeHandlingGroupAssignees($assigneeIds, $request->input('handling_group_id'));
 
         if (empty($assigneeIds)) {
@@ -523,7 +588,7 @@ class TaskPlannerController extends Controller
             $validated['status'] = 'waiting_approval';
         }
 
-        $assigneeIds = $request->input('assignees', []);
+        $assigneeIds = $this->uniqueIds($request->input('assignees', []));
         $assigneeIds = $this->mergeHandlingGroupAssignees($assigneeIds, $request->input('handling_group_id'));
 
         if (empty($assigneeIds)) {
@@ -725,7 +790,14 @@ class TaskPlannerController extends Controller
 
     public function transition(Request $request, $id): JsonResponse
     {
-        $task = Task::findOrFail($id);
+        $task = Task::with('assignees')->findOrFail($id);
+
+        if ($task->creator_id !== Auth::id() && ! $task->assignees->contains('id', Auth::id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pembuat atau assignee yang bisa mengubah status task.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'status' => 'required|in:todo,in_progress,done',

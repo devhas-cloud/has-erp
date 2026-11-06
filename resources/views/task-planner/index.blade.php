@@ -85,6 +85,35 @@
         max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .filter-bar .select2-container { min-width: 200px; font-size: 12px; }
+    /* Pilihan tampilan */
+    .view-toggle { display: inline-flex; border: 1px solid var(--card-border); border-radius: var(--radius-sm); overflow: hidden; margin-left: 10px; vertical-align: middle; }
+    .view-toggle button { border: 0; background: #fff; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .view-toggle button + button { border-left: 1px solid var(--card-border); }
+    .view-toggle button.active { background: var(--accent-soft); color: var(--accent); }
+
+    /* Kanban */
+    .kb-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: var(--text-muted); }
+    .kb-toolbar input { padding: 6px 10px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); font-size: 12.5px; width: 220px; }
+    .kb-board { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+    .kb-col { background: #f8fafc; border: 1px solid var(--card-border); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 220px; max-height: 70vh; }
+    .kb-col-head { padding: 10px 12px; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--card-border); border-top: 3px solid var(--c); border-radius: var(--radius) var(--radius) 0 0; background: #fff; }
+    .kb-col-head .cnt { font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--c) 15%, #fff); color: var(--c); border-radius: 999px; padding: 1px 8px; }
+    .kb-col-head .sub { font-size: 10.5px; font-weight: 500; color: var(--text-muted); margin-left: 4px; }
+    .kb-list { padding: 8px; overflow-y: auto; flex: 1; min-height: 80px; }
+    .kb-card { background: #fff; border: 1px solid var(--card-border); border-left: 3px solid var(--c); border-radius: var(--radius-sm); padding: 8px 10px; margin-bottom: 8px; cursor: pointer; font-size: 12.5px; }
+    .kb-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+    .kb-card.draggable { cursor: grab; }
+    .kb-card .tt { font-weight: 600; color: var(--text-primary); line-height: 1.3; margin-bottom: 5px; word-break: break-word; }
+    .kb-card .meta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 5px; }
+    .kb-card .tag { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: #f1f5f9; color: var(--text-secondary); }
+    .kb-card .tag.prj { background: var(--accent-soft); color: var(--accent); }
+    .kb-card .foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+    .kb-card .foot .late { color: #dc2626; font-weight: 700; }
+    .kb-avatars { display: flex; }
+    .kb-avatars span { width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 9.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; border: 2px solid #fff; margin-left: -6px; }
+    .kb-avatars span:first-child { margin-left: 0; }
+    .kb-ghost { opacity: .4; }
+    .kb-empty { text-align: center; font-size: 12px; color: #94a3b8; padding: 18px 0; }
     select.is-invalid + .select2-container .select2-selection {
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
@@ -111,11 +140,17 @@
 <div class="card-custom fade-in">
     <div class="card-header-custom">
         <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px">
-            <span><i class="fa fa-tasks me-2" style="color:var(--accent)"></i>Tasks List</span>
+            <span>
+                <i class="fa fa-tasks me-2" style="color:var(--accent)"></i>Tasks List
+                <span class="view-toggle" role="group" aria-label="Tampilan">
+                    <button type="button" data-view="table" class="active" onclick="taskSetView('table')"><i class="fa fa-table-list me-1"></i>Tabel</button>
+                    <button type="button" data-view="kanban" onclick="taskSetView('kanban')"><i class="fa fa-table-columns me-1"></i>Kanban</button>
+                </span>
+            </span>
             <div class="filter-bar">
-                <input type="date" id="filter-due-from" onchange="taskTable.ajax.reload(null, false)" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date From">
-                <input type="date" id="filter-due-to" onchange="taskTable.ajax.reload(null, false)" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date To">
-                <select id="filter-status" onchange="taskTable.ajax.reload(null, false)">
+                <input type="date" id="filter-due-from" onchange="taskReload()" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date From">
+                <input type="date" id="filter-due-to" onchange="taskReload()" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date To">
+                <select id="filter-status" onchange="taskReload()">
                     <option value="">All Status</option>
                     <option value="todo">To Do</option>
                     <option value="in_progress">In Progress</option>
@@ -123,7 +158,7 @@
                     <option value="done">Done</option>
                 </select>
                 <select id="filter-project" style="width:220px"></select>
-                <select id="filter-category" onchange="taskTable.ajax.reload(null, false)">
+                <select id="filter-category" onchange="taskReload()">
                     <option value="">All Categories</option>
                     @foreach($categories as $cat)
                         <option value="{{ $cat->id }}">{{ $cat->name }}</option>
@@ -141,7 +176,14 @@
         </div>
     </div>
     <div class="card-body-custom p-2">
-        <div class="table-responsive">
+        <div id="kanban-view" style="display:none">
+            <div class="kb-toolbar">
+                <input type="text" id="kb-search" placeholder="Cari task, assignee, project...">
+                <span><i class="fa fa-hand-pointer me-1"></i>Geser kartu untuk mengubah status. Task Visit / Quote / Proposal diselesaikan dari halaman detail.</span>
+            </div>
+            <div class="kb-board" id="kb-board"></div>
+        </div>
+        <div class="table-responsive" id="table-view">
         <table id="tasks-table" class="table table-custom align-middle mb-0" style="width:100%">
             <thead>
                 <tr>
@@ -331,6 +373,7 @@
 @endpush
 
 @section('scripts')
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <script>
 let taskModalInstance = null;
 let taskTable = null;
@@ -531,7 +574,7 @@ $(document).on('click', '#btn-save-task', function() {
             success: function(res) {
                 toastr.success(res.message);
                 if (taskModalInstance) taskModalInstance.hide();
-                if (taskTable) taskTable.ajax.reload(null, false);
+                taskReload();
             },
             error: function(xhr) {
                 $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
@@ -580,7 +623,7 @@ $(document).on('click', '.btn-delete-task', function() {
                 data: { _token: '{{ csrf_token() }}' },
                 success: function(res) {
                     toastr.success(res.message);
-                    if (taskTable) taskTable.ajax.reload(null, false);
+                    taskReload();
                 },
                 error: function(xhr) {
                     toastr.error(xhr.responseJSON?.message || 'Failed to delete task.');
@@ -605,7 +648,7 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
                 data: function(params) { return { q: params.term }; },
                 processResults: function(data) { return { results: data.results }; }
             },
-            minimumInputLength: 1
+            minimumInputLength: 0
         });
     }
 
@@ -687,9 +730,166 @@ $('#filter-project').select2({
         data: function(params) { return { q: params.term }; },
         processResults: function(data) { return { results: data.results }; }
     }
-}).on('change', function() { if (taskTable) taskTable.ajax.reload(null, false); });
+}).on('change', function() { taskReload(); });
 
 initTasksTable();
+$(function() { taskSetView(taskStoredView(), true); });
+
+// ── Tampilan Tabel / Kanban ──
+const kanbanUrl = '{{ route("task-planner.kanban") }}';
+const transitionUrl = '{{ route("task-planner.transition", "__ID__") }}';
+const approveUrl = '{{ route("task-planner.approve", "__ID__") }}';
+const rejectUrl = '{{ route("task-planner.reject", "__ID__") }}';
+const KB_COLUMNS = [
+    { key: 'todo', label: 'To Do', color: '#f59e0b' },
+    { key: 'in_progress', label: 'In Progress', color: '#3b82f6' },
+    { key: 'waiting_approval', label: 'Waiting Approval', color: '#a855f7' },
+    { key: 'done', label: 'Done', color: '#10b981' }
+];
+let taskView = 'table';
+let kbCards = {};
+let kbSearchTimer = null;
+let kbLoading = false;
+
+function taskStoredView() {
+    try { return localStorage.getItem('taskPlannerView') === 'kanban' ? 'kanban' : 'table'; } catch (e) { return 'table'; }
+}
+
+function taskSetView(view, initial) {
+    taskView = view === 'kanban' ? 'kanban' : 'table';
+    try { localStorage.setItem('taskPlannerView', taskView); } catch (e) {}
+    $('.view-toggle button').removeClass('active').filter('[data-view="' + taskView + '"]').addClass('active');
+    $('#table-view').toggle(taskView === 'table');
+    $('#kanban-view').toggle(taskView === 'kanban');
+    $('#filter-status').toggle(taskView === 'table'); // kolom Kanban sudah berupa status
+    if (taskView === 'kanban') {
+        kbLoad();
+    } else if (!initial && taskTable) {
+        taskTable.columns.adjust().ajax.reload(null, false);
+    }
+}
+
+function taskReload() {
+    if (taskView === 'kanban') kbLoad();
+    else if (taskTable) taskTable.ajax.reload(null, false);
+}
+
+function kbEsc(v) { return $('<div>').text(v == null ? '' : v).html(); }
+
+function kbInitials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+function kbFilters() {
+    return {
+        q: $('#kb-search').val(),
+        category_id: $('#filter-category').val(),
+        project_id: $('#filter-project').val(),
+        due_date_from: $('#filter-due-from').val(),
+        due_date_to: $('#filter-due-to').val()
+    };
+}
+
+function kbLoad() {
+    if (kbLoading) return;
+    kbLoading = true;
+    $.getJSON(kanbanUrl, kbFilters())
+        .done(function(res) { kbRender(res); })
+        .fail(function(xhr) { toastr.error(xhr.responseJSON?.message || 'Gagal memuat Kanban.'); })
+        .always(function() { kbLoading = false; });
+}
+
+function kbCardHtml(card, color) {
+    var canDrag = card.is_creator || card.is_assignee;
+    var avatars = card.assignees.slice(0, 4).map(function(a) {
+        return '<span title="' + kbEsc(a.name) + '">' + kbEsc(kbInitials(a.name)) + '</span>';
+    }).join('');
+    if (card.assignees.length > 4) avatars += '<span>+' + (card.assignees.length - 4) + '</span>';
+    return '<div class="kb-card' + (canDrag ? ' draggable' : '') + '" data-id="' + card.id + '" style="--c:' + color + '">'
+        + '<div class="tt">' + kbEsc(card.title) + (card.is_visit ? ' 📍' : '') + '</div>'
+        + '<div class="meta">'
+        + (card.category ? '<span class="tag">' + kbEsc(card.category) + '</span>' : '')
+        + (card.project_number ? '<span class="tag prj"><i class="fa fa-diagram-project me-1"></i>' + kbEsc(card.project_number) + '</span>' : '')
+        + '</div>'
+        + '<div class="foot"><span class="' + (card.is_overdue ? 'late' : '') + '"><i class="fa fa-calendar me-1"></i>'
+        + kbEsc(card.due_date || '—') + (card.time ? ' · ' + kbEsc(card.time) : '') + (card.is_overdue ? ' ⚠' : '') + '</span>'
+        + '<span class="kb-avatars">' + avatars + '</span></div>'
+        + '</div>';
+}
+
+function kbRender(res) {
+    kbCards = {};
+    var html = '';
+    KB_COLUMNS.forEach(function(col) {
+        var cards = res.columns[col.key] || [];
+        cards.forEach(function(c) { kbCards[c.id] = c; });
+        html += '<div class="kb-col" style="--c:' + col.color + '">'
+            + '<div class="kb-col-head"><span>' + col.label
+            + (col.key === 'done' ? '<span class="sub">' + res.done_days + ' hari terakhir</span>' : '')
+            + '</span><span class="cnt">' + cards.length + '</span></div>'
+            + '<div class="kb-list" data-status="' + col.key + '">'
+            + (cards.length ? cards.map(function(c) { return kbCardHtml(c, col.color); }).join('') : '<div class="kb-empty">Tidak ada task</div>')
+            + '</div></div>';
+    });
+    $('#kb-board').html(html);
+
+    document.querySelectorAll('#kb-board .kb-list').forEach(function(list) {
+        Sortable.create(list, {
+            group: 'kanban',
+            animation: 150,
+            draggable: '.kb-card.draggable',
+            filter: '.kb-empty',
+            ghostClass: 'kb-ghost',
+            onEnd: function(evt) {
+                if (evt.from === evt.to) return;
+                kbMove(Number(evt.item.getAttribute('data-id')), evt.from.getAttribute('data-status'), evt.to.getAttribute('data-status'));
+            }
+        });
+    });
+}
+
+/**
+ * Aturan pindah status (mengikuti aturan halaman detail):
+ * - To Do <-> In Progress: transition.
+ * - -> Done: transition (assignee non-pembuat -> Waiting Approval bila butuh approval).
+ *   Task Visit/Quote/Proposal wajib diselesaikan dari halaman detail.
+ * - Waiting Approval -> Done / In Progress: hanya pembuat (approve / reject).
+ * - Kartu Done tidak dipindah dari Kanban; Waiting Approval tidak bisa dituju langsung.
+ */
+function kbMove(id, from, to) {
+    var card = kbCards[id];
+    var fail = function(msg) { toastr.warning(msg); kbLoad(); };
+    if (!card) return kbLoad();
+
+    if (from === 'done') return fail('Task yang sudah Done tidak dipindah dari Kanban. Buka detail task bila perlu dibuka kembali.');
+    if (to === 'waiting_approval') return fail('Waiting Approval terjadi otomatis saat assignee menandai Done.');
+    if (to === 'done' && card.needs_detail) return fail('Task ' + (card.category || '') + ' diselesaikan dari halaman detail (check-in lokasi / quotation / proposal).');
+
+    var url, data = { _token: '{{ csrf_token() }}' };
+    if (from === 'waiting_approval') {
+        if (!card.is_creator) return fail('Hanya pembuat task yang bisa approve / menolak.');
+        if (to === 'done') url = approveUrl.replace('__ID__', id);
+        else if (to === 'in_progress') url = rejectUrl.replace('__ID__', id);
+        else return fail('Task Waiting Approval hanya bisa di-approve (Done) atau ditolak (In Progress).');
+    } else {
+        url = transitionUrl.replace('__ID__', id);
+        data.status = to;
+    }
+
+    $.post(url, data)
+        .done(function(res) { toastr.success(res.message || 'Status diupdate.'); kbLoad(); })
+        .fail(function(xhr) { fail(xhr.responseJSON?.message || 'Gagal mengubah status.'); });
+}
+
+$(document).on('click', '.kb-card', function() {
+    window.location.href = showUrl.replace('__ID__', $(this).data('id'));
+});
+$(document).on('input', '#kb-search', function() {
+    clearTimeout(kbSearchTimer);
+    kbSearchTimer = setTimeout(kbLoad, 350);
+});
 
 function openImportModal() {
     $('#import-file').val('');
@@ -748,7 +948,7 @@ $(document).on('click', '#btn-import-task', function() {
                 html += '</ul>';
             }
             $('#import-result').html(html).show();
-            if (taskTable) taskTable.ajax.reload(null, false);
+            taskReload();
         },
         error: function(xhr) {
             var msg = xhr.responseJSON?.message || 'Gagal mengimpor.';

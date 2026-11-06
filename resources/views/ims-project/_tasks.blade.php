@@ -161,7 +161,7 @@ function ptkOpen() {
             placeholder: 'Cari user...',
             allowClear: true,
             dropdownParent: $('#ptkModal'),
-            minimumInputLength: 1,
+            minimumInputLength: 0,
             ajax: {
                 url: '{{ route("task-planner.fetch-assignees") }}',
                 dataType: 'json',

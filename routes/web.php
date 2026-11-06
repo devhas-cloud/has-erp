@@ -121,6 +121,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::resource('accounts-management', AccountManagementController::class);
 
     Route::get('task-planner/data', [TaskPlannerController::class, 'data'])->name('task-planner.data');
+    Route::get('task-planner/kanban', [TaskPlannerController::class, 'kanban'])->name('task-planner.kanban');
     Route::get('users/search', [LeadsManagementController::class, 'searchUsers'])->name('users.search');
     Route::get('task-planner/export', [TaskPlannerController::class, 'export'])->name('task-planner.export');
     Route::get('task-planner/import-template', [TaskPlannerController::class, 'downloadTemplate'])->name('task-planner.template');

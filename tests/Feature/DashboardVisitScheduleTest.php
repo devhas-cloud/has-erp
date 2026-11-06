@@ -70,7 +70,7 @@ class DashboardVisitScheduleTest extends TestCase
     /** Judul task & nama orang yang ada di jadwal visit (bukan bagian dashboard lain). */
     private function schedule(array $params = []): array
     {
-        $visit = $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index', $params))->assertOk()->viewData('visit');
+        $visit = $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index', $params))->assertOk()->viewData('visit');
         $rows = $visit['groups']->flatMap(fn ($g) => $g['rows']);
 
         return [
@@ -89,7 +89,7 @@ class DashboardVisitScheduleTest extends TestCase
         $this->task('Visit di luar rentang', '2026-11-16', [$this->salesUser]); // hari kerja ke-8
         $this->task('Visit terlambat', '2026-11-05', [$this->salesUser], ['due_date' => '2026-11-05']);
 
-        $response = $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index'))->assertOk();
+        $response = $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index'))->assertOk();
 
         $response->assertSee('Jadwal Visit')
             ->assertSee('Kam 05')->assertSee('Jum 06')->assertSee('Sen 09')->assertSee('Jum 13')
@@ -124,21 +124,21 @@ class DashboardVisitScheduleTest extends TestCase
     {
         $this->task('Visit minggu depan', '2026-11-16', [$this->imsUser]);
 
-        $visit = $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index'))->viewData('visit');
+        $visit = $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index'))->viewData('visit');
         $this->assertSame('2026-11-16', $visit['next_start']);
         $this->assertSame('2026-10-27', $visit['prev_start']);
 
-        $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index', ['visit_start' => '2026-11-16']))
+        $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index', ['visit_start' => '2026-11-16']))
             ->assertOk()->assertSee('Visit minggu depan');
 
         // Mulai di hari Sabtu digeser ke Senin.
-        $visit = $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index', ['visit_start' => '2026-11-07']))->viewData('visit');
+        $visit = $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index', ['visit_start' => '2026-11-07']))->viewData('visit');
         $this->assertSame('2026-11-09', $visit['days'][0]->toDateString());
     }
 
     private function done(array $params = []): array
     {
-        return $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index', $params))->assertOk()->viewData('visitDone');
+        return $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index', $params))->assertOk()->viewData('visitDone');
     }
 
     public function test_visit_done_defaults_to_current_week_monday_to_friday(): void
@@ -164,7 +164,7 @@ class DashboardVisitScheduleTest extends TestCase
         $people = $done['people']->mapWithKeys(fn ($p) => [$p['user']->display_name => [$p['done'], $p['planned'], $p['checked_in']]])->all();
         $this->assertSame(['Andi IMS' => [2, 2, 1], 'Citra Sales' => [1, 2, 0]], $people);
 
-        $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index'))
+        $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index'))
             ->assertSee('Report Visit')->assertSee('vd-person', false)->assertSee('Minggu ini');
     }
 
@@ -204,7 +204,7 @@ class DashboardVisitScheduleTest extends TestCase
         // Semua salesperson tampil (Andi 0 visit), non-salesperson (Budi) tidak.
         $this->assertSame(['Citra Sales' => 1, 'Andi IMS' => 0], $done['people']->mapWithKeys(fn ($p) => [$p['user']->display_name => $p['done']])->all());
 
-        $this->actingAs($this->viewer)->get(route('dashboard-task-planner.index'))
+        $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index'))
             ->assertSee('Report Visit')
             ->assertSee('Citra Sales')
             ->assertSee('vd-person zero', false)->assertSee('Sales');
