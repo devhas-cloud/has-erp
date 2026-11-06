@@ -4,12 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\AccountCompany;
 use App\Models\Division;
-use App\Models\MasterProduct;
 use App\Models\Opportunity;
-use App\Models\Quotation;
-use App\Models\Stage;
-use App\Models\Task;
-use App\Models\TaskCategory;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -18,7 +14,7 @@ class DashboardAchievementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_dashboard_lists_fixed_divisions_with_opportunity_probability_counts(): void
+    public function test_dashboard_counts_achievement_from_project_achievements(): void
     {
         $water = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
         Division::create(['division_name' => 'Enviro', 'description' => 'Enviro', 'type' => 'Internal', 'status' => 'Active']);
@@ -29,42 +25,32 @@ class DashboardAchievementTest extends TestCase
         $admin = User::create(['username' => 'admin', 'email' => 'admin@has.com', 'password' => bcrypt('secret'), 'role' => 'Admin']);
         $owner = User::create(['username' => 'sales', 'email' => 'sales@has.com', 'password' => bcrypt('secret'), 'division_id' => $water->id, 'role' => 'User']);
 
-        $category = TaskCategory::create(['name' => 'Quote', 'use_division_handler' => true]);
-        $won = Stage::create(['stage_name' => 'Closed Won', 'status' => 'Active']);
         $company = AccountCompany::create(['account_name' => 'PT Maju', 'status' => 'Active']);
+        $ims = Division::where('division_name', 'IMS')->first();
+        $sales = Division::create(['division_name' => 'Sales', 'description' => 'Sales', 'type' => 'Internal', 'status' => 'Active']);
 
-        $opportunity = Opportunity::create([
-            'opportunity_name' => 'Opp Water',
-            'account_companies_id' => $company->id,
-            'owner_id' => $owner->id,
-            'division_id' => $water->id,
-            'stage_id' => $won->id,
-            'probability' => 100,
-        ]);
-
-        $task = Task::create([
-            'creator_id' => $owner->id,
-            'category_id' => $category->id,
-            'opportunity_id' => $opportunity->id,
-            'title' => 'Quote Achievement',
-            'due_date' => '2026-08-20',
-            'status' => 'in_progress',
-            'alert_type' => 'none',
-            'alert_target' => 'personal',
-        ]);
-
-        $quotation = Quotation::create([
-            'task_id' => $task->id,
-            'opportunity_id' => $opportunity->id,
-            'quotation_number' => '001/HAS/QT-A/2026',
-            'to_name' => 'PT Maju',
-            'status' => Quotation::STATUS_FINISH,
-            'grand_total' => 1000000,
+        $makeProject = fn (string $no, string $status = Project::STATUS_ACTIVE) => Project::create([
+            'project_number' => $no,
+            'project_name' => 'Project '.$no,
+            'company_id' => $company->id,
+            'po_number_company' => 'PO-'.$no,
+            'po_date' => '2026-10-01',
+            'po_date_received' => '2026-10-01',
+            'po_due_date' => '2026-11-01',
+            'status' => $status,
             'created_by' => $admin->id,
         ]);
 
-        $product = MasterProduct::create(['name' => 'Sensor', 'code' => 'BR-1', 'brand' => 'HAS']);
-        $quotation->items()->create(['part_number' => $product->code, 'qty' => 2, 'selling_price' => 500000]);
+        $p1 = $makeProject('PRJ-1');
+        $p1->achievements()->createMany([
+            ['device_name' => 'Sensor pH', 'brand' => 'HAS', 'qty' => 2, 'amount' => 600000, 'division_id' => $water->id],
+            ['device_name' => 'Instalasi', 'brand' => null, 'qty' => 1, 'amount' => 400000, 'division_id' => $water->id],
+            ['device_name' => 'Gateway', 'brand' => 'HAS', 'qty' => 1, 'amount' => 200000, 'division_id' => $ims->id],
+        ]);
+        $makeProject('PRJ-2')->achievements()->create(['device_name' => 'Logger', 'brand' => 'HAS', 'qty' => 3, 'amount' => 300000, 'division_id' => $water->id]);
+        // Divisi di luar daftar tetap masuk total; project Cancelled tidak dihitung.
+        $makeProject('PRJ-3')->achievements()->create(['device_name' => 'Jasa', 'qty' => 1, 'amount' => 50000, 'division_id' => $sales->id]);
+        $makeProject('PRJ-4', Project::STATUS_CANCELLED)->achievements()->create(['device_name' => 'Batal', 'brand' => 'HAS', 'qty' => 1, 'amount' => 999000, 'division_id' => $water->id]);
 
         // Jumlah opportunity per probabilitas (tanpa syarat quotation).
         foreach ([25, 50, 70] as $prob) {
@@ -87,21 +73,28 @@ class DashboardAchievementTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('dashboard-achievement.index'))->assertOk();
 
+        $this->assertEquals(1550000, $response->viewData('totalAchievement'));
+
         $divisions = $response->viewData('divisions');
         $this->assertSame(['Enviro', 'Water', 'IH', 'Gas', 'IMS'], $divisions->pluck('division_name')->all());
 
         $waterRow = $divisions->firstWhere('division_name', 'Water');
-        $this->assertSame(1, (int) $waterRow->quotation_count);
-        $this->assertEquals(1000000, (float) $waterRow->total);
+        $this->assertSame(2, $waterRow->project_count);
+        $this->assertEquals(1300000, $waterRow->total);
+        $this->assertEquals(200000, $divisions->firstWhere('division_name', 'IMS')->total);
         // Divisi lain tampil dengan nilai 0.
-        foreach (['Enviro', 'IH', 'Gas', 'IMS'] as $name) {
-            $this->assertSame(0, (int) $divisions->firstWhere('division_name', $name)->quotation_count);
+        foreach (['Enviro', 'IH', 'Gas'] as $name) {
+            $this->assertSame(0, $divisions->firstWhere('division_name', $name)->project_count);
         }
 
-        // Brand terjual tercatat di divisi Water.
+        // Brand per divisi dari rincian device; tanpa brand di baris terakhir.
         $brands = $response->viewData('brandsByDivision')->get($water->id, collect());
-        $this->assertSame('HAS', $brands->first()->brand);
-        $this->assertEquals(1000000, (float) $brands->first()->total_value);
+        $this->assertSame(['HAS', null], $brands->pluck('brand')->all());
+        $this->assertEquals([900000, 400000], $brands->pluck('total_value')->all());
+        $this->assertSame([2, 1], $brands->pluck('item_count')->all());
+        $this->assertEquals(5, $brands->first()->qty_total);
+
+        $response->assertSee('Tanpa Brand')->assertSee('2 Project');
 
         // Count probabilitas 25/50/70 = masing-masing 1.
         $counts = $response->viewData('probabilityCountsByDivision')[$water->id] ?? [];

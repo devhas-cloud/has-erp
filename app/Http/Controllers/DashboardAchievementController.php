@@ -4,48 +4,41 @@ namespace App\Http\Controllers;
 
 use App\Models\Division;
 use App\Models\Opportunity;
-use App\Models\Quotation;
-use App\Models\Stage;
+use App\Models\Project;
+use App\Models\ProjectAchievement;
 
+/**
+ * Dashboard Achievement: nilai achievement dihitung dari rincian device project
+ * (project_achievements.amount) per divisi device, bukan dari quotation.
+ * Project berstatus Cancelled tidak dihitung.
+ */
 class DashboardAchievementController extends Controller
 {
+    /** Baris divisi tetap; divisi tanpa data tetap tampil dengan nilai 0. */
+    private const DIVISION_ORDER = ['Enviro', 'Water', 'IH', 'Gas', 'IMS'];
+
     public function index()
     {
-        $wonStageId = (int) (Stage::where('stage_name', 'Closed Won')->value('id') ?: 5);
-
         // 1. Total achievement (semua divisi)
-        $totalAchievement = Quotation::query()
-            ->join('opportunities', 'opportunities.id', '=', 'quotations.opportunity_id')
-            ->where('quotations.status', Quotation::STATUS_FINISH)
-            ->where('opportunities.stage_id', $wonStageId)
-            ->sum('quotations.grand_total');
+        $totalAchievement = (float) $this->achievementQuery()->sum('project_achievements.amount');
 
-        // 2. Achievement per divisi (via opportunity -> division). Baris divisi
-        //    ditentukan daftar tetap [Enviro, Water, IH, Gas, IMS]; divisi tanpa
-        //    data tetap tampil dengan nilai 0.
-        $divOrder = ['Enviro', 'Water', 'IH', 'Gas', 'IMS'];
-
-        $divisionList = Division::whereIn('division_name', $divOrder)->where('type', 'Internal')
+        // 2. Achievement per divisi (project_achievements.division_id).
+        $divisionList = Division::whereIn('division_name', self::DIVISION_ORDER)->where('type', 'Internal')
             ->get(['id', 'division_name'])
             ->unique('division_name');
 
         // Urutkan sesuai urutan daftar (di luar DB agar portabel lintas driver).
-        $divisionRank = array_flip($divOrder);
+        $divisionRank = array_flip(self::DIVISION_ORDER);
         $divisionList = $divisionList
             ->sortBy(fn ($d) => $divisionRank[$d->division_name] ?? 99)
             ->values();
 
-        $achievementRows = Quotation::query()
-            ->join('opportunities', 'opportunities.id', '=', 'quotations.opportunity_id')
-            ->join('divisions', 'divisions.id', '=', 'opportunities.division_id')
-            ->where('quotations.status', Quotation::STATUS_FINISH)
-            ->where('opportunities.stage_id', $wonStageId)
-            ->groupBy('divisions.id', 'divisions.division_name')
+        $achievementRows = $this->achievementQuery()
+            ->groupBy('project_achievements.division_id')
             ->selectRaw(
-                'divisions.id as division_id,
-                 divisions.division_name,
-                 COUNT(DISTINCT quotations.id) as quotation_count,
-                 SUM(quotations.grand_total) as total'
+                'project_achievements.division_id,
+                 COUNT(DISTINCT project_achievements.project_id) as project_count,
+                 SUM(project_achievements.amount) as total'
             )
             ->get()
             ->keyBy('division_id');
@@ -54,33 +47,36 @@ class DashboardAchievementController extends Controller
             ->map(fn ($d) => (object) [
                 'division_id' => $d->id,
                 'division_name' => $d->division_name,
-                'quotation_count' => (int) ($achievementRows[$d->id]->quotation_count ?? 0),
+                'project_count' => (int) ($achievementRows[$d->id]->project_count ?? 0),
                 'total' => (float) ($achievementRows[$d->id]->total ?? 0),
             ])
             ->values();
 
-        // 3. Brand terjual per divisi (quotation_items.part_number = master_products.code)
-        $brands = Quotation::query()
-            ->join('opportunities', 'opportunities.id', '=', 'quotations.opportunity_id')
-            ->join('divisions', 'divisions.id', '=', 'opportunities.division_id')
-            ->join('quotation_items', 'quotation_items.quotation_id', '=', 'quotations.id')
-            ->join('master_products', 'master_products.code', '=', 'quotation_items.part_number')
-            ->where('quotations.status', Quotation::STATUS_FINISH)
-            ->where('opportunities.stage_id', $wonStageId)
-            ->whereNotNull('master_products.brand')
-            ->where('master_products.brand', '!=', '')
-            ->groupBy('divisions.id', 'master_products.brand')
+        // 3. Brand terjual per divisi dari rincian device project. Device tanpa brand
+        //    dikelompokkan "Tanpa Brand" agar total brand = total divisi.
+        $brandsByDivision = $this->achievementQuery()
+            ->whereIn('project_achievements.division_id', $divisionList->pluck('id'))
+            ->groupBy('project_achievements.division_id', 'project_achievements.brand')
             ->selectRaw(
-                'divisions.id as division_id,
-                 master_products.brand,
-                 COUNT(DISTINCT quotation_items.id) as item_count,
-                 SUM(quotation_items.qty * quotation_items.selling_price) as total_value'
+                'project_achievements.division_id,
+                 project_achievements.brand,
+                 COUNT(*) as item_count,
+                 SUM(project_achievements.qty) as qty_total,
+                 SUM(project_achievements.amount) as total_value'
             )
-            ->orderBy('division_id')
-            ->orderByDesc('total_value')
-            ->get();
-
-        $brandsByDivision = $brands->groupBy('division_id');
+            ->get()
+            ->groupBy('division_id')
+            ->map(fn ($rows) => $rows
+                // Kosong & NULL digabung jadi satu baris "Tanpa Brand".
+                ->groupBy(fn ($r) => trim((string) $r->brand) === '' ? '' : $r->brand)
+                ->map(fn ($group, $brand) => (object) [
+                    'brand' => $brand === '' ? null : $brand,
+                    'item_count' => (int) $group->sum('item_count'),
+                    'qty_total' => (float) $group->sum('qty_total'),
+                    'total_value' => (float) $group->sum('total_value'),
+                ])
+                ->sortBy(fn ($b) => [$b->brand === null ? 1 : 0, -$b->total_value])
+                ->values());
 
         // 4. Jumlah opportunity per divisi dikelompokkan probabilitas 25% / 50% / 70%.
         //    Hitung SEMUA opportunity milik divisi (tanpa syarat quotation).
@@ -107,5 +103,13 @@ class DashboardAchievementController extends Controller
             'brandsByDivision',
             'probabilityCountsByDivision'
         ));
+    }
+
+    /** Rincian achievement project yang tidak dibatalkan. */
+    private function achievementQuery()
+    {
+        return ProjectAchievement::query()
+            ->join('projects', 'projects.id', '=', 'project_achievements.project_id')
+            ->where('projects.status', '!=', Project::STATUS_CANCELLED);
     }
 }

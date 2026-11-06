@@ -165,7 +165,7 @@
     $statusLabel = ['todo' => 'To Do', 'in_progress' => 'In Progress', 'waiting_approval' => 'Waiting Approval', 'done' => 'Done'];
     $doneParams = request()->only(['done_period', 'done_year', 'done_quarter', 'done_start', 'done_end']);
     $visitParams = request()->only(['visit_start', 'visit_division', 'visit_category', 'visit_status', 'visit_q']);
-    $vsQuery = fn (array $over) => route('dashboard-task-planner.index', array_filter(array_merge($doneParams, [
+    $vsQuery = fn (array $over) => route('dashboard-visit-planner.index', array_filter(array_merge($doneParams, [
         'visit_start' => $vs['days'][0]->toDateString(),
         'visit_division' => $vs['filters']['division_id'],
         'visit_category' => $vs['filters']['category_id'],
@@ -189,7 +189,7 @@
         </div>
     </div>
     <div class="card-body-custom">
-        <form method="GET" action="{{ route('dashboard-task-planner.index') }}#jadwal-visit" class="vs-filter mb-3">
+        <form method="GET" action="{{ route('dashboard-visit-planner.index') }}#jadwal-visit" class="vs-filter mb-3">
             <input type="hidden" name="visit_start" value="{{ $firstDay->toDateString() }}">
             @foreach($doneParams as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
             <select name="visit_division" onchange="this.form.submit()">
@@ -213,7 +213,7 @@
             <input type="text" name="visit_q" value="{{ $vs['filters']['q'] }}" placeholder="Cari nama..." style="width:160px">
             <button type="submit" class="btn btn-sm btn-accent" style="font-size:12px"><i class="fa fa-search me-1"></i>Terapkan</button>
             @if(array_filter($vs['filters']))
-                <a href="{{ route('dashboard-task-planner.index', ['visit_start' => $firstDay->toDateString()] + $doneParams) }}#jadwal-visit" style="font-size:12px">Reset</a>
+                <a href="{{ route('dashboard-visit-planner.index', ['visit_start' => $firstDay->toDateString()] + $doneParams) }}#jadwal-visit" style="font-size:12px">Reset</a>
             @endif
         </form>
 
@@ -315,7 +315,7 @@
             <i class="fa fa-clipboard-list me-2" style="color:var(--accent)"></i>Report Visit
             <span style="font-size:12px;color:var(--text-muted);font-weight:500">{{ $vdLabel }} · {{ $vd['start']->format('d M Y') }} – {{ $vd['end']->format('d M Y') }}</span>
         </span>
-        <form method="GET" action="{{ route('dashboard-task-planner.index') }}#report-visit" class="vs-filter" id="vd-form">
+        <form method="GET" action="{{ route('dashboard-visit-planner.index') }}#report-visit" class="vs-filter" id="vd-form">
             @foreach($visitParams as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
             <select name="done_period" id="vd-period">
                 <option value="week" @selected($vd['period'] === 'week')>Minggu ini (Sen–Jum)</option>

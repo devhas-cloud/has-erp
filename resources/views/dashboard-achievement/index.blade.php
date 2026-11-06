@@ -41,13 +41,13 @@
 @endsection
 
 @section('content')
-    @php use App\Models\Quotation; @endphp
+    @php use App\Models\Project; @endphp
 
     <div class="page-header">
         <div>
             <h1 class="page-header-title">Dashboard Achievement</h1>
-            <p class="page-header-sub">Total achievement quotation Closed Won &amp; Finish, serta rincian per divisi dan
-                brand terjual.</p>
+            <p class="page-header-sub">Total achievement dari rincian device project (Project &rsaquo; Rincian Device),
+                per divisi dan brand terjual. Project Cancelled tidak dihitung.</p>
         </div>
     </div>
 
@@ -56,7 +56,7 @@
             <div class="card-body-custom">
                 <div class="empty-state">
                     <i class="fa fa-trophy"></i>
-                    <p>Belum ada achievement (quotation status Finish dengan opportunity stage Closed Won).</p>
+                    <p>Belum ada divisi achievement.</p>
                 </div>
             </div>
         </div>
@@ -66,9 +66,9 @@
             <div class="col-lg-4">
                 <div class="stat-card accent-green">
                     <div class="stat-icon green"><i class="fa fa-trophy"></i></div>
-                    <div class="stat-value">Rp {{ Quotation::formatMoney($totalAchievement) }}</div>
-                    <div class="stat-label"><i class="fa fa-check-double me-1"></i>Total Achievement · Closed Won &amp;
-                        Finish</div>
+                    <div class="stat-value">Rp {{ Project::formatMoney($totalAchievement) }}</div>
+                    <div class="stat-label"><i class="fa fa-check-double me-1"></i>Total Achievement · Rincian Device
+                        Project</div>
                 </div>
             </div>
 
@@ -104,8 +104,8 @@
                         <span><i class="fa fa-building me-2"
                                 style="color:var(--accent)"></i>{{ $div->division_name }}</span>
                         <span class="text-end">
-                            <span class="ach-flag me-2">{{ $div->quotation_count }} Quotation</span>
-                            <strong style="color:var(--accent)">Rp {{ Quotation::formatMoney($div->total) }}</strong>
+                            <span class="ach-flag me-2">{{ $div->project_count }} Project</span>
+                            <strong style="color:var(--accent)">Rp {{ Project::formatMoney($div->total) }}</strong>
                         </span>
                     </div>
                     <div class="card-body-custom">
@@ -116,8 +116,8 @@
                                 <div class="stat-card accent-green ach-stage-card">
                                     <div class="stat-icon green"><i class="fa fa-trophy"></i></div>
                                     <div class="stat-value" style="font-size:22px">Rp
-                                        {{ Quotation::formatMoney($div->total) }}</div>
-                                    <div class="stat-label">Divisi Achievement · {{ $div->quotation_count }} quotation</div>
+                                        {{ Project::formatMoney($div->total) }}</div>
+                                    <div class="stat-label">Divisi Achievement · {{ $div->project_count }} project</div>
                                 </div>
                             </div>
 
@@ -130,27 +130,33 @@
                                     </div>
                                     <div class="card-body-custom">
                                         @if ($divBrands->isEmpty())
-                                            <small style="color:var(--text-muted)">Tidak ada brand teridentifikasi pada
-                                                quotation divisi ini.</small>
+                                            <small style="color:var(--text-muted)">Belum ada rincian device project
+                                                untuk divisi ini.</small>
                                         @else
                                             <div class="table-responsive">
                                                 <table class="table table-custom align-middle mb-0">
                                                     <thead>
                                                         <tr>
                                                             <th>Brand</th>
-                                                            <th class="text-center" style="width:120px">Jml Item</th>
+                                                            <th class="text-center" style="width:100px">Jml Item</th>
+                                                            <th class="text-center" style="width:100px">Qty</th>
                                                             <th class="text-end" style="width:200px">Nilai Terjual</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         @foreach ($divBrands as $b)
                                                             <tr>
-                                                                <td><span class="ach-brand-chip"><i
-                                                                            class="fa fa-tag me-1"></i>{{ $b->brand }}</span>
+                                                                <td>
+                                                                    @if ($b->brand)
+                                                                        <span class="ach-brand-chip"><i class="fa fa-tag me-1"></i>{{ $b->brand }}</span>
+                                                                    @else
+                                                                        <span style="color:var(--text-muted);font-size:12px">Tanpa Brand</span>
+                                                                    @endif
                                                                 </td>
                                                                 <td class="text-center">{{ $b->item_count }}</td>
+                                                                <td class="text-center">{{ Project::formatNumber($b->qty_total) }}</td>
                                                                 <td class="text-end">Rp
-                                                                    {{ Quotation::formatMoney($b->total_value) }}</td>
+                                                                    {{ Project::formatMoney($b->total_value) }}</td>
                                                             </tr>
                                                         @endforeach
                                                     </tbody>

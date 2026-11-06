@@ -7,7 +7,7 @@ use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\DashboardAchievementController;
-use App\Http\Controllers\DashboardTaskPlannerController;
+use App\Http\Controllers\DashboardVisitPlannerController;
 use App\Http\Controllers\DeliveryOrderController;
 use App\Http\Controllers\DirectPurchaseController;
 use App\Http\Controllers\EmployeeManagementController;
@@ -545,8 +545,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::put('employee-management/{employee}/salary-components/{employeeSalaryComponentId}', [EmployeeManagementController::class, 'updateSalaryComponent'])->name('employee-management.salary-components.update');
     Route::delete('employee-management/{employee}/salary-components/{employeeSalaryComponentId}', [EmployeeManagementController::class, 'destroySalaryComponent'])->name('employee-management.salary-components.destroy');
 
-    Route::get('dashboard-task-planner', [DashboardTaskPlannerController::class, 'index'])
-        ->name('dashboard-task-planner.index');
+    Route::get('dashboard-visit-planner', [DashboardVisitPlannerController::class, 'index'])
+        ->name('dashboard-visit-planner.index');
 
     Route::get('dashboard-achievement', [DashboardAchievementController::class, 'index'])
         ->name('dashboard-achievement.index');

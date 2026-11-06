@@ -10,7 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-class DashboardTaskPlannerController extends Controller
+class DashboardVisitPlannerController extends Controller
 {
     public function index(Request $request)
     {
@@ -63,7 +63,7 @@ class DashboardTaskPlannerController extends Controller
             ];
         })->filter(fn ($c) => $c['total'] > 0)->values();
 
-        return view('dashboard-task-planner.index', compact(
+        return view('dashboard-visit-planner.index', compact(
             'totalTasks', 'todoCount', 'inProgressCount', 'overdueCount', 'doneCount',
             'upcomingTasks', 'categories'
         ) + ['visit' => $this->visitSchedule($request), 'visitDone' => $this->visitDone($request)]);
