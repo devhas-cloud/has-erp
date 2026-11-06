@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Detail Project')
-@section('page-title', 'Detail Project')
+@section('title', 'Project Detail')
+@section('page-title', 'Project Detail')
 
 @section('styles')
 <style>
@@ -148,7 +148,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ url()->previous() }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
+            <i class="fa fa-arrow-left me-1"></i> Back
         </a>
     </div>
 </div>
@@ -160,16 +160,16 @@
             <span>{!! $project->statusBadgeHtml() !!}</span>
             <span class="status-badge" style="background:var(--accent-soft);color:var(--accent)">{{ $project->type_label }}</span>
             @if($project->is_retention)
-                <span class="status-badge" style="background:#fef3c7;color:#92400e;">Retensi</span>
+                <span class="status-badge" style="background:#fef3c7;color:#92400e;">Retention</span>
             @endif
             @if($project->isImsHybrid())
-                <span class="pj-pill warn" title="Dibuat dari modul IMS Project tanpa nilai kontrak & sales. Lengkapi lewat Edit.">
-                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Nilai &amp; sales belum diisi
+                <span class="pj-pill warn" title="Created from the IMS Project module without contract value & sales. Complete via Edit.">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Value &amp; sales not yet filled
                 </span>
             @endif
             @if($warranty)
-                <span class="pj-pill {{ $warrantyMeta['class'] }}" title="Masa garansi {{ $warranty->start_date->format('d M Y') }} – {{ $warranty->end_date->format('d M Y') }}">
-                    <i class="fa-solid fa-shield-halved me-1"></i>Garansi {{ $warrantyMeta['label'] }} · s/d {{ $warranty->end_date->format('d M Y') }}
+                <span class="pj-pill {{ $warrantyMeta['class'] }}" title="Warranty period {{ $warranty->start_date->format('d M Y') }} – {{ $warranty->end_date->format('d M Y') }}">
+                    <i class="fa-solid fa-shield-halved me-1"></i>Warranty {{ $warrantyMeta['label'] }} · until {{ $warranty->end_date->format('d M Y') }}
                 </span>
             @endif
             <div class="spacer"></div>
@@ -185,7 +185,7 @@
             @endif --}}
             @if($canUpdate ?? false)
                 <a href="{{ route('project.achievements', $project->id) }}" class="btn btn-soft btn-sm">
-                    <i class="fa fa-list-check me-1"></i> Kelola Device
+                    <i class="fa fa-list-check me-1"></i> Manage Devices
                 </a>
                 <a href="{{ route('project.edit', $project->id) }}" class="btn btn-secondary btn-sm">
                     <i class="fa fa-pen me-1"></i> Edit
@@ -193,7 +193,7 @@
             @endif
             @if($canDelete ?? false)
                 <button type="button" class="btn btn-outline-danger btn-sm" onclick="pjDeleteProject()">
-                    <i class="fa fa-trash me-1"></i> Hapus
+                    <i class="fa fa-trash me-1"></i> Delete
                 </button>
             @endif
         </div>
@@ -206,22 +206,22 @@
     <div class="pj-kpi">
         <div class="pj-label">Total Sale Amount</div>
         <div class="val">{{ \App\Models\Project::formatMoney($project->total_sale_amount) }}</div>
-        <div class="sub">Nilai quotation</div>
+        <div class="sub">Quotation value</div>
     </div>
 
     <div class="pj-kpi primary">
         <div class="pj-label">Net Sale Amount</div>
         <div class="val">{{ \App\Models\Project::formatMoney($project->net_sale_amount) }}</div>
-        <div class="sub">Nilai riil project (Profit Estimate)</div>
+        <div class="sub">Real project value (Profit Estimate)</div>
     </div>
     <div class="pj-kpi">
-        <div class="pj-label">Sudah Ditagih</div>
+        <div class="pj-label">Billed</div>
         <div class="val">{{ \App\Models\Project::formatNumber($billedPercent) }}%</div>
         <div class="sub">{{ \App\Models\Project::formatMoney($billedAmount) }} &middot; {{ $activeInvoices->count() }} invoice</div>
         <div class="pj-bar"><span style="width:{{ $billedPercent }}%"></span></div>
     </div>
     <div class="pj-kpi">
-        <div class="pj-label">Sudah Dibayar</div>
+        <div class="pj-label">Paid</div>
         <div class="val">{{ \App\Models\Project::formatNumber($paidPercent) }}%</div>
         <div class="sub">{{ \App\Models\Project::formatMoney($paidAmount) }}</div>
         <div class="pj-bar"><span style="width:{{ $paidPercent }}%;background:#16a34a"></span></div>
@@ -236,7 +236,7 @@
 @endphp
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-calculator me-2" style="color:var(--accent)"></i>Rincian Nilai Project</span>
+        <span><i class="fa-solid fa-calculator me-2" style="color:var(--accent)"></i>Project Value Breakdown</span>
     </div>
     <div class="card-body-custom">
         <div class="row g-4">
@@ -246,23 +246,23 @@
                     <table class="pj-breakdown">
                         <tr class="start">
                             <td class="op"></td>
-                            <td class="k">Total Sale Amount<span class="tag">{{ $sb['source'] === 'manual' ? 'Nilai PO customer' : 'Nilai quotation' }}, termasuk PPN</span></td>
+                            <td class="k">Total Sale Amount<span class="tag">{{ $sb['source'] === 'manual' ? 'Customer PO value' : 'Quotation value' }}, including VAT</span></td>
                             <td class="v">{{ $money($sb['total_sale']) }}</td>
                         </tr>
                         <tr class="minus">
                             <td class="op">−</td>
-                            <td class="k">PPN</td>
+                            <td class="k">VAT</td>
                             <td class="v">− {{ $money($sb['ppn']) }}</td>
                         </tr>
                         @if($sb['source'] === 'manual' && isset($sb['base']))
                             <tr class="sub">
                                 <td class="op">=</td>
-                                <td class="k">Nilai Sesudah Diskon</td>
+                                <td class="k">Value After Discount</td>
                                 <td class="v">{{ $money($sb['base']) }}</td>
                             </tr>
                             <tr class="minus">
                                 <td class="op">−</td>
-                                <td class="k">Referen {{ \App\Models\Project::formatNumber($sb['referral_percent'] ?? 0) }}%</td>
+                                <td class="k">Referral {{ \App\Models\Project::formatNumber($sb['referral_percent'] ?? 0) }}%</td>
                                 <td class="v">{{ $sb['referral'] > 0 ? '− '.$money($sb['referral']) : '—' }}</td>
                             </tr>
                         @endif
@@ -284,55 +284,55 @@
                             </tr>
                             <tr class="minus">
                                 <td class="op">−</td>
-                                <td class="k">Referen {{ \App\Models\Project::formatNumber($sb['referral_percent']) }}%</td>
+                                <td class="k">Referral {{ \App\Models\Project::formatNumber($sb['referral_percent']) }}%</td>
                                 <td class="v">− {{ $money($sb['referral']) }}</td>
                             </tr>
                         @endif
                         <tr class="final">
                             <td class="op">=</td>
-                            <td class="k">Net Sale Amount<span class="tag">Nilai riil project · dasar achievement sales</span></td>
+                            <td class="k">Net Sale Amount<span class="tag">Real project value · basis for sales achievement</span></td>
                             <td class="v">{{ $money($sb['net_sale']) }}</td>
                         </tr>
                     </table>
                     <div class="pj-breakdown-note">
                         @if($sb['source'] === 'profit_estimate')
-                            <i class="fa fa-lock me-1"></i>Dari Estimasi PL.
-                            <a href="{{ route('profit-estimate.show', $sb['estimate_id']) }}" target="_blank" class="text-decoration-none">Lihat Estimasi PL <i class="fa fa-arrow-up-right-from-square ms-1" style="font-size:10px"></i></a>
+                            <i class="fa fa-lock me-1"></i>From PL Estimate.
+                            <a href="{{ route('profit-estimate.show', $sb['estimate_id']) }}" target="_blank" class="text-decoration-none">View PL Estimate <i class="fa fa-arrow-up-right-from-square ms-1" style="font-size:10px"></i></a>
                             @if($sb['differs'])
-                                <div class="text-danger mt-1"><i class="fa fa-triangle-exclamation me-1"></i>Estimasi PL sudah berubah sejak project disimpan (project: Total {{ $money($project->total_sale_amount) }}, Net {{ $money($project->net_sale_amount) }}).</div>
+                                <div class="text-danger mt-1"><i class="fa fa-triangle-exclamation me-1"></i>PL Estimate has changed since the project was saved (project: Total {{ $money($project->total_sale_amount) }}, Net {{ $money($project->net_sale_amount) }}).</div>
                             @endif
                         @else
-                            <i class="fa fa-pen me-1"></i>Project tanpa quotation: nilai diisi manual.
+                            <i class="fa fa-pen me-1"></i>Project without quotation: values entered manually.
                         @endif
                     </div>
                 @else
-                    <div class="pj-muted py-3"><i class="fa fa-circle-info me-1"></i>Estimasi PL quotation tidak tersedia, rincian tidak bisa ditampilkan.</div>
+                    <div class="pj-muted py-3"><i class="fa fa-circle-info me-1"></i>Quotation PL Estimate is unavailable, details cannot be displayed.</div>
                 @endif
             </div>
 
             <div class="col-lg-6">
-                <div class="pj-breakdown-title">Dasar Timeline Penagihan</div>
+                <div class="pj-breakdown-title">Billing Timeline Basis</div>
                 <table class="pj-breakdown">
                     @if($bb['subtotal'] !== null)
                         <tr class="start">
                             <td class="op"></td>
-                            <td class="k">Subtotal {{ $bb['source'] === 'quotation' ? 'Quotation' : 'Kontrak' }}<span class="tag">Sebelum diskon &amp; PPN</span></td>
+                            <td class="k">Subtotal {{ $bb['source'] === 'quotation' ? 'Quotation' : 'Contract' }}<span class="tag">Before discount &amp; VAT</span></td>
                             <td class="v">{{ $money($bb['subtotal']) }}</td>
                         </tr>
                         <tr class="minus">
                             <td class="op">−</td>
-                            <td class="k">Diskon{{ $bb['discount_percent'] ? ' '.\App\Models\Project::formatNumber($bb['discount_percent']).'%' : '' }}</td>
+                            <td class="k">Discount{{ $bb['discount_percent'] ? ' '.\App\Models\Project::formatNumber($bb['discount_percent']).'%' : '' }}</td>
                             <td class="v">{{ $bb['discount'] > 0 ? '− '.$money($bb['discount']) : '—' }}</td>
                         </tr>
                     @endif
                     <tr class="final">
                         <td class="op">{{ $bb['subtotal'] !== null ? '=' : '' }}</td>
-                        <td class="k">Nilai Sesudah Diskon<span class="tag">Sebelum PPN · dasar % tiap termin</span></td>
+                        <td class="k">Value After Discount<span class="tag">Before VAT · basis for each term %</span></td>
                         <td class="v">{{ $money($bb['base']) }}</td>
                     </tr>
                     <tr class="info">
                         <td class="op">+</td>
-                        <td class="k">PPN <span class="tag">Tidak memengaruhi dasar penagihan</span></td>
+                        <td class="k">VAT <span class="tag">Does not affect the billing basis</span></td>
                         <td class="v">{{ $money($bb['ppn']) }}</td>
                     </tr>
                     <tr class="info">
@@ -343,10 +343,10 @@
                 </table>
                 <div class="pj-breakdown-note">
                     @if($bb['subtotal'] !== null)
-                        Persentase termin dihitung dari nilai sesudah diskon. Ada atau tidaknya PPN, dasar penagihan tetap sama.
-                        @if($bb['source'] === 'manual') Rincian diisi manual (tanpa quotation). @endif
+                        Term percentages are calculated from the value after discount. With or without VAT, the billing basis remains the same.
+                        @if($bb['source'] === 'manual') Details entered manually (without quotation). @endif
                     @else
-                        Project lama tanpa rincian: dasar penagihan = Net Sale Amount. Lengkapi rincian lewat Edit agar diskon tampil di invoice.
+                        Legacy project without details: billing basis = Net Sale Amount. Complete the details via Edit so the discount appears on the invoice.
                     @endif
                 </div>
             </div>
@@ -358,7 +358,7 @@
     <div class="col-lg-7">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Informasi Project</span>
+                <span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Project Information</span>
             </div>
             <div class="card-body-custom">
                 <dl class="pj-dl">
@@ -371,20 +371,20 @@
                         @if($project->quotation)
                             <a href="{{ route('quotation.show', $project->quotation_id) }}" class="text-decoration-none">{{ $project->quotation->quotation_number ?? '#'.$project->quotation_id }}</a>
                         @else
-                            <span class="pj-muted">Tanpa quotation (data lama/manual)</span>
+                            <span class="pj-muted">Without quotation (legacy/manual data)</span>
                         @endif
                     </dd>
                     <dt>No PO Customer</dt>
                     <dd>{{ $project->po_number_company }}</dd>
-                    <dt>Tipe / Retensi</dt>
-                    <dd>{{ $project->type_label }} &middot; {{ $project->is_retention ? 'Ada retensi' : 'Tanpa retensi' }}</dd>
+                    <dt>Type / Retention</dt>
+                    <dd>{{ $project->type_label }} &middot; {{ $project->is_retention ? 'With retention' : 'Without retention' }}</dd>
                     @if($project->project_description)
-                        <dt>Deskripsi</dt>
+                        <dt>Description</dt>
                         <dd style="font-weight:400;white-space:pre-line">{{ $project->project_description }}</dd>
                     @endif
-                    <dt>Dibuat</dt>
+                    <dt>Created</dt>
                     <dd>{{ $project->creator?->display_name ?? '—' }} <span class="pj-muted">&middot; {{ $project->created_at?->format('d/m/Y H:i') }}</span></dd>
-                    <dt>Terakhir Diubah</dt>
+                    <dt>Last Updated</dt>
                     <dd>{{ $project->updater?->display_name ?? '—' }} <span class="pj-muted">&middot; {{ $project->updated_at?->format('d/m/Y H:i') }}</span></dd>
                 </dl>
             </div>
@@ -394,62 +394,62 @@
     <div class="col-lg-5">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-calendar-days me-2" style="color:var(--accent)"></i>Timeline PO &amp; Garansi</span>
+                <span><i class="fa-solid fa-calendar-days me-2" style="color:var(--accent)"></i>PO &amp; Warranty Timeline</span>
             </div>
             <div class="card-body-custom">
                 <ul class="pj-timeline">
                     <li>
-                        <div class="pj-label mb-0">Tanggal PO</div>
+                        <div class="pj-label mb-0">PO Date</div>
                         <div class="when">{{ $project->po_date?->format('d M Y') ?? '—' }}</div>
                     </li>
                     <li>
-                        <div class="pj-label mb-0">PO Diterima</div>
+                        <div class="pj-label mb-0">PO Received</div>
                         <div class="when">{{ $project->po_date_received?->format('d M Y') ?? '—' }}</div>
                     </li>
                     <li class="{{ $dueDays !== null && $dueDays > 0 ? 'future' : '' }}">
-                        <div class="pj-label mb-0">Jatuh Tempo PO</div>
+                        <div class="pj-label mb-0">PO Due Date</div>
                         <div class="when">
                             {{ $project->po_due_date?->format('d M Y') ?? '—' }}
                             @if($dueDays !== null && $project->status === \App\Models\Project::STATUS_ACTIVE)
                                 @if($dueDays < 0)
-                                    <span class="pj-pill danger ms-1">Lewat {{ abs($dueDays) }} hari</span>
+                                    <span class="pj-pill danger ms-1">{{ abs($dueDays) }} days overdue</span>
                                 @elseif($dueDays === 0)
-                                    <span class="pj-pill warn ms-1">Hari ini</span>
+                                    <span class="pj-pill warn ms-1">Today</span>
                                 @elseif($dueDays <= 14)
-                                    <span class="pj-pill warn ms-1">{{ $dueDays }} hari lagi</span>
+                                    <span class="pj-pill warn ms-1">in {{ $dueDays }} days</span>
                                 @else
-                                    <span class="pj-pill ok ms-1">{{ $dueDays }} hari lagi</span>
+                                    <span class="pj-pill ok ms-1">in {{ $dueDays }} days</span>
                                 @endif
                             @endif
                         </div>
                     </li>
                     @if($warranty)
                         <li class="{{ $warranty->status() === \App\Models\ProjectWarranty::STATUS_UPCOMING ? 'future' : '' }}">
-                            <div class="pj-label mb-0">Mulai Garansi</div>
+                            <div class="pj-label mb-0">Warranty Start</div>
                             <div class="when">{{ $warranty->start_date->format('d M Y') }}</div>
                         </li>
                         <li class="{{ $warranty->status() !== \App\Models\ProjectWarranty::STATUS_EXPIRED ? 'future' : '' }}">
-                            <div class="pj-label mb-0">Akhir Garansi <span class="pj-muted">({{ $warranty->durationMonths() > 0 ? $warranty->durationMonths().' bulan' : $warranty->start_date->diffInDays($warranty->end_date).' hari' }})</span></div>
+                            <div class="pj-label mb-0">Warranty End <span class="pj-muted">({{ $warranty->durationMonths() > 0 ? $warranty->durationMonths().' months' : $warranty->start_date->diffInDays($warranty->end_date).' days' }})</span></div>
                             <div class="when">
                                 {{ $warranty->end_date->format('d M Y') }}
                                 <span class="pj-pill {{ $warrantyMeta['class'] }} ms-1">
                                     @if($warranty->status() === \App\Models\ProjectWarranty::STATUS_ACTIVE)
-                                        {{ $warranty->daysLeft() === 0 ? 'Berakhir hari ini' : $warranty->daysLeft().' hari lagi' }}
+                                        {{ $warranty->daysLeft() === 0 ? 'Ends today' : $warranty->daysLeft().' days left' }}
                                     @elseif($warranty->status() === \App\Models\ProjectWarranty::STATUS_EXPIRED)
-                                        Berakhir {{ abs($warranty->daysLeft()) }} hari lalu
+                                        Ended {{ abs($warranty->daysLeft()) }} days ago
                                     @else
-                                        Belum mulai
+                                        Not started
                                     @endif
                                 </span>
                             </div>
                         </li>
                     @else
                         <li class="future">
-                            <div class="pj-label mb-0">Masa Garansi</div>
+                            <div class="pj-label mb-0">Warranty Period</div>
                             <div class="when pj-muted" style="font-weight:400">
-                                Belum diisi.
+                                Not filled.
                                 @if($canUpdate ?? false)
-                                    <a href="{{ route('project.edit', $project->id) }}#pj-warranty-start" class="text-decoration-none">Isi masa garansi</a>
+                                    <a href="{{ route('project.edit', $project->id) }}#pj-warranty-start" class="text-decoration-none">Fill warranty period</a>
                                 @endif
                             </div>
                         </li>
@@ -465,12 +465,12 @@
 <div class="card-custom fade-in mb-3" id="timeline-penagihan">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
-            <i class="fa-solid fa-timeline me-2" style="color:var(--accent)"></i>Timeline Penagihan <span class="pj-muted">({{ $terms->count() }} tahap)</span>
+            <i class="fa-solid fa-timeline me-2" style="color:var(--accent)"></i>Billing Timeline <span class="pj-muted">({{ $terms->count() }} stages)</span>
             @if($terms->isNotEmpty())
                 <span class="pj-muted ms-2">
-                    <i class="fa fa-lock me-1"></i>{{ $termLockedCount }} terkunci ·
+                    <i class="fa fa-lock me-1"></i>{{ $termLockedCount }} locked ·
                     <span style="color:#166534">{{ $termOpenCount }} open</span> ·
-                    {{ $termBilledCount }} ditagih
+                    {{ $termBilledCount }} billed
                 </span>
             @endif
         </span>
@@ -479,22 +479,22 @@
                 <span class="pj-term-progress">
                     <span class="pj-bar"><span style="width:{{ min(100, $termTotal) }}%;background:{{ $termTotal == 100 ? '#16a34a' : '#f59e0b' }}"></span></span>
                     @if($termTotal == 100)
-                        <span style="color:#16a34a;font-weight:600"><i class="fa fa-circle-check me-1"></i>100% terjadwal</span>
+                        <span style="color:#16a34a;font-weight:600"><i class="fa fa-circle-check me-1"></i>100% scheduled</span>
                     @else
-                        <span style="color:#b45309;font-weight:600">{{ \App\Models\Project::formatNumber($termTotal) }}% · sisa {{ \App\Models\Project::formatNumber(100 - $termTotal) }}%</span>
+                        <span style="color:#b45309;font-weight:600">{{ \App\Models\Project::formatNumber($termTotal) }}% · {{ \App\Models\Project::formatNumber(100 - $termTotal) }}% remaining</span>
                     @endif
                 </span>
             @endif
             @if($canUpdate ?? false)
-                <a href="{{ route('project.edit', $project->id) }}#pj-term-table" class="btn btn-secondary btn-sm"><i class="fa fa-pen me-1"></i> {{ $terms->isEmpty() ? 'Susun Timeline' : 'Ubah Timeline' }}</a>
+                <a href="{{ route('project.edit', $project->id) }}#pj-term-table" class="btn btn-secondary btn-sm"><i class="fa fa-pen me-1"></i> {{ $terms->isEmpty() ? 'Build Timeline' : 'Edit Timeline' }}</a>
             @endif
         </div>
     </div>
     <div class="card-body-custom p-2">
         @if($terms->isEmpty())
             <div class="text-center py-4" style="color:var(--text-muted);font-size:13px">
-                <i class="fa-solid fa-timeline me-1"></i> Belum ada timeline penagihan.
-                <div class="mt-1">Susun tahap pembayaran (mis. DP, Termin 1, Termin 2) agar invoice bisa dibuat langsung dari tiap tahap.</div>
+                <i class="fa-solid fa-timeline me-1"></i> No billing timeline yet.
+                <div class="mt-1">Set up payment stages (e.g. DP, Term 1, Term 2) so invoices can be created directly from each stage.</div>
             </div>
         @else
             <div class="table-responsive">
@@ -502,11 +502,11 @@
                     <thead>
                         <tr>
                             <th style="width:40px" class="text-center">#</th>
-                            <th>Nama Pembayaran</th>
+                            <th>Payment Name</th>
                             <th class="text-end" style="width:70px">%</th>
-                            <th class="text-end" style="width:150px">≈ Nominal</th>
-                            <th style="width:110px">Target Tagih</th>
-                            <th class="text-center" style="width:110px">Dokumen</th>
+                            <th class="text-end" style="width:150px">≈ Amount</th>
+                            <th style="width:110px">Billing Target</th>
+                            <th class="text-center" style="width:110px">Documents</th>
                             <th style="width:200px">Invoice / Status</th>
                             <th class="text-end" style="width:130px"></th>
                         </tr>
@@ -529,7 +529,7 @@
                                 <td class="text-end" style="font-variant-numeric:tabular-nums">{{ \App\Models\Project::formatMoney(round($billingBase * $term->percent / 100, 2)) }}</td>
                                 <td>{{ $term->target_date?->format('d M Y') ?? '—' }}</td>
                                 <td class="text-center">
-                                    <button type="button" class="pj-doc-btn {{ $docCount ? '' : 'empty' }}" onclick="pjOpenDocs({{ $term->id }})" title="Lihat / upload dokumen pendukung">
+                                    <button type="button" class="pj-doc-btn {{ $docCount ? '' : 'empty' }}" onclick="pjOpenDocs({{ $term->id }})" title="View / upload supporting documents">
                                         <i class="fa fa-paperclip"></i> <span data-doc-count="{{ $term->id }}">{{ $docCount }}</span>
                                     </button>
                                 </td>
@@ -539,33 +539,33 @@
                                         <span class="pj-status ms-1" style="{{ $meta['style'] }}">{{ $meta['label'] }}</span>
                                     @elseif($term->isUnlocked())
                                         <span class="pj-status" style="{{ $meta['style'] }}"><i class="fa fa-lock-open me-1"></i>Open</span>
-                                        <div class="desc">Dibuka {{ $term->unlocker?->display_name ?? '—' }}, {{ $term->unlocked_at?->format('d M Y') }}</div>
+                                        <div class="desc">Opened by {{ $term->unlocker?->display_name ?? '—' }}, {{ $term->unlocked_at?->format('d M Y') }}</div>
                                     @else
-                                        <span class="pj-status" style="{{ $meta['style'] }}"><i class="fa fa-lock me-1"></i>Terkunci</span>
-                                        <div class="desc">Belum dibuka untuk ditagih</div>
+                                        <span class="pj-status" style="{{ $meta['style'] }}"><i class="fa fa-lock me-1"></i>Locked</span>
+                                        <div class="desc">Not yet opened for billing</div>
                                     @endif
                                     @if($cancelledCount)
-                                        <div class="desc">{{ $cancelledCount }} invoice dibatalkan</div>
+                                        <div class="desc">{{ $cancelledCount }} invoices cancelled</div>
                                     @endif
                                 </td>
                                 <td class="text-end" style="white-space:nowrap">
                                     @if($active)
-                                        <a href="{{ route('invoice.show', $active->id) }}" class="btn btn-secondary btn-sm">Lihat</a>
+                                        <a href="{{ route('invoice.show', $active->id) }}" class="btn btn-secondary btn-sm">View</a>
                                     @elseif($term->isUnlocked())
                                         @if($canCreateInvoice ?? false)
                                             <a href="{{ route('invoice.create', ['project_id' => $project->id, 'billing_term_id' => $term->id]) }}" class="btn btn-primary btn-sm">
-                                                <i class="fa fa-file-invoice-dollar me-1"></i> Buat Invoice
+                                                <i class="fa fa-file-invoice-dollar me-1"></i> Create Invoice
                                             </a>
                                         @endif
                                         @if($canUpdate ?? false)
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" title="Kunci kembali" onclick="pjSetTermAccess({{ $term->id }}, true)"><i class="fa fa-lock"></i></button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" title="Lock again" onclick="pjSetTermAccess({{ $term->id }}, true)"><i class="fa fa-lock"></i></button>
                                         @endif
                                     @elseif($canUpdate ?? false)
                                         <button type="button" class="btn btn-soft btn-sm" onclick="pjSetTermAccess({{ $term->id }}, false)">
-                                            <i class="fa fa-lock-open me-1"></i> Buka Tagihan
+                                            <i class="fa fa-lock-open me-1"></i> Open Billing
                                         </button>
                                     @else
-                                        <span class="pj-muted"><i class="fa fa-hourglass-half me-1"></i>Menunggu dibuka</span>
+                                        <span class="pj-muted"><i class="fa fa-hourglass-half me-1"></i>Waiting to be opened</span>
                                     @endif
                                 </td>
                             </tr>
@@ -576,7 +576,7 @@
                             <td colspan="2" class="text-end pj-muted" style="font-size:13px">Total</td>
                             <td class="text-end">{{ \App\Models\Project::formatNumber($termTotal) }}%</td>
                             <td class="text-end">{{ \App\Models\Project::formatMoney(round($billingBase * $termTotal / 100, 2)) }}</td>
-                            <td colspan="4" class="pj-muted" style="font-size:12px;font-weight:400">Dari nilai sesudah diskon (sebelum PPN) {{ \App\Models\Project::formatMoney($billingBase) }}{{ $project->quotation_id || $project->hasManualBreakdown() ? '' : ' (Net Sale Amount)' }}</td>
+                            <td colspan="4" class="pj-muted" style="font-size:12px;font-weight:400">From value after discount (before VAT) {{ \App\Models\Project::formatMoney($billingBase) }}{{ $project->quotation_id || $project->hasManualBreakdown() ? '' : ' (Net Sale Amount)' }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -588,30 +588,30 @@
 {{-- Dokumen project: PO customer + kontrak/perjanjian --}}
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom d-flex justify-content-between align-items-center">
-        <span><i class="fa-solid fa-folder-open me-2" style="color:var(--accent)"></i>Dokumen Project</span>
+        <span><i class="fa-solid fa-folder-open me-2" style="color:var(--accent)"></i>Project Documents</span>
         @if($canUploadDocs)
-            <button type="button" class="btn btn-soft btn-sm" onclick="pjOpenDocs(null)"><i class="fa fa-upload me-1"></i> Upload Dokumen Pendukung</button>
+            <button type="button" class="btn btn-soft btn-sm" onclick="pjOpenDocs(null)"><i class="fa fa-upload me-1"></i> Upload Supporting Documents</button>
         @endif
     </div>
     <div class="card-body-custom">
         <div class="row g-2">
             <div class="col-lg-6">
-                <div class="pj-label">PO Customer</div>
+                <div class="pj-label">Customer PO</div>
                 @if($project->hasPoDocument())
                     <a href="{{ route('project.po', $project->id) }}" target="_blank" class="pj-doc-item text-decoration-none">
                         <i class="fa fa-file-pdf"></i>
                         <div style="min-width:0;flex:1">
                             <div class="name">{{ $project->po_document_name }}</div>
-                            <div class="pj-muted">No. {{ $project->po_number_company }} · diunggah {{ $project->poUploader?->display_name ?? '—' }}</div>
+                            <div class="pj-muted">No. {{ $project->po_number_company }} · uploaded {{ $project->poUploader?->display_name ?? '—' }}</div>
                         </div>
                         <i class="fa fa-arrow-up-right-from-square" style="color:var(--text-muted);font-size:12px"></i>
                     </a>
                 @else
-                    <div class="pj-doc-item pj-muted"><i class="fa fa-file-circle-xmark" style="color:var(--text-muted)"></i> Dokumen PO belum diunggah.</div>
+                    <div class="pj-doc-item pj-muted"><i class="fa fa-file-circle-xmark" style="color:var(--text-muted)"></i> PO document not yet uploaded.</div>
                 @endif
             </div>
             <div class="col-lg-6">
-                <div class="pj-label">Dokumen Pendukung</div>
+                <div class="pj-label">Supporting Documents</div>
                 <div id="pj-agreement-docs"></div>
             </div>
         </div>
@@ -622,12 +622,12 @@
     <div class="col-lg-7">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom d-flex justify-content-between align-items-center">
-                <span><i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>Rincian Achievement per Device</span>
+                <span><i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>Achievement Details per Device</span>
                 @if($project->achievements->isNotEmpty())
                     @if(abs($achievementDiff) < 0.01)
-                        <span class="pj-pill ok"><i class="fa fa-check me-1"></i>Sesuai net sale</span>
+                        <span class="pj-pill ok"><i class="fa fa-check me-1"></i>Matches net sale</span>
                     @else
-                        <span class="pj-pill danger"><i class="fa fa-triangle-exclamation me-1"></i>Selisih {{ \App\Models\Project::formatMoney(abs($achievementDiff)) }}</span>
+                        <span class="pj-pill danger"><i class="fa fa-triangle-exclamation me-1"></i>Difference {{ \App\Models\Project::formatMoney(abs($achievementDiff)) }}</span>
                     @endif
                 @endif
             </div>
@@ -639,9 +639,9 @@
                                 <th style="width:45px" class="text-center">#</th>
                                 <th>Principal</th>
                                 <th>Brand</th>
-                                <th>Nama Device</th>
+                                <th>Device Name</th>
                                 <th class="text-center">Qty</th>
-                                <th>Divisi</th>
+                                <th>Division</th>
                                 <th class="text-end">Amount</th>
                             </tr>
                         </thead>
@@ -659,9 +659,9 @@
                             @empty
                             <tr>
                                 <td colspan="7" class="text-center py-4" style="color:var(--text-muted)">
-                                    <i class="fa-solid fa-inbox me-1"></i> Belum ada rincian device.
+                                    <i class="fa-solid fa-inbox me-1"></i> No device details yet.
                                     @if($canUpdate ?? false)
-                                        <a href="{{ route('project.achievements', $project->id) }}" class="ms-1">Tambahkan sekarang</a>
+                                        <a href="{{ route('project.achievements', $project->id) }}" class="ms-1">Add now</a>
                                     @endif
                                 </td>
                             </tr>
@@ -670,7 +670,7 @@
                         @if($project->achievements->isNotEmpty())
                         <tfoot>
                             <tr>
-                                <td colspan="6" class="text-end pj-muted" style="font-size:13px">Total Rincian Device</td>
+                                <td colspan="6" class="text-end pj-muted" style="font-size:13px">Total Device Details</td>
                                 <td class="text-end fw-bold">{{ \App\Models\Project::formatMoney($achievementTotal) }}</td>
                             </tr>
                         </tfoot>
@@ -684,7 +684,7 @@
     <div class="col-lg-5">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-user-tie me-2" style="color:var(--accent)"></i>Pembagian Achievement Sales</span>
+                <span><i class="fa-solid fa-user-tie me-2" style="color:var(--accent)"></i>Sales Achievement Distribution</span>
             </div>
             <div class="card-body-custom">
                 @forelse($project->salesAchievements as $row)
@@ -699,12 +699,12 @@
                                 <span style="font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums">{{ \App\Models\Project::formatMoney($row->amount_achieved) }}</span>
                             </div>
                             <div class="pj-bar"><span style="width:{{ min(100, $pct) }}%"></span></div>
-                            <div class="pj-muted mt-1">{{ \App\Models\Project::formatNumber($pct) }}% dari net sale</div>
+                            <div class="pj-muted mt-1">{{ \App\Models\Project::formatNumber($pct) }}% of net sale</div>
                         </div>
                     </div>
                 @empty
                     <div class="text-center py-4" style="color:var(--text-muted);font-size:13px">
-                        <i class="fa-solid fa-user-plus me-1"></i> Belum ada sales.
+                        <i class="fa-solid fa-user-plus me-1"></i> No sales yet.
                     </div>
                 @endforelse
             </div>
@@ -714,10 +714,10 @@
 
 <div class="card-custom fade-in mb-4">
     <div class="card-header-custom d-flex justify-content-between align-items-center">
-        <span><i class="fa-solid fa-file-invoice-dollar me-2" style="color:var(--accent)"></i>Invoice Project <span class="pj-muted">({{ $project->invoices->count() }})</span></span>
+        <span><i class="fa-solid fa-file-invoice-dollar me-2" style="color:var(--accent)"></i>Project Invoices <span class="pj-muted">({{ $project->invoices->count() }})</span></span>
         @if($canCreateInvoice ?? false)
             <a href="{{ route('invoice.create', ['project_id' => $project->id]) }}" class="btn btn-secondary btn-sm">
-                <i class="fa fa-plus me-1"></i> Buat Invoice
+                <i class="fa fa-plus me-1"></i> Create Invoice
             </a>
         @endif
     </div>
@@ -727,12 +727,12 @@
                 <thead>
                     <tr>
                         <th>No. Invoice</th>
-                        <th>Tanggal</th>
-                        <th>Termin</th>
-                        <th>Jatuh Tempo</th>
+                        <th>Date</th>
+                        <th>Term</th>
+                        <th>Due Date</th>
                         <th class="text-end">Total</th>
                         <th class="text-center">Approval</th>
-                        <th class="text-center">Status Bayar</th>
+                        <th class="text-center">Payment Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -741,9 +741,9 @@
                         <td><a href="{{ route('invoice.show', $inv->id) }}" class="fw-semibold text-decoration-none">{{ $inv->invoice_number }}</a></td>
                         <td>{{ $inv->invoice_date?->format('d/m/Y') ?? '—' }}</td>
                         <td>
-                            {{ $inv->noted ?: 'Pembayaran' }} <span class="pj-muted">({{ \App\Models\Invoice::formatNumber($inv->percent_payment) }}%)</span>
+                            {{ $inv->noted ?: 'Payment' }} <span class="pj-muted">({{ \App\Models\Invoice::formatNumber($inv->percent_payment) }}%)</span>
                             @if($inv->isOutsideTimeline())
-                                <span class="status-badge ms-1" style="background:#fef3c7;color:#92400e;" title="{{ $inv->non_term_reason }}">Di luar timeline</span>
+                                <span class="status-badge ms-1" style="background:#fef3c7;color:#92400e;" title="{{ $inv->non_term_reason }}">Outside timeline</span>
                             @endif
                         </td>
                         <td>{{ $inv->due_date?->format('d/m/Y') ?? '—' }}</td>
@@ -754,7 +754,7 @@
                     @empty
                     <tr>
                         <td colspan="7" class="text-center py-4" style="color:var(--text-muted)">
-                            <i class="fa-solid fa-inbox me-1"></i> Belum ada invoice untuk project ini.
+                            <i class="fa-solid fa-inbox me-1"></i> No invoices for this project yet.
                         </td>
                     </tr>
                     @endforelse
@@ -795,24 +795,24 @@
 {{-- Barang project: stok teralokasi (belum dikirim) & Delivery Order --}}
 <div class="card-custom fade-in mb-4">
     <div class="card-header-custom d-flex justify-content-between align-items-center">
-        <span><i class="fa-solid fa-truck me-2" style="color:var(--accent)"></i>Barang &amp; Pengiriman <span class="pj-muted">({{ $project->deliveryOrders->count() }} DO)</span></span>
+        <span><i class="fa-solid fa-truck me-2" style="color:var(--accent)"></i>Goods &amp; Delivery <span class="pj-muted">({{ $project->deliveryOrders->count() }} DO)</span></span>
         @if($canCreateDeliveryOrder && $projectGoods->sum('in_stock') > 0)
             <a href="{{ route('delivery-order.create', ['project_id' => $project->id]) }}" class="btn btn-secondary btn-sm">
-                <i class="fa fa-plus me-1"></i> Buat Delivery Order
+                <i class="fa fa-plus me-1"></i> Create Delivery Order
             </a>
         @endif
     </div>
     <div class="card-body-custom p-2">
         <div class="row g-3">
             <div class="col-lg-6">
-                <div class="pj-label px-2">Barang Milik Project</div>
+                <div class="pj-label px-2">Project Goods</div>
                 <div class="table-responsive">
                     <table class="table table-custom align-middle mb-0">
                         <thead>
                             <tr>
-                                <th>Produk</th>
-                                <th class="text-center">Di Gudang</th>
-                                <th class="text-center">Terkirim</th>
+                                <th>Product</th>
+                                <th class="text-center">In Warehouse</th>
+                                <th class="text-center">Delivered</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -828,7 +828,7 @@
                             @empty
                             <tr>
                                 <td colspan="3" class="text-center py-4" style="color:var(--text-muted)">
-                                    <i class="fa-solid fa-inbox me-1"></i> Belum ada barang teralokasi ke project ini.
+                                    <i class="fa-solid fa-inbox me-1"></i> No goods allocated to this project yet.
                                 </td>
                             </tr>
                             @endforelse
@@ -843,8 +843,8 @@
                         <thead>
                             <tr>
                                 <th>No. DO</th>
-                                <th>Tanggal</th>
-                                <th>Penerima</th>
+                                <th>Date</th>
+                                <th>Recipient</th>
                                 <th class="text-center">Status</th>
                             </tr>
                         </thead>
@@ -859,7 +859,7 @@
                             @empty
                             <tr>
                                 <td colspan="4" class="text-center py-4" style="color:var(--text-muted)">
-                                    <i class="fa-solid fa-inbox me-1"></i> Belum ada Delivery Order.
+                                    <i class="fa-solid fa-inbox me-1"></i> No delivery orders yet.
                                 </td>
                             </tr>
                             @endforelse
@@ -880,7 +880,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h6 class="modal-title" id="pj-docs-title">Dokumen</h6>
+                    <h6 class="modal-title" id="pj-docs-title">Documents</h6>
                     <div class="pj-muted" id="pj-docs-subtitle"></div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -889,21 +889,21 @@
                 <div id="pj-docs-list"></div>
                 @if($canUploadDocs)
                 <div class="mt-3 p-3" style="background:var(--accent-subtle);border-radius:var(--radius-sm)">
-                    <div class="fw-semibold mb-2" style="font-size:13px"><i class="fa fa-upload me-1" style="color:var(--accent)"></i> Upload dokumen baru</div>
+                    <div class="fw-semibold mb-2" style="font-size:13px"><i class="fa fa-upload me-1" style="color:var(--accent)"></i> Upload new documents</div>
                     <div class="row g-2">
                         <div class="col-md-7">
                             <input type="file" id="pj-docs-files" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png" multiple>
-                            <div class="pj-muted mt-1">PDF, JPG, atau PNG, maksimal 10MB per file.</div>
+                            <div class="pj-muted mt-1">PDF, JPG, or PNG, max 10MB per file.</div>
                         </div>
                         <div class="col-md-5">
-                            <input type="text" id="pj-docs-notes" class="form-control form-control-sm" maxlength="255" placeholder="Keterangan (opsional)">
+                            <input type="text" id="pj-docs-notes" class="form-control form-control-sm" maxlength="255" placeholder="Notes (optional)">
                         </div>
                     </div>
                 </div>
                 @endif
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                 @if($canUploadDocs)
                 <button type="button" class="btn btn-primary btn-sm" id="pj-docs-upload-btn" onclick="pjUploadDocs()">
                     <i class="fa fa-upload me-1"></i> Upload
@@ -925,14 +925,14 @@ const pjTermAccessUrl = '{{ route("project.billing-terms.access", [$project->id,
 function pjSetTermAccess(termId, lock) {
     var term = pjTerms[termId] || {};
     Swal.fire({
-        title: lock ? 'Kunci kembali termin?' : 'Buka termin untuk ditagih?',
+        title: lock ? 'Lock this term again?' : 'Open term for billing?',
         html: lock
-            ? '<b>' + pjEsc(term.name) + '</b> tidak bisa dibuatkan invoice sampai dibuka lagi.'
-            : '<b>' + pjEsc(term.name) + ' (' + term.percent + '%)</b> akan berstatus Open dan bisa dibuatkan invoice. Tim invoice akan menerima notifikasi.',
+            ? '<b>' + pjEsc(term.name) + '</b> cannot have an invoice created until opened again.'
+            : '<b>' + pjEsc(term.name) + ' (' + term.percent + '%)</b> will become Open and can have an invoice created. The invoice team will receive a notification.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: lock ? 'Ya, Kunci' : 'Ya, Buka Tagihan',
-        cancelButtonText: 'Batal'
+        confirmButtonText: lock ? 'Yes, Lock' : 'Yes, Open Billing',
+        cancelButtonText: 'Cancel'
     }).then(function(r) {
         if (!r.isConfirmed) return;
         $.ajax({
@@ -940,10 +940,10 @@ function pjSetTermAccess(termId, lock) {
             method: 'POST',
             data: { _token: '{{ csrf_token() }}', _method: 'PATCH', locked: lock ? 1 : 0 }
         }).done(function(res) {
-            toastr.success(res.message || 'Tersimpan.');
+            toastr.success(res.message || 'Saved.');
             setTimeout(function() { window.location.hash = 'timeline-penagihan'; window.location.reload(); }, 600);
         }).fail(function(xhr) {
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal mengubah status termin.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to change term status.');
         });
     });
 }
@@ -969,11 +969,11 @@ function pjDocItemHtml(doc, key) {
     html += '<i class="fa ' + pjEsc(doc.icon) + '"></i>';
     html += '<div style="min-width:0;flex:1"><div class="name">' + pjEsc(doc.file_name) + '</div>';
     html += '<div class="pj-muted">' + (doc.notes ? pjEsc(doc.notes) + ' · ' : '') + pjEsc(doc.size) + ' · ' + pjEsc(doc.uploaded_by || '—') + ', ' + pjEsc(doc.uploaded_at || '') + '</div></div>';
-    html += '<a href="' + doc.view_url + '" target="_blank" class="btn-icon" title="Lihat"><i class="fa fa-eye"></i></a>';
+    html += '<a href="' + doc.view_url + '" target="_blank" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>';
     if (pjCanDeleteDocs && doc.delete_url) {
-        html += '<button type="button" class="btn-icon text-danger" title="Hapus" onclick="pjDeleteDoc(\'' + doc.delete_url + '\', \'' + key + '\')"><i class="fa fa-trash"></i></button>';
+        html += '<button type="button" class="btn-icon text-danger" title="Delete" onclick="pjDeleteDoc(\'' + doc.delete_url + '\', \'' + key + '\')"><i class="fa fa-trash"></i></button>';
     } else if (!doc.delete_url) {
-        html += '<span class="btn-icon" style="opacity:.4" title="Terkunci: invoice termin sudah Approved"><i class="fa fa-lock"></i></span>';
+        html += '<span class="btn-icon" style="opacity:.4" title="Locked: term invoice already Approved"><i class="fa fa-lock"></i></span>';
     }
     return html + '</div>';
 }
@@ -983,7 +983,7 @@ function pjRenderDocs() {
     var docs = pjDocs[key] || [];
     $('#pj-docs-list').html(docs.length
         ? docs.map(function(d) { return pjDocItemHtml(d, key); }).join('')
-        : '<div class="text-center py-3 pj-muted"><i class="fa fa-paperclip me-1"></i>Belum ada dokumen.</div>');
+        : '<div class="text-center py-3 pj-muted"><i class="fa fa-paperclip me-1"></i>No documents yet.</div>');
 
     if (pjDocsTermId) $('[data-doc-count="' + pjDocsTermId + '"]').text(docs.length).closest('.pj-doc-btn').toggleClass('empty', !docs.length);
     pjRenderAgreements();
@@ -993,16 +993,16 @@ function pjRenderAgreements() {
     var docs = pjDocs.project || [];
     $('#pj-agreement-docs').html(docs.length
         ? docs.map(function(d) { return pjDocItemHtml(d, 'project'); }).join('')
-        : '<div class="pj-doc-item pj-muted"><i class="fa fa-file-circle-xmark" style="color:var(--text-muted)"></i> Belum ada dokumen pendukung.</div>');
+        : '<div class="pj-doc-item pj-muted"><i class="fa fa-file-circle-xmark" style="color:var(--text-muted)"></i> No supporting documents yet.</div>');
 }
 
 function pjOpenDocs(termId) {
     pjDocsTermId = termId;
     var term = termId ? pjTerms[termId] : null;
-    $('#pj-docs-title').text(term ? 'Dokumen Pendukung — ' + term.name : 'Dokumen Pendukung');
+    $('#pj-docs-title').text(term ? 'Supporting Documents — ' + term.name : 'Supporting Documents');
     $('#pj-docs-subtitle').text(term
-        ? (term.description || '') + (term.description ? ' · ' : '') + 'Dokumen ini ikut tampil di invoice termin.'
-        : 'Dokumen dasar project, ditampilkan bersama PO customer.');
+        ? (term.description || '') + (term.description ? ' · ' : '') + 'This document also appears on the term invoice.'
+        : 'Base project documents, shown with the customer PO.');
     $('#pj-docs-files').val('');
     $('#pj-docs-notes').val('');
     pjRenderDocs();
@@ -1012,9 +1012,9 @@ function pjOpenDocs(termId) {
 
 function pjUploadDocs() {
     var files = document.getElementById('pj-docs-files').files;
-    if (!files.length) { toastr.error('Pilih minimal satu file.'); return; }
+    if (!files.length) { toastr.error('Select at least one file.'); return; }
     for (var i = 0; i < files.length; i++) {
-        if (files[i].size > 10 * 1024 * 1024) { toastr.error('File "' + files[i].name + '" lebih dari 10MB.'); return; }
+        if (files[i].size > 10 * 1024 * 1024) { toastr.error('File "' + files[i].name + '" exceeds 10MB.'); return; }
     }
 
     var fd = new FormData();
@@ -1024,17 +1024,17 @@ function pjUploadDocs() {
     for (var f = 0; f < files.length; f++) fd.append('files[' + f + ']', files[f]);
 
     var $btn = $('#pj-docs-upload-btn');
-    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Mengupload...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Uploading...');
     $.ajax({ url: pjDocUploadUrl, method: 'POST', data: fd, processData: false, contentType: false })
         .done(function(res) {
             pjDocs[pjDocKey(pjDocsTermId)] = res.documents || [];
             $('#pj-docs-files').val('');
             $('#pj-docs-notes').val('');
             pjRenderDocs();
-            toastr.success(res.message || 'Dokumen diupload.');
+            toastr.success(res.message || 'Documents uploaded.');
         })
         .fail(function(xhr) {
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal mengupload dokumen.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to upload documents.');
         })
         .always(function() {
             $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload');
@@ -1043,12 +1043,12 @@ function pjUploadDocs() {
 
 function pjDeleteDoc(url, key) {
     Swal.fire({
-        title: 'Hapus dokumen?',
-        text: 'File akan dihapus permanen.',
+        title: 'Delete document?',
+        text: 'File will be permanently deleted.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal',
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
         confirmButtonColor: '#dc2626'
     }).then(function(r) {
         if (!r.isConfirmed) return;
@@ -1057,10 +1057,10 @@ function pjDeleteDoc(url, key) {
                 pjDocs[key] = (pjDocs[key] || []).filter(function(d) { return d.delete_url !== url; });
                 if (key !== 'project') $('[data-doc-count="' + key + '"]').text(pjDocs[key].length).closest('.pj-doc-btn').toggleClass('empty', !pjDocs[key].length);
                 pjRenderDocs();
-                toastr.success(res.message || 'Dokumen dihapus.');
+                toastr.success(res.message || 'Document deleted.');
             })
             .fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus dokumen.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to delete document.');
             });
     });
 }
@@ -1069,22 +1069,22 @@ $(document).ready(pjRenderAgreements);
 
 function pjDeleteProject() {
     Swal.fire({
-        title: 'Hapus Project?',
-        text: 'Data project, achievement, dan pembagian sales akan dihapus.',
+        title: 'Delete Project?',
+        text: 'Project data, achievements, and sales distribution will be deleted.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal',
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
         confirmButtonColor: '#dc2626'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.ajax({ url: pjDeleteUrl, method: 'DELETE', data: { _token: '{{ csrf_token() }}' } })
             .done(function(res) {
-                toastr.success(res.message || 'Project dihapus.');
+                toastr.success(res.message || 'Project deleted.');
                 setTimeout(function() { window.location.href = '{{ route("project.index") }}'; }, 600);
             })
             .fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus project.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to delete project.');
             });
     });
 }

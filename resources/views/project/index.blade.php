@@ -16,13 +16,13 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Project</h1>
-        <p class="page-header-sub">Project dari quotation yang sudah deal. Sales dipilih di form project; rincian device dikelola di tab Achievements.</p>
+        <p class="page-header-sub">Projects from closed quotations. Sales are selected in the project form; device details are managed in the Achievements tab.</p>
     </div>
     @if($canCreate ?? false)
     <div class="page-header-actions">
         <a href="{{ route('project.create') }}" class="btn-accent">
             <i class="fa fa-plus"></i>
-            <span>Buat Project</span>
+            <span>Create Project</span>
         </a>
     </div>
     @endif
@@ -31,7 +31,7 @@
 <ul class="nav nav-tabs mb-3" id="pj-tabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="pj-tab-list-btn" data-bs-toggle="tab" data-bs-target="#pj-tab-list" type="button" role="tab">
-            <i class="fa fa-list me-1"></i> Daftar
+            <i class="fa fa-list me-1"></i> List
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -45,7 +45,7 @@
     <div class="tab-pane fade show active" id="pj-tab-list" role="tabpanel">
         <div class="card-custom fade-in">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-diagram-project me-2" style="color:var(--accent)"></i>Daftar Project</span>
+                <span><i class="fa-solid fa-diagram-project me-2" style="color:var(--accent)"></i>Project List</span>
             </div>
             <div class="card-body-custom p-2">
                 <div class="table-responsive">
@@ -54,16 +54,16 @@
                             <tr>
                                 <th style="width:50px">#</th>
                                 <th>No Project</th>
-                                <th>Nama Project</th>
+                                <th>Project Name</th>
                                 <th>Quotation</th>
                                 <th>Company</th>
-                                <th>No PO Customer</th>
-                                <th>Tgl PO</th>
+                                <th>Customer PO No.</th>
+                                <th>PO Date</th>
                                 <th class="text-end">Net Sale</th>
-                                <th>Tipe</th>
-                                <th>Garansi</th>
+                                <th>Type</th>
+                                <th>Warranty</th>
                                 <th>Status</th>
-                                <th class="text-center" style="width:120px">Aksi</th>
+                                <th class="text-center" style="width:120px">Action</th>
                             </tr>
                         </thead>
                     </table>
@@ -75,7 +75,7 @@
     <div class="tab-pane fade" id="pj-tab-ach" role="tabpanel">
         <div class="card-custom fade-in">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-trophy me-2" style="color:var(--accent)"></i>Rincian Achievement per Device</span>
+                <span><i class="fa-solid fa-trophy me-2" style="color:var(--accent)"></i>Achievement Details per Device</span>
             </div>
             <div class="card-body-custom p-2">
                 <div class="table-responsive">
@@ -84,14 +84,14 @@
                             <tr>
                                 <th style="width:50px">#</th>
                                 <th>No Project</th>
-                                <th>Company Name</th>
-                                <th>Nama Device</th>
+                                <th>Company</th>
+                                <th>Device Name</th>
                                 <th>Qty </th>
                                 <th class="text-end">Amount</th>
-                                <th>Date PO</th>
-                                <th>Divisi</th>
+                                <th>PO Date</th>
+                                <th>Division</th>
                                 <th>Sales</th>
-                                <th>PO number</th>
+                                <th>PO Number</th>
                             </tr>
                         </thead>
                     </table>
@@ -132,7 +132,7 @@ function initPjTable() {
                 render: function(data, type, row) {
                     var name = $('<div>').text(data).html();
                     return row.is_hybrid
-                        ? name + '<div><span class="pj-tag-warn" title="Dibuat dari IMS Project, nilai kontrak &amp; sales belum diisi">Belum lengkap</span></div>'
+                        ? name + '<div><span class="pj-tag-warn" title="Created from IMS Project, contract value &amp; sales not yet filled">Incomplete</span></div>'
                         : name;
                 }
             },
@@ -148,7 +148,7 @@ function initPjTable() {
                 render: function(data, type, row) {
                     if (!data) return '<span style="color:var(--text-muted)">—</span>';
                     return '<span class="pj-tag-' + row.warranty_class + '">' + data + '</span>'
-                        + '<div style="font-size:11.5px;color:var(--text-muted);white-space:nowrap">s/d ' + row.warranty_end + '</div>';
+                        + '<div style="font-size:11.5px;color:var(--text-muted);white-space:nowrap">until ' + row.warranty_end + '</div>';
                 }
             },
             { data: 'status_badge', orderable: false, searchable: false },
@@ -161,7 +161,7 @@ function initPjTable() {
                         btn += '<a href="' + pjEditUrl.replace('__ID__', data) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
                     }
                     if (pjCanDelete) {
-                        btn += '<button class="btn-icon text-danger" title="Hapus" onclick="pjDelete(' + data + ')"><i class="fa fa-trash"></i></button>';
+                        btn += '<button class="btn-icon text-danger" title="Delete" onclick="pjDelete(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
                     btn += '</div>';
                     return btn;
@@ -207,23 +207,23 @@ function initPjAchTable() {
 
 function pjDelete(id) {
     Swal.fire({
-        title: 'Hapus Project?',
-        text: 'Data project, achievement, dan pembagian sales akan dihapus.',
+        title: 'Delete Project?',
+        text: 'Project data, achievements, and sales distribution will be deleted.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal',
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
         confirmButtonColor: '#dc2626'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.ajax({ url: pjDeleteUrl.replace('__ID__', id), method: 'DELETE', data: { _token: '{{ csrf_token() }}' } })
             .done(function(res) {
-                toastr.success(res.message || 'Project dihapus.');
+                toastr.success(res.message || 'Project deleted.');
                 pjTable.ajax.reload(null, false);
                 if (pjAchTable) pjAchTable.ajax.reload(null, false);
             })
             .fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus project.');
+                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to delete project.');
             });
     });
 }

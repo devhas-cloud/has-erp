@@ -1,19 +1,19 @@
 @extends('layouts.app')
 
-@section('title', 'Rincian Achievement Device')
-@section('page-title', 'Rincian Achievement Device')
+@section('title', 'Device Achievement Details')
+@section('page-title', 'Device Achievement Details')
 
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Rincian Achievement per Device</h1>
+        <h1 class="page-header-title">Device Achievement Details</h1>
         <p class="page-header-sub">
             {{ $project->project_number }} &middot; {{ $project->project_name }}
         </p>
     </div>
     <div class="page-header-actions">
         <a href="{{ route('project.show', $project->id) }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
+            <i class="fa fa-arrow-left me-1"></i> Back
         </a>
     </div>
 </div>
@@ -26,7 +26,7 @@
                 <div style="font-size:18px;font-weight:700;color:var(--accent)">{{ \App\Models\Project::formatMoney($project->net_sale_amount) }}</div>
             </div>
             <div class="col-md-4">
-                <div style="font-size:12px;color:var(--text-muted)">Total Rincian</div>
+                <div style="font-size:12px;color:var(--text-muted)">Total Details</div>
                 <div style="font-size:18px;font-weight:700" id="pj-ach-total">Rp 0</div>
             </div>
             <div class="col-md-4">
@@ -41,7 +41,7 @@
     <div class="card-header-custom d-flex justify-content-between align-items-center">
         <span><i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>Device</span>
         <button type="button" class="btn btn-secondary btn-sm" onclick="pjAddRow()">
-            <i class="fa fa-plus me-1"></i> Tambah Baris
+            <i class="fa fa-plus me-1"></i> Add Row
         </button>
     </div>
     <div class="card-body-custom p-2">
@@ -52,19 +52,19 @@
                         <th style="width:40px">#</th>
                         <th style="width:14%">Principal</th>
                         <th style="width:13%">Brand</th>
-                        <th>Nama Device</th>
+                        <th>Device Name</th>
                         <th style="width:8%">Qty</th>
-                        <th style="width:9%">Satuan</th>
+                        <th style="width:9%">Unit</th>
                         <th style="width:14%">Amount</th>
-                        <th style="width:13%">Divisi</th>
-                        <th class="text-center" style="width:50px">Aksi</th>
+                        <th style="width:13%">Division</th>
+                        <th class="text-center" style="width:50px">Action</th>
                     </tr>
                 </thead>
                 <tbody id="pj-ach-body"></tbody>
             </table>
         </div>
         <div class="config-card-empty" id="pj-ach-empty">
-            <i class="fa-solid fa-inbox"></i> Belum ada rincian. Total amount harus sama dengan Net Sale Amount.
+            <i class="fa-solid fa-inbox"></i> No details yet. Total amount must equal Net Sale Amount.
         </div>
     </div>
 </div>
@@ -72,7 +72,7 @@
 <div class="d-flex justify-content-end mb-4">
     @if($canUpdate ?? false)
     <button type="button" class="btn btn-primary" onclick="pjSave()">
-        <i class="fa fa-save me-1"></i> Simpan Rincian
+        <i class="fa fa-save me-1"></i> Save Details
     </button>
     @endif
 </div>
@@ -138,7 +138,7 @@ function pjInitTagSelect($el, placeholder) {
 
 function pjRowHtml(row) {
     row = row || {};
-    var opts = '<option value="">— Pilih Divisi —</option>';
+    var opts = '<option value="">— Select Division —</option>';
     (pjDivisions || []).forEach(function(d) {
         var selected = String(row.division_id || '') === String(d.id) ? ' selected' : '';
         opts += '<option value="' + d.id + '"' + selected + '>' + pjEsc(d.name) + '</option>';
@@ -153,7 +153,7 @@ function pjRowHtml(row) {
     html += '<td><input type="text" class="form-control form-control-sm pj-unit" value="' + pjEsc(row.unit) + '" maxlength="50"></td>';
     html += '<td><input type="text" inputmode="decimal" autocomplete="off" class="form-control form-control-sm pj-number pj-amount text-end" value="' + pjFormatStored(row.amount) + '"></td>';
     html += '<td><select class="form-select form-select-sm pj-division">' + opts + '</select></td>';
-    html += '<td class="text-center"><button type="button" class="btn-icon text-danger" title="Hapus" onclick="pjRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
+    html += '<td class="text-center"><button type="button" class="btn-icon text-danger" title="Delete" onclick="pjRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
     html += '</tr>';
     return html;
 }
@@ -163,7 +163,7 @@ function pjAddRow(row) {
     $('#pj-ach-body').append($row);
     pjInitTagSelect($row.find('.pj-principal'), 'Principal');
     pjInitTagSelect($row.find('.pj-brand'), 'Brand');
-    pjInitTagSelect($row.find('.pj-device'), 'Ketik atau pilih nama device');
+    pjInitTagSelect($row.find('.pj-device'), 'Type or select device name');
     pjRenumber();
     pjRecalc();
 }
@@ -203,26 +203,26 @@ function pjRecalc() {
 
     var status = $('#pj-ach-status');
     if (totalCents === pjNetCents) {
-        status.text('Cocok dengan Net Sale Amount').css('color', '#166534');
+        status.text('Matches Net Sale Amount').css('color', '#166534');
     } else {
-        status.text('Selisih ' + pjFormatMoney((totalCents - pjNetCents) / 100)).css('color', '#b91c1c');
+        status.text('Difference ' + pjFormatMoney((totalCents - pjNetCents) / 100)).css('color', '#b91c1c');
     }
 }
 
 function pjValidate() {
     var rows = pjCollectRows();
-    if (rows.length === 0) { toastr.error('Tambahkan minimal satu rincian device.'); return false; }
+    if (rows.length === 0) { toastr.error('Add at least one device detail.'); return false; }
 
     for (var i = 0; i < rows.length; i++) {
-        if (!$.trim(rows[i].device_name)) { toastr.error('Nama device baris ' + (i + 1) + ' wajib diisi.'); return false; }
-        if (rows[i].amount === '' || rows[i].amount === null) { toastr.error('Amount baris ' + (i + 1) + ' wajib diisi.'); return false; }
-        if (!rows[i].division_id) { toastr.error('Divisi baris ' + (i + 1) + ' wajib dipilih.'); return false; }
+        if (!$.trim(rows[i].device_name)) { toastr.error('Device name on row ' + (i + 1) + ' is required.'); return false; }
+        if (rows[i].amount === '' || rows[i].amount === null) { toastr.error('Amount on row ' + (i + 1) + ' is required.'); return false; }
+        if (!rows[i].division_id) { toastr.error('Division on row ' + (i + 1) + ' is required.'); return false; }
     }
 
     var totalCents = 0;
     rows.forEach(function(row) { totalCents += pjCents(row.amount); });
     if (totalCents !== pjNetCents) {
-        toastr.error('Total rincian harus sama dengan Net Sale Amount.');
+        toastr.error('Total details must equal Net Sale Amount.');
         return false;
     }
 
@@ -240,10 +240,10 @@ function pjSave() {
             achievements: pjCollectRows()
         }
     }).done(function(res) {
-        toastr.success(res.message || 'Rincian achievement tersimpan.');
+        toastr.success(res.message || 'Achievement details saved.');
         setTimeout(function() { window.location.href = pjShowUrl; }, 700);
     }).fail(function(xhr) {
-        var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menyimpan rincian.';
+        var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to save details.';
         toastr.error(message);
     });
 }

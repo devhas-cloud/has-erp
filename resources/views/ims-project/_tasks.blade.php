@@ -17,22 +17,22 @@
 <div class="card-custom fade-in {{ $class ?? 'mb-4' }}" id="project-tasks">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
-            <i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>{{ ! empty($taskDivision) ? 'Task '.$taskDivision : 'Task Terkait' }}
+            <i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>{{ ! empty($taskDivision) ? 'Task '.$taskDivision : 'Related Tasks' }}
             <span style="font-size:12px;color:var(--text-muted);font-weight:500">
-                {{ $tasks->count() }} task{{ $openTasks ? ' · '.$openTasks.' belum selesai' : '' }}
+                {{ $tasks->count() }} tasks{{ $openTasks ? ' · '.$openTasks.' incomplete' : '' }}
             </span>
         </span>
         @if($canAddTask)
             <button type="button" class="btn btn-accent btn-sm" onclick="ptkOpen()">
-                <i class="fa fa-plus me-1"></i> Tambah Task
+                <i class="fa fa-plus me-1"></i> Add Task
             </button>
         @elseif(($canCreateTask ?? false) && ! ($projectActive ?? false))
-            <span style="font-size:12px;color:var(--text-muted)"><i class="fa fa-lock me-1"></i>Task baru hanya untuk project Active</span>
+            <span style="font-size:12px;color:var(--text-muted)"><i class="fa fa-lock me-1"></i>New tasks only for Active projects</span>
         @endif
     </div>
     @if(! empty($taskDivision))
         <div style="font-size:12px;color:var(--text-muted);padding:8px 16px 0">
-            <i class="fa fa-filter me-1"></i>Hanya task yang dibuat oleh / ditugaskan ke divisi {{ $taskDivision }}.
+            <i class="fa fa-filter me-1"></i>Only tasks created by / assigned to the {{ $taskDivision }} division.
         </div>
     @endif
     <div class="card-body-custom p-2">
@@ -41,9 +41,9 @@
                 <thead>
                     <tr>
                         <th>Task</th>
-                        <th>Kategori</th>
+                        <th>Category</th>
                         <th>Assignee</th>
-                        <th>Jatuh Tempo</th>
+                        <th>Due Date</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -56,22 +56,22 @@
                         <tr>
                             <td>
                                 <a href="{{ route('task-planner.show', $t->id) }}" style="font-weight:600;color:var(--text-primary);text-decoration:none">{{ $t->title }}</a>
-                                <div style="font-size:11.5px;color:var(--text-muted)">oleh {{ $t->creator?->display_name ?? '—' }}</div>
+                                <div style="font-size:11.5px;color:var(--text-muted)">by {{ $t->creator?->display_name ?? '—' }}</div>
                             </td>
                             <td>{{ $t->category?->name ?? '—' }}</td>
                             <td style="font-size:13px">{{ $t->assignees->pluck('display_name')->join(', ') ?: '—' }}</td>
                             <td class="{{ $overdue ? 'text-danger fw-bold' : '' }}" style="white-space:nowrap">
                                 {{ $t->due_date?->format('d M Y') ?? '—' }}@if($t->time) <span style="font-weight:400;color:var(--text-muted)">{{ $t->time }}</span>@endif
-                                @if($overdue) <i class="fa fa-exclamation-circle" title="Terlambat"></i>@endif
+                                @if($overdue) <i class="fa fa-exclamation-circle" title="Overdue"></i>@endif
                             </td>
                             <td><span class="status-badge" style="{{ $stStyle }}">{{ $stLabel }}</span></td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="5" class="text-center py-4" style="color:var(--text-muted)">
-                                <i class="fa-solid fa-inbox me-1"></i> Belum ada task {{ ! empty($taskDivision) ? 'divisi '.$taskDivision.' ' : '' }}untuk project ini.
+                                <i class="fa-solid fa-inbox me-1"></i> No tasks yet {{ ! empty($taskDivision) ? 'for the '.$taskDivision.' division ' : '' }}for this project.
                                 @if($canAddTask)
-                                    <a href="javascript:void(0)" onclick="ptkOpen()" class="text-decoration-none">Tambah task pertama</a>
+                                    <a href="javascript:void(0)" onclick="ptkOpen()" class="text-decoration-none">Add first task</a>
                                 @endif
                             </td>
                         </tr>
@@ -89,7 +89,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h6 class="modal-title mb-0"><i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>Tambah Task</h6>
+                    <h6 class="modal-title mb-0"><i class="fa-solid fa-list-check me-2" style="color:var(--accent)"></i>Add Task</h6>
                     <div style="font-size:12px;color:var(--text-muted)">{{ $project->project_number }} — {{ $project->project_name }}</div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -97,49 +97,49 @@
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label" for="ptk-title">Judul <span class="text-danger">*</span></label>
-                        <input type="text" id="ptk-title" class="form-control" maxlength="150" placeholder="Mis. Maintenance berkala Q1 / Pengecekan inverter">
+                        <label class="form-label" for="ptk-title">Title <span class="text-danger">*</span></label>
+                        <input type="text" id="ptk-title" class="form-control" maxlength="150" placeholder="E.g. Routine maintenance Q1 / Inverter check">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label" for="ptk-category">Kategori <span class="text-danger">*</span></label>
+                        <label class="form-label" for="ptk-category">Category <span class="text-danger">*</span></label>
                         <select id="ptk-category" class="form-select">
-                            <option value="">— Pilih kategori —</option>
+                            <option value="">— Select category —</option>
                             @foreach($taskCategories as $cat)
                                 <option value="{{ $cat->id }}">{{ $cat->division_id ? '['.optional($cat->division)->division_name.'] ' : '' }}{{ $cat->name }}</option>
                             @endforeach
                         </select>
                     </div>
                     <div class="col-md-3 col-6">
-                        <label class="form-label" for="ptk-due">Jatuh Tempo <span class="text-danger">*</span></label>
+                        <label class="form-label" for="ptk-due">Due Date <span class="text-danger">*</span></label>
                         <input type="date" id="ptk-due" class="form-control" value="{{ now()->toDateString() }}">
                     </div>
                     <div class="col-md-3 col-6">
-                        <label class="form-label" for="ptk-time">Jam</label>
+                        <label class="form-label" for="ptk-time">Time</label>
                         <input type="time" id="ptk-time" class="form-control">
                     </div>
                     <div class="col-12">
-                        <label class="form-label" for="ptk-assignees">Assign ke</label>
+                        <label class="form-label" for="ptk-assignees">Assign to</label>
                         <select id="ptk-assignees" multiple style="width:100%"></select>
                         <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">
-                            Kosongkan untuk ditugaskan ke diri sendiri.
+                            Leave empty to assign to yourself.
                             @if(! empty($taskDivision))
-                                Task tampil di halaman ini bila pembuat atau assignee dari divisi {{ $taskDivision }}.
+                                Task appears on this page when the creator or assignee is from the {{ $taskDivision }} division.
                             @endif
                         </div>
                     </div>
                     <div class="col-12">
-                        <label class="form-label" for="ptk-description">Deskripsi</label>
-                        <textarea id="ptk-description" class="form-control" rows="3" placeholder="Detail pekerjaan, lokasi, perangkat..."></textarea>
+                        <label class="form-label" for="ptk-description">Description</label>
+                        <textarea id="ptk-description" class="form-control" rows="3" placeholder="Work details, location, devices..."></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <a href="{{ route('task-planner.index') }}" class="me-auto" style="font-size:12px;color:var(--text-muted);text-decoration:none">
-                    Pengaturan lengkap (alert WA, dll.) di Task Planner <i class="fa fa-arrow-up-right-from-square ms-1"></i>
+                    Full settings (WA alerts, etc.) in Task Planner <i class="fa fa-arrow-up-right-from-square ms-1"></i>
                 </a>
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-accent btn-sm" id="ptk-save" onclick="ptkSave()">
-                    <i class="fa fa-floppy-disk me-1"></i> Simpan Task
+                    <i class="fa fa-floppy-disk me-1"></i> Save Task
                 </button>
             </div>
         </div>
@@ -158,7 +158,7 @@ function ptkOpen() {
         $('#ptk-assignees').select2({
             theme: 'bootstrap-5',
             width: '100%',
-            placeholder: 'Cari user...',
+            placeholder: 'Search users...',
             allowClear: true,
             dropdownParent: $('#ptkModal'),
             minimumInputLength: 0,
@@ -184,9 +184,9 @@ function ptkFail(selector, message) {
 
 function ptkSave() {
     $('#ptkModal .is-invalid').removeClass('is-invalid');
-    if (!$.trim($('#ptk-title').val())) return ptkFail('#ptk-title', 'Judul task wajib diisi.');
-    if (!$('#ptk-category').val()) return ptkFail('#ptk-category', 'Kategori wajib dipilih.');
-    if (!$('#ptk-due').val()) return ptkFail('#ptk-due', 'Jatuh tempo wajib diisi.');
+    if (!$.trim($('#ptk-title').val())) return ptkFail('#ptk-title', 'Task title is required.');
+    if (!$('#ptk-category').val()) return ptkFail('#ptk-category', 'Category is required.');
+    if (!$('#ptk-due').val()) return ptkFail('#ptk-due', 'Due date is required.');
 
     var data = {
         _token: '{{ csrf_token() }}',
@@ -204,18 +204,18 @@ function ptkSave() {
 
     var $btn = $('#ptk-save');
     var label = $btn.html();
-    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
     $.ajax({ url: '{{ route("task-planner.store") }}', method: 'POST', data: data, headers: { Accept: 'application/json' } })
         .done(function(res) {
-            toastr.success(res.message || 'Task berhasil dibuat.');
+            toastr.success(res.message || 'Task created.');
             ptkModal.hide();
             setTimeout(function() { window.location.hash = 'project-tasks'; window.location.reload(); }, 500);
         })
         .fail(function(xhr) {
             $btn.prop('disabled', false).html(label);
             var json = xhr.responseJSON || {};
-            var message = json.message || 'Gagal menyimpan task.';
+            var message = json.message || 'Failed to save task.';
             if (json.errors) {
                 var first = Object.keys(json.errors)[0];
                 if (first) message = json.errors[first][0];
