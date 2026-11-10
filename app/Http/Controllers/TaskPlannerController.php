@@ -705,9 +705,12 @@ class TaskPlannerController extends Controller
                 ->first();
         }
 
+        // Jika is global delegator, maka bisa edit task walau bukan creator.
+        $isGlobalDelegator = Auth::user()->load('hierarchyRole')->hierarchyRole?->is_global_delegator ?? false;
+
         $projectUrl = $task->project ? $this->projectUrl($task->project) : null;
 
-        return view('task-planner.show', compact('task', 'quoteConfigurations', 'quotations', 'finalQuotation', 'projectUrl'));
+        return view('task-planner.show', compact('task', 'quoteConfigurations', 'quotations', 'finalQuotation', 'projectUrl', 'isGlobalDelegator'));
     }
 
     public function approve($id): JsonResponse

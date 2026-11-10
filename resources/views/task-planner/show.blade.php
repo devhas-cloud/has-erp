@@ -620,7 +620,7 @@
             <p class="page-header-sub">#{{ $task->id }} — Informasi lengkap tugas</p>
         </div>
         <div class="page-header-actions">
-            @if ($canUpdate && $task->creator_id === Auth::id() && strtolower($task->category?->name) !== 'proposal' && strtolower($task->category?->name) !== 'quote')
+            @if ($canUpdate && ($task->creator_id === Auth::id() || $isGlobalDelegator) && strtolower($task->category?->name) !== 'proposal' && strtolower($task->category?->name) !== 'quote')
                 <a href="{{ route('task-planner.edit', $task->id) }}" class="btn-accent">
                     <i class="fa fa-pen"></i><span>Edit</span>
                 </a>
