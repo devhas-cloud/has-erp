@@ -682,15 +682,15 @@
                         <select id="cat-category">
                             <option value="">— Pilih —</option>
                             @foreach($taskCategories as $tc)
-                            <option value="{{ $tc->id }}">{{ $tc->name }}</option>
+                            <option value="{{ $tc->id }}" data-log="{{ str_contains(mb_strtolower($tc->name), 'log') ? '1' : '0' }}">{{ $tc->name }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="cat-due-date-group">
                         <label>Due Date <span class="text-danger">*</span></label>
                         <input type="date" id="cat-due-date">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="cat-time-group">
                         <label>Time</label>
                         <input type="time" id="cat-time">
                     </div>
@@ -698,8 +698,13 @@
                         <label>Description</label>
                         <textarea id="cat-description" rows="3"></textarea>
                     </div>
+                    <div class="form-group" id="cat-log-file-group" style="display:none">
+                        <label>Upload File</label>
+                        <input type="file" id="cat-log-files" name="attachments[]" multiple
+                               accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                    </div>
 
-                    <div class="form-group">
+                    <div class="form-group" id="cat-assignees-group">
                         <label>Assign To</label>
                         <select id="cat-assignees" multiple style="width:100%">
                             @foreach($users as $u)
@@ -911,11 +916,37 @@ function openContactActivityTaskModal() {
     document.getElementById('contact-activity-task-form').reset();
     $('#contact-activity-task-form .is-invalid').removeClass('is-invalid');
     $('#cat-assignees').val(null).trigger('change');
+    syncContactTaskLogState();
     if (!contactActivityTaskModalInstance) {
         contactActivityTaskModalInstance = new bootstrap.Modal(document.getElementById('contactActivityTaskModal'));
     }
     contactActivityTaskModalInstance.show();
 }
+
+// Kategori yang namanya mengandung "log": due date = hari ini, tanpa time/assignee,
+// dan description + file menjadi TaskActivity.
+function syncContactTaskLogState() {
+    var isLog = String($('#cat-category option:selected').data('log') || '') === '1';
+
+    $('#cat-due-date-group').toggle(!isLog);
+    $('#cat-time-group').toggle(!isLog);
+    $('#cat-assignees-group').toggle(!isLog);
+    $('#cat-log-file-group').toggle(isLog);
+
+    if (isLog) {
+        var now = new Date();
+        var today = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0');
+        $('#cat-due-date').val(today).removeClass('is-invalid');
+        $('#cat-time').val('');
+        $('#cat-assignees').val(null).trigger('change');
+    } else {
+        $('#cat-log-files').val('');
+    }
+}
+
+$(document).on('change', '#cat-category', syncContactTaskLogState);
 
 $(document).on('shown.bs.modal', '#contactActivityTaskModal', function() {
     if ($('#cat-assignees').hasClass('select2-hidden-accessible')) return;
@@ -934,6 +965,8 @@ $(document).on('change input', '#contact-activity-task-form .is-invalid', functi
 
 $(document).on('click', '#btn-save-contact-task', function() {
     const $btn = $(this);
+    syncContactTaskLogState();
+    const isLog = String($('#cat-category option:selected').data('log') || '') === '1';
     $('#contact-activity-task-form .is-invalid').removeClass('is-invalid');
     let first = null;
     if (!$('#cat-title').val().trim()) { $('#cat-title').addClass('is-invalid'); first = first || 'Title wajib diisi.'; }
@@ -942,19 +975,31 @@ $(document).on('click', '#btn-save-contact-task', function() {
     if (first) { toastr.error(first); return; }
 
     $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
-    const payload = {
-        _token: '{{ csrf_token() }}',
-        title: $('#cat-title').val().trim(),
-        category_id: $('#cat-category').val(),
-        description: $('#cat-description').val().trim(),
-        due_date: $('#cat-due-date').val(),
-        time: $('#cat-time').val(),
-        assignees: $('#cat-assignees').val() || []
-    };
+
+    const formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('title', $('#cat-title').val().trim());
+    formData.append('category_id', $('#cat-category').val());
+    formData.append('description', $('#cat-description').val() || '');
+    formData.append('due_date', $('#cat-due-date').val());
+    formData.append('time', $('#cat-time').val() || '');
+
+    if (isLog) {
+        Array.from($('#cat-log-files')[0].files).forEach(function(file) {
+            formData.append('attachments[]', file);
+        });
+    } else {
+        ($('#cat-assignees').val() || []).forEach(function(id) {
+            formData.append('assignees[]', id);
+        });
+    }
+
     $.ajax({
         url: '{{ route("contact-management.tasks.store", ["contact_management" => $contact->id]) }}',
         type: 'POST',
-        data: payload,
+        data: formData,
+        processData: false,
+        contentType: false,
         success: function(res) {
             bootstrap.Modal.getInstance('#contactActivityTaskModal').hide();
             toastr.success(res.message);

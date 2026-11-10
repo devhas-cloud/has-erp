@@ -371,6 +371,48 @@ class ContactManagementTest extends TestCase
         $this->assertSame('Task Baru', $task->title);
         $this->assertSame($contact->id, $task->account_contact_id);
         $this->assertTrue($task->assignees()->where('users.id', $this->creator->id)->exists());
+        $this->assertSame(0, TaskActivity::where('task_id', $task->id)->count());
+    }
+
+    public function test_store_contact_log_task_makes_description_and_file_task_activity(): void
+    {
+        Storage::fake('public');
+
+        $contact = AccountContact::create(array_merge($this->payload, [
+            'full_name' => 'Kontak Log',
+            'email' => 'log-contact@example.com',
+            'mobile' => '81234567892',
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+        $category = TaskCategory::create(['name' => 'Log Activity']);
+        $file = UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf');
+
+        $this->actingAs($this->creator)
+            ->post(route('contact-management.tasks.store', $contact->id), [
+                'title' => 'Log kunjungan',
+                'description' => 'Hasil kunjungan lapangan.',
+                'category_id' => $category->id,
+                'due_date' => '2020-01-01',
+                'time' => '09:00',
+                'assignees' => [$this->assignee->id],
+                'attachments' => [$file],
+            ])
+            ->assertOk();
+
+        $task = Task::firstOrFail();
+        $this->assertSame('done', $task->status);
+        $this->assertSame(now()->toDateString(), $task->due_date->toDateString());
+        $this->assertNull($task->time);
+        $this->assertFalse($task->requires_approval);
+        $this->assertFalse($task->assignees()->where('users.id', $this->assignee->id)->exists());
+
+        $taskActivity = TaskActivity::where('task_id', $task->id)->firstOrFail();
+        $this->assertSame('Hasil kunjungan lapangan.', $taskActivity->content);
+
+        $attachment = $taskActivity->attachments()->firstOrFail();
+        $this->assertSame('bukti.pdf', $attachment->attachment_name);
+        Storage::disk('public')->assertExists($attachment->attachment_path);
     }
 
     public function test_contact_last_activity_tracks_lead_and_task_activities(): void

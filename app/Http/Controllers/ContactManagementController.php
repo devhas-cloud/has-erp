@@ -16,6 +16,7 @@ use App\Models\RoleInProject;
 use App\Models\Source;
 use App\Models\Stage;
 use App\Models\Task;
+use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Services\ContactExportService;
@@ -30,6 +31,8 @@ use Illuminate\Validation\Rule;
 
 class ContactManagementController extends Controller
 {
+    private const ACTIVITY_MIME_RULE = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,application/zip,application/x-zip-compressed,application/octet-stream';
+
     public function index()
     {
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
@@ -346,13 +349,23 @@ $sources = Source::where('status', 'Active')->get();
             'time' => 'nullable|date_format:H:i',
             'assignees' => 'nullable|array',
             'assignees.*' => 'exists:users,id',
+            'attachments' => 'nullable|array|max:10',
+            'attachments.*' => 'file|max:10240|mimetypes:'.self::ACTIVITY_MIME_RULE,
         ]);
+
+        $category = TaskCategory::findOrFail($validated['category_id']);
+        $isLog = str_contains(mb_strtolower($category->name), 'log');
 
         $validated['account_contact_id'] = $contact->id;
         $validated['creator_id'] = Auth::id();
-        $validated['status'] = 'todo';
+        $validated['status'] = $isLog ? 'done' : 'todo';
 
-        $assigneeIds = $request->input('assignees', []);
+        if ($isLog) {
+            $validated['due_date'] = now()->toDateString();
+            $validated['time'] = null;
+        }
+
+        $assigneeIds = $isLog ? [] : $request->input('assignees', []);
         if (empty($assigneeIds)) {
             $assigneeIds = [Auth::id()];
         }
@@ -363,6 +376,28 @@ $sources = Source::where('status', 'Active')->get();
         try {
             $task = Task::create($validated);
             $task->assignees()->sync($assigneeIds);
+
+            // Kategori log: description + file menjadi activity task,
+            // bukan lampiran activity lead.
+            $hasDescription = filled($validated['description'] ?? null);
+            $hasAttachments = $request->hasFile('attachments');
+
+            if ($isLog && ($hasDescription || $hasAttachments)) {
+                $taskActivity = TaskActivity::create([
+                    'task_id' => $task->id,
+                    'user_id' => Auth::id(),
+                    'content' => $validated['description'] ?? null,
+                ]);
+
+                foreach ($request->file('attachments', []) as $file) {
+                    $path = $file->store('task-activities', 'public');
+                    $taskActivity->attachments()->create([
+                        'attachment_path' => $path,
+                        'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'attachment_name' => $file->getClientOriginalName(),
+                    ]);
+                }
+            }
 
             $task->load('creator');
             foreach ($otherAssignees as $assigneeId) {

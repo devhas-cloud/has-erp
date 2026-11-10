@@ -1397,26 +1397,33 @@
                                     <select name="category_id" id="task-category-id">
                                         <option value="">— Select Category —</option>
                                         @foreach($categories as $cat)
-                                            <option value="{{ $cat->id }}">
-                                                {{ $cat->division_id ? '[' . optional($cat->division)->division_name . '] ' : '[Global] ' }}
+                                            <option value="{{ $cat->id }}" data-log="{{ str_contains(mb_strtolower($cat->name), 'log') ? '1' : '0' }}">
                                                 {{ $cat->name }}
                                             </option>
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" id="task-due-date-group">
                                     <label>Due Date <span class="text-danger">*</span></label>
                                     <input type="date" name="due_date" id="task-due-date">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" id="task-time-group">
                                     <label>Time</label>
                                     <input type="time" name="time" id="task-time">
+                                </div>
+                            </div>
+                            <div class="task-form-row" id="task-log-file-row" style="display:none">
+                                <div class="form-group">
+                                    <label>Upload File</label>
+                                    <input type="file" id="task-log-files" name="attachments[]" multiple
+                                           accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                                    <div class="reply-file-previews" id="task-log-file-previews"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="task-form-section open">
+                    <div class="task-form-section open" id="task-assignees-section">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
                             <span><i class="fa fa-users me-2" style="color:var(--accent)"></i>Assign To</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -2296,11 +2303,36 @@ function openCreateTaskModal() {
     $('#task-form')[0].reset();
     document.getElementById('taskModalTitle').textContent = 'Add Task';
     $('#task-assignees').val(null).trigger('change');
+    syncTaskLogState();
     new bootstrap.Modal(document.getElementById('taskModal')).show();
 }
 
+// Kategori yang namanya mengandung "log": due date = hari ini, tanpa time/assignee,
+// dan file yang diupload ikut tersimpan sebagai lampiran activity.
+function syncTaskLogState() {
+    var isLog = String($('#task-category-id option:selected').data('log') || '') === '1';
+
+    $('#task-due-date-group').toggle(!isLog);
+    $('#task-time-group').toggle(!isLog);
+    $('#task-assignees-section').toggle(!isLog);
+    $('#task-log-file-row').toggle(isLog);
+
+    if (isLog) {
+        $('#task-due-date').val(moment().format('YYYY-MM-DD'));
+        $('#task-time').val('');
+        $('#task-assignees').val(null).trigger('change');
+    } else {
+        $('#task-log-files').val('');
+        $('#task-log-file-previews').empty();
+    }
+}
+
+$(document).on('change', '#task-category-id', syncTaskLogState);
+
 $(document).on('click', '#btn-save-lead-task', function() {
     var $btn = $(this);
+    syncTaskLogState();
+    var isLog = String($('#task-category-id option:selected').data('log') || '') === '1';
     var title = $('#task-title').val().trim();
     var category = $('#task-category-id').val();
     var dueDate = $('#task-due-date').val();
@@ -2310,21 +2342,33 @@ $(document).on('click', '#btn-save-lead-task', function() {
 
     $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Creating...');
 
+    var formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('title', title);
+    formData.append('description', $('#task-description').val() || '');
+    formData.append('category_id', category);
+    formData.append('due_date', dueDate);
+    formData.append('time', $('#task-time').val() || '');
+    formData.append('alert_type', $('#task-alert-type').val() || 'none');
+    formData.append('alert_target', $('#task-alert-target').val() || 'personal');
+    formData.append('alert_time', $('#task-alert-time').val() || '');
+
+    if (!isLog) {
+        ($('#task-assignees').val() || []).forEach(function(id) {
+            formData.append('assignees[]', id);
+        });
+    } else {
+        Array.from($('#task-log-files')[0].files).forEach(function(file) {
+            formData.append('attachments[]', file);
+        });
+    }
+
     $.ajax({
         url: '/leads-management/' + leadId + '/tasks',
         type: 'POST',
-        data: {
-            _token: '{{ csrf_token() }}',
-            title: title,
-            description: $('#task-description').val(),
-            category_id: category,
-            due_date: dueDate,
-            time: $('#task-time').val(),
-            assignees: $('#task-assignees').val(),
-            alert_type: $('#task-alert-type').val(),
-            alert_target: $('#task-alert-target').val(),
-            alert_time: $('#task-alert-time').val()
-        },
+        data: formData,
+        processData: false,
+        contentType: false,
         success: function(res) {
             toastr.success(res.message);
             bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();

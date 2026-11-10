@@ -31,6 +31,8 @@ use Illuminate\Support\Str;
 
 class OpportunityManagementController extends Controller
 {
+    private const ACTIVITY_MIME_RULE = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,application/zip,application/x-zip-compressed,application/octet-stream';
+
     public function index()
     {
         $stages = Stage::where('status', 'Active')->get();
@@ -613,7 +615,7 @@ class OpportunityManagementController extends Controller
         $users = User::all();
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $accountContacts = AccountContact::where('status', 'Active')->orderBy('full_name')->get();
-        $categories = TaskCategory::with('division')->get();
+        $categories = TaskCategory::where('division_id', NULL)->get();
         $categoryHandlerMap = TaskCategory::pluck('use_division_handler', 'id')
             ->map(fn ($v) => (bool) $v);
 
@@ -947,17 +949,28 @@ class OpportunityManagementController extends Controller
             'time' => 'nullable|date_format:H:i',
             'assignees' => 'nullable|array',
             'assignees.*' => 'exists:users,id',
+            'attachments' => 'nullable|array|max:10',
+            'attachments.*' => 'file|max:10240|mimetypes:'.self::ACTIVITY_MIME_RULE,
             'alert_type' => 'nullable|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
             'alert_time' => 'nullable|date',
         ]);
 
+        $category = TaskCategory::findOrFail($validated['category_id']);
+        $isLog = str_contains(mb_strtolower($category->name), 'log');
+
         $validated['creator_id'] = Auth::id();
-        $validated['status'] = 'todo';
+        $validated['status'] = $isLog ? 'done' : 'todo';
         $validated['opportunity_id'] = $opportunity->id;
 
-        $assigneeIds = $request->input('assignees', []);
-        $handlingGroupId = $request->input('handling_group_id');
+        if ($isLog) {
+            $validated['due_date'] = now()->toDateString();
+            $validated['time'] = null;
+            $validated['handling_group_id'] = null;
+        }
+
+        $assigneeIds = $isLog ? [] : $request->input('assignees', []);
+        $handlingGroupId = $isLog ? null : $request->input('handling_group_id');
         if ($handlingGroupId) {
             $group = HandlingGroup::with('users')->find($handlingGroupId);
             if ($group) {
@@ -1002,6 +1015,28 @@ class OpportunityManagementController extends Controller
                 'user_id' => Auth::id(),
                 'content' => "📋 Created task: {$task->title}",
             ]);
+
+            // Kategori log: description + file menjadi activity task (child),
+            // bukan lampiran parent Activity.
+            $hasDescription = filled($validated['description'] ?? null);
+            $hasAttachments = $request->hasFile('attachments');
+
+            if ($isLog && ($hasDescription || $hasAttachments)) {
+                $taskActivity = TaskActivity::create([
+                    'task_id' => $task->id,
+                    'user_id' => Auth::id(),
+                    'content' => $validated['description'] ?? null,
+                ]);
+
+                foreach ($request->file('attachments', []) as $file) {
+                    $path = $file->store('task-activities', 'public');
+                    $taskActivity->attachments()->create([
+                        'attachment_path' => $path,
+                        'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'attachment_name' => $file->getClientOriginalName(),
+                    ]);
+                }
+            }
 
             DB::commit();
 

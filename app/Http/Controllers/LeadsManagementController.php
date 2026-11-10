@@ -40,6 +40,8 @@ use Illuminate\Validation\Rule;
 
 class LeadsManagementController extends Controller
 {
+    private const ACTIVITY_MIME_RULE = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,application/zip,application/x-zip-compressed,application/octet-stream';
+
     public function index()
     {
         $jobTitles = JobTitle::where('status', 'Active')->get();
@@ -603,7 +605,7 @@ class LeadsManagementController extends Controller
         $accountCompanies = AccountCompany::where('status', 'Active')->orderBy('account_name')->get();
         $typesAccountsCompanies = TypesAccountsCompany::where('status', 'Active')->get();
         $opportunityDivisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
-        $categories = TaskCategory::with('division')->get();
+        $categories = TaskCategory::where('division_id', NULL)->get();
 
         // Saran autocomplete alamat: gabungan unik nilai billing + shipping.
         $suggest = function (string $billing, string $shipping) use ($accountCompanies) {
@@ -1073,7 +1075,7 @@ class LeadsManagementController extends Controller
     {
         $lead = Lead::findOrFail($id);
 
-        $mimeRule = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,application/zip,application/x-zip-compressed,application/octet-stream';
+        $mimeRule = self::ACTIVITY_MIME_RULE;
         $validated = $request->validate([
             'content' => 'nullable|string|max:5000',
             'attachments' => 'nullable|array|max:10',
@@ -1209,15 +1211,25 @@ class LeadsManagementController extends Controller
             'time' => 'nullable|date_format:H:i',
             'assignees' => 'nullable|array',
             'assignees.*' => 'exists:users,id',
+            'attachments' => 'nullable|array|max:10',
+            'attachments.*' => 'file|max:10240|mimetypes:'.self::ACTIVITY_MIME_RULE,
             'alert_type' => 'nullable|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
             'alert_time' => 'nullable|date',
         ]);
 
-        $validated['creator_id'] = Auth::id();
-        $validated['status'] = 'todo';
+        $category = TaskCategory::findOrFail($validated['category_id']);
+        $isLog = str_contains(mb_strtolower($category->name), 'log');
 
-        $assigneeIds = $request->input('assignees', []);
+        $validated['creator_id'] = Auth::id();
+        $validated['status'] = $isLog ? 'done' : 'todo';
+
+        if ($isLog) {
+            $validated['due_date'] = now()->toDateString();
+            $validated['time'] = null;
+        }
+
+        $assigneeIds = $isLog ? [] : $request->input('assignees', []);
 
         if (empty($assigneeIds)) {
             $assigneeIds = [Auth::id()];
@@ -1256,6 +1268,29 @@ class LeadsManagementController extends Controller
                 'user_id' => Auth::id(),
                 'content' => "📋 Created task: {$task->title}",
             ]);
+
+            // Kategori log: description + file menjadi activity task (TaskActivity),
+            // bukan lampiran Activity lead. Parent Activity di atas tetap dipakai
+            // sebagai jangkar agar activity task muncul di feed lead.
+            $hasDescription = filled($validated['description'] ?? null);
+            $hasAttachments = $request->hasFile('attachments');
+
+            if ($isLog && ($hasDescription || $hasAttachments)) {
+                $taskActivity = TaskActivity::create([
+                    'task_id' => $task->id,
+                    'user_id' => Auth::id(),
+                    'content' => $validated['description'] ?? null,
+                ]);
+
+                foreach ($request->file('attachments', []) as $file) {
+                    $path = $file->store('task-activities', 'public');
+                    $taskActivity->attachments()->create([
+                        'attachment_path' => $path,
+                        'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'attachment_name' => $file->getClientOriginalName(),
+                    ]);
+                }
+            }
 
             DB::commit();
 
