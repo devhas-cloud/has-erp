@@ -2,6 +2,8 @@
 
 namespace App\Observers;
 
+use App\Models\AccountCompany;
+use App\Models\AccountContact;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\User;
@@ -11,12 +13,16 @@ class TaskActivityObserver
 {
     public function created(TaskActivity $activity): void
     {
+        $task = $activity->task()->with(['creator', 'assignees'])->first();
+
+        AccountCompany::touchLastActivity($task?->accountCompanyId(), $activity->created_at);
+        AccountContact::touchLastActivity($task?->accountContactId(), $activity->created_at);
+
         // Skip replies — handled by controller-side reply notification
         if ($activity->reply_to_id) {
             return;
         }
 
-        $task = $activity->task()->with(['creator', 'assignees'])->first();
         if (! $task) {
             return;
         }

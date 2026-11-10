@@ -162,6 +162,7 @@
                     <th>Account Name</th>
                     <th>Phone</th>
                     <th>Owner</th>
+                    <th class="text-center">Last Activity</th>
                     <th class="text-center" style="width:120px">Action</th>
                 </tr>
             </thead>
@@ -866,6 +867,16 @@ function initAccountsTable() {
             },
             { data: 'phone' },
             { data: 'owner_name', orderable: false },
+            {
+                data: 'last_activity_at',
+                orderable: true,
+                searchable: false,
+                className: 'text-center',
+                render: function(data, type, row) {
+                    if (!data) return '<span style="color:var(--text-muted)">—</span>';
+                    return '<span title="' + row.last_activity_full + '">' + data + '</span>';
+                }
+            },
             {
                 data: null,
                 orderable: false,

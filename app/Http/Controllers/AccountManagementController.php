@@ -83,15 +83,18 @@ class AccountManagementController extends Controller
 
         $recordsFiltered = $query->count();
 
-        $orderColumnIndex = $request->input('order.0.column', 1);
-        $orderDirection = $request->input('order.0.dir', 'asc');
+        $orderColumnIndex = (int) $request->input('order.0.column', 1);
+        $orderDirection = strtolower((string) $request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         $columnOrderMap = [
             1 => 'account_name',
             2 => 'phone',
+            4 => 'last_activity_at',
         ];
 
-        if (isset($columnOrderMap[$orderColumnIndex])) {
+        if ($orderColumnIndex === 4) {
+            $query->orderByRaw("last_activity_at IS NULL, last_activity_at {$orderDirection}");
+        } elseif (isset($columnOrderMap[$orderColumnIndex])) {
             $query->orderBy($columnOrderMap[$orderColumnIndex], $orderDirection);
         }
         $query->orderBy('id', 'desc');
@@ -112,6 +115,8 @@ class AccountManagementController extends Controller
                 'name_display' => $account->account_name ?? '—',
                 'phone' => $account->phone ?? '—',
                 'owner_name' => $account->accountOwner?->display_name ?? '—',
+                'last_activity_at' => $account->last_activity_at?->format('d/m/Y'),
+                'last_activity_full' => $account->last_activity_at?->format('d/m/Y H:i'),
             ];
         }
 

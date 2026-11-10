@@ -2,6 +2,8 @@
 
 namespace App\Observers;
 
+use App\Models\AccountCompany;
+use App\Models\AccountContact;
 use App\Models\Activity;
 use App\Models\Lead;
 use App\Models\Notification;
@@ -13,6 +15,9 @@ class ActivityObserver
 {
     public function created(Activity $activity): void
     {
+        AccountCompany::touchLastActivity($activity->accountCompanyId(), $activity->created_at);
+        AccountContact::touchLastActivity($activity->accountContactId(), $activity->created_at);
+
         // Skip replies — handled by controller-side reply notification
         if ($activity->reply_to_id) {
             return;

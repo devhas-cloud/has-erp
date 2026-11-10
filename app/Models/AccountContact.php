@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class AccountContact extends Model
 {
     protected $appends = ['icon_url'];
+
+    protected $casts = [
+        'last_activity_at' => 'datetime',
+    ];
 
     protected $fillable = [
         'account_companies_id',
@@ -98,5 +103,25 @@ class AccountContact extends Model
     public function leads(): HasMany
     {
         return $this->hasMany(Lead::class, 'account_contacts_id');
+    }
+
+    /**
+     * Naikkan last_activity_at hanya bila timestamp baru lebih besar.
+     * Monotonic: timestamp tidak turun saat activity dihapus.
+     */
+    public static function touchLastActivity(?int $contactId, ?CarbonInterface $at): void
+    {
+        if (! $contactId || ! $at) {
+            return;
+        }
+
+        static::query()
+            ->whereKey($contactId)
+            ->where(function ($q) use ($at) {
+                $q->whereNull('last_activity_at')
+                    ->orWhere('last_activity_at', '<', $at);
+            })
+            ->toBase()
+            ->update(['last_activity_at' => $at]);
     }
 }

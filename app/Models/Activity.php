@@ -47,6 +47,18 @@ class Activity extends Model
         return $this->hasMany(self::class, 'reply_to_id');
     }
 
+    public function accountCompanyId(): ?int
+    {
+        return $this->lead?->account_companies_id
+            ?? $this->opportunity?->account_companies_id;
+    }
+
+    public function accountContactId(): ?int
+    {
+        return $this->lead?->account_contacts_id
+            ?? $this->opportunity?->account_contacts_id;
+    }
+
     public function attachments(): HasMany
     {
         return $this->hasMany(ActivityAttachment::class);

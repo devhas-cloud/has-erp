@@ -116,6 +116,24 @@ class Task extends Model
         return $this->belongsTo(Opportunity::class);
     }
 
+    public function accountCompanyId(): ?int
+    {
+        return $this->lead?->account_companies_id
+            ?? $this->opportunity?->account_companies_id
+            ?? $this->accountContact?->account_companies_id
+            ?? $this->project?->company_id
+            ?? $this->sourceActivity?->accountCompanyId();
+    }
+
+    public function accountContactId(): ?int
+    {
+        return $this->account_contact_id
+            ? (int) $this->account_contact_id
+            : ($this->lead?->account_contacts_id
+                ?? $this->opportunity?->account_contacts_id
+                ?? $this->sourceActivity?->accountContactId());
+    }
+
     /**
      * Kolom DB bertipe TIME tersimpan "HH:MM:SS"; tampilkan & gunakan "HH:MM"
      * agar input time lintas browser konsisten.

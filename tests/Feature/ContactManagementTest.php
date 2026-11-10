@@ -4,14 +4,17 @@ namespace Tests\Feature;
 
 use App\Models\AccountCompany;
 use App\Models\AccountContact;
+use App\Models\Activity;
 use App\Models\ContactMethod;
 use App\Models\Division;
 use App\Models\JobTitle;
+use App\Models\Lead;
 use App\Models\Module;
 use App\Models\Opportunity;
 use App\Models\RoleInProject;
 use App\Models\Source;
 use App\Models\Task;
+use App\Models\TaskActivity;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\UserAccessControl;
@@ -301,7 +304,7 @@ class ContactManagementTest extends TestCase
 
         $response = $this->actingAs($this->creator)->getJson(route('contact-management.data'));
 
-$response->assertOk();
+        $response->assertOk();
         $this->assertSame('PT Sinar Abadi', $response->json('data.0.company_name_display'));
         $this->assertSame('PT', $response->json('data.0.company_initials'));
     }
@@ -368,6 +371,101 @@ $response->assertOk();
         $this->assertSame('Task Baru', $task->title);
         $this->assertSame($contact->id, $task->account_contact_id);
         $this->assertTrue($task->assignees()->where('users.id', $this->creator->id)->exists());
+    }
+
+    public function test_contact_last_activity_tracks_lead_and_task_activities(): void
+    {
+        $contact = AccountContact::create(array_merge($this->payload, [
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+
+        $lead = Lead::create([
+            'lead_title' => 'Lead Aktivitas Contact',
+            'account_contacts_id' => $contact->id,
+            'account_companies_id' => $contact->account_companies_id,
+            'source_id' => $this->payload['sources_id'],
+            'lead_owner_id' => $this->creator->id,
+        ]);
+
+        $activity = Activity::create([
+            'lead_id' => $lead->id,
+            'user_id' => $this->creator->id,
+            'content' => 'Activity contact pertama.',
+        ]);
+
+        $contact->refresh();
+        $this->assertTrue($contact->last_activity_at->equalTo($activity->created_at));
+
+        // Activity lama tidak boleh menurunkan timestamp.
+        $olderActivity = new Activity([
+            'lead_id' => $lead->id,
+            'user_id' => $this->creator->id,
+            'content' => 'Activity contact lama.',
+        ]);
+        $olderActivity->created_at = $activity->created_at->copy()->subDay();
+        $olderActivity->save();
+
+        $contact->refresh();
+        $this->assertTrue($contact->last_activity_at->equalTo($activity->created_at));
+
+        $category = TaskCategory::create(['name' => 'Follow Up']);
+
+        $directTask = Task::create([
+            'title' => 'Task Kontak Langsung',
+            'account_contact_id' => $contact->id,
+            'category_id' => $category->id,
+            'due_date' => now()->toDateString(),
+            'creator_id' => $this->creator->id,
+        ]);
+        $directActivity = TaskActivity::create([
+            'task_id' => $directTask->id,
+            'user_id' => $this->creator->id,
+            'content' => 'Komentar task kontak langsung.',
+        ]);
+
+        $contact->refresh();
+        $this->assertTrue($contact->last_activity_at->equalTo($directActivity->created_at));
+
+        $opportunity = Opportunity::create([
+            'opportunity_name' => 'Opp Aktivitas Contact',
+            'account_companies_id' => $contact->account_companies_id,
+            'account_contacts_id' => $contact->id,
+            'owner_id' => $this->creator->id,
+        ]);
+        $opportunityTask = Task::create([
+            'title' => 'Task Opportunity Contact',
+            'opportunity_id' => $opportunity->id,
+            'category_id' => $category->id,
+            'due_date' => now()->toDateString(),
+            'creator_id' => $this->creator->id,
+        ]);
+        $opportunityActivity = TaskActivity::create([
+            'task_id' => $opportunityTask->id,
+            'user_id' => $this->creator->id,
+            'content' => 'Komentar task opportunity contact.',
+        ]);
+
+        $contact->refresh();
+        $this->assertTrue($contact->last_activity_at->equalTo($opportunityActivity->created_at));
+
+        AccountContact::create(array_merge($this->payload, [
+            'full_name' => 'Kontak Tanpa Aktivitas',
+            'email' => 'tanpa-aktivitas@example.com',
+            'mobile' => '81234567891',
+            'contact_owner_id' => $this->creator->id,
+            'status' => 'Active',
+        ]));
+
+        $this->actingAs($this->creator)
+            ->getJson(route('contact-management.data', [
+                'order' => [['column' => 8, 'dir' => 'desc']],
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.last_activity_at', $opportunityActivity->created_at->format('d/m/Y'))
+            ->assertJsonPath('data.0.full_name', $contact->full_name)
+            ->assertJsonPath('data.1.last_activity_at', null)
+            ->assertJsonPath('data.1.full_name', 'Kontak Tanpa Aktivitas');
     }
 
     public function test_destroy_contact_task_deletes_task(): void

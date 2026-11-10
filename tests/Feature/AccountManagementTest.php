@@ -4,12 +4,17 @@ namespace Tests\Feature;
 
 use App\Models\AccountCompany;
 use App\Models\AccountContact;
+use App\Models\Activity;
 use App\Models\BusinessEntity;
 use App\Models\BusinessValue;
 use App\Models\Division;
+use App\Models\Lead;
 use App\Models\Module;
 use App\Models\Segmentation;
 use App\Models\Source;
+use App\Models\Task;
+use App\Models\TaskActivity;
+use App\Models\TaskCategory;
 use App\Models\TaskRole;
 use App\Models\TypesAccountsCompany;
 use App\Models\User;
@@ -147,6 +152,81 @@ class AccountManagementTest extends TestCase
         $response->assertSee('Kontak Milik Orang Lain');
         $response->assertSee('sendiri@example.com');
         $response->assertDontSee('oranglain@example.com');
+    }
+
+    public function test_account_last_activity_tracks_lead_and_task_activities(): void
+    {
+        $company = AccountCompany::create(array_merge($this->payload, ['status' => 'Active']));
+
+        $contact = AccountContact::create([
+            'account_companies_id' => $company->id,
+            'full_name' => 'Kontak Aktivitas',
+            'email' => 'aktivitas@example.com',
+            'contact_owner_id' => $this->user->id,
+            'status' => 'Active',
+        ]);
+
+        $lead = Lead::create([
+            'lead_title' => 'Lead Aktivitas',
+            'account_contacts_id' => $contact->id,
+            'account_companies_id' => $company->id,
+            'source_id' => $this->payload['sources_id'],
+            'lead_owner_id' => $this->user->id,
+        ]);
+
+        $activity = Activity::create([
+            'lead_id' => $lead->id,
+            'user_id' => $this->user->id,
+            'content' => 'Activity pertama.',
+        ]);
+
+        $company->refresh();
+        $this->assertTrue($company->last_activity_at->equalTo($activity->created_at));
+
+        // Activity lama tidak boleh menurunkan timestamp.
+        $olderActivity = new Activity([
+            'lead_id' => $lead->id,
+            'user_id' => $this->user->id,
+            'content' => 'Activity lama.',
+        ]);
+        $olderActivity->created_at = $activity->created_at->copy()->subDay();
+        $olderActivity->save();
+
+        $company->refresh();
+        $this->assertTrue($company->last_activity_at->equalTo($activity->created_at));
+
+        $category = TaskCategory::create(['name' => 'Visit']);
+        $task = Task::create([
+            'creator_id' => $this->user->id,
+            'category_id' => $category->id,
+            'account_contact_id' => $contact->id,
+            'title' => 'Task Aktivitas',
+            'due_date' => now()->toDateString(),
+        ]);
+
+        $taskActivity = TaskActivity::create([
+            'task_id' => $task->id,
+            'user_id' => $this->user->id,
+            'content' => 'Komentar task.',
+        ]);
+
+        $company->refresh();
+        $this->assertTrue($company->last_activity_at->equalTo($taskActivity->created_at));
+
+        AccountCompany::create(array_merge($this->payload, [
+            'account_name' => 'PT Tanpa Aktivitas',
+            'status' => 'Active',
+        ]));
+
+        $this->actingAs($this->user)
+            ->getJson(route('accounts-management.data', [
+                'order' => [['column' => 4, 'dir' => 'desc']],
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.last_activity_at', $taskActivity->created_at->format('d/m/Y'))
+            ->assertJsonPath('data.0.account_name', $company->account_name)
+            ->assertJsonPath('data.1.last_activity_at', null)
+            ->assertJsonPath('data.1.account_name', 'PT Tanpa Aktivitas');
     }
 
     public function test_sales_manager_sees_all_contact_rows(): void

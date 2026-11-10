@@ -93,16 +93,19 @@ class ContactManagementController extends Controller
 
         $recordsFiltered = $query->count();
 
-        $orderColumnIndex = $request->input('order.0.column', 1);
-        $orderDirection = $request->input('order.0.dir', 'asc');
+        $orderColumnIndex = (int) $request->input('order.0.column', 1);
+        $orderDirection = strtolower((string) $request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         $columnOrderMap = [
             1 => 'full_name',
             4 => 'mobile',
             5 => 'email',
+            8 => 'last_activity_at',
         ];
 
-        if (isset($columnOrderMap[$orderColumnIndex])) {
+        if ($orderColumnIndex === 8) {
+            $query->orderByRaw("last_activity_at IS NULL, last_activity_at {$orderDirection}");
+        } elseif (isset($columnOrderMap[$orderColumnIndex])) {
             $query->orderBy($columnOrderMap[$orderColumnIndex], $orderDirection);
         }
         $query->orderBy('id', 'desc');
@@ -130,6 +133,8 @@ class ContactManagementController extends Controller
                 'email' => $contact->email ?? '—',
                 'owner_name' => $contact->contactOwner?->display_name ?? '—',
                 'assigned_to_name' => $contact->assignedTo?->display_name ?? '—',
+                'last_activity_at' => $contact->last_activity_at?->format('d/m/Y'),
+                'last_activity_full' => $contact->last_activity_at?->format('d/m/Y H:i'),
             ];
         }
 
