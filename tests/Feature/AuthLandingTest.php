@@ -6,6 +6,8 @@ use App\Models\Module;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 use Tests\TestCase;
 
 /**
@@ -131,5 +133,56 @@ class AuthLandingTest extends TestCase
             ->assertSee('Belum Ada Akses Modul');
 
         $this->actingAs($user)->get('/')->assertRedirect(route('no-access'));
+    }
+
+    public function test_remember_me_cookie_lasts_seven_days(): void
+    {
+        $user = $this->makeUser();
+
+        $response = $this->post(route('login'), [
+            'username' => $user->username,
+            'password' => 'secret',
+            'remember' => '1',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertAuthenticatedAs($user);
+
+        $rememberCookie = collect($response->headers->getCookies())
+            ->first(fn ($cookie) => str_starts_with($cookie->getName(), 'remember_web_'));
+
+        $this->assertNotNull($rememberCookie);
+        $this->assertEqualsWithDelta(
+            now()->addDays(7)->timestamp,
+            $rememberCookie->getExpiresTime(),
+            120
+        );
+    }
+
+    public function test_logout_redirects_to_login_and_clears_auth(): void
+    {
+        $user = $this->makeUser();
+
+        $this->actingAs($user)
+            ->post(route('logout'))
+            ->assertRedirect(route('login'));
+
+        $this->assertGuest();
+    }
+
+    public function test_expired_logout_token_redirects_to_login_instead_of_419(): void
+    {
+        $user = $this->makeUser();
+        $this->actingAs($user);
+
+        $request = Request::create('/logout', 'POST');
+        $request->setLaravelSession($this->app['session.store']);
+
+        $response = $this->app->make(\Illuminate\Contracts\Debug\ExceptionHandler::class)
+            ->render($request, new TokenMismatchException);
+
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame(route('login'), $response->headers->get('Location'));
+        $this->assertGuest();
     }
 }

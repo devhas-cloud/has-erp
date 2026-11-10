@@ -41,6 +41,8 @@ return [
         'web' => [
             'driver' => 'session',
             'provider' => 'users',
+            // Cookie "Ingat saya" berlaku 7 hari (menit).
+            'remember' => 60 * 24 * 7,
         ],
     ],
 
