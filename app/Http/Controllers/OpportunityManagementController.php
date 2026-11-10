@@ -71,6 +71,7 @@ class OpportunityManagementController extends Controller
             'close_date_to' => 'nullable|date_format:Y-m-d',
             'stage_ids' => 'nullable|array',
             'stage_ids.*' => 'integer',
+            'division_id' => 'nullable|integer',
         ]);
         if (! empty($filters['close_date_from'])) {
             $query->whereDate('opportunities.close_date', '>=', $filters['close_date_from']);
@@ -80,6 +81,9 @@ class OpportunityManagementController extends Controller
         }
         if (! empty($filters['stage_ids'])) {
             $query->whereIn('opportunities.stage_id', $filters['stage_ids']);
+        }
+        if (! empty($filters['division_id'])) {
+            $query->where('opportunities.division_id', $filters['division_id']);
         }
 
         $searchValue = $request->input('search.value');

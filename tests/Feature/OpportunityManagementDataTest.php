@@ -251,6 +251,25 @@ class OpportunityManagementDataTest extends TestCase
         $this->assertSame(['Opp Ims', 'Opp Water'], array_slice($sorted, -2));
     }
 
+    public function test_division_filter_limits_results(): void
+    {
+        $user = $this->makeUser('viewer', 'Viewer');
+        $water = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
+        $ims = Division::create(['division_name' => 'IMS', 'description' => 'Ims', 'type' => 'Internal', 'status' => 'Active']);
+
+        $company = AccountCompany::create(['account_name' => 'PT Division Filter', 'status' => 'Active']);
+        Opportunity::create(['opportunity_name' => 'Opp Water Filter', 'account_companies_id' => $company->id, 'owner_id' => $user->id, 'division_id' => $water->id]);
+        Opportunity::create(['opportunity_name' => 'Opp Ims Filter', 'account_companies_id' => $company->id, 'owner_id' => $user->id, 'division_id' => $ims->id]);
+
+        $this->assertSame(['Opp Water Filter'], $this->names($user, ['division_id' => $water->id]));
+        $this->assertSame(['Opp Ims Filter'], $this->names($user, ['division_id' => $ims->id]));
+        $this->assertCount(5, $this->names($user, ['division_id' => '']));
+
+        $this->actingAs($user)
+            ->getJson(route('opportunity-management.data', ['division_id' => 'abc']))
+            ->assertStatus(422);
+    }
+
     public function test_default_order_is_newest_created_first(): void
     {
         $user = $this->makeUser('viewer', 'Viewer');

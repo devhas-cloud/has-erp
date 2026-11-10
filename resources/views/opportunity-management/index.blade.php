@@ -232,6 +232,15 @@
                         @endforeach
                     </select>
                 </div>
+                <div class="opp-toolbar-group opp-stage-filter">
+                    <label class="opp-toolbar-label" for="filter-division"><i class="fa fa-building"></i>Division</label>
+                    <select id="filter-division" class="form-select">
+                        <option value="">Semua Division</option>
+                        @foreach($divisions as $d)
+                        <option value="{{ $d->id }}">{{ $d->division_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
             <div class="opp-summary" aria-live="polite">
                 <span id="opp-summary-text">Memuat…</span>
@@ -593,6 +602,7 @@ function initOpportunityTable() {
                 d.close_date_from = $('#filter-close-from').val();
                 d.close_date_to = $('#filter-close-to').val();
                 d.stage_ids = selectedStageIds();
+                d.division_id = $('#filter-division').val();
             }
         },
         columns: [
@@ -668,6 +678,7 @@ function initOpportunityTable() {
                 from: $('#filter-close-from').val(),
                 to: $('#filter-close-to').val(),
                 stages: selectedStageIds(),
+                division: $('#filter-division').val(),
             };
         },
         stateLoadParams: function(settings, data) {
@@ -675,6 +686,7 @@ function initOpportunityTable() {
             // Filter tersimpan dari versi lama (bawaan kuartal berjalan) diabaikan
             if (!saved || saved.v !== OPP_FILTER_VERSION) return;
             setSelectedStages(saved.stages || []);
+            setSelectedDivision(saved.division || '');
             if (isClosePreset(saved.preset)) {
                 if (saved.year && $('#opp-year option[value="' + saved.year + '"]').length) {
                     $('#opp-year').val(saved.year);
@@ -799,9 +811,25 @@ $('#filter-stage').on('change', function() {
     if (opportunityTable) opportunityTable.ajax.reload();
 });
 
+// --- Filter Division (dropdown; kosong = semua division) ---
+function setSelectedDivision(id) {
+    id = String(id || '');
+    // Id tersimpan yang division-nya sudah tidak ada → kembali ke "Semua Division"
+    $('#filter-division').val($('#filter-division option[value="' + id + '"]').length ? id : '');
+}
+
+function divisionLabel() {
+    return $('#filter-division').val() ? $('#filter-division option:selected').text().trim() : '';
+}
+
+$('#filter-division').on('change', function() {
+    if (opportunityTable) opportunityTable.ajax.reload();
+});
+
 $('#btn-reset-close-filter').on('click', function() {
     applyClosePreset('all');
     setSelectedStages([]);
+    setSelectedDivision('');
     if (opportunityTable) opportunityTable.ajax.reload();
 });
 
@@ -811,13 +839,15 @@ $('#opportunity-table').on('draw.dt', function(e, settings) {
     var info = api.page.info();
     var label = closeRangeLabel();
     var stages = stageLabel();
+    var division = divisionLabel();
 
     $('#opp-summary-text').html(
         '<strong>' + info.recordsDisplay.toLocaleString('id-ID') + '</strong> opportunity' +
         (label ? ' · Close Date <strong>' + label + '</strong>' : ' · semua tanggal') +
-        (stages ? ' · Stage <strong>' + $('<span>').text(stages).html() + '</strong>' : ' · semua stage')
+        (stages ? ' · Stage <strong>' + $('<span>').text(stages).html() + '</strong>' : ' · semua stage') +
+        (division ? ' · Division <strong>' + $('<span>').text(division).html() + '</strong>' : ' · semua division')
     );
-    $('#btn-reset-close-filter').toggle(!!(label || stages));
+    $('#btn-reset-close-filter').toggle(!!(label || stages || division));
 });
 
 $(document).on('click', '#btn-save-opportunity', function() {
