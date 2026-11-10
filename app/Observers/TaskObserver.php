@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Task;
 use App\Models\User;
+use App\Services\TaskWhatsAppNotifier;
 use Illuminate\Support\Facades\Auth;
 
 class TaskObserver
@@ -45,6 +46,8 @@ class TaskObserver
                 'Assignee telah menyelesaikan tugas.',
                 ['task_id' => $task->id]
             );
+
+            app(TaskWhatsAppNotifier::class)->notifyApprovalRequired($task);
 
             return;
         }

@@ -134,6 +134,21 @@ class Task extends Model
                 ?? $this->sourceActivity?->accountContactId());
     }
 
+    public function accountCompanyName(): ?string
+    {
+        $companyId = $this->accountCompanyId();
+
+        return $companyId ? AccountCompany::find($companyId)?->account_name : null;
+    }
+
+    /**
+     * Link absolut untuk notifikasi WhatsApp.
+     */
+    public function whatsappUrl(): string
+    {
+        return route('task-planner.show', $this->id);
+    }
+
     /**
      * Kolom DB bertipe TIME tersimpan "HH:MM:SS"; tampilkan & gunakan "HH:MM"
      * agar input time lintas browser konsisten.

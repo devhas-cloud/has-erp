@@ -9,7 +9,7 @@ class TaskAlertService
 {
     public function sendAlerts(): array
     {
-        $tasks = Task::with(['creator', 'assignees', 'whatsappGroup', 'handlingGroup'])
+        $tasks = Task::with(['creator', 'category', 'assignees', 'whatsappGroup', 'handlingGroup'])
             // whereDate, bukan whereIn: due_date bertipe datetime, jadi whereIn
             // dengan 'Y-m-d' cuma cocok kalau jamnya persis 00:00:00.
             ->where(function ($q) {
@@ -163,35 +163,22 @@ class TaskAlertService
 
     private function buildMessage(Task $task): string
     {
-        $dueDate = $task->due_date->format('d M Y');
-        $isToday = $task->due_date->isToday();
-        $prefix = $isToday ? '⚠️ *Reminder: Task Hari Ini!*' : '📋 *Reminder: Task Besok*';
-
-        $lines = [
-            $prefix,
+        return implode("\n", [
+            'REMINDER TUGAS',
             '',
-            '*Tugas:* '.$task->title,
-            '*Status:* '.$this->statusLabel($task->status),
-            '*Tenggat:* '.$dueDate,
-        ];
-
-        if ($task->time) {
-            $lines[] = '*Waktu:* '.$task->time;
-        }
-
-        $lines[] = '*Dari:* '.($task->creator?->display_name ?? 'Sistem');
-
-        return implode("\n", $lines);
-    }
-
-    private function statusLabel(string $status): string
-    {
-        return match ($status) {
-            'todo' => 'To Do',
-            'in_progress' => 'In Progress',
-            'waiting_approval' => 'Waiting Approval',
-            'done' => 'Done',
-            default => $status,
-        };
+            'Tugas anda mendekati deadline.',
+            '',
+            'Judul: '.trim((string) $task->title),
+            'Perusahaan: '.($task->accountCompanyName() ?? '-'),
+            'Kategori: '.($task->category?->name ?? 'Belum ditentukan'),
+            'Tenggat: '.($task->due_date?->format('d M Y') ?? 'Belum ditentukan'),
+            'Dari: '.($task->creator?->display_name ?? 'Sistem'),
+            '',
+            'Segera selesaikan tugas pada link berikut:',
+            '',
+            $task->whatsappUrl(),
+            '',
+            'Jika ada hal yang perlu dikoordinasikan, silakan didiskusikan bersama.',
+        ]);
     }
 }

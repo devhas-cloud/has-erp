@@ -6,13 +6,14 @@ use App\Models\Task;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Notifikasi WhatsApp saat task baru dibuat atau assignee ditambahkan.
+ * Notifikasi WhatsApp untuk task baru, assignee tambahan, dan approval.
  *
- * Prioritas pengiriman:
+ * Prioritas pengiriman task baru:
  * 1. Grup WhatsApp penanganan.
  * 2. Grup WhatsApp khusus task.
  * 3. WhatsApp personal assignee.
  *
+ * Reminder approval selalu personal ke creator.
  * Kegagalan notifikasi tidak boleh mengganggu proses pembuatan task.
  */
 class TaskWhatsAppNotifier
@@ -32,7 +33,7 @@ class TaskWhatsAppNotifier
             return;
         }
 
-        $message = $this->buildMessage($task);
+        $message = $this->buildNewTaskMessage($task);
 
         // 1. Kirim ke grup penanganan jika tersedia.
         if ($task->handling_group_id) {
@@ -77,12 +78,7 @@ class TaskWhatsAppNotifier
         }
 
         // 3. Jika tidak menggunakan grup, kirim ke assignee.
-        $this->sendToUsers(
-            $whatsapp,
-            $task,
-            $assignees,
-            '*Informasi Tugas Baru*'
-        );
+        $this->sendToUsers($whatsapp, $task, $assignees);
     }
 
     /**
@@ -105,12 +101,34 @@ class TaskWhatsAppNotifier
             return;
         }
 
-        $this->sendToUsers(
-            $whatsapp,
-            $task,
-            $assignees,
-            '👋 *Ada Penugasan Baru untuk Kamu*'
-        );
+        $this->sendToUsers($whatsapp, $task, $assignees);
+    }
+
+    /**
+     * Reminder approval dikirim sekali saat status menjadi waiting_approval.
+     */
+    public function notifyApprovalRequired(Task $task): void
+    {
+        $task->loadMissing(['creator', 'category']);
+
+        $whatsapp = app(WhatsAppService::class);
+
+        if (! $whatsapp->isConfigured()) {
+            return;
+        }
+
+        $phoneNumber = $task->creator?->phone_number;
+
+        if (! $phoneNumber) {
+            Log::info(
+                'Notifikasi approval WA dilewati: creator tidak memiliki nomor HP.',
+                ['task_id' => $task->id]
+            );
+
+            return;
+        }
+
+        $whatsapp->sendText($phoneNumber, $this->buildApprovalMessage($task));
     }
 
     /**
@@ -119,10 +137,9 @@ class TaskWhatsAppNotifier
     private function sendToUsers(
         WhatsAppService $whatsapp,
         Task $task,
-        array $assignees,
-        string $heading
+        array $assignees
     ): void {
-        $message = $this->buildMessage($task, $heading);
+        $message = $this->buildNewTaskMessage($task);
 
         $sent = false;
 
@@ -153,42 +170,51 @@ class TaskWhatsAppNotifier
         }
     }
 
-    /**
-     * Membuat pesan WhatsApp dengan bahasa santai, sopan, dan mudah dibaca.
-     */
-    private function buildMessage(
-        Task $task,
-        string $heading = '*Informasi Tugas Baru*'
-    ): string {
-        $title = trim((string) $task->title);
-        $category = $task->category?->name ?? 'Belum ditentukan';
-        $creator = $task->creator?->display_name ?? 'Sistem';
-
-        $dueDate = $task->due_date
-            ? $task->due_date->format('d M Y')
-            : 'Belum ditentukan';
-
-        $lines = [
-            $heading,
-            '',
+    private function buildNewTaskMessage(Task $task): string
+    {
+        return implode("\n", [
             'INFORMASI TUGAS BARU',
             '',
             'Ada tugas yang perlu diperhatikan dan ditindaklanjuti.',
             '',
-            '*Judul:* ' . $title,
-            '*Kategori:* ' . $category,
-            '*Tenggat:* ' . $dueDate,
-            '*Dari:* ' . $creator,
+            ...$this->commonLines($task),
             '',
-            'Mohon bantuannya untuk menyelesaikan tugas ini '
-                . 'sesuai tenggat waktu yang telah ditentukan.',
+            'Mohon bantuannya untuk menyelesaikan tugas ini sesuai tenggat waktu yang telah ditentukan pada link berikut:',
             '',
-            'Jika ada hal yang perlu dikoordinasikan, '
-                . 'silakan didiskusikan bersama.',
+            $task->whatsappUrl(),
             '',
-            'Terima kasih atas kerja sama dan bantuannya!',
-        ];
+            'Jika ada hal yang perlu dikoordinasikan, silakan didiskusikan bersama.',
+        ]);
+    }
 
-        return implode("\n", $lines);
+    private function buildApprovalMessage(Task $task): string
+    {
+        $description = preg_replace('/\s+/', ' ', trim((string) $task->description)) ?: '-';
+
+        return implode("\n", [
+            'REMINDER APPROVAL',
+            '',
+            'Ada pekerjaan yang membutuhkan persetujuan anda.',
+            '',
+            ...$this->commonLines($task),
+            'Keterangan: '.$description,
+            '',
+            'Segera periksa dan setujui pada link berikut:',
+            '',
+            $task->whatsappUrl(),
+            '',
+            'Jika ada hal yang perlu dikoordinasikan, silakan didiskusikan bersama.',
+        ]);
+    }
+
+    private function commonLines(Task $task): array
+    {
+        return [
+            'Judul: '.trim((string) $task->title),
+            'Perusahaan: '.($task->accountCompanyName() ?? '-'),
+            'Kategori: '.($task->category?->name ?? 'Belum ditentukan'),
+            'Tenggat: '.($task->due_date?->format('d M Y') ?? 'Belum ditentukan'),
+            'Dari: '.($task->creator?->display_name ?? 'Sistem'),
+        ];
     }
 }
