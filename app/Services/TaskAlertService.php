@@ -16,7 +16,7 @@ class TaskAlertService
                 $q->whereDate('due_date', today())
                     ->orWhereDate('due_date', today()->addDay());
             })
-            ->whereNotIn('status', ['done'])
+            ->whereNotIn('status', ['done', 'cancelled'])
             ->where('alert_type', '!=', 'none')
             // ->where('is_alert_sent', false)
             ->where(function ($q) {

@@ -33,6 +33,7 @@ class TaskObserver
             'in_progress' => 'In Progress',
             'waiting_approval' => 'Waiting Approval',
             'done' => 'Done',
+            'cancelled' => 'Cancelled',
         ];
 
         $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;

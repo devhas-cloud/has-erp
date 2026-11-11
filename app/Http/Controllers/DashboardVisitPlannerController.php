@@ -35,23 +35,24 @@ class DashboardVisitPlannerController extends Controller
             });
         }
 
-        $overdueSub = (clone $query)->whereNotIn('status', ['done'])
+        $overdueSub = (clone $query)->whereNotIn('status', ['done', 'cancelled'])
             ->where('due_date', '<', now()->endOfDay());
 
-        $totalTasks = (clone $query)->count();
+        $totalTasks = (clone $query)->where('status', '!=', 'cancelled')->count();
         $todoCount = (clone $query)->where('status', 'todo')->count();
         $inProgressCount = (clone $query)->where('status', 'in_progress')->count();
         $doneCount = (clone $query)->where('status', 'done')->count();
         $overdueCount = $overdueSub->count();
 
         $upcomingTasks = (clone $query)
-            ->whereNotIn('status', ['done'])
+            ->whereNotIn('status', ['done', 'cancelled'])
             ->orderBy('due_date', 'asc')
             ->limit(10)
             ->get();
 
         $categories = TaskCategory::all()->map(function ($cat) use ($query) {
-            $catTasks = (clone $query)->where('category_id', $cat->id);
+            $catTasks = (clone $query)->where('category_id', $cat->id)
+                ->where('status', '!=', 'cancelled');
             $total = $catTasks->count();
             $done = (clone $catTasks)->where('status', 'done')->count();
 
@@ -91,7 +92,7 @@ class DashboardVisitPlannerController extends Controller
         $filters = [
             'division_id' => $request->integer('visit_division') ?: null,
             'category_id' => $request->integer('visit_category') ?: null,
-            'status' => in_array($request->input('visit_status'), ['todo', 'in_progress', 'waiting_approval', 'done', 'late'], true)
+            'status' => in_array($request->input('visit_status'), ['todo', 'in_progress', 'waiting_approval', 'done', 'cancelled', 'late'], true)
                 ? $request->input('visit_status') : null,
             'q' => trim((string) $request->input('visit_q', '')),
         ];
@@ -103,8 +104,9 @@ class DashboardVisitPlannerController extends Controller
             ->whereHas('assignees', fn ($q) => $q->where('salesperson', true))
             ->whereDate('due_date', '>=', $first->toDateString())
             ->whereDate('due_date', '<=', $last->toDateString())
+            ->when($filters['status'] !== 'cancelled', fn ($q) => $q->where('status', '!=', 'cancelled'))
             ->when($filters['category_id'], fn ($q, $id) => $q->where('category_id', $id))
-            ->when($filters['status'] === 'late', fn ($q) => $q->where('status', '!=', 'done')->whereDate('due_date', '<', $today->toDateString()))
+            ->when($filters['status'] === 'late', fn ($q) => $q->whereNotIn('status', ['done', 'cancelled'])->whereDate('due_date', '<', $today->toDateString()))
             ->when($filters['status'] && $filters['status'] !== 'late', fn ($q) => $q->where('status', $filters['status']))
             ->with(['category', 'assignees.division', 'accountContact.accountCompany', 'project', 'visits'])
             ->orderBy('due_date')
@@ -138,7 +140,7 @@ class DashboardVisitPlannerController extends Controller
                         ?? $task->accountContact?->full_name
                         ?? $task->project?->project_number,
                     'status' => $task->status,
-                    'late' => $task->status !== 'done' && $task->due_date->lt($today),
+                    'late' => ! in_array($task->status, ['done', 'cancelled'], true) && $task->due_date->lt($today),
                     'checked_in' => $task->visits->contains('user_id', $user->id),
                 ];
                 $rows[$user->id]['count']++;
@@ -217,7 +219,7 @@ class DashboardVisitPlannerController extends Controller
             ->whereDate('due_date', '<=', $end->toDateString());
 
         $tasks = (clone $inRange)->with(['assignees', 'visits'])->get();
-        $planned = $tasks->count();
+        $planned = $tasks->where('status', '!=', 'cancelled')->count();
         $done = $tasks->where('status', 'done');
 
         // Semua salesperson tampil (termasuk 0 visit) agar yang belum visit ikut terpantau.
@@ -231,6 +233,10 @@ class DashboardVisitPlannerController extends Controller
             ]])->all();
 
         foreach ($tasks as $task) {
+            if ($task->status === 'cancelled') {
+                continue;
+            }
+
             foreach ($task->assignees as $user) {
                 if (! isset($people[$user->id])) {
                     continue;

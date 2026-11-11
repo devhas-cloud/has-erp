@@ -378,7 +378,7 @@ class ImsConfigurationController extends Controller
 
         $query = MasterProduct::query()
             ->where('status', 'Active')
-            ->where('division_id', $imsId)
+            //->where('division_id', $imsId)
             ->orderBy('name');
 
         $recordsTotal = $query->count();

@@ -10,8 +10,9 @@
         'in_progress' => ['In Progress', 'background:var(--info-soft);color:#1e40af'],
         'waiting_approval' => ['Waiting Approval', 'background:#fef3c7;color:#92400e'],
         'done' => ['Done', 'background:var(--success-soft);color:#065f46'],
+        'cancelled' => ['Cancelled', 'background:var(--danger-soft);color:#7f1d1d'],
     ];
-    $openTasks = $tasks->where('status', '!=', 'done')->count();
+    $openTasks = $tasks->whereNotIn('status', ['done', 'cancelled'])->count();
     $canAddTask = ($canCreateTask ?? false) && ($projectActive ?? false);
 @endphp
 <div class="card-custom fade-in {{ $class ?? 'mb-4' }}" id="project-tasks">
@@ -51,7 +52,7 @@
                     @forelse($tasks as $t)
                         @php
                             [$stLabel, $stStyle] = $taskStatus[$t->status] ?? $taskStatus['todo'];
-                            $overdue = $t->due_date && $t->due_date->copy()->endOfDay()->isPast() && $t->status !== 'done';
+                            $overdue = $t->due_date && $t->due_date->copy()->endOfDay()->isPast() && ! in_array($t->status, ['done', 'cancelled'], true);
                         @endphp
                         <tr>
                             <td>

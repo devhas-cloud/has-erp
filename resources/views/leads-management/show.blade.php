@@ -2396,14 +2396,14 @@ function loadTasks() {
         var html = '';
         if (res.length > 0) {
             res.forEach(function(t) {
-                var iconBg = t.status === 'done' ? 'background:#d1fae5;color:#059669' : t.status === 'in_progress' ? 'background:#dbeafe;color:#2563eb' : 'background:#f1f5f9;color:var(--text-muted)';
-                var statusClass = t.status === 'done' ? 'status-active' : t.status === 'in_progress' ? 'status-pending' : 'status-inactive';
-                var statusLabel = t.status === 'todo' ? 'To Do' : t.status === 'in_progress' ? 'In Progress' : t.status === 'waiting_approval' ? 'Waiting' : 'Done';
+                var iconBg = t.status === 'cancelled' ? 'background:#fee2e2;color:#991b1b' : t.status === 'done' ? 'background:#d1fae5;color:#059669' : t.status === 'in_progress' ? 'background:#dbeafe;color:#2563eb' : 'background:#f1f5f9;color:var(--text-muted)';
+                var statusClass = t.status === 'cancelled' ? 'status-inactive' : t.status === 'done' ? 'status-active' : t.status === 'in_progress' ? 'status-pending' : 'status-inactive';
+                var statusLabel = t.status === 'cancelled' ? 'Cancelled' : t.status === 'todo' ? 'To Do' : t.status === 'in_progress' ? 'In Progress' : t.status === 'waiting_approval' ? 'Waiting' : 'Done';
                 var assigneeName = (t.assignees && t.assignees.length > 0) ? t.assignees.map(function(a) { return a.display_name; }).join(', ') : '—';
                 var creatorName = t.creator ? t.creator.display_name : '—';
                 var categoryName = t.category ? t.category.name : '—';
                 var dueLabel = t.due_date? new Date(t.due_date).toISOString().split('T')[0] : '—';
-                var dueStyle = (t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString())) ? 'color:#dc3545;font-weight:600' : '';
+                var dueStyle = (!['done', 'cancelled'].includes(t.status) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString())) ? 'color:#dc3545;font-weight:600' : '';
                 html += '<div class="task-item" onclick="window.location.href=\'/task-planner/' + t.id + '?back=lead-' + leadId + '\'" style="cursor:pointer">' +
                     '<div class="task-item-icon" style="' + iconBg + '"><i class="fa fa-tasks"></i></div>' +
                     '<div class="task-item-body">' +

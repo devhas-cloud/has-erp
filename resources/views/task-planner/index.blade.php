@@ -160,6 +160,7 @@
                     <option value="in_progress">In Progress</option>
                     <option value="waiting_approval">Waiting Approval</option>
                     <option value="done">Done</option>
+                    <option value="cancelled">Cancelled</option>
                 </select>
                 <select id="filter-project" style="width:220px"></select>
                 <select id="filter-category" onchange="taskReload()">
@@ -396,6 +397,7 @@ const taskCanDelete = {{ $canDelete ? 'true' : 'false' }};
 const currentUserId = {{ $userId }};
 const showUrl = '{{ route("task-planner.show", "__ID__") }}';
 const editUrl = '{{ route("task-planner.edit", "__ID__") }}';
+const cancelUrl = '{{ route("task-planner.cancel", "__ID__") }}';
 const exportUrl = '{{ route("task-planner.export") }}';
 const importUrl = '{{ route("task-planner.import") }}';
 const fetchProjectsUrl = '{{ route("task-planner.fetch-projects") }}';
@@ -540,7 +542,10 @@ function initTasksTable() {
                     var html = '<div style="display:flex;gap:5px;justify-content:center">';
                     html += '<a href="' + showUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
                     var isCreator = row.creator_id === currentUserId;
-                    if (taskCanUpdate && isCreator) {
+                    if (row.can_cancel) {
+                        html += ' <button type="button" class="btn-icon danger btn-cancel-task" title="Batalkan" data-id="' + row.id + '"><i class="fa fa-ban"></i></button>';
+                    }
+                    if (taskCanUpdate && isCreator && row.status !== 'cancelled') {
                         html += ' <a href="' + editUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
                     }
                     if (taskCanDelete && isCreator) {
@@ -646,6 +651,40 @@ $(document).on('click', '#btn-save-task', function() {
 
 $(document).on('change input', '#task-form input.is-invalid, #task-form select.is-invalid', function() {
     $(this).removeClass('is-invalid');
+});
+
+$(document).on('click', '.btn-cancel-task', function() {
+    const id = $(this).data('id');
+    Swal.fire({
+        title: 'Batalkan task?',
+        text: 'Task yang dibatalkan tidak bisa dilanjutkan.',
+        icon: 'warning',
+        input: 'textarea',
+        inputPlaceholder: 'Alasan pembatalan...',
+        inputValidator: function(v) {
+            if (!v || !v.trim()) return 'Alasan pembatalan wajib diisi.';
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Batalkan',
+        cancelButtonText: 'Tidak',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: cancelUrl.replace('__ID__', id),
+            type: 'POST',
+            data: { _token: '{{ csrf_token() }}', cancel_reason: result.value.trim() },
+            success: function(res) {
+                toastr.success(res.message);
+                taskReload();
+            },
+            error: function(xhr) {
+                toastr.error(xhr.responseJSON?.message || 'Gagal membatalkan task.');
+            }
+        });
+    });
 });
 
 $(document).on('click', '.btn-delete-task', function() {

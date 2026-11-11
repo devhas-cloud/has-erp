@@ -620,7 +620,7 @@
             <p class="page-header-sub">#{{ $task->id }} — Informasi lengkap tugas</p>
         </div>
         <div class="page-header-actions">
-            @if ($canUpdate && ($task->creator_id === Auth::id() || $isGlobalDelegator) && strtolower($task->category?->name) !== 'proposal' && strtolower($task->category?->name) !== 'quote')
+            @if ($canUpdate && ! $task->isCancelled() && ($task->creator_id === Auth::id() || $isGlobalDelegator) && strtolower($task->category?->name) !== 'proposal' && strtolower($task->category?->name) !== 'quote')
                 <a href="{{ route('task-planner.edit', $task->id) }}" class="btn-accent">
                     <i class="fa fa-pen"></i><span>Edit</span>
                 </a>
@@ -664,6 +664,7 @@
                         @if ($task->status === 'todo') status-pending
                         @elseif($task->status === 'in_progress') style="background:var(--info-soft);color:#1e40af;"
                         @elseif($task->status === 'waiting_approval') style="background:#fef3c7;color:#92400e;"
+                        @elseif($task->status === 'cancelled') style="background:var(--danger-soft);color:#7f1d1d;"
                         @else status-active @endif ">
                             @if ($task->status === 'todo')
                                 To Do
@@ -673,6 +674,8 @@
                                 Waiting Approval
                             @elseif($task->status === 'done')
                                 Done
+                            @elseif($task->status === 'cancelled')
+                                Cancelled
                             @endif
                         </span>
                     </div>
@@ -709,6 +712,27 @@
                     @endif
                 </div>
             </div>
+
+            @if ($task->isCancelled())
+                <div class="card-custom fade-in mt-4" style="border-left:4px solid #dc2626">
+                    <div class="card-body-custom" style="padding:14px 18px;background:#fef2f2;color:#7f1d1d;border-radius:var(--radius-sm)">
+                        <div style="font-weight:700;margin-bottom:4px">
+                            <i class="fa fa-ban me-1"></i> Task dibatalkan
+                        </div>
+                        <div style="font-size:13px">
+                            Dibatalkan oleh <strong>{{ $task->cancelledBy?->display_name ?? '—' }}</strong>
+                            @if ($task->cancelled_at)
+                                pada {{ $task->cancelled_at->format('d M Y H:i') }}
+                            @endif
+                        </div>
+                        @if ($task->cancel_reason)
+                            <div style="font-size:13px;margin-top:6px">
+                                Alasan: {{ $task->cancel_reason }}
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endif
 
             <div class="card-custom fade-in stagger-1 mt-4">
                 <div class="card-header-custom" style="padding:0 22px">
@@ -817,7 +841,7 @@
                     @endphp
 
                     <!-- Tombol ini dengan skema muncul jika, status tidak != done, task berupa visit true, maka pembuat dan assignee bisa melakukan start progress dan complete task -->
-                    @if ($task->status !== 'done' && $task->category?->visit)
+                    @if (! in_array($task->status, ['done', 'cancelled'], true) && $task->category?->visit)
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
                             @if ($task->status === 'todo')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
@@ -838,7 +862,7 @@
                         </div>
 
                      <!-- Tombol ini dengan skema muncul jika, status tidak != done, task bukan visit true, dimana dengan skema delegasi dari atasan maka perlu Start progres, mask as done, approve -->
-                    @elseif ($task->status !== 'done' && $isAssignee)
+                    @elseif (! in_array($task->status, ['done', 'cancelled'], true) && $isAssignee)
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
                             @if ($task->status === 'todo')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
@@ -925,7 +949,7 @@
                         $isAssignee = $task->assignees->contains('id', Auth::id());
                         $canTransition = $isCreator || $isAssignee;
                     @endphp
-                    @if ($canTransition && $task->status !== 'done')
+                    @if ($canTransition && ! in_array($task->status, ['done', 'cancelled'], true))
                         <button type="button" class="btn btn-sm btn-accent" id="btn-record-visit"
                             style="font-size:11px">
                             <i class="fa fa-location-dot"></i> Record
@@ -943,7 +967,7 @@
             <div class="card-custom fade-in stagger-3 mt-4">
                 <div class="card-header-custom">
                     <span><i class="fa fa-file-pdf me-2" style="color:var(--accent)"></i>Proposal Files</span>
-                    @if($task->status !== 'done' && ($isCreator || $isAssignee))
+                    @if(! in_array($task->status, ['done', 'cancelled'], true) && ($isCreator || $isAssignee))
                     <button type="button" class="btn btn-sm btn-accent" id="btn-upload-proposal"
                         style="font-size:11px">
                         <i class="fa fa-upload"></i> Upload Proposal
@@ -1027,6 +1051,10 @@
                             </a>
                         </div>
                         @endif
+                    @elseif ($task->isCancelled())
+                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
+                            <i class="fa fa-ban me-1"></i> Task dibatalkan.
+                        </div>
                     @elseif ($task->status !== 'done')
                         <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
                             <i class="fa fa-info-circle me-1"></i> Final quotation akan tampil setelah task di-complete.
@@ -1048,7 +1076,7 @@
                     <span><i class="fa fa-clipboard-check me-2" style="color:var(--accent)"></i>Quote &amp; Configuration</span>
                     @php
                         // Syarat tombol Add: task belum done, viewer creator/assignee, dan quotation belum dibuat.
-                        $showAddConfigBtn = $task->status !== 'done' && ($isCreator || $isAssignee) && $quotations->isEmpty();
+                        $showAddConfigBtn = ! in_array($task->status, ['done', 'cancelled'], true) && ($isCreator || $isAssignee) && $quotations->isEmpty();
                         // Item "Buat Quotation" hanya tampil jika sudah ada config Approved.
                         $hasApprovedConfig = $quoteConfigurations->contains(fn ($c) => $c->status === \App\Models\QuoteConfiguration::STATUS_APPROVED);
                     @endphp

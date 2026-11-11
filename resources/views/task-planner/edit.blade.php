@@ -152,6 +152,7 @@
                         'in_progress' => ['bg' => 'var(--info-soft)', 'color' => '#1e40af', 'label' => 'In Progress'],
                         'waiting_approval' => ['bg' => '#fef3c7', 'color' => '#92400e', 'label' => 'Waiting Approval'],
                         'done' => ['bg' => 'var(--success-soft)', 'color' => '#065f46', 'label' => 'Done'],
+                        'cancelled' => ['bg' => 'var(--danger-soft)', 'color' => '#7f1d1d', 'label' => 'Cancelled'],
                     ];
                     $ss = $statusStyles[$task->status] ?? $statusStyles['todo'];
                 @endphp

@@ -14,6 +14,10 @@ class Task extends Model
     use Loggable;
     use Notifiable;
 
+    public const STATUS_CANCELLED = 'cancelled';
+
+    public const CANCELLABLE_STATUSES = ['todo', 'in_progress'];
+
     protected $fillable = [
         'creator_id',
         'lead_id',
@@ -29,6 +33,9 @@ class Task extends Model
         'due_date',
         'time',
         'status',
+        'cancel_reason',
+        'cancelled_by',
+        'cancelled_at',
         'requires_approval',
         'alert_type',
         'alert_target',
@@ -39,6 +46,7 @@ class Task extends Model
     protected $casts = [
         'due_date' => 'date',
         'alert_time' => 'datetime',
+        'cancelled_at' => 'datetime',
         'requires_approval' => 'boolean',
         'is_alert_sent' => 'boolean',
     ];
@@ -46,6 +54,21 @@ class Task extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function canBeCancelled(): bool
+    {
+        return in_array($this->status, self::CANCELLABLE_STATUSES, true);
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === self::STATUS_CANCELLED;
     }
 
     public function category(): BelongsTo

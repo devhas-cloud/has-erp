@@ -117,6 +117,7 @@ class TaskPlannerController extends Controller
     public function data(Request $request): JsonResponse
     {
         [$query, $recordsTotal] = $this->visibleTaskQuery($request);
+        $userId = Auth::id();
 
         $recordsFiltered = $query->count();
 
@@ -143,6 +144,7 @@ class TaskPlannerController extends Controller
         $data = [];
         foreach ($tasks as $i => $task) {
             $assigneeNames = $task->assignees->pluck('display_name')->join(', ');
+            $canCancel = $task->canBeCancelled() && $task->creator_id === $userId;
 
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
@@ -153,13 +155,16 @@ class TaskPlannerController extends Controller
                 'project_number' => $task->project?->project_number,
                 'project_name' => $task->project?->project_name,
                 'category_name' => $task->category?->name ?? '—',
+                'status' => $task->status,
                 'status_label' => $this->renderStatusBadge($task->status),
                 'creator_name' => $task->creator?->display_name ?? '—',
                 'assignees' => $assigneeNames ?: '—',
                 'time' => $task->time ?? '',
                 'due_date' => $task->due_date?->format('d M Y') ?? '—',
                 'due_date_raw' => $task->due_date?->format('Y-m-d') ?? '',
-                'is_overdue' => $task->due_date && $task->due_date->endOfDay()->isPast() && ! in_array($task->status, ['done']),
+                'is_overdue' => $task->due_date && $task->due_date->endOfDay()->isPast()
+                    && ! in_array($task->status, ['done', 'cancelled'], true),
+                'can_cancel' => $canCancel,
             ];
         }
 
@@ -186,6 +191,7 @@ class TaskPlannerController extends Controller
         $today = now()->startOfDay();
 
         $tasks = $query
+            ->where('status', '!=', Task::STATUS_CANCELLED)
             ->where(fn ($q) => $q->where('status', '!=', 'done')
                 ->orWhere('updated_at', '>=', now()->subDays(self::KANBAN_DONE_DAYS)))
             ->orderBy('due_date')
@@ -270,6 +276,7 @@ class TaskPlannerController extends Controller
             'in_progress' => '<span class="status-badge" style="background:var(--info-soft);color:#1e40af;">In Progress</span>',
             'waiting_approval' => '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Waiting Approval</span>',
             'done' => '<span class="status-badge status-active">Done</span>',
+            'cancelled' => '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Cancelled</span>',
             default => '<span class="status-badge">'.$status.'</span>',
         };
     }
@@ -618,6 +625,12 @@ class TaskPlannerController extends Controller
     public function edit($id)
     {
         $task = Task::with(['assignees', 'category', 'whatsappGroup', 'accountContact', 'project.company'])->findOrFail($id);
+
+        if ($task->isCancelled()) {
+            return redirect()->route('task-planner.show', $task->id)
+                ->with('error', 'Task yang dibatalkan tidak bisa diedit.');
+        }
+
         $whatsappGroups = WhatsAppGroup::with('division')->where('status', 'Active')->get();
         $categories = TaskCategory::all();
         $users = User::all();
@@ -631,6 +644,13 @@ class TaskPlannerController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $task = Task::findOrFail($id);
+
+        if ($task->isCancelled()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task yang dibatalkan tidak bisa diubah.',
+            ], 422);
+        }
 
         if ($request->has('time')) {
             $request->merge(['time' => $this->normalizeTime($request->input('time'))]);
@@ -717,6 +737,7 @@ class TaskPlannerController extends Controller
     {
         $task = Task::with([
             'creator.hierarchyRole',
+            'cancelledBy',
             'category',
             'whatsappGroup.division',
             'assignees.hierarchyRole',
@@ -772,6 +793,10 @@ class TaskPlannerController extends Controller
     public function approve($id): JsonResponse
     {
         $task = Task::findOrFail($id);
+
+        if ($task->isCancelled()) {
+            return response()->json(['success' => false, 'message' => 'Task yang dibatalkan tidak bisa di-approve.'], 422);
+        }
 
         if ($task->creator_id !== Auth::id()) {
             return response()->json(['success' => false, 'message' => 'Hanya creator yang bisa approve.'], 403);
@@ -876,6 +901,13 @@ class TaskPlannerController extends Controller
     {
         $task = Task::with('assignees')->findOrFail($id);
 
+        if ($task->isCancelled()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task yang dibatalkan tidak bisa diubah statusnya.',
+            ], 422);
+        }
+
         if ($task->creator_id !== Auth::id() && ! $task->assignees->contains('id', Auth::id())) {
             return response()->json([
                 'success' => false,
@@ -955,6 +987,69 @@ class TaskPlannerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Status diupdate.',
+        ]);
+    }
+
+    /**
+     * Batalkan task yang masih To Do / In Progress. Task cancelled bersifat terminal.
+     */
+    public function cancel(Request $request, $id): JsonResponse
+    {
+        $task = Task::with('assignees')->findOrFail($id);
+
+        if ($task->creator_id !== Auth::id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pembuat task yang bisa membatalkan task.',
+            ], 403);
+        }
+
+        if (! $task->canBeCancelled()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya task berstatus To Do atau In Progress yang bisa dibatalkan.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'cancel_reason' => 'required|string|max:1000',
+        ], [
+            'cancel_reason.required' => 'Alasan pembatalan wajib diisi.',
+        ]);
+
+        $reason = trim($validated['cancel_reason']);
+
+        DB::beginTransaction();
+
+        try {
+            $task->update([
+                'status' => Task::STATUS_CANCELLED,
+                'cancel_reason' => $reason,
+                'cancelled_by' => Auth::id(),
+                'cancelled_at' => now(),
+            ]);
+
+            TaskActivity::create([
+                'task_id' => $task->id,
+                'user_id' => Auth::id(),
+                'content' => '🚫 Task dibatalkan: '.$reason,
+            ]);
+
+            Log::record('cancel_task', "{$task->title} dibatalkan: {$reason}", 'MOD_TASK_PLANNER', $task);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membatalkan task: '.$e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task berhasil dibatalkan.',
         ]);
     }
 
@@ -1313,6 +1408,13 @@ class TaskPlannerController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
+        if (in_array($task->status, ['done', Task::STATUS_CANCELLED], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task yang sudah selesai atau dibatalkan tidak bisa record visit.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'latitude' => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
@@ -1432,6 +1534,13 @@ class TaskPlannerController extends Controller
     public function storeProposal(Request $request, $id): JsonResponse
     {
         $task = Task::findOrFail($id);
+
+        if (in_array($task->status, ['done', Task::STATUS_CANCELLED], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task yang sudah selesai atau dibatalkan tidak bisa upload proposal.',
+            ], 422);
+        }
 
         $maxUpload = UploadedFile::getMaxFilesize();
 

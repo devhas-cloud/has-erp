@@ -186,7 +186,7 @@
     <div class="ip-stat">
         <div class="k"><i class="fa-solid fa-list-check"></i>Task IMS</div>
         <div class="v">{{ $project->tasks->count() }}</div>
-        <div class="s">{{ $project->tasks->where('status', '!=', 'done')->count() }} belum selesai</div>
+        <div class="s">{{ $project->tasks->whereNotIn('status', ['done', 'cancelled'])->count() }} belum selesai</div>
     </div>
 </div>
 

@@ -161,8 +161,9 @@
         'in_progress' => '#3b82f6',
         'waiting_approval' => '#a855f7',
         'done' => '#10b981',
+        'cancelled' => '#ef4444',
     ];
-    $statusLabel = ['todo' => 'To Do', 'in_progress' => 'In Progress', 'waiting_approval' => 'Waiting Approval', 'done' => 'Done'];
+    $statusLabel = ['todo' => 'To Do', 'in_progress' => 'In Progress', 'waiting_approval' => 'Waiting Approval', 'done' => 'Done', 'cancelled' => 'Cancelled'];
     $doneParams = request()->only(['done_period', 'done_year', 'done_quarter', 'done_start', 'done_end']);
     $visitParams = request()->only(['visit_start', 'visit_division', 'visit_category', 'visit_status', 'visit_q']);
     $vsQuery = fn (array $over) => route('dashboard-visit-planner.index', array_filter(array_merge($doneParams, [
