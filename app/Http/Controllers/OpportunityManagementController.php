@@ -953,7 +953,6 @@ class OpportunityManagementController extends Controller
             'attachments.*' => 'file|max:10240|mimetypes:'.self::ACTIVITY_MIME_RULE,
             'alert_type' => 'nullable|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
-            'alert_time' => 'nullable|date',
         ]);
 
         $category = TaskCategory::findOrFail($validated['category_id']);

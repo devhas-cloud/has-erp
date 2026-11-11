@@ -1226,10 +1226,6 @@
                             </td>
                         </tr>
                         <tr>
-                            <td>Alert Time</td>
-                            <td>{{ $task->alert_time ? $task->alert_time->format('d M Y H:i') : '—' }}</td>
-                        </tr>
-                        <tr>
                             <td>Sent</td>
                             <td>{!! $task->is_alert_sent
                                 ? '<span style="color:var(--success)"><i class="fa fa-check"></i> Yes</span>'

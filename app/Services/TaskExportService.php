@@ -178,7 +178,6 @@ class TaskExportService
             $task->requires_approval ? 'Ya' : 'Tidak',
             $task->alert_type ?? 'none',
             $task->alert_target ?? 'personal',
-            $task->alert_time?->format('d M Y H:i') ?? '',
             $task->created_at->format('d M Y H:i'),
         ];
     }

@@ -19,10 +19,6 @@ class TaskAlertService
             ->whereNotIn('status', ['done', 'cancelled'])
             ->where('alert_type', '!=', 'none')
             // ->where('is_alert_sent', false)
-            ->where(function ($q) {
-                $q->whereNull('alert_time')
-                    ->orWhere('alert_time', '<=', now());
-            })
             ->get();
 
         $sent = 0;

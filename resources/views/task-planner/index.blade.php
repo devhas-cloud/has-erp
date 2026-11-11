@@ -327,17 +327,16 @@
                                         {{-- <option value="both">Both</option> --}}
                                     </select>
                                 </div>
-                                 <div class="form-group" id="whatsapp-group-container" style="display:none">
+                                <div class="form-group" id="whatsapp-group-container" style="display:none">
                                     <label>WhatsApp Group (for alert group)</label>
                                     <select name="whatsapp_group_id" id="task-whatsapp-group" style="width:100%"></select>
                                     <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
                                         Pilih grup WA untuk notifikasi.
                                     </div>
                                 </div>
-                                <div class="form-group small">
-                                    <label>Alert Time</label>
-                                    <input type="datetime-local" name="alert_time" id="task-alert-time">
-                                </div>
+                            </div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+                                Reminder WhatsApp dikirim otomatis setiap hari pukul 08:00 untuk task yang jatuh tempo hari ini atau besok.
                             </div>
                         </div>
                     </div>
@@ -437,7 +436,6 @@ function syncTaskLogState() {
         $('#task-assignees').val(null).trigger('change');
         $('#task-alert-type').val('none');
         $('#task-alert-target').val('personal').trigger('change');
-        $('#task-alert-time').val('');
         $('#task-whatsapp-group').val(null).trigger('change');
         $('#whatsapp-group-container').hide();
     } else {

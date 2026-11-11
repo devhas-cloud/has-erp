@@ -520,7 +520,6 @@ class TaskPlannerController extends Controller
             'attachments.*' => 'file|max:10240|mimetypes:'.self::ACTIVITY_MIME_RULE,
             'alert_type' => 'required|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
-            'alert_time' => 'nullable|date',
         ], [
             'project_id.exists' => 'Project tidak ditemukan atau sudah tidak aktif.',
         ]);
@@ -536,7 +535,6 @@ class TaskPlannerController extends Controller
             $validated['time'] = now()->format('H:i');
             $validated['alert_type'] = 'none';
             $validated['alert_target'] = 'personal';
-            $validated['alert_time'] = null;
             $validated['whatsapp_group_id'] = null;
             $validated['handling_group_id'] = null;
         }
@@ -671,7 +669,6 @@ class TaskPlannerController extends Controller
             'assignees.*' => 'exists:users,id',
             'alert_type' => 'required|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
-            'alert_time' => 'nullable|date',
         ], [
             'project_id.exists' => 'Project tidak ditemukan atau sudah tidak aktif.',
         ]);
@@ -1341,7 +1338,7 @@ class TaskPlannerController extends Controller
         $headers = [
             'ID', 'Title', 'Project', 'Description', 'Category', 'Status',
             'Creator', 'Assignees', 'WhatsApp Group', 'Due Date', 'Time',
-            'Requires Approval', 'Alert Type', 'Alert Target', 'Alert Time', 'Created At',
+            'Requires Approval', 'Alert Type', 'Alert Target', 'Created At',
         ];
 
         $service = new TaskExportService;

@@ -292,11 +292,9 @@
                                 @endif
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Alert Time</label>
-                            <input type="datetime-local" name="alert_time" class="form-control"
-                                value="{{ old('alert_time', $task->alert_time ? $task->alert_time->format('Y-m-d\TH:i') : '') }}">
-                        </div>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+                        Reminder WhatsApp dikirim otomatis setiap hari pukul 08:00 untuk task yang jatuh tempo hari ini atau besok.
                     </div>
                 </div>
             </div>

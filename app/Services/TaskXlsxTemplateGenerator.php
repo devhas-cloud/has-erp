@@ -9,14 +9,14 @@ class TaskXlsxTemplateGenerator
     private array $headers = [
         'Title', 'Description', 'Category', 'Assignee Usernames',
         'WhatsApp Group', 'Due Date', 'Time', 'Status',
-        'Alert Type', 'Alert Target', 'Alert Time',
+        'Alert Type', 'Alert Target',
     ];
 
     private array $exampleRow = [
         'Contoh Tugas Baru', 'Deskripsi tugas contoh',
         'Nama Kategori', 'username1, username2',
         'Nama Group WA', '2026-07-07', '14:00', 'todo',
-        'whatsapp', 'personal', '2026-07-06 09:00',
+        'whatsapp', 'personal',
     ];
 
     public function generate(array $references, string $filePath): void

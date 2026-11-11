@@ -1460,10 +1460,6 @@
                                         <option value="group">Group WA</option>
                                     </select>
                                 </div>
-                                <div class="form-group small">
-                                    <label>Alert Time</label>
-                                    <input type="datetime-local" name="alert_time" id="task-alert-time">
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -2351,7 +2347,6 @@ $(document).on('click', '#btn-save-lead-task', function() {
     formData.append('time', $('#task-time').val() || '');
     formData.append('alert_type', $('#task-alert-type').val() || 'none');
     formData.append('alert_target', $('#task-alert-target').val() || 'personal');
-    formData.append('alert_time', $('#task-alert-time').val() || '');
 
     if (!isLog) {
         ($('#task-assignees').val() || []).forEach(function(id) {

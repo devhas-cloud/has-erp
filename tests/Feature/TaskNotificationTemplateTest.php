@@ -159,4 +159,41 @@ class TaskNotificationTemplateTest extends TestCase
         });
         Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/api/send-group'));
     }
+
+    public function test_reminder_tetap_kirim_walau_alert_time_lama_masih_terisi(): void
+    {
+        $this->configureGateway();
+        Http::fake();
+
+        $assignee = User::create([
+            'username' => 'assignee-alert-time',
+            'email' => 'assignee-alert-time@has.com',
+            'password' => bcrypt('secret'),
+            'role' => 'User',
+            'phone_number' => '081234567894',
+        ]);
+
+        // Nilai legacy: dulu field ini menunda reminder. Sekarang harus diabaikan.
+        $task = $this->makeTask(['alert_time' => now()->addDays(3)]);
+        $task->assignees()->sync([$assignee->id]);
+
+        app(TaskAlertService::class)->sendAlerts();
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/api/send')
+            && $request['to'] === '6281234567894');
+    }
+
+    public function test_add_task_tidak_menampilkan_alert_time(): void
+    {
+        $admin = User::create([
+            'username' => 'admin-alert-time',
+            'email' => 'admin-alert-time@has.com',
+            'password' => bcrypt('secret'),
+            'role' => 'Admin',
+        ]);
+
+        $this->actingAs($admin)->get(route('task-planner.index'))
+            ->assertOk()
+            ->assertDontSee('Alert Time');
+    }
 }

@@ -76,7 +76,6 @@ class TaskImportService
                     'status' => $rowData['status'],
                     'alert_type' => $rowData['alert_type'],
                     'alert_target' => $rowData['alert_target'],
-                    'alert_time' => $rowData['alert_time'],
                     'requires_approval' => ! empty($rowData['assignee_ids']),
                 ]);
 
@@ -150,7 +149,6 @@ class TaskImportService
             'status' => ['status'],
             'alert type' => ['alert type', 'alert_type', 'tipe notifikasi'],
             'alert target' => ['alert target', 'alert_target', 'target notifikasi'],
-            'alert time' => ['alert time', 'alert_time', 'waktu notifikasi'],
         ];
 
         foreach ($fieldMapping as $key => $aliases) {
@@ -173,7 +171,6 @@ class TaskImportService
 
         $dueDate = $get('due date');
         $time = $get('time');
-        $alertTime = $get('alert time');
 
         $assigneeStr = $get('assignee usernames');
         $assigneeIds = [];
@@ -218,7 +215,6 @@ class TaskImportService
             'status' => in_array($status, $this->validStatuses) ? $status : 'todo',
             'alert_type' => in_array($get('alert type'), $this->validAlertTypes) ? $get('alert type') : 'none',
             'alert_target' => in_array($get('alert target'), $this->validAlertTargets) ? $get('alert target') : 'personal',
-            'alert_time' => $alertTime ?: null,
         ];
     }
 
@@ -250,14 +246,6 @@ class TaskImportService
 
         if (! empty($rowData['whatsapp_group_name']) && empty($rowData['whatsapp_group_id'])) {
             $errors[] = 'Baris '.$line.': WhatsApp Group "'.$rowData['whatsapp_group_name'].'" tidak ditemukan. Cek Daftar Referensi.';
-        }
-
-        if (! empty($rowData['alert_time'])) {
-            try {
-                $d = new \DateTime($rowData['alert_time']);
-            } catch (\Exception $e) {
-                $errors[] = 'Baris '.$line.': Alert Time format tidak valid ("'.$rowData['alert_time'].'").';
-            }
         }
 
         return $errors;
