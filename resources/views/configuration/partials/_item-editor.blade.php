@@ -149,41 +149,7 @@
 </div>
 
 @push('modals')
-<div class="modal fade" id="productPickerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Pilih Part Instrument
-                    <small id="pp-target-label" style="font-size:11px;color:var(--text-muted);font-weight:400"></small></h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-2">
-                    <input type="text" id="pp-search" class="form-control" placeholder="Cari part number / brand / kategori...">
-                </div>
-                <div class="table-responsive">
-                    <table id="pp-table" class="table table-custom align-middle mb-0" style="width:100%">
-                        <thead>
-                            <tr>
-                                <th style="width:40px"></th>
-                                <th>Part Number</th>
-                                <th>Brand</th>
-                                <th>Category</th>
-                                <th>Deskripsi</th>
-                            </tr>
-                        </thead>
-                    </table>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-primary btn-sm" id="btn-pp-add">
-                    <i class="fa fa-plus me-1"></i> Tambah
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+@include('configuration.partials._product-picker-modal', ['ppColumns' => ['Part Number', 'Brand', 'Category', 'Deskripsi']])
 @endpush
 
 @push('page-scripts')
@@ -437,7 +403,7 @@ $(document).ready(function() {
         columns: [
             { data: 'id', orderable: false, searchable: false, className: 'text-center',
                 render: function(data) {
-                    var checked = (ppSelected[data] || existingProductIds.indexOf(data) !== -1) ? ' checked' : '';
+                    var checked = ppSelected[data] ? ' checked' : '';
                     return '<input type="checkbox" class="pp-check" value="' + data + '"' + checked + '>';
                 }
             },
