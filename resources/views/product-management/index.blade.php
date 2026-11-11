@@ -190,7 +190,7 @@
                                 </select>
                             </div>
                         </div>
-                        @if($canViewPrice)
+                        @if($canManagePrice)
 
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -204,8 +204,6 @@
                                 </div> --}}
                             </div>
                         </div>
-
-                        @endif
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Currency</label>
@@ -219,6 +217,7 @@
                                 <div class="form-text">Kosongkan untuk memakai mata uang base.</div>
                             </div>
                         </div>
+                        @endif
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Status <span style="color:var(--danger)">*</span></label>
@@ -467,7 +466,7 @@ function initProductTable() {
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
             @if($canViewPrice)
-            { data: 'purchase_price_formatted', orderable: true, searchable: false, className: 'text-end', width: '13%',
+            { data: 'purchase_price_formatted', orderable: {{ $canManagePrice ? 'true' : 'false' }}, searchable: false, className: 'text-end', width: '13%',
                 // Harga beli table = apa adanya di mata uang produk.
                 render: function(data, type, row) {
                     if (data == null) return '<span style="color:var(--text-muted)">—</span>';
@@ -515,7 +514,7 @@ function resetProductForm() {
     document.getElementById('product-form').reset();
     document.getElementById('product-edit-id').value = '';
     document.getElementById('product-status').value = 'Active';
-    document.getElementById('product-currency').value = '';
+    $('#product-currency').val('');
     $('#product-image-preview').empty();
     $('#product-form .is-invalid').removeClass('is-invalid');
 }
@@ -659,10 +658,12 @@ $(document).on('click', '#btn-save-product', function() {
     fd.append('parameter', $('#product-parameter').val().trim());
     fd.append('division_id', $('#product-division').val());
     fd.append('description', $('#product-description').val().trim());
-    @if($canViewPrice)
+    @if($canManagePrice)
     fd.append('purchase_price', purchasePrice);
     @endif
+    @if($canManagePrice)
     fd.append('currency_id', $('#product-currency').val());
+    @endif
     fd.append('status', status);
     var imageFile = $('#product-image')[0].files[0];
     if (imageFile) {

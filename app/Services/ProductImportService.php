@@ -15,6 +15,13 @@ class ProductImportService
     /** lowercase nama produk => code (untuk cek duplikat nama) */
     private array $nameMap = [];
 
+    /**
+     * @param  bool  $withPrices  false = kolom harga & currency di file diabaikan (importer bukan
+     *                            Admin): produk baru tanpa harga ber-currency base, produk lama
+     *                            harga & currency-nya tidak berubah.
+     */
+    public function __construct(private bool $withPrices = true) {}
+
     private function resolveLookups(): void
     {
         // Build lowercase-keyed lookup for case-insensitive matching
@@ -310,7 +317,7 @@ class ProductImportService
                 // Kosong → pakai currency base; kode tak dikenal → baris gagal.
                 $currencyId = null;
                 $currencyInput = trim($data['currency'] ?? '');
-                if ($currencyInput === '') {
+                if ($currencyInput === '' || ! $this->withPrices) {
                     $currencyId = $this->baseCurrencyId();
                 } else {
                     $currencyKey = mb_strtolower($currencyInput);
@@ -371,6 +378,15 @@ class ProductImportService
                 ];
 
                 $existing = MasterProduct::where('code', $data['code'])->first();
+
+                if (! $this->withPrices) {
+                    unset($record['selling_price'], $record['purchase_price']);
+                    if ($existing) {
+                        unset($record['currency_id']);
+                    } else {
+                        $record['currency_id'] = $this->baseCurrencyId();
+                    }
+                }
 
                 if ($existing) {
                     $oldName = $existing->name;

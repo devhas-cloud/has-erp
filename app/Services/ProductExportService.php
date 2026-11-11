@@ -206,7 +206,8 @@ class ProductExportService
             $product->currency?->name ?? '',
         ];
         if ($this->withPurchase) {
-            $row[] = number_format($product->purchase_price ?? 0, 2);
+            // purchase_price_hidden = disembunyikan untuk user ini (IMS, produk divisi lain).
+            $row[] = ! empty($product->purchase_price_hidden) ? '-' : number_format($product->purchase_price ?? 0, 2);
         }
         if ($this->withSelling) {
             $row[] = number_format($product->selling_price ?? 0, 2);

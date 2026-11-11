@@ -52,7 +52,9 @@ class ProductManagementController extends Controller
             'type' => 'type',
             'status' => 'status',
         ];
-        if ($this->canViewPurchasePrice()) {
+        // Urut harga beli hanya untuk Admin: IMS hanya melihat sebagian harga, urutan
+        // lintas semua produk akan membocorkan posisi harga yang disembunyikan.
+        if ($this->canManagePrice()) {
             $columnOrderMap['purchase_price_formatted'] = 'purchase_price';
         }
         if ($this->canViewSellingPrice()) {
@@ -82,7 +84,7 @@ class ProductManagementController extends Controller
             $purchaseFormatted = null;
             $selling = null;
             $sellingFormatted = null;
-            if ($withPurchase) {
+            if ($withPurchase && $this->canViewPurchasePriceOf($product)) {
                 $purchase = round((float) $product->purchase_price, 2);
                 $purchaseFormatted = number_format($purchase, 2, '.', ',');
             }
@@ -147,9 +149,10 @@ class ProductManagementController extends Controller
             'status' => 'required|in:Active,Inactive',
         ]);
 
-        $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
-        // Harga beli hanya boleh diisi role Admin / divisi Admin / divisi IMS.
-        if (! $this->canViewPurchasePrice()) {
+        // Harga beli & currency hanya boleh diisi role Admin / divisi Admin;
+        // selain itu produk baru memakai currency base.
+        $validated['currency_id'] = $this->resolveCurrencyId($this->canManagePrice() ? $request->input('currency_id') : null);
+        if (! $this->canManagePrice()) {
             unset($validated['purchase_price']);
         }
         // Harga jual tidak pernah diterima dari input: selalu hasil formulasi harga beli.
@@ -188,8 +191,8 @@ class ProductManagementController extends Controller
         $data['selling_price_formula'] = $this->formula_selling_price($product->currency_id, $product->purchase_price);
         $data['selling_price_formula_formatted'] = number_format($data['selling_price_formula'], 2, '.', ',');
 
-        if (! $this->canViewPurchasePrice()) {
-            // Harga beli hanya untuk role Admin / divisi Admin / divisi IMS.
+        if (! $this->canViewPurchasePriceOf($product)) {
+            // Harga beli: Admin semua produk; IMS hanya produk divisinya.
             $data['purchase_price'] = null;
         }
         if (! $this->canViewSellingPrice()) {
@@ -233,11 +236,15 @@ class ProductManagementController extends Controller
             'status' => 'required|in:Active,Inactive',
         ]);
 
-        $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
-        // Harga beli hanya bisa diubah role Admin / divisi Admin / divisi IMS; harga jual
-        // ikut dihitung ulang dari formulasi (IMS tetap tidak bisa melihatnya).
-        // Lainnya / form tanpa field purchase_price -> harga DB tetap.
-        if ($this->canViewPurchasePrice() && array_key_exists('purchase_price', $validated)) {
+        // Harga beli & currency hanya bisa diubah role Admin / divisi Admin; harga jual
+        // ikut dihitung ulang dari formulasi. Lainnya -> harga & currency DB tetap.
+        // Admin dengan form tanpa field purchase_price -> harga DB tetap.
+        if ($this->canManagePrice()) {
+            $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
+        } else {
+            unset($validated['currency_id']);
+        }
+        if ($this->canManagePrice() && array_key_exists('purchase_price', $validated)) {
             $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price']);
         } else {
             unset($validated['selling_price'], $validated['purchase_price']);
@@ -285,10 +292,15 @@ class ProductManagementController extends Controller
         $withPurchase = $this->canViewPurchasePrice();
         $withSelling = $this->canViewSellingPrice();
 
-        // Selling Price pada export = hasil formulasi dari harga beli.
-        if ($withSelling) {
-            foreach ($products as $product) {
+        foreach ($products as $product) {
+            // Selling Price pada export = hasil formulasi dari harga beli.
+            if ($withSelling) {
                 $product->selling_price = $this->formula_selling_price($product->currency_id, $product->purchase_price);
+            }
+            // IMS: harga beli produk divisi lain dikosongkan.
+            if ($withPurchase && ! $this->canViewPurchasePriceOf($product)) {
+                $product->purchase_price = null;
+                $product->purchase_price_hidden = true;
             }
         }
 
@@ -331,12 +343,20 @@ class ProductManagementController extends Controller
         $fullPath = Storage::path($filePath);
 
         try {
-            $service = new ProductImportService;
+            // Harga dari file hanya dipakai bila importer Admin; selain itu harga diabaikan
+            // (produk baru tanpa harga, produk lama harganya tetap).
+            $canManagePrice = $this->canManagePrice();
+            $service = new ProductImportService($canManagePrice);
             $result = $service->import($fullPath);
+
+            $message = "Import selesai. {$result['success']} baru, {$result['updated']} diupdate, {$result['failed']} gagal.";
+            if (! $canManagePrice) {
+                $message .= ' Kolom harga & currency diabaikan (hanya Admin yang boleh mengisi).';
+            }
 
             return response()->json([
                 'success' => $result['failed'] === 0,
-                'message' => "Import selesai. {$result['success']} baru, {$result['updated']} diupdate, {$result['failed']} gagal.",
+                'message' => $message,
                 'result' => $result,
             ]);
         } catch (\Exception $e) {
@@ -352,11 +372,27 @@ class ProductManagementController extends Controller
     }
 
     /**
-     * Harga beli: role Admin, divisi Admin, atau divisi IMS (User::canViewProductPrice).
+     * Kolom harga beli: role Admin, divisi Admin, atau divisi IMS (User::canViewProductPrice).
      */
     private function canViewPurchasePrice(): bool
     {
         return (bool) Auth::user()?->canViewProductPrice();
+    }
+
+    /**
+     * Nilai harga beli satu produk: Admin semua, IMS hanya produk divisinya.
+     */
+    private function canViewPurchasePriceOf(MasterProduct $product): bool
+    {
+        return (bool) Auth::user()?->canViewPurchasePriceOf($product);
+    }
+
+    /**
+     * Input/edit harga (form & import): hanya role Admin atau divisi Admin.
+     */
+    private function canManagePrice(): bool
+    {
+        return (bool) Auth::user()?->canManageProductPrice();
     }
 
     /**

@@ -212,7 +212,7 @@ class ImsConfigurationApprovalTest extends TestCase
         $this->assertSame('IMS', $response->json('data.0.division_name'));
     }
 
-    public function test_search_products_only_returns_ims_division(): void
+    public function test_search_products_returns_all_divisions_but_hides_external_price(): void
     {
         MasterProduct::create([
             'name' => 'Material IMS',
@@ -220,6 +220,8 @@ class ImsConfigurationApprovalTest extends TestCase
             'brand' => 'ims',
             'category' => 'Material',
             'division_id' => $this->ims->id,
+            'purchase_price' => 150000,
+            'selling_price' => 200000,
             'status' => 'Active',
         ]);
         MasterProduct::create([
@@ -228,6 +230,8 @@ class ImsConfigurationApprovalTest extends TestCase
             'brand' => 's::can',
             'category' => 'pH',
             'division_id' => $this->water->id,
+            'purchase_price' => 250000,
+            'selling_price' => 300000,
             'status' => 'Active',
         ]);
 
@@ -235,8 +239,86 @@ class ImsConfigurationApprovalTest extends TestCase
             ->getJson(route('ims-configuration.search-products', ['draw' => 1, 'length' => 100]))
             ->assertOk();
 
-        $this->assertSame(1, $response->json('recordsTotal'));
-        $this->assertSame('MAT-IMS-001', $response->json('data.0.code'));
+        $this->assertSame(2, $response->json('recordsTotal'));
+
+        $data = collect($response->json('data'))->keyBy('code');
+        $this->assertSame($this->ims->id, $data['MAT-IMS-001']['division_id']);
+        $this->assertEquals(150000, $data['MAT-IMS-001']['selling_price']);
+        $this->assertSame($this->water->id, $data['W-001']['division_id']);
+        $this->assertNull($data['W-001']['selling_price']);
+        $this->assertNull($data['W-001']['purchase_price']);
+    }
+
+    public function test_store_uses_master_purchase_price_for_ims_product(): void
+    {
+        $product = MasterProduct::create([
+            'name' => 'Material IMS',
+            'code' => 'MAT-IMS-002',
+            'division_id' => $this->ims->id,
+            'purchase_price' => 150000,
+            'selling_price' => 200000,
+            'status' => 'Active',
+        ]);
+        $task = $this->createQuoteTask();
+
+        $this->actingAs($this->creator)->postJson(route('ims-configuration.store'), [
+            'task_id' => $task->id,
+            'items' => [[
+                '_key' => 'new-1',
+                'product_id' => $product->id,
+                'description' => 'Material IMS',
+                'qty' => 2,
+                'selling_price' => 999999,
+                'purchase_price_currency' => 999999,
+            ]],
+        ])->assertOk();
+
+        $item = QuoteConfiguration::latest('id')->firstOrFail()->items()->firstOrFail();
+
+        $this->assertEquals(150000, $item->selling_price);
+        $this->assertEquals(150000, $item->purchase_price_currency);
+    }
+
+    public function test_store_hides_external_division_product_price_and_totals(): void
+    {
+        $product = MasterProduct::create([
+            'name' => 'pH Water',
+            'code' => 'W-002',
+            'division_id' => $this->water->id,
+            'purchase_price' => 987654321,
+            'selling_price' => 987654321,
+            'status' => 'Active',
+        ]);
+        $task = $this->createQuoteTask();
+
+        $this->actingAs($this->creator)->postJson(route('ims-configuration.store'), [
+            'task_id' => $task->id,
+            'items' => [[
+                '_key' => 'new-1',
+                'product_id' => $product->id,
+                'description' => 'Produk Water',
+                'qty' => 1,
+                'selling_price' => 987654321,
+                'purchase_price_currency' => 987654321,
+            ]],
+        ])->assertOk();
+
+        $quotation = QuoteConfiguration::latest('id')->firstOrFail();
+        $item = $quotation->items()->firstOrFail();
+
+        $this->assertNull($item->selling_price);
+        $this->assertNull($item->purchase_price_currency);
+        $this->assertNull($item->currency);
+
+        $hiddenPrice = number_format(987654321, 0, '.', ',');
+
+        $this->actingAs($this->creator)->get(route('ims-configuration.show', $quotation->id))
+            ->assertOk()
+            ->assertDontSee($hiddenPrice);
+
+        $this->actingAs($this->creator)->get(route('ims-configuration.edit', $quotation->id))
+            ->assertOk()
+            ->assertDontSee($hiddenPrice);
     }
 
     public function test_approval_same_division_ims(): void
