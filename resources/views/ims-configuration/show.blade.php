@@ -234,6 +234,11 @@
             </div>
             <div class="card-body-custom p-2">
                 @php
+                    $imsDivisionId = $imsDivisionId ?? null;
+                    $isPriceVisible = fn ($item) => ! $item->product || (int) $item->product->division_id === (int) $imsDivisionId;
+                    $priceOf = fn ($item) => $isPriceVisible($item) ? ($item->selling_price ?? $item->product?->selling_price) : null;
+                    $hasHiddenPrice = $quotation->items->contains(fn ($item) => ! $isPriceVisible($item));
+
                     $all = $quotation->items->keyBy('id');
                     $children = $all->groupBy(fn ($i) => $i->parent_id ?: '_root');
 
@@ -254,10 +259,10 @@
                     foreach ($groupOrder as $category) {
                         $catRows = [];
                         $catSubtotal = 0;
-                        $walk = function ($parentId, $depth) use (&$walk, &$catRows, &$catSubtotal, $children) {
+                        $walk = function ($parentId, $depth) use (&$walk, &$catRows, &$catSubtotal, $children, $priceOf) {
                             foreach ($children[$parentId] ?? [] as $item) {
                                 $catRows[] = ['item' => $item, 'depth' => $depth];
-                                $catSubtotal += (($item->selling_price ?? $item->product?->selling_price) ?? 0) * $item->qty;
+                                $catSubtotal += ($priceOf($item) ?? 0) * $item->qty;
                                 $walk($item->id, $depth + 1);
                             }
                         };
@@ -266,7 +271,7 @@
                             if ($kids->isEmpty()) {
                                 // Root tanpa children -> dirender sbg baris data.
                                 $catRows[] = ['item' => $root, 'depth' => 0];
-                                $catSubtotal += (($root->selling_price ?? $root->product?->selling_price) ?? 0) * $root->qty;
+                                $catSubtotal += ($priceOf($root) ?? 0) * $root->qty;
                             } else {
                                 // Root = judul kategori; children mulai kedalaman 1.
                                 $walk($root->id, 1);
@@ -275,7 +280,7 @@
                         $groups[] = ['category' => $category, 'rows' => $catRows, 'subtotal' => $catSubtotal];
                     }
 
-                    $totalPrice = $quotation->items->sum(fn ($item) => (($item->selling_price ?? $item->product?->selling_price) ?? 0) * $item->qty);
+                    $totalPrice = $quotation->items->sum(fn ($item) => ($priceOf($item) ?? 0) * $item->qty);
                 @endphp
 
                 @forelse($groups as $group)
@@ -296,7 +301,7 @@
                                     @php
                                         $item = $row['item'];
                                         $depth = $row['depth'];
-                                        $price = $item->selling_price ?? $item->product?->selling_price;
+                                        $price = $priceOf($item);
                                     @endphp
                                     <tr>
                                         <td class="text-center" style="padding-left:{{ 6 + $depth * 20 }}px">{{ $item->item_no }}</td>
@@ -333,6 +338,12 @@
                 @empty
                     <div class="text-center" style="color:var(--text-muted);padding:24px">Belum ada item.</div>
                 @endforelse
+
+                @if($hasHiddenPrice)
+                    <div class="text-end mb-2" style="font-size:11px;color:var(--text-muted)">
+                        Harga produk dari divisi lain tidak ditampilkan. Total hanya menghitung produk divisi IMS.
+                    </div>
+                @endif
 
                 @if($groups)
                 <div class="d-flex justify-content-end mt-2">

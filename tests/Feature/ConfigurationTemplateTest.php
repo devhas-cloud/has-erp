@@ -356,4 +356,44 @@ class ConfigurationTemplateTest extends TestCase
             ->assertSee('Unit')
             ->assertSee('Harga');
     }
+
+    public function test_ims_template_accepts_external_product_but_hides_price(): void
+    {
+        $this->createDivision('IMS');
+        $water = $this->createDivision('Water');
+        $product = MasterProduct::create([
+            'name' => 'pH Water',
+            'code' => 'W-TPL-001',
+            'division_id' => $water->id,
+            'purchase_price' => 123456,
+            'selling_price' => 123456,
+            'status' => 'Active',
+        ]);
+
+        $templateId = $this->actingAs($this->admin)
+            ->postJson(route('ims-configuration.template-store'), [
+                'name' => 'IMS Template Divisi Lain',
+                'items' => [[
+                    '_key' => 'new-1',
+                    'product_id' => $product->id,
+                    'description' => 'Produk Water',
+                    'qty' => 1,
+                    'selling_price' => 999999,
+                    'purchase_price_currency' => 999999,
+                ]],
+            ])->assertOk()
+            ->json('id');
+
+        $item = ConfigurationTemplate::findOrFail($templateId)->items()->firstOrFail();
+        $this->assertNull($item->selling_price);
+        $this->assertNull($item->purchase_price_currency);
+
+        $payload = $this->actingAs($this->admin)
+            ->getJson(route('ims-configuration.fetch-template', $templateId))
+            ->assertOk()
+            ->json('items.0');
+
+        $this->assertSame($water->id, $payload['division_id']);
+        $this->assertNull($payload['selling_price']);
+    }
 }

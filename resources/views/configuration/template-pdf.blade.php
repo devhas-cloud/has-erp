@@ -139,7 +139,8 @@
                     @php
                         $item = $row['item'];
                         $depth = $row['depth'];
-                        $price = $item->selling_price;
+                        $isPriceVisible = ! $item->product || (int) $item->product->division_id === (int) $template->division_id;
+                        $price = $isPriceVisible ? $item->selling_price : null;
                     @endphp
                     <tr>
                         <td class="no-col" style="padding-left:{{ 6 + $depth * 12 }}px">{{ $item->item_no }}</td>

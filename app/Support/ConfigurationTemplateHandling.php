@@ -58,27 +58,31 @@ trait ConfigurationTemplateHandling
      */
     public function fetchTemplate(Request $request, $id): JsonResponse
     {
-        $template = ConfigurationTemplate::with(['items'])
+        $template = ConfigurationTemplate::with(['items.product'])
             ->where('division_id', $this->templateDivisionId())
             ->findOrFail($id);
 
         $all = $template->items->keyBy('id');
         $children = $all->groupBy(fn ($item) => $item->parent_id ?: '_root');
+        $divisionId = $this->templateDivisionId();
 
         $items = [];
-        $walk = function ($parentId) use (&$walk, &$items, $children) {
+        $walk = function ($parentId) use (&$walk, &$items, $children, $divisionId) {
             foreach ($children[$parentId] ?? [] as $item) {
+                $isPriceVisible = ! $item->product || (int) $item->product->division_id === (int) $divisionId;
+
                 $items[] = [
                     '_key' => 'tpl-'.$item->id,
                     'parent_key' => $item->parent_id ? 'tpl-'.$item->parent_id : null,
                     'item_no' => $item->item_no,
                     'product_id' => $item->product_id,
+                    'division_id' => $item->product?->division_id,
                     'category' => $item->category,
                     'part_number' => $item->part_number,
                     'description' => $item->description,
                     'qty' => $item->qty,
-                    'selling_price' => $item->selling_price,
-                    'purchase_price_currency' => $item->purchase_price_currency,
+                    'selling_price' => $isPriceVisible ? $item->selling_price : null,
+                    'purchase_price_currency' => $isPriceVisible ? $item->purchase_price_currency : null,
                     'unit' => $item->unit,
                 ];
                 $walk($item->id);
@@ -230,6 +234,7 @@ trait ConfigurationTemplateHandling
             'updateUrl' => route($this->templateViewRoot().'.template-update', '__ID__'),
             'indexUrl' => route($this->templateViewRoot().'.index'),
             'searchUrl' => route($this->templateViewRoot().'.search-products'),
+            'imsDivisionId' => $this->templateDivisionId(),
         ]);
     }
 
@@ -247,6 +252,7 @@ trait ConfigurationTemplateHandling
             'updateUrl' => route($this->templateViewRoot().'.template-update', '__ID__'),
             'indexUrl' => route($this->templateViewRoot().'.index'),
             'searchUrl' => route($this->templateViewRoot().'.search-products'),
+            'imsDivisionId' => $this->templateDivisionId(),
         ]);
     }
 
@@ -385,7 +391,7 @@ trait ConfigurationTemplateHandling
 
         $products = MasterProduct::with('currency')
             ->whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
-            ->get(['id', 'selling_price', 'purchase_price', 'currency_id'])
+            ->get(['id', 'division_id', 'selling_price', 'purchase_price', 'currency_id'])
             ->keyBy('id');
 
         $baseCurrency = strtoupper((string) (Currency::where('is_base', true)->value('name') ?: 'IDR'));
@@ -399,10 +405,20 @@ trait ConfigurationTemplateHandling
             $unit = $item['unit'] ?? null;
             $product = $productId ? $products->get($productId) : null;
 
+            // Produk dari divisi lain tidak boleh menyimpan harga di template IMS.
+            $isExternalProduct = $product && (int) $product->division_id !== (int) $this->templateDivisionId();
+
             // Modul dengan pola harga client (mis. IMS) kirim 'selling_price' eksplisit;
             // simpan apa adanya. Modul lain tanpa harga -> recompute dari master product.
             $explicitPrice = $item['selling_price'] ?? null;
-            if ($explicitPrice !== null && $explicitPrice !== '') {
+            if ($isExternalProduct) {
+                $pricing = [
+                    'currency' => null,
+                    'selling_price_currency' => null,
+                    'selling_price' => null,
+                    'purchase_price_currency' => null,
+                ];
+            } elseif ($explicitPrice !== null && $explicitPrice !== '') {
                 $clientPrice = round((float) $explicitPrice, 2);
                 $pricing = [
                     'currency' => 'IDR',

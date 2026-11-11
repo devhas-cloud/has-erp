@@ -177,6 +177,11 @@
     </table>
 
     @php
+        $imsDivisionId = $imsDivisionId ?? null;
+        $isPriceVisible = fn ($item) => ! $item->product || (int) $item->product->division_id === (int) $imsDivisionId;
+        $priceOf = fn ($item) => $isPriceVisible($item) ? ($item->selling_price ?? $item->product?->selling_price) : null;
+        $hasHiddenPrice = $quotation->items->contains(fn ($item) => ! $isPriceVisible($item));
+
         $all = $quotation->items->keyBy('id');
         $children = $all->groupBy(fn ($i) => $i->parent_id ?: '_root');
 
@@ -214,7 +219,7 @@
             $groups[] = ['category' => $cat, 'rows' => $catRows];
         }
 
-        $totalPrice = $quotation->items->sum(fn ($item) => (($item->selling_price ?? $item->product?->selling_price) ?? 0) * $item->qty);
+        $totalPrice = $quotation->items->sum(fn ($item) => ($priceOf($item) ?? 0) * $item->qty);
     @endphp
 
     <table class="parts">
@@ -237,7 +242,7 @@
                         $item = $row['item'];
                         $depth = $row['depth'];
                         $qty = $item->qty;
-                        $price = $qty * ($item->selling_price ?? $item->product?->selling_price);
+                        $price = $qty * ($priceOf($item) ?? 0);
                     @endphp
                     <tr>
                         <td class="no-col" style="padding-left:{{ 6 + $depth * 12 }}px">{{ $item->item_no }}</td>
@@ -259,7 +264,12 @@
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="4" class="text-end"><strong>Total </strong></td>
+                <td colspan="4" class="text-end">
+                    @if($hasHiddenPrice)
+                        <div style="font-size:8px;color:#777;font-weight:400">Harga produk dari divisi lain tidak ditampilkan. Total hanya menghitung produk divisi IMS.</div>
+                    @endif
+                    <strong>Total </strong>
+                </td>
                 <td class="price-col"><strong>{{ 'Rp '.number_format($totalPrice, 0, '.', ',') }}</strong></td>
             </tr>
         </tfoot>

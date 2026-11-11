@@ -60,6 +60,7 @@ class ImsConfigurationController extends Controller
             'categories' => $categories,
             'templates' => $this->templateList(),
             'preselectedTaskId' => $request->query('task_id'),
+            'imsDivisionId' => $this->templateDivisionId(),
         ]);
     }
 
@@ -361,12 +362,13 @@ class ImsConfigurationController extends Controller
             'categories' => $this->categorySuggestions(),
             'templates' => $this->templateList(),
             'preselectedTaskId' => null,
+            'imsDivisionId' => $this->templateDivisionId(),
         ]);
     }
 
     /**
-     * Pencarian produk master_products (hanya aktif milik divisi IMS).
-     * Format DataTables server-side agar bisa dipaginasi 100 baris/halaman.
+     * Pencarian produk master_products aktif dari semua divisi.
+     * Harga hanya dikirim untuk produk divisi IMS.
      */
     public function searchProducts(Request $request): JsonResponse
     {
@@ -374,11 +376,10 @@ class ImsConfigurationController extends Controller
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 100);
 
-        $imsId = Division::where('division_name', 'IMS')->value('id');
+        $imsId = $this->templateDivisionId();
 
         $query = MasterProduct::query()
             ->where('status', 'Active')
-            //->where('division_id', $imsId)
             ->orderBy('name');
 
         $recordsTotal = $query->count();
@@ -398,18 +399,25 @@ class ImsConfigurationController extends Controller
         $products = $query
             ->skip($start)
             ->take($length)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'selling_price', 'purchase_price']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'division_id', 'purchase_price']);
 
-        $data = $products->map(fn ($product) => [
-            'id' => $product->id,
-            'name' => $product->name,
-            'code' => $product->code,
-            'brand' => $product->brand,
-            'category' => $product->category,
-            'description' => $product->description,
-            'selling_price' => $product->purchase_price,
-            'purchase_price' => $product->purchase_price,
-        ])->all();
+        $data = $products->map(function ($product) use ($imsId) {
+            $isOwnDivision = (int) $product->division_id === (int) $imsId;
+            $price = $isOwnDivision ? $product->purchase_price : null;
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'code' => $product->code,
+                'brand' => $product->brand,
+                'category' => $product->category,
+                'description' => $product->description,
+                'division_id' => $product->division_id,
+                'selling_price' => $price,
+                'purchase_price' => $price,
+                'purchase_price_currency' => $price,
+            ];
+        })->all();
 
         return response()->json([
             'draw' => (int) $request->input('draw'),
@@ -544,7 +552,8 @@ class ImsConfigurationController extends Controller
 
         $back = request('back');
 
-        return view('ims-configuration.show', compact('quotation', 'isSameDivisionApprover', 'back'));
+        return view('ims-configuration.show', compact('quotation', 'isSameDivisionApprover', 'back'))
+            ->with('imsDivisionId', $this->templateDivisionId());
     }
 
     /**
@@ -922,8 +931,9 @@ class ImsConfigurationController extends Controller
             'task.creator',
         ])->findOrFail($id);
 
-        $pdf = Pdf::loadView('ims-configuration.pdf', compact('quotation'))
-            ->setPaper('a4', 'portrait');
+        $pdf = Pdf::loadView('ims-configuration.pdf', compact('quotation') + [
+            'imsDivisionId' => $this->templateDivisionId(),
+        ])->setPaper('a4', 'portrait');
 
         return $pdf->stream('Quote-Configuration-'.$quotation->id.'.pdf');
     }
@@ -1005,8 +1015,24 @@ class ImsConfigurationController extends Controller
         $keyMap = [];
         $payload = [];
 
+        $imsId = $this->templateDivisionId();
+        $products = MasterProduct::whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
+            ->get(['id', 'division_id', 'purchase_price'])
+            ->keyBy('id');
+
         foreach (array_values($items) as $i => $item) {
             $keyMap[$item['_key']] = $i;
+
+            $product = $products->get($item['product_id'] ?? null);
+            $price = $item['selling_price'] ?? null;
+            $purchasePrice = $item['purchase_price_currency'] ?? null;
+
+            if ($product) {
+                $isOwnDivision = (int) $product->division_id === (int) $imsId;
+                $price = $isOwnDivision ? round((float) $product->purchase_price, 2) : null;
+                $purchasePrice = $price;
+            }
+
             $payload[] = [
                 'quote_configuration_id' => $quotation->id,
                 'item_no' => $item['item_no'] ?? null,
@@ -1016,10 +1042,10 @@ class ImsConfigurationController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => (int) ($item['qty'] ?? 1),
-                'selling_price' => $item['selling_price'] ?? null,
-                'selling_price_currency' => $item['selling_price'] ?? null,
-                'purchase_price_currency' => $item['purchase_price_currency'] ?? null,
-                'currency' => isset($item['selling_price']) && $item['selling_price'] ? 'IDR' : null,
+                'selling_price' => $price,
+                'selling_price_currency' => $price,
+                'purchase_price_currency' => $purchasePrice,
+                'currency' => $price ? 'IDR' : null,
                 'unit' => $item['unit'] ?? null,
                 'sort_order' => $i + 1,
                 'created_at' => now(),
@@ -1106,7 +1132,6 @@ class ImsConfigurationController extends Controller
         }
 
         $found = MasterProduct::whereIn('id', $ids)
-            ->where('division_id', $this->templateDivisionId())
             ->where('status', 'Active')
             ->pluck('id');
         $missing = $ids->diff($found)->values();
@@ -1117,7 +1142,7 @@ class ImsConfigurationController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Produk tidak ditemukan di master product divisi IMS: #'.$missing->implode(', #').'.',
+            'message' => 'Produk tidak ditemukan atau tidak aktif di master product: #'.$missing->implode(', #').'.',
         ], 422);
     }
 
