@@ -78,6 +78,10 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
     }
+    .form-group input[readonly] {
+        background: #f8fafc;
+        cursor: not-allowed;
+    }
     .task-project-tag {
         display: inline-flex; align-items: center; gap: 4px; margin-top: 3px;
         font-size: 11px; font-weight: 600; color: var(--accent);
@@ -240,7 +244,9 @@
                                     <select name="category_id" id="task-category-id">
                                         <option value="">— Select Category —</option>
                                         @foreach($categories as $cat)
-                                            <option value="{{ $cat->id }}" @if($cat->visit) data-visit="1" @endif>
+                                            <option value="{{ $cat->id }}"
+                                                data-log="{{ str_contains(mb_strtolower($cat->name), 'log') ? '1' : '0' }}"
+                                                @if($cat->visit) data-visit="1" @endif>
                                                 {{ $cat->division_id ? '[' . optional($cat->division)->division_name . '] ' : '[Global] ' }}
                                                 {{ $cat->name }}
                                             </option>
@@ -268,10 +274,17 @@
                                     <input type="time" name="time" id="task-time">
                                 </div>
                             </div>
+                            <div class="task-form-row" id="task-log-file-row" style="display:none">
+                                <div class="form-group">
+                                    <label>Upload File</label>
+                                    <input type="file" id="task-log-files" name="attachments[]" multiple
+                                           accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="task-form-section open">
+                    <div class="task-form-section open" id="task-assignees-section">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
                             <span><i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees & Delegation</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -289,7 +302,7 @@
                         </div>
                     </div>
 
-                    <div class="task-form-section">
+                    <div class="task-form-section" id="task-alert-section">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
                             <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Settings</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
@@ -399,6 +412,37 @@ function taskToggleAccountContact() {
     }
 }
 
+// Kategori log: due date/time = sekarang (readonly), tanpa assignee/alert,
+// dan description + file menjadi TaskActivity.
+function syncTaskLogState() {
+    var isLog = String($('#task-category-id option:selected').data('log') || '') === '1';
+
+    $('#task-assignees-section').toggle(!isLog);
+    $('#task-alert-section').toggle(!isLog);
+    $('#task-log-file-row').toggle(isLog);
+    $('#task-due-date, #task-time').prop('readonly', isLog);
+
+    if (isLog) {
+        var now = new Date();
+        var today = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0');
+        var currentTime = String(now.getHours()).padStart(2, '0') + ':' +
+            String(now.getMinutes()).padStart(2, '0');
+
+        $('#task-due-date').val(today).removeClass('is-invalid');
+        $('#task-time').val(currentTime);
+        $('#task-assignees').val(null).trigger('change');
+        $('#task-alert-type').val('none');
+        $('#task-alert-target').val('personal').trigger('change');
+        $('#task-alert-time').val('');
+        $('#task-whatsapp-group').val(null).trigger('change');
+        $('#whatsapp-group-container').hide();
+    } else {
+        $('#task-log-files').val('');
+    }
+}
+
 function resetTaskForm() {
     document.getElementById('task-form').reset();
     document.getElementById('task-edit-id').value = '';
@@ -415,6 +459,7 @@ function resetTaskForm() {
     $('#task-account-contact-container').hide();
     $('#task-project').val(null).trigger('change');
     $('#task-alert-target').val('personal');
+    syncTaskLogState();
 }
 
 function openCreateModal() {
@@ -716,7 +761,10 @@ $(document).on('change', '#task-alert-target', function() {
     }
 });
 
-$(document).on('change', '#task-category-id', taskToggleAccountContact);
+$(document).on('change', '#task-category-id', function() {
+    taskToggleAccountContact();
+    syncTaskLogState();
+});
 
 $('#filter-project').select2({
     theme: 'bootstrap-5',

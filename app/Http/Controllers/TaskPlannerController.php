@@ -33,6 +33,8 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class TaskPlannerController extends Controller
 {
+    private const ACTIVITY_MIME_RULE = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,application/zip,application/x-zip-compressed,application/octet-stream';
+
     public function index()
     {
         $whatsappGroups = WhatsAppGroup::with('division')->where('status', 'Active')->get();
@@ -393,7 +395,7 @@ class TaskPlannerController extends Controller
     public static function categoriesFor(User $user)
     {
         return TaskCategory::with('division')->where(function ($q) use ($user) {
-            $q->whereNull('division_id')->orWhere('division_id', $user->division_id);
+            $q->whereNull('division_id')->orWhere('division_id', $user->division_id)->orderBy('division_id', 'asc');
         })->get();
     }
 
@@ -507,6 +509,8 @@ class TaskPlannerController extends Controller
             'time' => 'nullable|date_format:H:i',
             'assignees' => 'nullable|array',
             'assignees.*' => 'exists:users,id',
+            'attachments' => 'nullable|array|max:10',
+            'attachments.*' => 'file|max:10240|mimetypes:'.self::ACTIVITY_MIME_RULE,
             'alert_type' => 'required|in:none,email,whatsapp,both',
             'alert_target' => 'required|in:personal,group,both',
             'alert_time' => 'nullable|date',
@@ -514,11 +518,27 @@ class TaskPlannerController extends Controller
             'project_id.exists' => 'Project tidak ditemukan atau sudah tidak aktif.',
         ]);
 
-        $validated['creator_id'] = Auth::id();
-        $validated['status'] = 'todo';
+        $category = TaskCategory::findOrFail($validated['category_id']);
+        $isLog = str_contains(mb_strtolower($category->name), 'log');
 
-        $assigneeIds = $this->uniqueIds($request->input('assignees', []));
-        $assigneeIds = $this->mergeHandlingGroupAssignees($assigneeIds, $request->input('handling_group_id'));
+        $validated['creator_id'] = Auth::id();
+        $validated['status'] = $isLog ? 'done' : 'todo';
+
+        if ($isLog) {
+            $validated['due_date'] = now()->toDateString();
+            $validated['time'] = now()->format('H:i');
+            $validated['alert_type'] = 'none';
+            $validated['alert_target'] = 'personal';
+            $validated['alert_time'] = null;
+            $validated['whatsapp_group_id'] = null;
+            $validated['handling_group_id'] = null;
+        }
+
+        $assigneeIds = $isLog ? [] : $this->uniqueIds($request->input('assignees', []));
+
+        if (! $isLog) {
+            $assigneeIds = $this->mergeHandlingGroupAssignees($assigneeIds, $request->input('handling_group_id'));
+        }
 
         if (empty($assigneeIds)) {
             $assigneeIds = [Auth::id()];
@@ -526,30 +546,66 @@ class TaskPlannerController extends Controller
 
         $otherAssignees = array_values(array_diff($assigneeIds, [Auth::id()]));
         $validated['requires_approval'] = ! empty($otherAssignees);
-
-        $task = Task::create($validated);
-        $task->assignees()->sync($assigneeIds);
-
-        $task->load('creator');
         $notifiedAssignees = [];
-        foreach ($otherAssignees as $assigneeId) {
-            $assignee = User::find($assigneeId);
-            if ($assignee) {
-                Notification::create([
-                    'user_id' => $assignee->id,
-                    'type' => 'task_assigned',
-                    'title' => "Tugas baru: {$task->title}",
-                    'body' => "{$task->creator->display_name} menugaskan Anda",
-                    'notifiable_type' => Task::class,
-                    'notifiable_id' => $task->id,
-                    'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
-                ]);
-                $notifiedAssignees[] = $assignee;
+
+        DB::beginTransaction();
+
+        try {
+            $task = Task::create($validated);
+            $task->assignees()->sync($assigneeIds);
+
+            $task->load('creator');
+            foreach ($otherAssignees as $assigneeId) {
+                $assignee = User::find($assigneeId);
+                if ($assignee) {
+                    Notification::create([
+                        'user_id' => $assignee->id,
+                        'type' => 'task_assigned',
+                        'title' => "Tugas baru: {$task->title}",
+                        'body' => "{$task->creator->display_name} menugaskan Anda",
+                        'notifiable_type' => Task::class,
+                        'notifiable_id' => $task->id,
+                        'data' => ['task_id' => $task->id, 'creator' => $task->creator->display_name],
+                    ]);
+                    $notifiedAssignees[] = $assignee;
+                }
             }
+
+            $hasDescription = filled($validated['description'] ?? null);
+            $hasAttachments = $request->hasFile('attachments');
+
+            if ($isLog && ($hasDescription || $hasAttachments)) {
+                $taskActivity = TaskActivity::create([
+                    'task_id' => $task->id,
+                    'user_id' => Auth::id(),
+                    'content' => $validated['description'] ?? null,
+                ]);
+
+                foreach ($request->file('attachments', []) as $file) {
+                    $path = $file->store('task-activities', 'public');
+                    $taskActivity->attachments()->create([
+                        'attachment_path' => $path,
+                        'attachment_type' => str_starts_with((string) $file->getMimeType(), 'image/') ? 'image' : 'file',
+                        'attachment_name' => $file->getClientOriginalName(),
+                    ]);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membuat task: '.$e->getMessage(),
+            ], 500);
         }
 
         // Notifikasi WhatsApp: penanganan -> grup WA, tanpa penanganan -> personal.
-        app(TaskWhatsAppNotifier::class)->notifyNewTask($task, $notifiedAssignees);
+        // Task log tidak dikirim karena hanya catatan aktivitas.
+        if (! $isLog) {
+            app(TaskWhatsAppNotifier::class)->notifyNewTask($task, $notifiedAssignees);
+        }
 
         Log::record('create_task', " {$task->title}", 'MOD_TASK_PLANNER', $task);
 
