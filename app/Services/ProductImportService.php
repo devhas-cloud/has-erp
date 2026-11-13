@@ -342,22 +342,25 @@ class ProductImportService
                     }
                 }
 
-                // Parse type (Acc/Main/Service) — case-insensitive
-                $type = null;
-                $typeInput = trim($data['type'] ?? '');
-                if ($typeInput !== '') {
-                    $typeKey = mb_strtolower($typeInput);
-                    if (! in_array($typeKey, ['acc', 'main', 'service'], true)) {
+                // Type = teks bebas; penulisan disamakan dengan nilai yang sudah ada.
+                $type = MasterProduct::normalizeType($data['type'] ?? '');
+
+                // Kolom material opsional (ya/tidak, 1/0, true/false). Tidak ada di file /
+                // kosong -> produk baru = non-material (default), produk lama tetap.
+                $isMaterial = null;
+                $materialInput = mb_strtolower(trim((string) ($data['material'] ?? '')));
+                if ($materialInput !== '') {
+                    $isMaterial = match (true) {
+                        in_array($materialInput, ['ya', 'yes', 'y', '1', 'true', 'material'], true) => true,
+                        in_array($materialInput, ['tidak', 'no', 'n', '0', 'false', 'sn', 'serial'], true) => false,
+                        default => 'invalid',
+                    };
+                    if ($isMaterial === 'invalid') {
                         $failed++;
-                        $errors[] = "Line {$lineNumber}: Nilai type '{$typeInput}' tidak valid. Gunakan salah satu dari: Acc, Main, Service.";
+                        $errors[] = "Line {$lineNumber}: Nilai material '{$data['material']}' tidak valid. Gunakan ya / tidak.";
 
                         continue;
                     }
-                    $type = match ($typeKey) {
-                        'acc' => 'Acc',
-                        'main' => 'Main',
-                        default => 'Service',
-                    };
                 }
 
                 $parameter = $this->nullIfEmpty($data['parameter'] ?? '', 255);
@@ -376,6 +379,10 @@ class ProductImportService
                     'status' => $status,
                     'division_id' => $divisionId,
                 ];
+
+                if ($isMaterial !== null) {
+                    $record['is_material'] = $isMaterial;
+                }
 
                 $existing = MasterProduct::where('code', $data['code'])->first();
 
@@ -441,7 +448,8 @@ class ProductImportService
         return [
             'division' => $divisions,
             'currency' => $currencies,
-            'type' => ['Acc', 'Main', 'Service'],
+            'type' => array_values(array_unique(array_merge(['Acc', 'Main', 'Service'], MasterProduct::typeOptions()))),
+            'material' => ['ya (stok per qty)', 'tidak (per Serial Number, default)'],
             'status' => ['Active', 'Inactive'],
         ];
     }

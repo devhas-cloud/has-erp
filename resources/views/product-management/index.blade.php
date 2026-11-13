@@ -72,9 +72,14 @@
                 </select>
                 <select id="filter-type" onchange="productTable.ajax.reload()">
                     <option value="">All Type</option>
-                    <option value="Acc">Acc</option>
-                    <option value="Main">Main</option>
-                    <option value="Service">Service</option>
+                    @foreach($types as $t)
+                        <option value="{{ $t }}">{{ $t }}</option>
+                    @endforeach
+                </select>
+                <select id="filter-stock-kind" onchange="productTable.ajax.reload()">
+                    <option value="">Material &amp; SN</option>
+                    <option value="material">Material</option>
+                    <option value="serial">Non-material</option>
                 </select>
                 <select id="filter-division" onchange="productTable.ajax.reload()">
                     <option value="">All Divisions</option>
@@ -165,14 +170,15 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Type</label>
-                                <select id="product-type" class="form-select">
-                                    <option value="">— Pilih —</option>
-                                    <option value="Acc">Acc</option>
-                                    <option value="Main">Main</option>
-                                    <option value="Service">Service</option>
-                                </select>
+                                <input type="text" id="product-type" class="form-control" list="product-type-options" maxlength="50" autocomplete="off" placeholder="Ketik atau pilih, mis. Main / Acc / Service">
+                                <datalist id="product-type-options">
+                                    @foreach($types as $t)
+                                        <option value="{{ $t }}">
+                                    @endforeach
+                                </datalist>
                             </div>
                         </div>
+
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Parameter</label>
@@ -225,6 +231,15 @@
                                     <option value="Active">Active</option>
                                     <option value="Inactive">Inactive</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="product-is-material">
+                                    <label class="form-check-label" for="product-is-material">Material</label>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-12">
@@ -329,6 +344,10 @@
                                 <td id="pd-type">—</td>
                             </tr>
                             <tr>
+                                <td>Material</td>
+                                <td id="pd-is-material">—</td>
+                            </tr>
+                            <tr>
                                 <td>Parameter</td>
                                 <td id="pd-parameter">—</td>
                             </tr>
@@ -407,6 +426,8 @@ function exportProducts() {
 
     if (category) params.set('category', category);
     if (type) params.set('type', type);
+    var stockKind = $('#filter-stock-kind').val();
+    if (stockKind) params.set('stock_kind', stockKind);
     if (division) params.set('division_id', division);
     if (status) params.set('status', status);
 
@@ -427,6 +448,7 @@ function initProductTable() {
             data: function(d) {
                 d.category = $('#filter-category').val();
                 d.type = $('#filter-type').val();
+                d.stock_kind = $('#filter-stock-kind').val();
                 d.division_id = $('#filter-division').val();
                 d.status = $('#filter-status').val();
             }
@@ -557,6 +579,7 @@ function openEditModal(id) {
         $('#product-brand').val(p.brand || '');
         $('#product-category').val(p.category || '');
         $('#product-type').val(p.type || '');
+        $('#product-is-material').prop('checked', p.is_material === true || p.is_material === 1);
         $('#product-parameter').val(p.parameter || '');
         $('#product-division').val(p.division_id || '');
         $('#product-purchase-price').val(p.purchase_price ? Num.format(p.purchase_price, 2) : '');
@@ -585,6 +608,7 @@ function openDetailModal(id) {
         $('#pd-brand').text(p.brand || '—');
         $('#pd-category').text(p.category || '—');
         $('#pd-type').text(p.type || '—');
+        $('#pd-is-material').text(p.is_material === true || p.is_material === 1 ? 'Ya' : 'Tidak');
         $('#pd-parameter').text(p.parameter || '—');
         $('#pd-division').text(p.division_name || '—');
         // Harga jual = hasil formulasi dari harga beli (selalu IDR). Harga beli
@@ -654,7 +678,8 @@ $(document).on('click', '#btn-save-product', function() {
     fd.append('code', code);
     fd.append('brand', $('#product-brand').val().trim());
     fd.append('category', $('#product-category').val().trim());
-    fd.append('type', $('#product-type').val());
+    fd.append('type', $('#product-type').val().trim());
+    fd.append('is_material', $('#product-is-material').is(':checked') ? '1' : '0');
     fd.append('parameter', $('#product-parameter').val().trim());
     fd.append('division_id', $('#product-division').val());
     fd.append('description', $('#product-description').val().trim());
@@ -705,6 +730,7 @@ $(document).on('click', '#btn-save-product', function() {
                     brand: 'product-brand',
                     category: 'product-category',
                     type: 'product-type',
+                    is_material: 'product-is-material',
                     parameter: 'product-parameter',
                     division_id: 'product-division',
                     image: 'product-image',

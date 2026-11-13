@@ -5,12 +5,12 @@ namespace App\Services;
 class ProductXlsxTemplateGenerator
 {
     private array $headers = [
-        'name', 'code', 'brand', 'category', 'type', 'parameter', 'division',
+        'name', 'code', 'brand', 'category', 'type', 'material', 'parameter', 'division',
         'description', 'purchase_price', 'currency', 'status',
     ];
 
     private array $exampleRow = [
-        'Laptop ThinkPad X1', 'PROD-001', 'Lenovo', 'Electronics', 'Main', 'i7-1365U / 16GB', 'IT',
+        'Laptop ThinkPad X1', 'PROD-001', 'Lenovo', 'Electronics', 'Main', 'tidak', 'i7-1365U / 16GB', 'IT',
         'High-performance business laptop', '12000000', 'IDR', 'Active',
     ];
 

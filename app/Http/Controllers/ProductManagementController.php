@@ -26,7 +26,9 @@ class ProductManagementController extends Controller
             ->orderBy('category')
             ->pluck('category');
 
-        return view('product-management.index', compact('divisions', 'currencies', 'categories'));
+        $types = MasterProduct::typeOptions();
+
+        return view('product-management.index', compact('divisions', 'currencies', 'categories', 'types'));
     }
 
     public function data(Request $request): JsonResponse
@@ -102,6 +104,7 @@ class ProductManagementController extends Controller
                 'brand' => $product->brand ?? '—',
                 'category' => $product->category ?? '—',
                 'type' => $product->type ?? '—',
+                'is_material' => $product->isMaterial(),
                 'parameter' => $product->parameter ?? '—',
                 'division_name' => $product->division?->division_name ?? '—',
                 'purchase_price' => $purchase,
@@ -138,7 +141,8 @@ class ProductManagementController extends Controller
             'code' => 'required|string|max:50|unique:master_products,code',
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
-            'type' => 'nullable|in:Acc,Main,Service',
+            'type' => 'nullable|string|max:50',
+            'is_material' => 'nullable|boolean',
             'parameter' => 'nullable|string|max:255',
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
@@ -148,6 +152,10 @@ class ProductManagementController extends Controller
             'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
+
+        $validated['type'] = MasterProduct::normalizeType($validated['type'] ?? null);
+        // Tidak diisi = bukan Material (barang ber-SN); Material = stok per qty.
+        $validated['is_material'] = $request->boolean('is_material');
 
         // Harga beli & currency hanya boleh diisi role Admin / divisi Admin;
         // selain itu produk baru memakai currency base.
@@ -225,7 +233,8 @@ class ProductManagementController extends Controller
             'code' => 'required|string|max:50|unique:master_products,code,'.$product->id,
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
-            'type' => 'nullable|in:Acc,Main,Service',
+            'type' => 'nullable|string|max:50',
+            'is_material' => 'nullable|boolean',
             'parameter' => 'nullable|string|max:255',
             'division_id' => 'nullable|exists:divisions,id',
             'description' => 'nullable|string',
@@ -235,6 +244,14 @@ class ProductManagementController extends Controller
             'currency_id' => 'nullable|exists:currencies,id',
             'status' => 'required|in:Active,Inactive',
         ]);
+
+        $validated['type'] = MasterProduct::normalizeType($validated['type'] ?? null);
+        // Form tanpa field is_material (klien lama) -> nilai lama tetap.
+        if ($request->has('is_material')) {
+            $validated['is_material'] = $request->boolean('is_material');
+        } else {
+            unset($validated['is_material']);
+        }
 
         // Harga beli & currency hanya bisa diubah role Admin / divisi Admin; harga jual
         // ikut dihitung ulang dari formulasi. Lainnya -> harga & currency DB tetap.
@@ -405,7 +422,7 @@ class ProductManagementController extends Controller
 
     /**
      * Terapkan filter pencarian (search.value dari DataTables / search flat dari export)
-     * dan filter dropdown (category, type, division_id, status).
+     * dan filter dropdown (category, type, stock_kind, division_id, status).
      */
     private function applyProductFilters($query, Request $request)
     {
@@ -438,6 +455,13 @@ class ProductManagementController extends Controller
 
         if ($request->filled('type')) {
             $query->where('type', $request->input('type'));
+        }
+
+        // Filter jenis stok: material (qty) / serial (ber-SN).
+        if ($request->input('stock_kind') === 'material') {
+            $query->where('is_material', true);
+        } elseif ($request->input('stock_kind') === 'serial') {
+            $query->where('is_material', false);
         }
 
         if ($request->filled('division_id')) {

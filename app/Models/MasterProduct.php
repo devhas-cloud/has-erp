@@ -16,6 +16,7 @@ class MasterProduct extends Model
         'brand',
         'category',
         'type',
+        'is_material',
         'parameter',
         'division_id',
         'description',
@@ -31,7 +32,40 @@ class MasterProduct extends Model
         return [
             'selling_price' => 'decimal:2',
             'purchase_price' => 'decimal:2',
+            'is_material' => 'boolean',
         ];
+    }
+
+    /**
+     * Material = stok dihitung per qty; bukan Material = barang ber-SN
+     * (stok dihitung per Serial Number).
+     */
+    public function isMaterial(): bool
+    {
+        return (bool) $this->is_material;
+    }
+
+    /** Nilai type yang sudah dipakai — saran isian di form & template import. */
+    public static function typeOptions(): array
+    {
+        return static::query()->whereNotNull('type')->where('type', '!=', '')
+            ->distinct()->orderBy('type')->pluck('type')->all();
+    }
+
+    /**
+     * Type = teks bebas. Penulisan disamakan dengan nilai yang sudah ada
+     * ("main" -> "Main") agar filter tidak terpecah karena beda huruf besar/kecil.
+     */
+    public static function normalizeType(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+        $value = mb_substr($value, 0, 50);
+        $existing = static::query()->whereRaw('LOWER(type) = ?', [mb_strtolower($value)])->value('type');
+
+        return $existing ?? $value;
     }
 
     public function division(): BelongsTo

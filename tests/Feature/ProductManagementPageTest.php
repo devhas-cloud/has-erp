@@ -116,19 +116,42 @@ class ProductManagementPageTest extends TestCase
         ]);
     }
 
-    public function test_store_rejects_invalid_type(): void
+    public function test_store_accepts_free_text_type_and_material_flag(): void
     {
+        // Type = teks bebas; penulisan disamakan dengan nilai yang sudah ada.
+        $existing = $this->createProduct(['type' => 'Main']);
+
         $this->actingAs($this->admin)
             ->postJson(route('product-management.store'), [
-                'code' => 'INV-001',
-                'selling_price' => 1000,
-                'status' => 'Active',
-                'type' => 'Spare',
+                'code' => 'NEW-001', 'selling_price' => 1000, 'status' => 'Active', 'type' => '  main ',
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('type');
+            ->assertOk();
+        // Tanpa isian is_material -> non-material (default, per Serial Number).
+        $this->assertDatabaseHas('master_products', ['code' => 'NEW-001', 'type' => 'Main', 'is_material' => false]);
 
-        $this->assertDatabaseMissing('master_products', ['code' => 'INV-001']);
+        $this->actingAs($this->admin)
+            ->postJson(route('product-management.store'), [
+                'code' => 'MAT-001', 'selling_price' => 1000, 'status' => 'Active', 'type' => 'Spare Part', 'is_material' => '1',
+            ])
+            ->assertOk();
+        $this->assertDatabaseHas('master_products', ['code' => 'MAT-001', 'type' => 'Spare Part', 'is_material' => true]);
+
+        // Edit dengan field -> berubah; tanpa field (klien lama) -> nilai lama tetap.
+        $this->actingAs($this->admin)
+            ->putJson(route('product-management.update', $existing->id), ['code' => $existing->code, 'name' => $existing->name, 'status' => 'Active', 'type' => 'Main', 'is_material' => '1'])
+            ->assertOk();
+        $this->assertTrue($existing->fresh()->is_material);
+        $this->actingAs($this->admin)
+            ->putJson(route('product-management.update', $existing->id), ['code' => $existing->code, 'name' => $existing->name, 'status' => 'Active', 'type' => 'Main'])
+            ->assertOk();
+        $this->assertTrue($existing->fresh()->is_material);
+
+        $this->actingAs($this->admin)->getJson(route('product-management.data', ['stock_kind' => 'material']))
+            ->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('data.0.is_material', true);
+        $this->actingAs($this->admin)->getJson(route('product-management.data', ['type' => 'Spare Part']))
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.code', 'MAT-001');
+        $this->actingAs($this->admin)->get(route('product-management.index'))->assertOk()
+            ->assertSee('id="product-is-material"', false)->assertDontSee('Perhitungan Stok')->assertSee('Spare Part');
     }
 
     public function test_store_rejects_duplicate_code(): void
@@ -409,24 +432,28 @@ class ProductManagementPageTest extends TestCase
         ]);
     }
 
-    public function test_import_rejects_invalid_type(): void
+    public function test_import_accepts_free_text_type_and_material_column(): void
     {
-        $csv = "Code,Type,Selling Price,Status\n"
-            ."BAD-1,Spare,1000,Active\n"
-            ."OK-1,Acc,1000,Active\n";
+        $this->createProduct(['code' => 'OLD-1', 'name' => 'Lama', 'type' => 'Acc', 'is_material' => true]);
+        $csv = "Code,Type,Material,Selling Price,Status\n"
+            ."NEW-1,Spare,ya,1000,Active\n"
+            ."NEW-2,acc,,1000,Active\n"
+            ."OLD-1,Acc,,1000,Active\n"
+            ."BAD-1,Acc,mungkin,1000,Active\n";
 
         $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
 
         $this->actingAs($this->admin)
             ->post(route('product-management.import'), ['file' => $file])
             ->assertOk()
-            ->assertJsonPath('result.success', 1)
+            ->assertJsonPath('result.success', 2)
+            ->assertJsonPath('result.updated', 1)
             ->assertJsonPath('result.failed', 1);
 
-        $this->assertDatabaseHas('master_products', [
-            'code' => 'OK-1',
-            'type' => 'Acc',
-        ]);
+        $this->assertDatabaseHas('master_products', ['code' => 'NEW-1', 'type' => 'Spare', 'is_material' => true]);
+        // Material kosong: produk baru = non-material (default), produk lama tetap.
+        $this->assertDatabaseHas('master_products', ['code' => 'NEW-2', 'type' => 'Acc', 'is_material' => false]);
+        $this->assertDatabaseHas('master_products', ['code' => 'OLD-1', 'is_material' => true]);
         $this->assertDatabaseMissing('master_products', ['code' => 'BAD-1']);
     }
 
