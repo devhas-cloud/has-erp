@@ -103,7 +103,11 @@ class DashboardVisitScheduleTest extends TestCase
         $visit = $response->viewData('visit');
         $this->assertCount(7, $visit['days']);
         $this->assertSame('2026-11-13', end($visit['days'])->toDateString());
-        $this->assertSame(['tasks' => 3, 'people' => 2, 'divisions' => 2], $visit['summary']);
+        // Visit Sabtu tidak tampil di grid, tetapi tetap dihitung di jumlah visit.
+        $this->assertSame(['tasks' => 4, 'weekend' => 1, 'people' => 2, 'divisions' => 2], $visit['summary']);
+        $andi = $visit['groups']->flatMap(fn ($g) => $g['rows'])->first(fn ($r) => $r['user']->is($this->imsUser));
+        $this->assertSame([3, 1], [$andi['count'], $andi['weekend']]);
+        $response->assertDontSee('Visit akhir minggu');
         $this->assertSame(2, $visit['day_totals']['2026-11-09'], 'Task dengan 2 assignee tampil di 2 baris.');
     }
 
@@ -154,7 +158,8 @@ class DashboardVisitScheduleTest extends TestCase
 
         $this->assertSame('week', $done['period']);
         $this->assertSame('2026-11-02', $done['start']->toDateString());
-        $this->assertSame('2026-11-06', $done['end']->toDateString());
+        $this->assertSame('2026-11-08', $done['end']->toDateString(), 'Sabtu/Minggu ikut dihitung.');
+        $this->assertSame('2026-11-06', $done['display_end']->toDateString(), 'Tampilan tetap Senin–Jumat.');
         $this->assertSame(2, $done['total']);
         $this->assertSame(3, $done['planned']);
         $this->assertSame(67, $done['rate']);

@@ -122,16 +122,24 @@ class DashboardVisitPlannerController extends Controller
 
         $rows = [];
         $taskIds = [];
+        $weekendTaskIds = [];
         foreach ($tasks as $task) {
             $day = $task->due_date->toDateString();
-            if (! array_key_exists($day, $emptyDays)) {
-                continue; // Sabtu/Minggu di dalam rentang tidak ditampilkan.
-            }
+            // Sabtu/Minggu di dalam rentang tidak ditampilkan di grid, tetapi tetap dihitung jumlah visitnya.
+            $isWeekend = ! array_key_exists($day, $emptyDays);
             foreach ($task->assignees as $user) {
                 if (! $matches($user)) {
                     continue;
                 }
-                $rows[$user->id] ??= ['user' => $user, 'days' => $emptyDays, 'count' => 0];
+                $rows[$user->id] ??= ['user' => $user, 'days' => $emptyDays, 'count' => 0, 'weekend' => 0];
+                $taskIds[$task->id] = true;
+                $rows[$user->id]['count']++;
+                if ($isWeekend) {
+                    $rows[$user->id]['weekend']++;
+                    $weekendTaskIds[$task->id] = true;
+
+                    continue;
+                }
                 $rows[$user->id]['days'][$day][] = [
                     'id' => $task->id,
                     'title' => $task->title,
@@ -144,8 +152,6 @@ class DashboardVisitPlannerController extends Controller
                     'late' => ! in_array($task->status, ['done', 'cancelled'], true) && $task->due_date->lt($today),
                     'checked_in' => $task->visits->contains('user_id', $user->id),
                 ];
-                $rows[$user->id]['count']++;
-                $taskIds[$task->id] = true;
             }
         }
 
@@ -168,6 +174,7 @@ class DashboardVisitPlannerController extends Controller
             'day_totals' => array_combine($dayKeys, $dayTotals),
             'summary' => [
                 'tasks' => count($taskIds),
+                'weekend' => count($weekendTaskIds),
                 'people' => collect($rows)->where('count', '>', 0)->count(),
                 'divisions' => $groups->filter(fn ($g) => $g['visits'] > 0)->count(),
             ],
@@ -194,8 +201,9 @@ class DashboardVisitPlannerController extends Controller
         $quarter = (int) $request->input('done_quarter', now()->quarter);
         $quarter = $quarter >= 1 && $quarter <= 4 ? $quarter : now()->quarter;
 
+        // Minggu ini: ditampilkan Senin–Jumat, tetapi visit Sabtu/Minggu tetap ikut dihitung.
         $weekStart = now()->startOfWeek(Carbon::MONDAY)->startOfDay();
-        [$start, $end] = [$weekStart, $weekStart->copy()->addDays(4)];
+        [$start, $end] = [$weekStart, $weekStart->copy()->addDays(6)];
 
         if ($period === 'quarter') {
             $start = Carbon::create($year, ($quarter - 1) * 3 + 1, 1)->startOfDay();
@@ -309,6 +317,7 @@ class DashboardVisitPlannerController extends Controller
             'quarter' => $quarter,
             'start' => $start,
             'end' => $end,
+            'display_end' => $period === 'week' ? $start->copy()->addDays(4) : $end,
             'total' => $erpDone + $baselineTotal,
             'erp' => $erpDone,
             'baseline' => $baselineTotal,

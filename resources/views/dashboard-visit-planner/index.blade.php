@@ -219,7 +219,11 @@
         </form>
 
         <div class="vs-summary mb-2">
-            <span><strong>{{ $vs['summary']['tasks'] }}</strong> visit</span>
+            <span><strong>{{ $vs['summary']['tasks'] }}</strong> visit
+                @if($vs['summary']['weekend'] > 0)
+                    <small title="Visit Sabtu/Minggu tidak tampil di jadwal, tetapi ikut dihitung">(termasuk {{ $vs['summary']['weekend'] }} Sab/Min)</small>
+                @endif
+            </span>
             <span><strong>{{ $vs['summary']['people'] }}</strong> salesperson</span>
             <span><strong>{{ $vs['summary']['divisions'] }}</strong> divisi</span>
             <div class="vs-legend">
@@ -262,7 +266,11 @@
                                 <tr data-group-row="{{ $gi }}">
                                     <td class="vs-person">
                                         <div class="n">{{ $row['user']->display_name }}</div>
-                                        <div class="c">{{ $row['count'] }} visit</div>
+                                        <div class="c">{{ $row['count'] }} visit
+                                            @if($row['weekend'] > 0)
+                                                <span title="Visit Sabtu/Minggu tidak tampil di jadwal, tetapi ikut dihitung">· {{ $row['weekend'] }} Sab/Min</span>
+                                            @endif
+                                        </div>
                                     </td>
                                     @foreach($vs['days'] as $day)
                                         @php $items = $row['days'][$day->toDateString()]; @endphp
@@ -314,7 +322,11 @@
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
             <i class="fa fa-clipboard-list me-2" style="color:var(--accent)"></i>Report Visit
-            <span style="font-size:12px;color:var(--text-muted);font-weight:500">{{ $vdLabel }} · {{ $vd['start']->format('d M Y') }} – {{ $vd['end']->format('d M Y') }}</span>
+            <span style="font-size:12px;color:var(--text-muted);font-weight:500">{{ $vdLabel }} · {{ $vd['start']->format('d M Y') }} – {{ $vd['display_end']->format('d M Y') }}
+            @if($vd['period'] === 'week')
+                · Sab/Min ikut dihitung
+            @endif
+            </span>
         </span>
         <form method="GET" action="{{ route('dashboard-visit-planner.index') }}#report-visit" class="vs-filter" id="vd-form">
             @foreach($visitParams as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
