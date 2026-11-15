@@ -359,7 +359,11 @@
                         </div>
                         <div class="text-end">
                             <div class="c">{{ $p['done'] }}</div>
-                            <div class="d">visit</div>
+                            @if($p['baseline'] > 0)
+                                <div class="d" title="{{ $p['baseline'] }} visit dari SF (baseline) + {{ $p['erp'] }} visit Done di ERP">{{ $p['baseline'] }} SF + {{ $p['erp'] }} ERP</div>
+                            @else
+                                <div class="d">visit</div>
+                            @endif
                         </div>
                     </div>
                 @endforeach
@@ -367,6 +371,9 @@
         @endif
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:10px">
             Jumlah visit selesai (task kategori visit berstatus Done) per salesperson pada periode ini, berdasarkan jatuh tempo task.
+            @if($vd['baseline'] > 0)
+                Termasuk {{ $vd['baseline'] }} visit baseline SF. Baseline SF menggantikan data ERP pada rentang tanggal baseline sehingga tidak terhitung dobel.
+            @endif
         </div>
     </div>
 </div>

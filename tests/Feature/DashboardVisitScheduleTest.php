@@ -168,6 +168,30 @@ class DashboardVisitScheduleTest extends TestCase
             ->assertSee('Report Visit')->assertSee('vd-person', false)->assertSee('Minggu ini');
     }
 
+    public function test_visit_done_baseline_replaces_erp_inside_its_window(): void
+    {
+        \App\Models\VisitBaseline::create([
+            'user_id' => $this->imsUser->id, 'start_date' => '2026-10-01', 'end_date' => '2026-11-08', 'visits' => 10,
+        ]);
+        // Di dalam jendela baseline: sudah tercakup angka SF, tidak dihitung lagi untuk Andi.
+        $this->task('Selesai sebelum ERP', '2026-10-20', [$this->imsUser], ['status' => 'done']);
+        // Task bersama di dalam jendela: Citra (tanpa baseline) tetap dihitung dari ERP.
+        $this->task('Bersama sebelum ERP', '2026-11-03', [$this->imsUser, $this->salesUser], ['status' => 'done']);
+        // Setelah jendela baseline: dihitung dari ERP.
+        $this->task('Selesai setelah ERP', '2026-11-10', [$this->imsUser], ['status' => 'done']);
+
+        $q4 = $this->done(['done_period' => 'quarter', 'done_quarter' => 4, 'done_year' => 2026]);
+        $people = $q4['people']->mapWithKeys(fn ($p) => [$p['user']->display_name => [$p['done'], $p['baseline'], $p['erp']]])->all();
+        $this->assertSame(['Andi IMS' => [11, 10, 1], 'Citra Sales' => [1, 0, 1]], $people);
+        $this->assertSame([12, 10, 2, 2], [$q4['total'], $q4['baseline'], $q4['erp'], $q4['planned']]);
+
+        // Periode yang hanya menyinggung sebagian jendela baseline memakai data ERP apa adanya.
+        $custom = $this->done(['done_period' => 'custom', 'done_start' => '2026-11-01', 'done_end' => '2026-11-15']);
+        $people = $custom['people']->mapWithKeys(fn ($p) => [$p['user']->display_name => [$p['done'], $p['baseline']]])->all();
+        $this->assertSame(['Andi IMS' => [2, 0], 'Citra Sales' => [1, 0]], $people);
+        $this->assertSame(2, $custom['total']);
+    }
+
     public function test_visit_done_quarter_and_custom_range(): void
     {
         $this->task('Selesai Q3', '2026-08-14', [$this->imsUser], ['status' => 'done']);

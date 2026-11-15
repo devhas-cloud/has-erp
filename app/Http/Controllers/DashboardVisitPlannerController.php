@@ -6,6 +6,7 @@ use App\Models\Division;
 use App\Models\Task;
 use App\Models\TaskCategory;
 use App\Models\User;
+use App\Models\VisitBaseline;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -219,64 +220,88 @@ class DashboardVisitPlannerController extends Controller
             ->whereDate('due_date', '<=', $end->toDateString());
 
         $tasks = (clone $inRange)->with(['assignees', 'visits'])->get();
-        $planned = $tasks->where('status', '!=', 'cancelled')->count();
-        $done = $tasks->where('status', 'done');
 
         // Semua salesperson tampil (termasuk 0 visit) agar yang belum visit ikut terpantau.
         $people = User::with('division')->where('salesperson', true)->get()
             ->mapWithKeys(fn (User $u) => [$u->id => [
                 'user' => $u,
                 'division' => $u->division?->division_name ?? 'Tanpa Divisi',
-                'done' => 0,
+                'done' => 0,      // total = erp + baseline
+                'erp' => 0,       // visit Done dari ERP (di luar jendela baseline)
+                'baseline' => 0,  // angka awal dari SF
                 'planned' => 0,
                 'checked_in' => 0,
-                'baseline' => 0,
             ]])->all();
 
-        foreach ($tasks as $task) {
-            if ($task->status === 'cancelled') {
-                continue;
-            }
+        // Baseline visit dari SF menggantikan data ERP pada jendela tanggalnya
+        // (angka SF sudah mencakup visit di rentang itu). Baseline hanya dipakai
+        // bila periode laporan mencakup seluruh jendela baseline — baseline tidak
+        // bisa dipecah per hari, sehingga periode yang hanya menyinggung sebagian
+        // (mis. tampilan mingguan) tetap memakai data ERP apa adanya.
+        $baselines = VisitBaseline::query()
+            ->whereDate('start_date', '>=', $start->toDateString())
+            ->whereDate('end_date', '<=', $end->toDateString())
+            ->get();
 
-            foreach ($task->assignees as $user) {
-                if (! isset($people[$user->id])) {
-                    continue;
-                }
-                $people[$user->id]['planned']++;
-                if ($task->status === 'done') {
-                    $people[$user->id]['done']++;
-                    if ($task->visits->contains('user_id', $user->id)) {
-                        $people[$user->id]['checked_in']++;
-                    }
-                }
-            }
-        }
-
-        // Angka ERP murni (tanpa baseline) — dipakai untuk rate & checked_in.
-        $erpDoneCount = $done->count();
-
-        // Baseline visit dari SF: angka awal sebelum ERP dipakai.
-        // Hanya diterapkan pada periode kumulatif (kuartal / rentang tanggal),
-        // bukan pada tampilan mingguan — supaya tidak dobel tiap minggu.
-        $baselineTotal = 0;
-        $baselines = in_array($period, ['quarter', 'custom'], true)
-            ? \App\Models\VisitBaseline::query()
-                ->whereDate('start_date', '<=', $end->toDateString())
-                ->whereDate('end_date', '>=', $start->toDateString())
-                ->get()
-            : collect();
-
+        $windows = [];
         foreach ($baselines as $b) {
             $uid = (int) $b->user_id;
             if (! isset($people[$uid])) {
                 continue;
             }
             $people[$uid]['baseline'] += (int) $b->visits;
-            $people[$uid]['done'] += (int) $b->visits;
-            $baselineTotal += (int) $b->visits;
+            $windows[$uid][] = [$b->start_date->toDateString(), $b->end_date->toDateString()];
         }
 
-        $total = $done->count() + $baselineTotal;
+        $coveredByBaseline = function (int $uid, string $day) use ($windows): bool {
+            foreach ($windows[$uid] ?? [] as [$from, $to]) {
+                if ($day >= $from && $day <= $to) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        // Ringkasan dihitung per task unik; per orang dihitung per assignee.
+        $planned = $erpDone = $checkedIn = 0;
+
+        foreach ($tasks as $task) {
+            if ($task->status === 'cancelled') {
+                continue;
+            }
+            $day = $task->due_date->toDateString();
+            $isDone = $task->status === 'done';
+            $counted = $taskCheckedIn = false;
+
+            foreach ($task->assignees as $user) {
+                if (! isset($people[$user->id]) || $coveredByBaseline($user->id, $day)) {
+                    continue;
+                }
+                $counted = true;
+                $people[$user->id]['planned']++;
+                if ($isDone) {
+                    $people[$user->id]['erp']++;
+                    if ($task->visits->contains('user_id', $user->id)) {
+                        $people[$user->id]['checked_in']++;
+                        $taskCheckedIn = true;
+                    }
+                }
+            }
+
+            if ($counted) {
+                $planned++;
+                $erpDone += (int) $isDone;
+                $checkedIn += (int) $taskCheckedIn;
+            }
+        }
+
+        foreach ($people as &$p) {
+            $p['done'] = $p['erp'] + $p['baseline'];
+        }
+        unset($p);
+
+        $baselineTotal = array_sum(array_column($people, 'baseline'));
 
         return [
             'period' => $period,
@@ -284,10 +309,13 @@ class DashboardVisitPlannerController extends Controller
             'quarter' => $quarter,
             'start' => $start,
             'end' => $end,
-            'total' => $total,
+            'total' => $erpDone + $baselineTotal,
+            'erp' => $erpDone,
+            'baseline' => $baselineTotal,
             'planned' => $planned,
-            'rate' => $planned > 0 ? (int) round($erpDoneCount / $planned * 100) : null,
-            'checked_in' => $done->filter(fn (Task $t) => $t->visits->whereIn('user_id', $t->assignees->where('salesperson', true)->pluck('id'))->isNotEmpty())->count(),
+            // Rate dari ERP murni: task Done / rencana (di luar jendela baseline).
+            'rate' => $planned > 0 ? (int) round($erpDone / $planned * 100) : null,
+            'checked_in' => $checkedIn,
             'people' => collect($people)->sortBy([
                 ['done', 'desc'],
                 ['planned', 'desc'],
