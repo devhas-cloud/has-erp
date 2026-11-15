@@ -230,6 +230,7 @@ class DashboardVisitPlannerController extends Controller
                 'done' => 0,
                 'planned' => 0,
                 'checked_in' => 0,
+                'baseline' => 0,
             ]])->all();
 
         foreach ($tasks as $task) {
@@ -251,7 +252,31 @@ class DashboardVisitPlannerController extends Controller
             }
         }
 
-        $total = $done->count();
+        // Angka ERP murni (tanpa baseline) — dipakai untuk rate & checked_in.
+        $erpDoneCount = $done->count();
+
+        // Baseline visit dari SF: angka awal sebelum ERP dipakai.
+        // Hanya diterapkan pada periode kumulatif (kuartal / rentang tanggal),
+        // bukan pada tampilan mingguan — supaya tidak dobel tiap minggu.
+        $baselineTotal = 0;
+        $baselines = in_array($period, ['quarter', 'custom'], true)
+            ? \App\Models\VisitBaseline::query()
+                ->whereDate('start_date', '<=', $end->toDateString())
+                ->whereDate('end_date', '>=', $start->toDateString())
+                ->get()
+            : collect();
+
+        foreach ($baselines as $b) {
+            $uid = (int) $b->user_id;
+            if (! isset($people[$uid])) {
+                continue;
+            }
+            $people[$uid]['baseline'] += (int) $b->visits;
+            $people[$uid]['done'] += (int) $b->visits;
+            $baselineTotal += (int) $b->visits;
+        }
+
+        $total = $done->count() + $baselineTotal;
 
         return [
             'period' => $period,
@@ -261,7 +286,7 @@ class DashboardVisitPlannerController extends Controller
             'end' => $end,
             'total' => $total,
             'planned' => $planned,
-            'rate' => $planned > 0 ? (int) round($total / $planned * 100) : null,
+            'rate' => $planned > 0 ? (int) round($erpDoneCount / $planned * 100) : null,
             'checked_in' => $done->filter(fn (Task $t) => $t->visits->whereIn('user_id', $t->assignees->where('salesperson', true)->pluck('id'))->isNotEmpty())->count(),
             'people' => collect($people)->sortBy([
                 ['done', 'desc'],
