@@ -709,6 +709,24 @@ class QuotationTest extends TestCase
         $this->assertMatchesRegularExpression('/^\d{3}\/HAS\/QT-ZM\/VIII\/2026$/', $quotation->quotation_number);
     }
 
+    public function test_quotation_number_sequence_resets_each_month(): void
+    {
+        Quotation::create([
+            'date' => '2026-08-11',
+            'from_name' => 'Tania Varera',
+            'quotation_number' => '007/HAS/QT-TV/VIII/2026',
+        ]);
+
+        $august = new Quotation(['date' => '2026-08-20', 'from_name' => 'Tania Varera']);
+        $this->assertSame('008/HAS/QT-TV/VIII/2026', $august->generateQuotationNumber());
+
+        $september = new Quotation(['date' => '2026-09-01', 'from_name' => 'Tania Varera']);
+        $this->assertSame('001/HAS/QT-TV/IX/2026', $september->generateQuotationNumber());
+
+        $nextYear = new Quotation(['date' => '2027-08-01', 'from_name' => 'Tania Varera']);
+        $this->assertSame('001/HAS/QT-TV/VIII/2027', $nextYear->generateQuotationNumber());
+    }
+
     public function test_store_with_discount_percent_and_ppn_percent(): void
     {
         $config = $this->createApprovedConfiguration();

@@ -488,10 +488,11 @@ class Quotation extends Model
         $year = (int) substr($date, 0, 4);
         $month = (int) substr($date, 5, 2);
 
-        // Ambil seq maksimum yang sudah terpakai di tahun berjalan.
-        // (Revisi boleh bernomor sama dengan sumber, jadi max+1 memastikan
-        // pembuatan baru tetap unik dan tahan penghapusan baris.)
+        // Ambil seq maksimum yang sudah terpakai di bulan berjalan; nomor
+        // direset ke 001 setiap ganti bulan. Revisi boleh bernomor sama
+        // dengan sumber, jadi max+1 menjaga pembuatan baru tetap unik.
         $numbers = Quotation::whereYear('date', $year)
+            ->whereMonth('date', $month)
             ->whereNotNull('quotation_number')
             ->pluck('quotation_number');
 
