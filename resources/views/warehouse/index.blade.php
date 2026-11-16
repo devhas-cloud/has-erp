@@ -31,7 +31,7 @@
                         <th style="width:50px">#</th>
                         <th>Kode</th>
                         <th>Nama</th>
-                        <th>Jenis</th>
+                        <th>Branch</th>
                         <th>Status</th>
                         <th class="text-center" style="width:130px">Aksi</th>
                     </tr>
@@ -62,13 +62,14 @@
                         <input type="text" id="warehouse-name" class="form-control" maxlength="150" placeholder="Contoh: Gudang Pusat" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Jenis Gudang <span style="color:var(--danger)">*</span></label>
-                        <select id="warehouse-type" class="form-select" required>
-                            @foreach(\App\Models\Warehouse::TYPE_LABELS as $typeKey => $typeLabel)
-                                <option value="{{ $typeKey }}">{{ $typeLabel }}</option>
+                        <label class="form-label" for="warehouse-branch">Branch <span style="color:var(--danger)">*</span></label>
+                        <select id="warehouse-branch" class="form-select" required>
+                            <option value="">— Pilih Branch —</option>
+                            @foreach($branches as $branch)
+                                <option value="{{ $branch->id }}">{{ $branch->code }} — {{ $branch->name }}</option>
                             @endforeach
                         </select>
-                        <small style="color:var(--text-muted)">Gudang Stok untuk stok bebas; Gudang Transit untuk barang project yang menunggu Delivery Order.</small>
+                        <small style="color:var(--text-muted)">Kantor pemilik gudang. Branch dikelola di Configuration.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Status <span style="color:var(--danger)">*</span></label>
@@ -113,11 +114,11 @@ function initWarehouseTable() {
                 render: function(data) { return '<strong style="color:var(--text-primary)">' + data + '</strong>'; }
             },
             { data: 'name', orderable: false, searchable: true },
-            { data: 'type_label', orderable: false, searchable: false,
-                render: function(data, type, row) {
-                    return row.type === 'transit'
-                        ? '<span class="status-badge" style="background:#fef3c7;color:#92400e;">' + data + '</span>'
-                        : '<span class="status-badge" style="background:var(--accent-soft);color:var(--accent);">' + data + '</span>';
+            { data: 'branch_name', orderable: false, searchable: false,
+                render: function(data) {
+                    return data
+                        ? '<span class="status-badge" style="background:var(--accent-soft);color:var(--accent);">' + $('<div>').text(data).html() + '</span>'
+                        : '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Belum ada branch</span>';
                 }
             },
             { data: 'status', orderable: false, searchable: false,
@@ -149,7 +150,7 @@ function resetWarehouseForm() {
     document.getElementById('warehouse-form').reset();
     document.getElementById('warehouse-edit-id').value = '';
     document.getElementById('warehouse-status').value = 'Active';
-    document.getElementById('warehouse-type').value = 'stock';
+    document.getElementById('warehouse-branch').value = '';
 }
 
 function openCreateModal() {
@@ -168,7 +169,7 @@ function openEditModal(id) {
         $('#warehouse-code').val(w.code || '');
         $('#warehouse-name').val(w.name || '');
         $('#warehouse-status').val(w.status || 'Active');
-        $('#warehouse-type').val(w.type || 'stock');
+        $('#warehouse-branch').val(w.branch_id || '');
         if (!warehouseModalInstance) warehouseModalInstance = new bootstrap.Modal(document.getElementById('warehouseModal'));
         warehouseModalInstance.show();
     });
@@ -183,8 +184,9 @@ $(document).on('click', '#btn-save-warehouse', function() {
 
     if (!code) { toastr.error('Kode wajib diisi.'); return; }
     if (!name) { toastr.error('Nama wajib diisi.'); return; }
+    if (!$('#warehouse-branch').val()) { toastr.error('Pilih branch.'); return; }
 
-    var payload = { code: code, name: name, type: $('#warehouse-type').val(), status: status };
+    var payload = { code: code, name: name, branch_id: $('#warehouse-branch').val(), status: status };
 
     $('#btn-save-warehouse').prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Menyimpan...');
 

@@ -7,13 +7,15 @@ use App\Models\Division;
 use App\Models\MasterProduct;
 use App\Models\Module;
 use App\Models\Project;
+use App\Models\Stock;
 use App\Models\StockEntry;
-use App\Models\StockMovement;
+use App\Models\StockLog;
 use App\Models\StockTransfer;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
 /**
@@ -22,6 +24,7 @@ use Tests\TestCase;
  */
 class StockInventoryTest extends TestCase
 {
+    use InteractsWithStock;
     use RefreshDatabase;
 
     private Division $division;
@@ -57,13 +60,13 @@ class StockInventoryTest extends TestCase
             ]);
         }
 
-        $this->stockWarehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang Pusat', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
-        $this->transitWarehouse = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'type' => Warehouse::TYPE_TRANSIT, 'status' => 'Active']);
+        $this->stockWarehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang Pusat', 'status' => 'Active']);
+        $this->transitWarehouse = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'status' => 'Active']);
     }
 
     private function product(string $code = 'PN-1'): MasterProduct
     {
-        return MasterProduct::firstOrCreate(['code' => $code], ['name' => 'Produk '.$code, 'division_id' => $this->division->id, 'status' => 'Active']);
+        return MasterProduct::firstOrCreate(['code' => $code], ['name' => 'Produk '.$code, 'division_id' => $this->division->id, 'status' => 'Active', 'is_material' => true]);
     }
 
     private function project(): Project
@@ -101,8 +104,10 @@ class StockInventoryTest extends TestCase
 
         $entry = StockEntry::findOrFail($id);
         $this->assertSame('SE-26110001', $entry->entry_number);
-        $this->assertSame(10, StockMovement::balance($this->stockWarehouse->id, $this->product()->id));
-        $this->assertDatabaseHas('stock_movements', ['type' => StockMovement::TYPE_MISC_IN, 'source_type' => StockMovement::SOURCE_STOCK_ENTRY, 'source_id' => $id, 'unit' => 'Pcs']);
+        $this->assertEquals(10, $this->stockBalance($this->stockWarehouse->id, $this->product()->id));
+        $item = $entry->items()->first();
+        $this->assertDatabaseHas('stocks', ['source_type' => Stock::SOURCE_STOCK_ENTRY_ITEM, 'source_id' => $item->id, 'unit' => 'Pcs', 'is_material' => true]);
+        $this->assertDatabaseHas('stock_logs', ['type' => StockLog::TYPE_IN, 'ref_type' => StockLog::REF_STOCK_ENTRY_ITEM, 'ref_id' => $item->id]);
 
         $this->actingAs($this->user)->postJson(route('stock-entry.store'), [
             'warehouse_id' => $this->stockWarehouse->id,
@@ -122,8 +127,9 @@ class StockInventoryTest extends TestCase
         $project = $this->project();
         $product = $this->product();
 
+        $row = Stock::firstOrFail();
         $this->actingAs($this->user)->getJson(route('stock-transfer.available-stock', ['warehouse_id' => $this->stockWarehouse->id]))
-            ->assertOk()->assertJsonPath('items.0.balance', 10)->assertJsonPath('items.0.unit', 'Pcs');
+            ->assertOk()->assertJsonPath('data.0.id', $row->id)->assertJsonPath('data.0.qty', 10)->assertJsonPath('data.0.unit', 'Pcs');
 
         $payload = [
             'from_warehouse_id' => $this->stockWarehouse->id,
@@ -132,17 +138,22 @@ class StockInventoryTest extends TestCase
             'transfer_date' => '2026-11-02',
         ];
 
-        $this->actingAs($this->user)->postJson(route('stock-transfer.store'), $payload + ['items' => [['master_product_id' => $product->id, 'qty' => 11]]])->assertStatus(422);
+        $this->actingAs($this->user)->postJson(route('stock-transfer.store'), $payload + ['items' => [['stock_id' => $row->id, 'qty' => 11]]])->assertStatus(422);
 
-        $id = $this->actingAs($this->user)->postJson(route('stock-transfer.store'), $payload + ['items' => [['master_product_id' => $product->id, 'qty' => 4]]])
+        $id = $this->actingAs($this->user)->postJson(route('stock-transfer.store'), $payload + ['items' => [['stock_id' => $row->id, 'qty' => 4]]])
             ->assertOk()->json('id');
 
         $transfer = StockTransfer::findOrFail($id);
         $this->assertSame('ST-26110001', $transfer->transfer_number);
         $this->assertSame('Alokasi ke Project', $transfer->kindLabel());
-        $this->assertSame(6, StockMovement::balance($this->stockWarehouse->id, $product->id));
-        $this->assertSame(4, StockMovement::balance($this->transitWarehouse->id, $product->id, $project->id));
-        $this->assertSame(0, StockMovement::balance($this->transitWarehouse->id, $product->id));
+        $this->assertEquals(6, $this->stockBalance($this->stockWarehouse->id, $product->id));
+        $this->assertEquals(4, $this->stockBalance($this->transitWarehouse->id, $product->id, $project->id));
+        $this->assertEquals(0, $this->stockBalance($this->transitWarehouse->id, $product->id));
+        // Sebagian -> baris dipecah; item transfer menunjuk baris tujuan; pindah kepemilikan = alokasi.
+        $child = Stock::where('project_id', $project->id)->firstOrFail();
+        $this->assertSame($row->id, $child->parent_id);
+        $this->assertSame($child->id, $transfer->items()->value('stock_id'));
+        $this->assertSame(2, StockLog::where('type', StockLog::TYPE_ALLOCATE)->count());
 
         $this->actingAs($this->user)->get(route('stock-transfer.show', $id))->assertOk()->assertSee('SPARING Gresik');
         $this->actingAs($this->user)->get(route('stock-transfer.index'))->assertOk();
@@ -156,31 +167,33 @@ class StockInventoryTest extends TestCase
         $product = $this->product();
         $this->entry(5, $project)->assertOk();
 
+        $row = Stock::firstOrFail();
+
         $this->actingAs($this->user)->postJson(route('stock-transfer.store'), [
             'from_warehouse_id' => $this->stockWarehouse->id,
             'from_project_id' => $project->id,
             'to_warehouse_id' => $this->stockWarehouse->id,
             'to_project_id' => $project->id,
-            'items' => [['master_product_id' => $product->id, 'qty' => 1]],
+            'items' => [['stock_id' => $row->id, 'qty' => 1]],
         ])->assertStatus(422);
 
-        // Stok bebas kosong -> produk tidak tersedia di asal bebas.
+        // Baris milik project tidak bisa dipakai sebagai asal stok bebas.
         $this->actingAs($this->user)->postJson(route('stock-transfer.store'), [
             'from_warehouse_id' => $this->stockWarehouse->id,
             'to_warehouse_id' => $this->transitWarehouse->id,
-            'items' => [['master_product_id' => $product->id, 'qty' => 1]],
+            'items' => [['stock_id' => $row->id, 'qty' => 1]],
         ])->assertStatus(422);
 
         $id = $this->actingAs($this->user)->postJson(route('stock-transfer.store'), [
             'from_warehouse_id' => $this->stockWarehouse->id,
             'from_project_id' => $project->id,
             'to_warehouse_id' => $this->stockWarehouse->id,
-            'items' => [['master_product_id' => $product->id, 'qty' => 2]],
+            'items' => [['stock_id' => $row->id, 'qty' => 2]],
         ])->assertOk()->json('id');
 
         $this->assertSame('Lepas Alokasi', StockTransfer::findOrFail($id)->kindLabel());
-        $this->assertSame(3, StockMovement::balance($this->stockWarehouse->id, $product->id, $project->id));
-        $this->assertSame(2, StockMovement::balance($this->stockWarehouse->id, $product->id));
+        $this->assertEquals(3, $this->stockBalance($this->stockWarehouse->id, $product->id, $project->id));
+        $this->assertEquals(2, $this->stockBalance($this->stockWarehouse->id, $product->id));
     }
 
     public function test_stock_report_balances_filters_and_card(): void
@@ -197,6 +210,8 @@ class StockInventoryTest extends TestCase
 
         $this->actingAs($this->user)->getJson(route('stock-report.data', ['ownership' => 'free']))
             ->assertOk()->assertJsonPath('recordsTotal', 2)->assertJsonPath('data.0.code', 'PN-1')->assertJsonPath('data.0.balance', 7);
+        $this->actingAs($this->user)->getJson(route('stock-report.data', ['ownership' => 'free']))
+            ->assertJsonPath('data.0.missing_serial', 0)->assertJsonPath('data.0.serialized', false);
 
         $this->actingAs($this->user)->getJson(route('stock-report.data', ['ownership' => $project->id]))
             ->assertOk()->assertJsonPath('recordsTotal', 1)->assertJsonPath('data.0.balance', 3);
@@ -205,6 +220,10 @@ class StockInventoryTest extends TestCase
             ->assertOk()->assertJsonPath('recordsFiltered', 1);
 
         $this->actingAs($this->user)->get(route('stock-report.card', ['productId' => $this->product()->id, 'ownership' => 'free']))
-            ->assertOk()->assertSee('Saldo akhir: 7')->assertSee('Masuk Lain-lain');
+            ->assertOk()->assertSee('Saldo akhir: 7')->assertSee('Masuk');
+
+        // Saldo awal dihitung mundur: periode setelah semua pergerakan -> saldo awal = 7, tanpa baris.
+        $this->actingAs($this->user)->get(route('stock-report.card', ['productId' => $this->product()->id, 'ownership' => 'free', 'from' => now()->addDay()->toDateString(), 'to' => now()->addDays(2)->toDateString()]))
+            ->assertOk()->assertSee('Saldo akhir: 7')->assertSee('Tidak ada pergerakan stok pada periode ini');
     }
 }

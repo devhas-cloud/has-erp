@@ -28,7 +28,7 @@
             </div>
             <div class="card-body-custom">
                 <table class="info-table" style="width:100%">
-                    <tr><td>Gudang</td><td>{{ $warehouse ? $warehouse->code.' — '.$warehouse->name.' ('.$warehouse->type_label.')' : '—' }}</td></tr>
+                    <tr><td>Gudang</td><td>{{ $warehouse ? $warehouse->code.' — '.$warehouse->name.' ('.$warehouse->branch_label.')' : '—' }}</td></tr>
                     <tr>
                         <td>Kepemilikan</td>
                         <td>
@@ -71,23 +71,30 @@
                         <th style="width:45px" class="text-center">#</th>
                         <th>Kode</th>
                         <th>Nama Produk</th>
+                        <th>SN / Batch</th>
                         <th class="text-center" style="width:100px">Qty</th>
                         <th style="width:100px">Satuan</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($transfer->items as $i => $item)
+                    @php $product = $item->stock?->masterProduct; @endphp
                     <tr>
                         <td class="text-center" style="color:var(--text-muted)">{{ $i + 1 }}</td>
                         <td>
-                            @if($item->masterProduct)
-                                <a href="{{ route('stock-report.card', $item->master_product_id) }}" title="Kartu stok">{{ $item->masterProduct->code }}</a>
+                            @if($product)
+                                <a href="{{ route('stock-report.card', $product->id) }}" title="Kartu stok">{{ $product->code }}</a>
                             @else
                                 —
                             @endif
                         </td>
-                        <td>{{ $item->masterProduct?->name ?? '—' }}</td>
-                        <td class="text-center fw-semibold">{{ $item->qty }}</td>
+                        <td>{{ $product?->name ?? '—' }}</td>
+                        <td style="font-size:12.5px">
+                            @if($item->stock)
+                                <a href="{{ route('stock-detail.show', $item->stock_id) }}" title="Riwayat">{{ $item->stock->identity_label }}</a>
+                            @endif
+                        </td>
+                        <td class="text-center fw-semibold">{{ \App\Support\StockCost::qty($item->qty) }}</td>
                         <td>{{ $item->unit ?: '—' }}</td>
                     </tr>
                     @endforeach

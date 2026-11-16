@@ -9,7 +9,7 @@ class StockTransferItem extends Model
 {
     protected $fillable = [
         'stock_transfer_id',
-        'master_product_id',
+        'stock_id',
         'qty',
         'unit',
         'sort_order',
@@ -18,7 +18,7 @@ class StockTransferItem extends Model
     protected function casts(): array
     {
         return [
-            'qty' => 'integer',
+            'qty' => 'float',
         ];
     }
 
@@ -27,8 +27,11 @@ class StockTransferItem extends Model
         return $this->belongsTo(StockTransfer::class);
     }
 
-    public function masterProduct(): BelongsTo
+    /**
+     * Baris stok yang dipindah (produk, SN, batch dibaca dari sini).
+     */
+    public function stock(): BelongsTo
     {
-        return $this->belongsTo(MasterProduct::class);
+        return $this->belongsTo(Stock::class);
     }
 }

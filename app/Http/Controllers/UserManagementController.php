@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
 use App\Models\Division;
 use App\Models\TaskRole;
 use App\Models\User;
@@ -20,7 +21,7 @@ class UserManagementController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = User::with(['division', 'hierarchyRole']);
+        $query = User::with(['division', 'hierarchyRole', 'branch']);
 
         $recordsTotal = User::count();
 
@@ -72,6 +73,7 @@ class UserManagementController extends Controller
                 'icon' => $user->avatar_url,
                 'email' => $user->email,
                 'division_name' => $user->division?->division_name,
+                'branch_name' => $user->branch?->name,
                 'role' => $user->role,
                 'task_role_name' => $user->hierarchyRole?->role_name,
                 'salesperson' => (bool) $user->salesperson,
@@ -93,8 +95,9 @@ class UserManagementController extends Controller
         $divisions = Division::where('type', 'Internal')->where('status', 'Active')->get();
         $taskRoles = TaskRole::all();
         $modules = SidebarMenu::forUser(Auth::user());
+        $branches = Branch::active()->orderBy('name')->get();
 
-        return view('user-management.create', compact('divisions', 'taskRoles', 'modules'));
+        return view('user-management.create', compact('divisions', 'taskRoles', 'modules', 'branches'));
     }
 
     public function store(Request $request)
@@ -106,11 +109,13 @@ class UserManagementController extends Controller
             'password' => 'required|string|min:6',
             'phone_number' => 'nullable|string|max:20',
             'division_id' => 'nullable|exists:divisions,id',
+            'branch_id' => 'nullable|exists:branches,id',
             'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
             'salesperson' => 'nullable|boolean',
         ]);
         $validated['salesperson'] = $request->boolean('salesperson');
+        $validated['branch_id'] = $validated['branch_id'] ?? null;
 
         $roleRecord = TaskRole::where('role_name', $validated['role'])->first();
         if ($roleRecord) {
@@ -138,7 +143,7 @@ class UserManagementController extends Controller
 
     public function show($id)
     {
-        $user = User::with(['division', 'accessControls.module'])->findOrFail($id);
+        $user = User::with(['division', 'branch', 'accessControls.module'])->findOrFail($id);
 
         return view('user-management.show', compact('user'));
     }
@@ -149,10 +154,12 @@ class UserManagementController extends Controller
         $divisions = Division::where('status', 'Active')->get();
         $taskRoles = TaskRole::all();
         $modules = SidebarMenu::forUser(Auth::user());
+        // Branch nonaktif yang masih dipakai user tetap ditampilkan agar tidak hilang saat disimpan.
+        $branches = Branch::where(fn ($q) => $q->where('status', Branch::STATUS_ACTIVE)->orWhere('id', $user->branch_id))->orderBy('name')->get();
 
         $userPermissions = $user->accessControls->keyBy('module_id');
 
-        return view('user-management.edit', compact('user', 'divisions', 'taskRoles', 'modules', 'userPermissions'));
+        return view('user-management.edit', compact('user', 'divisions', 'taskRoles', 'modules', 'userPermissions', 'branches'));
     }
 
     public function update(Request $request, $id)
@@ -165,11 +172,13 @@ class UserManagementController extends Controller
             'email' => 'required|email|max:255|unique:users,email,'.$user->id,
             'phone_number' => 'nullable|string|max:20',
             'division_id' => 'nullable|exists:divisions,id',
+            'branch_id' => 'nullable|exists:branches,id',
             'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
             'salesperson' => 'nullable|boolean',
         ]);
         $validated['salesperson'] = $request->boolean('salesperson');
+        $validated['branch_id'] = $validated['branch_id'] ?? null;
 
         if ($request->filled('password')) {
             $validated['password'] = $request->validate(['password' => 'string|min:6'])['password'];

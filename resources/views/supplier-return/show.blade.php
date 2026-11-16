@@ -36,8 +36,15 @@
                     <tr>
                         <td><div class="fw-semibold" style="font-size:13px">{{ $item->purchaseOrderItem?->part_number ?: '—' }}</div><div style="font-size:12px;color:var(--text-muted)">{!! $item->purchaseOrderItem?->description !!}</div></td>
                         <td style="font-size:12.5px">{{ $item->project ? $item->project->project_number.' — '.$item->project->project_name : 'Stok / Internal' }}</td>
-                        <td class="text-center">{{ $item->qty }} {{ $item->unit }}</td>
-                        <td>{{ $item->destination === 'warehouse' ? 'Stok gudang' : 'Langsung pakai' }}</td>
+                        <td class="text-center">{{ \App\Support\StockCost::qty($item->qty) }} {{ $item->unit }}</td>
+                        <td>
+                            @if($item->destination === 'warehouse')
+                                Stok gudang
+                                @if($item->stock)<div style="font-size:12px"><a href="{{ route('stock-detail.show', $item->stock_id) }}">{{ $item->stock->identity_label }}</a></div>@endif
+                            @else
+                                Langsung pakai
+                            @endif
+                        </td>
                     </tr>
                 @endforeach
             </tbody>

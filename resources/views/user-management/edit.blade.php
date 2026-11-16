@@ -245,6 +245,19 @@
                     @error('division_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
                 <div class="col-md-6">
+                    <label class="form-label">Branch</label>
+                    <select name="branch_id" class="form-select @error('branch_id') is-invalid @enderror">
+                        <option value="">— Semua branch —</option>
+                        @foreach ($branches as $branch)
+                            <option value="{{ $branch->id }}" {{ old('branch_id', $user->branch_id) == $branch->id ? 'selected' : '' }}>
+                                {{ $branch->code }} — {{ $branch->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <div class="field-hint">Opsional. Kosong = bisa melihat semua branch (hak tetap mengikuti akses modul).</div>
+                    @error('branch_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
+                <div class="col-md-6">
                     <label class="form-label">Task Role</label>
                     <select name="task_role_id" class="form-select @error('task_role_id') is-invalid @enderror">
                         <option value="">— Pilih Task Role —</option>

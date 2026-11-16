@@ -41,7 +41,7 @@
                 <table class="info-table" style="width:100%">
                     <tr><td>Project</td><td>@if($order->project)<a href="{{ route('project.show', $order->project_id) }}" class="fw-semibold">{{ $order->project->project_number }} — {{ $order->project->project_name }}</a>@else — @endif</td></tr>
                     <tr><td>Customer</td><td>{{ $order->project?->company?->account_name ?? '—' }}</td></tr>
-                    <tr><td>Gudang Asal</td><td>{{ $order->warehouse ? $order->warehouse->code.' — '.$order->warehouse->name.' ('.$order->warehouse->type_label.')' : '—' }}</td></tr>
+                    <tr><td>Gudang Asal</td><td>{{ $order->warehouse ? $order->warehouse->code.' — '.$order->warehouse->name.' ('.$order->warehouse->branch_label.')' : '—' }}</td></tr>
                     <tr><td>Ekspedisi</td><td>{{ $order->courier ?: '—' }}</td></tr>
                     <tr><td>Dibuat Oleh</td><td>{{ $order->creator?->display_name ?? '—' }} &middot; {{ $order->created_at?->format('d/m/Y H:i') }}</td></tr>
                     @if($order->posted_at)
@@ -80,28 +80,32 @@
                         <th style="width:45px" class="text-center">#</th>
                         <th>Kode</th>
                         <th>Nama Produk</th>
+                        <th>SN / Batch</th>
                         <th class="text-center" style="width:90px">Qty</th>
                         <th style="width:90px">Satuan</th>
                         <th>Keterangan</th>
-                        @if($order->isDraft())<th class="text-center" style="width:120px">Stok Project</th>@endif
+                        @if($order->isDraft())<th class="text-center" style="width:140px">Sisa Stok</th>@endif
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($order->items as $i => $item)
-                        @php $available = $balances[$item->master_product_id]['balance'] ?? 0; @endphp
+                        @php $stock = $item->stock; $product = $stock?->masterProduct; @endphp
                         <tr>
                             <td class="text-center" style="color:var(--text-muted)">{{ $i + 1 }}</td>
-                            <td>{{ $item->masterProduct?->code ?? '—' }}</td>
-                            <td>{{ $item->masterProduct?->name ?? '—' }}</td>
-                            <td class="text-center fw-semibold">{{ $item->qty }}</td>
+                            <td>{{ $product?->code ?? '—' }}</td>
+                            <td>{{ $product?->name ?? '—' }}</td>
+                            <td style="font-size:12.5px">@if($stock)<a href="{{ route('stock-detail.show', $stock->id) }}">{{ $stock->identity_label }}</a>@endif</td>
+                            <td class="text-center fw-semibold">{{ \App\Support\StockCost::qty($item->qty) }}</td>
                             <td>{{ $item->unit ?: '—' }}</td>
                             <td>{{ $item->remark ?: '—' }}</td>
                             @if($order->isDraft())
                                 <td class="text-center">
-                                    @if($available >= $item->qty)
-                                        <span class="badge" style="background:var(--accent-soft);color:var(--accent)">{{ $available }}</span>
+                                    @if(! $stock || ! $stock->is_open || $stock->qty + 0.00005 < $item->qty)
+                                        <span class="badge" style="background:var(--danger-soft);color:#7f1d1d" title="Stok tidak cukup untuk posting">{{ \App\Support\StockCost::qty($stock?->qty ?? 0) }} — kurang</span>
+                                    @elseif(! $stock->canLeave())
+                                        <span class="badge" style="background:var(--danger-soft);color:#7f1d1d">SN belum diisi</span>
                                     @else
-                                        <span class="badge" style="background:var(--danger-soft);color:#7f1d1d" title="Stok tidak cukup untuk posting">{{ $available }} — kurang</span>
+                                        <span class="badge" style="background:var(--accent-soft);color:var(--accent)">{{ \App\Support\StockCost::qty($stock->qty) }}</span>
                                     @endif
                                 </td>
                             @endif

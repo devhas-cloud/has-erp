@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Gudang. TYPE_STOCK = gudang utama (stok bebas); TYPE_TRANSIT = gudang
- * sementara barang project (teralokasi) sebelum Delivery Order.
+ * Gudang milik satu branch. Tidak ada lagi gudang "transit": barang milik
+ * project cukup ditandai project_id di baris stok, dan barang antar branch
+ * tercatat "dalam pengiriman" di dokumen Branch Transfer.
  */
 class Warehouse extends Model
 {
@@ -14,30 +16,26 @@ class Warehouse extends Model
 
     public const STATUS_INACTIVE = 'Inactive';
 
-    public const TYPE_STOCK = 'stock';
-
-    public const TYPE_TRANSIT = 'transit';
-
-    public const TYPE_LABELS = [
-        self::TYPE_STOCK => 'Gudang Stok',
-        self::TYPE_TRANSIT => 'Gudang Transit (Project)',
-    ];
-
     protected $fillable = [
+        'branch_id',
         'code',
         'name',
-        'type',
         'status',
     ];
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 
     public function scopeActive($query)
     {
         return $query->where('status', self::STATUS_ACTIVE);
     }
 
-    public function scopeOfType($query, string $type)
+    public function scopeOfBranch($query, ?int $branchId)
     {
-        return $query->where('type', $type);
+        return $branchId ? $query->where('branch_id', $branchId) : $query;
     }
 
     public function isActive(): bool
@@ -45,13 +43,16 @@ class Warehouse extends Model
         return $this->status === self::STATUS_ACTIVE;
     }
 
-    public function isTransit(): bool
+    /**
+     * Nama branch pemilik (untuk label form & laporan).
+     */
+    public function getBranchLabelAttribute(): string
     {
-        return $this->type === self::TYPE_TRANSIT;
+        return $this->branch?->name ?? 'Tanpa branch';
     }
 
-    public function getTypeLabelAttribute(): string
+    public function getFullLabelAttribute(): string
     {
-        return self::TYPE_LABELS[$this->type] ?? ucfirst((string) $this->type);
+        return $this->code.' — '.$this->name.' ('.$this->branch_label.')';
     }
 }

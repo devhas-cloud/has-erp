@@ -10,14 +10,16 @@ use App\Models\GoodsRequest;
 use App\Models\MasterProduct;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
-use App\Models\StockMovement;
+use App\Models\StockLog;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Models\SupplierPayment;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\StockService;
 use App\Support\PayableReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
 /**
@@ -26,6 +28,7 @@ use Tests\TestCase;
  */
 class PayableReportTest extends TestCase
 {
+    use InteractsWithStock;
     use RefreshDatabase;
 
     private User $admin;
@@ -54,14 +57,14 @@ class PayableReportTest extends TestCase
             'po_number_company' => 'PO-1', 'po_date' => '2026-10-01', 'po_date_received' => '2026-10-02', 'po_due_date' => '2026-11-01',
             'total_sale_amount' => 1, 'net_sale_amount' => 1, 'status' => Project::STATUS_ACTIVE,
         ]);
-        $product = MasterProduct::create(['code' => 'PN-1', 'name' => 'Sensor', 'division_id' => $division->id, 'status' => 'Active']);
+        $product = MasterProduct::create(['code' => 'PN-1', 'name' => 'Sensor', 'division_id' => $division->id, 'status' => 'Active', 'is_material' => true]);
         $request = GoodsRequest::create(['purpose' => GoodsRequest::PURPOSE_PROJECT, 'project_id' => $this->project->id, 'division_id' => $division->id, 'status' => GoodsRequest::STATUS_APPROVED, 'created_by' => $this->admin->id]);
         $requestItem = $request->items()->create(['master_product_id' => $product->id, 'part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 10, 'unit' => 'Unit', 'sort_order' => 1]);
 
         $this->po = PurchaseOrder::create(['supplier_id' => $this->alpha->id, 'supplier_name' => 'PT Alpha', 'po_number' => '26110001', 'status' => PurchaseOrder::STATUS_APPROVED, 'created_by' => $this->admin->id]);
         $poItem = $this->po->items()->create(['goods_request_item_id' => $requestItem->id, 'master_product_id' => $product->id, 'part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 10, 'unit' => 'Unit', 'price' => 1000, 'currency' => 'IDR', 'sort_order' => 1]);
 
-        $warehouse = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'type' => Warehouse::TYPE_TRANSIT, 'status' => 'Active']);
+        $warehouse = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'status' => 'Active']);
         $receipt = GoodsReceipt::create(['receipt_number' => 'GRN-1', 'purchase_order_id' => $this->po->id, 'warehouse_id' => $warehouse->id, 'received_date' => '2026-10-01', 'status' => GoodsReceipt::STATUS_POSTED, 'created_by' => $this->admin->id]);
         $receipt->items()->create(['purchase_order_item_id' => $poItem->id, 'master_product_id' => $product->id, 'qty' => 6, 'destination' => 'warehouse', 'sort_order' => 1]);
 
@@ -76,7 +79,9 @@ class PayableReportTest extends TestCase
         $payment->allocations()->create(['supplier_bill_id' => $overdue->id, 'amount' => 2000]);
         $overdue->refreshPaymentStatus();
 
-        StockMovement::record(['warehouse_id' => $warehouse->id, 'master_product_id' => $product->id, 'project_id' => $this->project->id, 'type' => StockMovement::TYPE_ALLOCATE_IN, 'qty' => 2, 'unit_cost' => 750, 'created_by' => $this->admin->id]);
+        // Stok bebas 2 @ 750 dialokasikan ke project -> biaya stok project 1.500.
+        $row = $this->seedStock($warehouse->id, $product, 2, ['unit_cost' => 750])->first();
+        app(StockService::class)->move($row, 2, $warehouse->id, $this->project->id, StockLog::TYPE_ALLOCATE, ['note' => 'alokasi test']);
     }
 
     private function bill(Supplier $supplier, float $total, string $due, string $invoice): SupplierBill

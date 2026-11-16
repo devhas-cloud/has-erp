@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Penerimaan Barang (GRN) dari Purchase Order atau Direct Purchase. Satu
  * dokumen sumber boleh diterima bertahap. Posting mencatat stok masuk
- * (stock_movements 'receipt') untuk baris bertujuan gudang — beralokasi
+ * (baris stocks + log 'in') untuk baris bertujuan gudang — beralokasi
  * project bila barang untuk project; baris langsung pakai hanya konfirmasi.
  * Dokumen yang sudah posted tidak bisa diubah/dihapus.
  */

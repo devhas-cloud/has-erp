@@ -7,7 +7,7 @@ use App\Models\DirectPurchase;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
-use App\Models\StockMovement;
+use App\Models\StockLog;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Models\SupplierBillItem;
@@ -188,7 +188,7 @@ class PayableReport
      *  - ditagih   : baris tagihan terverifikasi ber-project;
      *  - terbayar  : porsi baris tersebut dari bagian tagihan yang sudah diselesaikan
      *                (pembayaran + potongan uang muka + PPh dipotong);
-     *  - alokasi stok: stok bebas yang dialokasikan/ditransfer ke project (harga rata-rata).
+     *  - alokasi stok: stok bebas yang dialokasikan ke project (harga modal baris stok).
      * Pembelian untuk stok belum menjadi biaya project sampai dialokasikan.
      */
     public function projectCosts(?int $projectId = null): Collection
@@ -243,14 +243,17 @@ class PayableReport
                 $rows[$item->project_id]['paid'] += $bill->toBook($base > 0 ? $item->amount * $settledRatio : 0);
             });
 
-        StockMovement::whereNotNull('project_id')
-            ->whereIn('type', [StockMovement::TYPE_ALLOCATE_IN, StockMovement::TYPE_TRANSFER_IN, StockMovement::TYPE_TRANSFER_OUT])
+        // Stok bebas yang dialokasikan ke project (dan dilepas kembali): log bertanda
+        // pada sisi project. Transfer antar gudang dalam project yang sama saling meniadakan.
+        StockLog::whereNotNull('project_id')
+            ->whereIn('type', [StockLog::TYPE_ALLOCATE, StockLog::TYPE_TRANSFER_IN, StockLog::TYPE_TRANSFER_OUT])
             ->when($projectId, fn ($q) => $q->where('project_id', $projectId))
+            ->groupBy('project_id')
+            ->selectRaw('project_id, SUM(qty * unit_cost) AS total_value')
             ->get()
-            ->each(function (StockMovement $m) use (&$rows, $row) {
-                $row($m->project_id);
-                $sign = $m->type === StockMovement::TYPE_TRANSFER_OUT ? -1 : 1;
-                $rows[$m->project_id]['stock_allocated'] += $sign * $m->qty * (float) $m->unit_cost;
+            ->each(function ($sum) use (&$rows, $row) {
+                $row((int) $sum->project_id);
+                $rows[(int) $sum->project_id]['stock_allocated'] += (float) $sum->total_value;
             });
 
         $projects = Project::with('quotation.profitEstimate')->whereIn('id', array_keys($rows))->get()->keyBy('id');

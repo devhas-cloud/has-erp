@@ -11,9 +11,12 @@ use App\Models\Log;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\Warehouse;
-use App\Support\StockValuation;
+use App\Services\StockException;
+use App\Services\StockService;
+use App\Support\StockCost;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,8 +28,9 @@ use Illuminate\Support\Facades\DB;
  * Penerimaan Barang (GRN) dari Purchase Order (Approved / Diterima Sebagian)
  * atau Direct Purchase (Approved). Penerimaan boleh bertahap, tidak boleh
  * melebihi sisa per baris. Disimpan langsung terposting:
- *   - baris "Masuk Gudang"   -> stok masuk (receipt) ke gudang terpilih,
- *     beralokasi project bila barang untuk project;
+ *   - baris "Masuk Gudang"   -> baris stok baru (stocks) di gudang terpilih,
+ *     milik project bila barang untuk project. Material = 1 baris; barang ber-SN
+ *     = 1 baris per unit (SN, batch, kedaluwarsa, garansi boleh menyusul);
  *   - baris "Langsung Pakai" -> hanya konfirmasi terima, tidak masuk kartu stok.
  * Satu penerimaan = satu gudang; PO yang mencampur barang project & internal
  * bisa diterima dalam beberapa penerimaan. Dokumen posted tidak bisa diubah.
@@ -106,7 +110,7 @@ class GoodsReceiptController extends Controller
             ->values();
 
         return view('goods-receipt.form', [
-            'warehouses' => Warehouse::active()->orderBy('type')->orderBy('name')->get(),
+            'warehouses' => Warehouse::active()->orderBy('name')->get(),
             'purchaseOrders' => $purchaseOrders,
             'directPurchases' => $directPurchases,
             'preselect' => [
@@ -147,6 +151,11 @@ class GoodsReceiptController extends Controller
             'items.*.source_line_id' => 'required|integer',
             'items.*.qty' => 'required|integer|min:1',
             'items.*.destination' => 'required|in:'.GoodsReceiptItem::DESTINATION_WAREHOUSE.','.GoodsReceiptItem::DESTINATION_DIRECT,
+            'items.*.serial_numbers' => 'nullable',
+            'items.*.batch_number' => 'nullable|string|max:100',
+            'items.*.expiry_date' => 'nullable|date',
+            'items.*.warranty_until' => 'nullable|date',
+            'items.*.note' => 'nullable|string|max:255',
         ], ['items.required' => 'Pilih minimal satu baris yang diterima.']);
 
         [, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
@@ -170,10 +179,40 @@ class GoodsReceiptController extends Controller
                     'message' => 'Qty baris '.($i + 1).' ('.($line['part_number'] ?: 'item').') melebihi sisa yang belum diterima ('.$line['remaining'].').',
                 ], 422);
             }
-            $rows[] = array_merge($line, ['qty' => (int) $row['qty'], 'destination' => $row['destination']]);
+            $toStock = $row['destination'] === GoodsReceiptItem::DESTINATION_WAREHOUSE;
+            if ($toStock && ! $line['master_product_id']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Baris '.($i + 1).' ('.($line['part_number'] ?: 'item').') belum terhubung master produk, jadi tidak bisa masuk gudang. Pilih Langsung Pakai atau petakan produknya dulu.',
+                ], 422);
+            }
+            $rows[] = array_merge($line, [
+                'qty' => (int) $row['qty'],
+                'destination' => $row['destination'],
+                'serial_numbers' => $toStock ? StockService::parseSerials($row['serial_numbers'] ?? null) : [],
+                'batch_number' => $toStock ? ($row['batch_number'] ?? null) : null,
+                'expiry_date' => $toStock ? ($row['expiry_date'] ?? null) : null,
+                'warranty_until' => $toStock ? ($row['warranty_until'] ?? null) : null,
+                'note' => $row['note'] ?? null,
+            ]);
         }
 
-        $receipt = DB::transaction(function () use ($validated, $warehouse, $rows) {
+        try {
+            $receipt = $this->persist($validated, $warehouse, $rows);
+        } catch (StockException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Penerimaan '.$receipt->receipt_number.' diposting.'.($warehouse ? ' Stok '.$warehouse->name.' bertambah.' : ''),
+            'id' => $receipt->id,
+        ]);
+    }
+
+    private function persist(array $validated, ?Warehouse $warehouse, array $rows): GoodsReceipt
+    {
+        return DB::transaction(function () use ($validated, $warehouse, $rows) {
             $receipt = GoodsReceipt::create([
                 'receipt_number' => GoodsReceipt::generateNumber(),
                 'purchase_order_id' => $validated['source_type'] === self::SOURCE_PO ? $validated['source_id'] : null,
@@ -196,20 +235,19 @@ class GoodsReceiptController extends Controller
                     'price' => $row['price'],
                     'destination' => $row['destination'],
                     'project_id' => $row['project_id'],
+                    'batch_number' => $row['batch_number'],
+                    'expiry_date' => $row['expiry_date'],
+                    'warranty_until' => $row['warranty_until'],
+                    'serial_numbers' => $row['serial_numbers'] ?: null,
+                    'note' => $row['note'],
                     'sort_order' => $i + 1,
                 ]);
             }
 
-            $this->post($receipt->load('items'));
+            $this->post($receipt->load(['items.masterProduct', 'purchaseOrder', 'directPurchase']));
 
             return $receipt;
         });
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Penerimaan '.$receipt->receipt_number.' diposting.'.($warehouse ? ' Stok '.$warehouse->name.' bertambah.' : ''),
-            'id' => $receipt->id,
-        ]);
     }
 
     public function show($id)
@@ -217,6 +255,7 @@ class GoodsReceiptController extends Controller
         $receipt = GoodsReceipt::with([
             'items.masterProduct',
             'items.project',
+            'items.stocks.masterProduct',
             'purchaseOrder',
             'directPurchase',
             'warehouse',
@@ -252,25 +291,34 @@ class GoodsReceiptController extends Controller
      */
     private function post(GoodsReceipt $receipt): void
     {
+        $service = app(StockService::class);
+        $date = $receipt->received_date?->toDateString() ?? now()->toDateString();
+        $supplierId = $receipt->purchaseOrder?->supplier_id ?? $receipt->directPurchase?->supplier_id;
+
         foreach ($receipt->items as $item) {
             if ($item->destination !== GoodsReceiptItem::DESTINATION_WAREHOUSE) {
                 continue;
             }
 
-            StockMovement::record([
+            $service->receive($item->masterProduct, (float) $item->qty, [
                 'warehouse_id' => $receipt->warehouse_id,
-                'master_product_id' => $item->master_product_id,
                 'project_id' => $item->project_id,
-                'type' => StockMovement::TYPE_RECEIPT,
-                'qty' => $item->qty,
+                'received_date' => $date,
+                'expiry_date' => $item->expiry_date,
+                'batch_number' => $item->batch_number,
+                'supplier_id' => $supplierId,
+                'warranty_until' => $item->warranty_until,
                 'unit' => $item->unit,
                 'unit_cost' => $item->price !== null
-                    ? StockValuation::toBase($item->price, $item->currency, (float) ($receipt->purchaseOrder?->discount_percent ?? 0))
-                    : null,
-                'source_type' => StockMovement::SOURCE_GOODS_RECEIPT,
-                'source_id' => $receipt->id,
-                'source_line_id' => $item->id,
-                'moved_at' => $receipt->received_date?->toDateString() ?? now()->toDateString(),
+                    ? StockCost::toBase((float) $item->price, $item->currency, (float) ($receipt->purchaseOrder?->discount_percent ?? 0))
+                    : StockCost::standardCost((int) $item->master_product_id),
+                'source_type' => Stock::SOURCE_GOODS_RECEIPT_ITEM,
+                'source_id' => $item->id,
+                'note' => $item->note,
+            ], $item->serial_numbers ?? [], [
+                'date' => $date,
+                'ref_type' => StockLog::REF_GOODS_RECEIPT_ITEM,
+                'ref_id' => $item->id,
                 'note' => 'Penerimaan '.$receipt->receipt_number,
             ]);
         }
@@ -343,7 +391,10 @@ class GoodsReceiptController extends Controller
         return [
             'source_line_id' => $lineId,
             'master_product_id' => $item->master_product_id,
+            'product_code' => $item->masterProduct?->code,
             'product_name' => $item->masterProduct?->name,
+            // Barang ber-SN: 1 baris stok per unit, SN boleh menyusul.
+            'serialized' => $item->masterProduct ? ! $item->masterProduct->isMaterial() : false,
             'part_number' => $item->part_number,
             'description' => Quotation::renderDescription($item->description),
             'ordered' => (int) $item->qty,

@@ -45,6 +45,15 @@ class MasterProduct extends Model
         return (bool) $this->is_material;
     }
 
+    /**
+     * Masih punya stok (baris stok terbuka). Selama ini is_material tidak boleh
+     * diubah, karena perilaku stok (per jumlah vs per SN) sudah melekat di barisnya.
+     */
+    public function hasStock(): bool
+    {
+        return Stock::where('master_product_id', $this->id)->where('is_open', true)->exists();
+    }
+
     /** Nilai type yang sudah dipakai — saran isian di form & template import. */
     public static function typeOptions(): array
     {

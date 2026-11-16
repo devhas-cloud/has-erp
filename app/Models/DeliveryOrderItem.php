@@ -5,11 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Baris DO = satu baris stok milik project yang dikirim (produk, SN, batch
+ * dibaca dari stock). Material boleh dikirim sebagian dari baris stoknya.
+ */
 class DeliveryOrderItem extends Model
 {
     protected $fillable = [
         'delivery_order_id',
-        'master_product_id',
+        'stock_id',
         'qty',
         'unit',
         'remark',
@@ -19,7 +23,7 @@ class DeliveryOrderItem extends Model
     protected function casts(): array
     {
         return [
-            'qty' => 'integer',
+            'qty' => 'float',
         ];
     }
 
@@ -28,8 +32,8 @@ class DeliveryOrderItem extends Model
         return $this->belongsTo(DeliveryOrder::class);
     }
 
-    public function masterProduct(): BelongsTo
+    public function stock(): BelongsTo
     {
-        return $this->belongsTo(MasterProduct::class);
+        return $this->belongsTo(Stock::class);
     }
 }

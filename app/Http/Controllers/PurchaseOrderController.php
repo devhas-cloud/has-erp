@@ -10,7 +10,7 @@ use App\Models\Log;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
-use App\Models\StockMovement;
+use App\Models\Stock;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Support\ModuleAccess;
@@ -664,7 +664,7 @@ class PurchaseOrderController extends Controller
     /**
      * Stok bebas (semua gudang) per produk — hanya informasi di picker.
      *
-     * @return array<int,int>
+     * @return array<int,float>
      */
     private function freeStockByProduct(array $productIds): array
     {
@@ -672,11 +672,11 @@ class PurchaseOrderController extends Controller
             return [];
         }
 
-        return StockMovement::whereIn('master_product_id', $productIds)
-            ->whereNull('project_id')
-            ->get(['master_product_id', 'type', 'qty'])
+        return Stock::open()->whereNull('project_id')->whereIn('master_product_id', $productIds)
             ->groupBy('master_product_id')
-            ->map(fn ($rows) => max(0, $rows->sum(fn (StockMovement $m) => $m->isIn() ? $m->qty : -$m->qty)))
+            ->selectRaw('master_product_id, SUM(qty) AS qty')
+            ->pluck('qty', 'master_product_id')
+            ->map(fn ($qty) => round((float) $qty, 4))
             ->all();
     }
 

@@ -48,6 +48,11 @@ class Document extends Model
         self::TYPE_OTHER => 'Lain-lain',
     ];
 
+    // Foto pemeriksaan barang saat diterima (Branch Transfer).
+    public const TYPE_RECEIPT_PHOTO = 'receipt_photo';
+
+    public const IMAGE_RULE = 'file|mimes:jpg,jpeg,png,webp|max:10240';
+
     public const MAX_FILES = 10;
 
     public const VALIDATION_RULE = 'file|mimes:pdf,jpg,jpeg,png|max:10240';
@@ -131,7 +136,7 @@ class Document extends Model
             'id' => $this->id,
             'file_name' => $this->file_name,
             'type' => $this->type,
-            'type_label' => self::PURCHASE_TYPE_LABELS[$this->type] ?? null,
+            'type_label' => self::PURCHASE_TYPE_LABELS[$this->type] ?? ($this->type === self::TYPE_RECEIPT_PHOTO ? 'Foto Penerimaan' : null),
             'notes' => $this->notes,
             'size' => $this->sizeLabel(),
             'icon' => $this->iconClass(),

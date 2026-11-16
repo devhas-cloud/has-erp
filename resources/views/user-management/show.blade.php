@@ -253,6 +253,11 @@
                     <div class="detail-value">{{ $user->division?->division_name ?? '—' }}</div>
                 </div>
                 <div class="detail-row">
+                    <div class="detail-icon"><i class="fa-solid fa-code-branch"></i></div>
+                    <div class="detail-label">Branch</div>
+                    <div class="detail-value">{{ $user->branch?->name ?? 'Semua branch' }}</div>
+                </div>
+                <div class="detail-row">
                     <div class="detail-icon"><i class="fa-solid fa-shield-halved"></i></div>
                     <div class="detail-label">Role</div>
                     <div class="detail-value">

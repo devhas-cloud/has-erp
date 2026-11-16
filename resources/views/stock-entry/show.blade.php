@@ -23,7 +23,7 @@
     <div class="card-body-custom">
         <table class="info-table" style="width:100%">
             <tr><td>Alasan</td><td><span class="status-badge" style="background:var(--accent-soft);color:var(--accent);">{{ $entry->reason_label }}</span></td></tr>
-            <tr><td>Gudang</td><td>{{ $entry->warehouse ? $entry->warehouse->code.' — '.$entry->warehouse->name.' ('.$entry->warehouse->type_label.')' : '—' }}</td></tr>
+            <tr><td>Gudang</td><td>{{ $entry->warehouse ? $entry->warehouse->code.' — '.$entry->warehouse->name.' ('.$entry->warehouse->branch_label.')' : '—' }}</td></tr>
             <tr>
                 <td>Kepemilikan</td>
                 <td>
@@ -70,11 +70,31 @@
                             @endif
                         </td>
                         <td>{{ $item->masterProduct?->name ?? '—' }}</td>
-                        <td class="text-center fw-semibold">{{ $item->qty }}</td>
+                        <td class="text-center fw-semibold">{{ \App\Support\StockCost::qty($item->qty) }}</td>
                         <td>{{ $item->unit ?: '—' }}</td>
-                        <td class="text-end">{{ \App\Support\StockValuation::format($item->unit_cost) }}</td>
-                        <td class="text-end">{{ \App\Support\StockValuation::format($item->unit_cost * $item->qty) }}</td>
+                        <td class="text-end">{{ \App\Support\StockCost::format($item->unit_cost) }}</td>
+                        <td class="text-end">{{ \App\Support\StockCost::format($item->unit_cost * $item->qty) }}</td>
                     </tr>
+                    @php
+                        $missing = $item->stocks->filter(fn ($st) => ! $st->canLeave())->count();
+                        $serials = collect($item->serial_numbers ?? []);
+                    @endphp
+                    @if($item->batch_number || $item->expiry_date || $item->warranty_until || $item->note || $serials->isNotEmpty() || $missing)
+                    <tr>
+                        <td></td>
+                        <td colspan="6" style="font-size:12px;padding-top:0;color:var(--text-muted)">
+                            @if($item->batch_number)<span class="me-3">Batch / No. MFG: <strong>{{ $item->batch_number }}</strong></span>@endif
+                            @if($item->expiry_date)<span class="me-3">Kedaluwarsa: <strong>{{ $item->expiry_date->format('d/m/Y') }}</strong></span>@endif
+                            @if($item->warranty_until)<span class="me-3">Garansi s/d: <strong>{{ $item->warranty_until->format('d/m/Y') }}</strong>{{ $item->supplier ? ' ('.$item->supplier->name.')' : '' }}</span>@endif
+                            @if($item->note)<span class="me-3">Catatan: {{ $item->note }}</span>@endif
+                            @if($serials->isNotEmpty())<div class="mt-1">SN: {{ $serials->implode(', ') }}</div>@endif
+                            @if($missing)
+                                <div class="mt-1" style="color:#b45309"><i class="fa fa-triangle-exclamation me-1"></i>{{ $missing }} unit SN belum diisi —
+                                    <a href="{{ route('stock-detail.index', ['product_id' => $item->master_product_id, 'warehouse_id' => $entry->warehouse_id]) }}">lengkapi sekarang</a></div>
+                            @endif
+                        </td>
+                    </tr>
+                    @endif
                     @endforeach
                 </tbody>
             </table>

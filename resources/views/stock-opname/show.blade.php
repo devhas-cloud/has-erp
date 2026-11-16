@@ -4,7 +4,8 @@
 @section('page-title', 'Detail Stock Opname')
 
 @php
-    $fmt = fn ($v) => \App\Support\StockValuation::format($v);
+    $fmt = fn ($v) => \App\Support\StockCost::format($v);
+    $fmtQty = fn ($v) => \App\Support\StockCost::qty($v);
     $plusValue = $opname->items->sum(fn ($i) => max($i->difference(), 0) * (float) $i->unit_cost);
     $minusValue = $opname->items->sum(fn ($i) => max(-$i->difference(), 0) * (float) $i->unit_cost);
 @endphp
@@ -38,7 +39,10 @@
 
 @if($opname->isDraft())
 <div class="alert alert-info py-2" style="font-size:13px">
-    <i class="fa fa-circle-info me-1"></i> Qty sistem dan harga di bawah adalah kondisi <strong>saat ini</strong> dan dihitung ulang ketika diposting.
+    <i class="fa fa-circle-info me-1"></i> Kolom <strong>Sistem</strong> adalah sisa baris stok saat qty fisik disimpan. Saat posting, selisihnya diterapkan ke sisa stok sekarang.
+    @if(count($changed))
+        <div class="mt-1" style="color:#b45309"><i class="fa fa-triangle-exclamation me-1"></i>{{ count($changed) }} baris stok berubah sejak dihitung (ada barang keluar/masuk). Pastikan hitungannya masih berlaku sebelum posting.</div>
+    @endif
 </div>
 @endif
 
@@ -48,7 +52,7 @@
             <div class="card-header-custom"><span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Informasi</span></div>
             <div class="card-body-custom">
                 <table class="info-table" style="width:100%">
-                    <tr><td>Gudang</td><td>{{ $opname->warehouse ? $opname->warehouse->code.' — '.$opname->warehouse->name.' ('.$opname->warehouse->type_label.')' : '—' }}</td></tr>
+                    <tr><td>Gudang</td><td>{{ $opname->warehouse ? $opname->warehouse->code.' — '.$opname->warehouse->name.' ('.$opname->warehouse->branch_label.')' : '—' }}</td></tr>
                     <tr><td>Dibuat Oleh</td><td>{{ $opname->creator?->display_name ?? '—' }} &middot; {{ $opname->created_at?->format('d/m/Y H:i') }}</td></tr>
                     @if($opname->posted_at)
                     <tr><td>Diposting Oleh</td><td>{{ $opname->postedBy?->display_name ?? '—' }} &middot; {{ $opname->posted_at->format('d/m/Y H:i') }}</td></tr>
@@ -80,11 +84,12 @@
                 <thead>
                     <tr>
                         <th>Produk</th>
+                        <th>SN / Batch</th>
                         <th>Kepemilikan</th>
                         <th class="text-center">Sistem</th>
                         <th class="text-center">Fisik</th>
                         <th class="text-center">Selisih</th>
-                        <th class="text-end">Harga Rata-rata</th>
+                        <th class="text-end">Harga Modal</th>
                         <th class="text-end">Nilai Selisih</th>
                         <th>Keterangan</th>
                     </tr>
@@ -97,10 +102,21 @@
                                 <div class="fw-semibold" style="font-size:13px">{{ $item->masterProduct?->name ?? '—' }}</div>
                                 <div style="font-size:11px;color:var(--text-muted)">{{ $item->masterProduct?->code }}</div>
                             </td>
+                            <td style="font-size:12px">
+                                @if($item->isFound())
+                                    <span class="badge" style="background:var(--info-soft);color:#1e40af;font-size:10px">Temuan</span>
+                                    {{ $item->serial_number ? 'SN '.$item->serial_number : '' }}{{ $item->batch_number ? ' · Batch '.$item->batch_number : '' }}
+                                @elseif($item->stock)
+                                    <a href="{{ route('stock-detail.show', $item->stock_id) }}">{{ $item->stock->identity_label }}</a>
+                                @endif
+                            </td>
                             <td style="font-size:12px">{{ $item->project ? $item->project->project_number.' — '.$item->project->project_name : 'Stok bebas' }}</td>
-                            <td class="text-center">{{ $item->system_qty }}</td>
-                            <td class="text-center">{{ $item->counted_qty }}</td>
-                            <td class="text-center fw-semibold" style="color:{{ $diff > 0 ? 'var(--accent)' : ($diff < 0 ? 'var(--danger)' : 'inherit') }}">{{ $diff > 0 ? '+'.$diff : $diff }}</td>
+                            <td class="text-center">
+                                {{ $fmtQty($item->system_qty) }}
+                                @isset($changed[$item->id])<div style="font-size:11px;color:#b45309">sekarang {{ $fmtQty($changed[$item->id]) }}</div>@endisset
+                            </td>
+                            <td class="text-center">{{ $fmtQty($item->counted_qty) }}</td>
+                            <td class="text-center fw-semibold" style="color:{{ $diff > 0 ? 'var(--accent)' : ($diff < 0 ? 'var(--danger)' : 'inherit') }}">{{ $diff > 0 ? '+'.$fmtQty($diff) : $fmtQty($diff) }}</td>
                             <td class="text-end">{{ $fmt($item->unit_cost) }}</td>
                             <td class="text-end">{{ $fmt($diff * (float) $item->unit_cost) }}</td>
                             <td>{{ $item->remark ?: '—' }}</td>

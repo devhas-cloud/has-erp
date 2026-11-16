@@ -3,23 +3,24 @@
 use App\Http\Controllers\AccountManagementController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BranchTransferController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
+use App\Http\Controllers\CustomerReceiptController;
 use App\Http\Controllers\DashboardAchievementController;
 use App\Http\Controllers\DashboardVisitPlannerController;
 use App\Http\Controllers\DeliveryOrderController;
 use App\Http\Controllers\DirectPurchaseController;
 use App\Http\Controllers\EmployeeManagementController;
 use App\Http\Controllers\EnviroConfigurationController;
+use App\Http\Controllers\FinanceNotificationController;
 use App\Http\Controllers\GasConfigurationController;
 use App\Http\Controllers\GoodsReceiptController;
 use App\Http\Controllers\GoodsRequestController;
 use App\Http\Controllers\IhConfigurationController;
 use App\Http\Controllers\ImsConfigurationController;
 use App\Http\Controllers\ImsProjectController;
-use App\Http\Controllers\CustomerReceiptController;
-use App\Http\Controllers\FinanceNotificationController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LeadsManagementController;
 use App\Http\Controllers\LeaveRequestController;
@@ -28,7 +29,6 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OpportunityManagementController;
 use App\Http\Controllers\OvertimeRequestController;
 use App\Http\Controllers\PayableReportController;
-use App\Http\Controllers\ReceivableReportController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PoSupplierApprovalController;
 use App\Http\Controllers\ProductManagementController;
@@ -37,6 +37,8 @@ use App\Http\Controllers\ProfitEstimateController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\QuotationController;
+use App\Http\Controllers\ReceivableReportController;
+use App\Http\Controllers\StockDetailController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\StockOpnameController;
 use App\Http\Controllers\StockOutController;
@@ -407,14 +409,31 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('stock-out', [StockOutController::class, 'index'])->name('stock-out.index');
     Route::post('stock-out', [StockOutController::class, 'store'])->name('stock-out.store');
+    Route::get('stock-out/stock-options', [StockOutController::class, 'stockOptions'])->name('stock-out.stock-options');
 
     Route::get('stock-transfer/data', [StockTransferController::class, 'data'])->name('stock-transfer.data');
     Route::get('stock-transfer/available-stock', [StockTransferController::class, 'availableStock'])->name('stock-transfer.available-stock');
     Route::resource('stock-transfer', StockTransferController::class)->only(['index', 'create', 'store', 'show']);
 
+    Route::get('branch-transfer/data', [BranchTransferController::class, 'data'])->name('branch-transfer.data');
+    Route::get('branch-transfer/stock-options', [BranchTransferController::class, 'stockOptions'])->name('branch-transfer.stock-options');
+    Route::post('branch-transfer/{id}/ship', [BranchTransferController::class, 'ship'])->whereNumber('id')->name('branch-transfer.ship');
+    Route::get('branch-transfer/{id}/pdf', [BranchTransferController::class, 'pdf'])->whereNumber('id')->name('branch-transfer.pdf');
+    Route::post('branch-transfer/{id}/inspect', [BranchTransferController::class, 'inspect'])->whereNumber('id')->name('branch-transfer.inspect');
+    Route::post('branch-transfer/{id}/receive', [BranchTransferController::class, 'receive'])->whereNumber('id')->name('branch-transfer.receive');
+    Route::post('branch-transfer/{id}/items/{item}/photos', [BranchTransferController::class, 'uploadPhotos'])->whereNumber('id')->name('branch-transfer.photos.store');
+    Route::get('branch-transfer/{id}/items/{item}/photos/{document}', [BranchTransferController::class, 'viewPhoto'])->whereNumber('id')->name('branch-transfer.photos.show');
+    Route::delete('branch-transfer/{id}/items/{item}/photos/{document}', [BranchTransferController::class, 'deletePhoto'])->whereNumber('id')->name('branch-transfer.photos.destroy');
+    Route::resource('branch-transfer', BranchTransferController::class);
+
     Route::get('stock-entry/data', [StockEntryController::class, 'data'])->name('stock-entry.data');
     Route::get('stock-entry/search-products', [StockEntryController::class, 'searchProducts'])->name('stock-entry.search-products');
     Route::resource('stock-entry', StockEntryController::class)->only(['index', 'create', 'store', 'show']);
+
+    Route::get('stock-detail', [StockDetailController::class, 'index'])->name('stock-detail.index');
+    Route::get('stock-detail/data', [StockDetailController::class, 'data'])->name('stock-detail.data');
+    Route::post('stock-detail/save', [StockDetailController::class, 'save'])->name('stock-detail.save');
+    Route::get('stock-detail/{id}', [StockDetailController::class, 'show'])->whereNumber('id')->name('stock-detail.show');
 
     Route::get('stock-report', [StockReportController::class, 'index'])->name('stock-report.index');
     Route::get('stock-report/data', [StockReportController::class, 'data'])->name('stock-report.data');
@@ -422,6 +441,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('delivery-order/data', [DeliveryOrderController::class, 'data'])->name('delivery-order.data');
     Route::get('delivery-order/project-stock', [DeliveryOrderController::class, 'projectStock'])->name('delivery-order.project-stock');
+    Route::get('delivery-order/stock-options', [DeliveryOrderController::class, 'stockOptions'])->name('delivery-order.stock-options');
     Route::post('delivery-order/{id}/post', [DeliveryOrderController::class, 'post'])->name('delivery-order.post');
     Route::get('delivery-order/{id}/pdf', [DeliveryOrderController::class, 'pdf'])->name('delivery-order.pdf');
     Route::resource('delivery-order', DeliveryOrderController::class);
@@ -461,6 +481,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::resource('supplier-refund', SupplierRefundController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
 
     Route::get('supplier-return/returnable-lines', [SupplierReturnController::class, 'returnableLines'])->name('supplier-return.returnable-lines');
+    Route::get('supplier-return/stock-options', [SupplierReturnController::class, 'stockOptions'])->name('supplier-return.stock-options');
     Route::resource('supplier-return', SupplierReturnController::class)->only(['index', 'create', 'store', 'show']);
     Route::patch('supplier-bill/{id}/pph-slip', [SupplierBillController::class, 'updatePphSlip'])->name('supplier-bill.pph-slip');
     Route::patch('supplier-bill/{id}/exchange-rate', [SupplierBillController::class, 'updateExchangeRate'])->name('supplier-bill.exchange-rate');

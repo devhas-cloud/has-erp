@@ -29,7 +29,7 @@
                         <select id="se-warehouse" class="form-select">
                             <option value="">— Pilih Gudang —</option>
                             @foreach($warehouses as $w)
-                                <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->type_label }})</option>
+                                <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->branch_label }})</option>
                             @endforeach
                         </select>
                     </div>
@@ -105,7 +105,7 @@
                     <i class="fa fa-check me-1"></i> Posting Masuk Stok
                 </button>
                 @endif
-                <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Dokumen langsung terposting dan tidak bisa diubah. Harga satuan menjadi dasar nilai persediaan (default: harga rata-rata / harga beli master).</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Dokumen langsung terposting dan tidak bisa diubah. Harga satuan menjadi harga modal baris stok (default: harga beli master). Barang ber-SN dicatat per unit; SN boleh menyusul di <a href="{{ route('stock-detail.index') }}">Lengkapi Data Stok</a>. SN yang pernah keluar (retur dari customer) kembali ke riwayat SN-nya.</div>
             </div>
         </div>
     </div>
@@ -140,6 +140,8 @@ const seSearchUrl = '{{ route("stock-entry.search-products") }}';
 const seStoreUrl = '{{ route("stock-entry.store") }}';
 const seShowUrl = '{{ route("stock-entry.show", "__ID__") }}';
 const seReasonOther = '{{ \App\Models\StockEntry::REASON_OTHER }}';
+const seSupplierOptions = @json($suppliers->map(fn ($s) => ['id' => $s->id, 'name' => $s->name])->values());
+let seRowSeq = 0;
 let sePickerInstance = null;
 let seProductPool = [];
 
@@ -168,9 +170,10 @@ function seSearchProducts() {
             var html = '<div class="list-group">';
             list.forEach(function(p) {
                 var added = $('#se-items tr[data-product-id="' + p.id + '"]').length > 0;
-                html += '<a href="javascript:void(0)" class="list-group-item list-group-item-action se-product-item' + (added ? ' disabled' : '') + '" data-idx="' + seProductPool.length + '">';
+                html += '<a href="javascript:void(0)" class="list-group-item list-group-item-action se-product-item" data-idx="' + seProductPool.length + '">';
                 html += '<div class="d-flex justify-content-between align-items-center"><strong>' + seEsc(p.code || '') + ' &middot; ' + seEsc(p.name || '') + '</strong>';
-                if (added) html += '<span class="badge bg-secondary">Sudah ditambahkan</span>';
+                html += '<span>' + (p.serialized ? '<span class="badge bg-info text-dark me-1">Barang ber-SN</span>' : '<span class="badge bg-light text-dark me-1">Material</span>')
+                    + (added ? '<span class="badge bg-secondary">Sudah ada di daftar</span>' : '') + '</span>';
                 html += '</div>';
                 if (p.brand || p.category) html += '<div class="text-muted" style="font-size:12px">' + seEsc([p.brand, p.category].filter(Boolean).join(' · ')) + '</div>';
                 html += '</a>';
@@ -187,25 +190,48 @@ $(document).on('keydown', '#se-product-q', function(e) {
     if (e.key === 'Enter') { e.preventDefault(); seSearchProducts(); }
 });
 
-$(document).on('click', '.se-product-item:not(.disabled)', function() {
+$(document).on('click', '.se-product-item', function() {
     var p = seProductPool[$(this).data('idx')];
     if (!p) return;
     $('#se-items .se-empty').remove();
-    var html = '<tr data-product-id="' + p.id + '">';
+    var key = ++seRowSeq;
+    var html = '<tr data-product-id="' + p.id + '" data-row="' + key + '" data-serialized="' + (p.serialized ? 1 : 0) + '">';
     html += '<td class="text-center se-no" style="color:var(--text-muted)"></td>';
-    html += '<td><div class="fw-semibold" style="font-size:13px">' + seEsc(p.name) + '</div><div style="font-size:11px;color:var(--text-muted)">' + seEsc(p.code) + '</div></td>';
-    html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm text-center se-qty" value="1"></td>';
+    html += '<td><div class="fw-semibold" style="font-size:13px">' + seEsc(p.name) + '</div><div style="font-size:11px;color:var(--text-muted)">' + seEsc(p.code) + ' &middot; ' + (p.serialized ? 'Barang ber-SN' : 'Material') + '</div></td>';
+    html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-center se-qty" value="1"></td>';
     html += '<td><input type="text" class="form-control form-control-sm se-unit" maxlength="50" value="Unit"></td>';
-    html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-end se-cost" value="' + seFmt(p.cost) + '"></td>';
+    html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-end se-cost" value="' + (p.cost == null ? '' : seFmt(p.cost)) + '" placeholder="Harga beli master"></td>';
     html += '<td class="text-center"><button type="button" class="btn-icon danger" title="Hapus" onclick="seRemoveRow(this)"><i class="fa fa-trash-can"></i></button></td>';
-    $('#se-items').append(html + '</tr>');
+    html += '</tr>';
+    var sup = '<option value="">— Supplier garansi —</option>' + seSupplierOptions.map(function(o) { return '<option value="' + o.id + '">' + seEsc(o.name) + '</option>'; }).join('');
+    html += '<tr class="se-detail" data-for="' + key + '"><td></td><td colspan="5" style="padding-top:0"><div class="row g-2" style="font-size:12px">';
+    html += '<div class="col-md-3"><label class="form-label mb-0" style="font-size:11.5px">Batch / No. MFG</label><input type="text" class="form-control form-control-sm se-batch" maxlength="100" placeholder="Opsional"></div>';
+    html += '<div class="col-md-2"><label class="form-label mb-0" style="font-size:11.5px">Kedaluwarsa</label><input type="date" class="form-control form-control-sm se-expiry"></div>';
+    html += '<div class="col-md-3"><label class="form-label mb-0" style="font-size:11.5px">Supplier garansi</label><select class="form-select form-select-sm se-supplier">' + sup + '</select></div>';
+    html += '<div class="col-md-2"><label class="form-label mb-0" style="font-size:11.5px">Garansi s/d</label><input type="date" class="form-control form-control-sm se-warranty"></div>';
+    html += '<div class="col-md-2"><label class="form-label mb-0" style="font-size:11.5px">Catatan barang</label><input type="text" class="form-control form-control-sm se-item-note" maxlength="255"></div>';
+    if (p.serialized) {
+        html += '<div class="col-12"><label class="form-label mb-0" style="font-size:11.5px">SN — satu per baris, boleh dikosongkan (<span class="se-sn-count">0</span> / qty)</label><textarea class="form-control form-control-sm se-serials" rows="2" placeholder="Tempel atau scan SN"></textarea></div>';
+    }
+    html += '</div></td></tr>';
+    $('#se-items').append(html);
     seRenumber();
     sePickerInstance.hide();
     toastr.success('Barang ditambahkan.');
 });
 
+function seSerialList(text) {
+    return String(text || '').split(/[\r\n,;]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+}
+
+$(document).on('input', '.se-serials', function() {
+    $(this).closest('tr').find('.se-sn-count').text(seSerialList($(this).val()).length);
+});
+
 function seRemoveRow(btn) {
-    $(btn).closest('tr').remove();
+    var $row = $(btn).closest('tr');
+    $('#se-items tr.se-detail[data-for="' + $row.data('row') + '"]').remove();
+    $row.remove();
     if ($('#se-items tr[data-product-id]').length === 0) {
         $('#se-items').html('<tr class="se-empty"><td colspan="6" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Belum ada barang. Klik "Tambah dari Katalog".</td></tr>');
     }
@@ -217,14 +243,15 @@ function seRenumber() {
     $('#se-items tr[data-product-id]').each(function(i) {
         $(this).find('.se-no').text(i + 1);
         lines++;
-        qty += parseInt($(this).find('.se-qty').val(), 10) || 0;
+        qty += Num.parseOrNull($(this).find('.se-qty').val()) || 0;
     });
     $('#se-sum-lines').text(lines);
-    $('#se-sum-qty').text(qty);
+    $('#se-sum-qty').text(Num.format(qty, 4));
 }
 
 $(document).on('input', '.se-qty', function() {
-    this.value = this.value.replace(/\D/g, '');
+    var serialized = $(this).closest('tr').data('serialized') === 1;
+    this.value = serialized ? this.value.replace(/\D/g, '') : this.value.replace(/[^\d.]/g, '');
     $(this).removeClass('is-invalid');
     seRenumber();
 });
@@ -243,13 +270,27 @@ function seSave() {
 
     var items = [], invalid = null;
     $('#se-items tr[data-product-id]').each(function() {
-        var qty = parseInt($(this).find('.se-qty').val(), 10) || 0;
-        if (qty < 1 && !invalid) invalid = $(this).find('.se-qty');
+        var qty = Num.parseOrNull($(this).find('.se-qty').val()) || 0;
+        if (qty <= 0 && !invalid) invalid = $(this).find('.se-qty');
         var cost = seParse($(this).find('.se-cost').val());
-        items.push({ master_product_id: $(this).data('product-id'), qty: qty, unit: $(this).find('.se-unit').val().trim(), unit_cost: cost });
+        var $d = $('#se-items tr.se-detail[data-for="' + $(this).data('row') + '"]');
+        var serials = seSerialList($d.find('.se-serials').val());
+        if (serials.length > qty && !invalid) invalid = $d.find('.se-serials');
+        items.push({
+            master_product_id: $(this).data('product-id'),
+            qty: qty,
+            unit: $(this).find('.se-unit').val().trim(),
+            unit_cost: cost,
+            batch_number: $d.find('.se-batch').val() || null,
+            expiry_date: $d.find('.se-expiry').val() || null,
+            supplier_id: $d.find('.se-supplier').val() || null,
+            warranty_until: $d.find('.se-warranty').val() || null,
+            note: $d.find('.se-item-note').val() || null,
+            serial_numbers: serials
+        });
     });
     if (items.length === 0) { toastr.error('Tambahkan minimal satu barang.'); return; }
-    if (invalid) { invalid.addClass('is-invalid')[0].scrollIntoView({ behavior: 'smooth', block: 'center' }); toastr.error('Qty harus lebih dari 0.'); return; }
+    if (invalid) { invalid.addClass('is-invalid')[0].scrollIntoView({ behavior: 'smooth', block: 'center' }); toastr.error('Qty harus lebih dari 0 dan jumlah SN tidak boleh melebihi qty.'); return; }
 
     Swal.fire({
         title: 'Posting Masuk Stok?',

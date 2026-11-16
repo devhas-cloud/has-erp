@@ -84,25 +84,11 @@
         <div class="card-custom fade-in">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Barang Dikirim</span>
-                <button type="button" class="btn btn-secondary btn-sm" id="do-fill-all" style="display:none" onclick="doFillAll()"><i class="fa fa-angles-right me-1"></i> Kirim Semua</button>
+                <input type="search" id="do-q" class="form-control form-control-sm" style="max-width:260px" placeholder="Cari kode, nama, SN, batch">
             </div>
             <div class="card-body-custom p-2">
-                <div class="table-responsive">
-                    <table class="table table-custom align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width:45px" class="text-center">#</th>
-                                <th>Produk</th>
-                                <th class="text-center" style="width:110px">Stok Project</th>
-                                <th class="text-center" style="width:120px">Qty Kirim</th>
-                                <th style="width:220px">Keterangan</th>
-                            </tr>
-                        </thead>
-                        <tbody id="do-items">
-                            <tr><td colspan="5" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Pilih project dan gudang terlebih dahulu.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <div id="do-picker"><div class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Pilih project dan gudang terlebih dahulu.</div></div>
+                <div class="px-2 pt-2" style="font-size:12px;color:var(--text-muted)"><i class="fa fa-circle-info me-1"></i>Centang baris stok yang dikirim. Material boleh dikirim sebagian. Unit ber-SN yang SN-nya belum diisi tidak bisa dikirim — lengkapi dulu di <a href="{{ route('stock-detail.index') }}" target="_blank">Lengkapi Data Stok</a>. SN tercetak otomatis di surat jalan.</div>
             </div>
         </div>
     </div>
@@ -114,7 +100,7 @@
             </div>
             <div class="card-body-custom">
                 <table class="info-table" style="width:100%">
-                    <tr><td>Produk</td><td class="text-end fw-semibold" id="do-sum-lines">0</td></tr>
+                    <tr><td>Baris stok</td><td class="text-end fw-semibold" id="do-sum-lines">0</td></tr>
                     <tr><td>Total Qty</td><td class="text-end fw-semibold" id="do-sum-qty">0</td></tr>
                 </table>
                 <button type="button" class="btn btn-primary w-100 mt-3" id="do-save" onclick="doSave()">
@@ -128,38 +114,34 @@
 @endsection
 
 @section('scripts')
+@include('partials.stock-pick')
 <script>
 const doProjectStockUrl = '{{ route("delivery-order.project-stock") }}';
+const doStockOptionsUrl = '{{ route("delivery-order.stock-options") }}';
 const doSaveUrl = '{{ $isEdit ? route("delivery-order.update", $order->id) : route("delivery-order.store") }}';
 const doSaveMethod = '{{ $isEdit ? "PUT" : "POST" }}';
 const doShowUrl = '{{ route("delivery-order.show", "__ID__") }}';
 const doIsEdit = {{ $isEdit ? 'true' : 'false' }};
 let doInitialWarehouse = @json($order?->warehouse_id);
-let doInitialItems = @json($items);
+let doSelected = @json((object) $selected->all());
 const doSaveLabel = $('#do-save').html();
-let doStock = [];
 
 function doEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
 
 function doLoadProject() {
     var projectId = $('#do-project').val();
-    doStock = [];
     $('#do-warehouse').html('<option value="">— Pilih project dulu —</option>');
     doRenderItems();
     if (!projectId) return;
 
     $.get(doProjectStockUrl, { project_id: projectId }).done(function(res) {
-        doStock = res.items || [];
-        var seen = {}, opts = '<option value="">— Pilih Gudang —</option>';
-        doStock.forEach(function(s) {
-            if (seen[s.warehouse_id]) return;
-            seen[s.warehouse_id] = true;
-            opts += '<option value="' + s.warehouse_id + '">' + doEsc(s.warehouse) + '</option>';
-        });
+        var list = res.warehouses || [];
+        var opts = '<option value="">— Pilih Gudang —</option>';
+        list.forEach(function(w) { opts += '<option value="' + w.id + '">' + doEsc(w.label) + '</option>'; });
         $('#do-warehouse').html(opts);
-        if (doStock.length === 0) toastr.warning('Project ini belum punya stok teralokasi di gudang mana pun.');
+        if (list.length === 0) toastr.warning('Project ini belum punya stok teralokasi di gudang mana pun.');
 
-        var wh = doInitialWarehouse || (Object.keys(seen).length === 1 ? Object.keys(seen)[0] : '');
+        var wh = doInitialWarehouse || (list.length === 1 ? list[0].id : '');
         if (wh) $('#do-warehouse').val(String(wh));
         doInitialWarehouse = null;
 
@@ -173,59 +155,49 @@ function doLoadProject() {
 }
 
 function doRenderItems() {
-    var wh = parseInt($('#do-warehouse').val(), 10);
-    var rows = doStock.filter(function(s) { return s.warehouse_id === wh; });
-    $('#do-fill-all').toggle(rows.length > 0);
-    if (!wh || rows.length === 0) {
-        $('#do-items').html('<tr><td colspan="5" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> ' + (wh ? 'Tidak ada stok project di gudang ini.' : 'Pilih project dan gudang terlebih dahulu.') + '</td></tr>');
+    var projectId = $('#do-project').val(), wh = $('#do-warehouse').val();
+    if (!projectId || !wh) {
+        $('#do-picker').html('<div class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Pilih project dan gudang terlebih dahulu.</div>');
         doSummary();
         return;
     }
-    var initial = {};
-    (doInitialItems || []).forEach(function(i) { initial[i.master_product_id] = i; });
-    doInitialItems = null;
-
-    var html = '';
-    rows.forEach(function(s, i) {
-        var pre = initial[s.master_product_id] || {};
-        html += '<tr data-product-id="' + s.master_product_id + '" data-max="' + s.balance + '">';
-        html += '<td class="text-center" style="color:var(--text-muted)">' + (i + 1) + '</td>';
-        html += '<td><div class="fw-semibold" style="font-size:13px">' + doEsc(s.name) + '</div><div style="font-size:11px;color:var(--text-muted)">' + doEsc(s.code) + '</div></td>';
-        html += '<td class="text-center">' + s.balance + ' ' + doEsc(s.unit || '') + '</td>';
-        html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm text-center do-qty" placeholder="0" value="' + (pre.qty || '') + '"></td>';
-        html += '<td><input type="text" class="form-control form-control-sm do-remark" maxlength="255" value="' + doEsc(pre.remark || '') + '" placeholder="Opsional, mis. S/N"></td>';
-        html += '</tr>';
+    StockPick.load($('#do-picker'), doStockOptionsUrl, { project_id: projectId, warehouse_id: wh, q: $('#do-q').val() }, {
+        requireSerial: true,
+        selected: doSelected,
+        onChange: doSummary
     });
-    $('#do-items').html(html);
-    doSummary();
 }
 
-function doFillAll() {
-    $('#do-items tr[data-product-id]').each(function() { $(this).find('.do-qty').val($(this).data('max')).removeClass('is-invalid'); });
-    doSummary();
+// Pilihan yang sedang tampil + pilihan sebelumnya yang tersembunyi oleh pencarian.
+function doRemember() {
+    $('#do-picker tr[data-stock-id]').each(function() { delete doSelected[$(this).data('stock-id')]; });
+    StockPick.picks($('#do-picker')).forEach(function(p) { doSelected[p.stock_id] = p.qty; });
 }
 
 function doCollect() {
-    var rows = [];
-    $('#do-items tr[data-product-id]').each(function() {
-        var qty = parseInt($(this).find('.do-qty').val(), 10) || 0;
-        if (qty > 0) rows.push({ master_product_id: $(this).data('product-id'), qty: qty, remark: $(this).find('.do-remark').val().trim(), max: $(this).data('max'), $el: $(this).find('.do-qty') });
+    var picks = StockPick.picks($('#do-picker'));
+    var visible = {};
+    $('#do-picker tr[data-stock-id]').each(function() { visible[$(this).data('stock-id')] = true; });
+    Object.keys(doSelected).forEach(function(id) {
+        if (!visible[id]) picks.push({ stock_id: parseInt(id, 10), qty: doSelected[id] });
     });
-    return rows;
+    return picks;
 }
 
 function doSummary() {
-    var rows = doCollect();
-    $('#do-sum-lines').text(rows.length);
-    $('#do-sum-qty').text(rows.reduce(function(sum, r) { return sum + r.qty; }, 0));
+    var picks = doCollect();
+    $('#do-sum-lines').text(picks.length);
+    $('#do-sum-qty').text(Num.format(picks.reduce(function(sum, p) { return sum + p.qty; }, 0), 4));
 }
 
 $(document).on('change', '#do-project', doLoadProject);
-$(document).on('change', '#do-warehouse', doRenderItems);
-$(document).on('input', '.do-qty', function() {
-    this.value = this.value.replace(/\D/g, '');
-    $(this).removeClass('is-invalid');
-    doSummary();
+$(document).on('change', '#do-warehouse', function() { doSelected = {}; doRenderItems(); });
+let doSearchTimer = null;
+$(document).on('input', '#do-q', function() {
+    // Simpan pilihan saat ini agar tidak hilang ketika daftar disaring ulang.
+    doRemember();
+    clearTimeout(doSearchTimer);
+    doSearchTimer = setTimeout(doRenderItems, 350);
 });
 
 function doFail(message, $el) {
@@ -241,10 +213,7 @@ function doSave() {
     if (!$('#do-address').val().trim()) { doFail('Alamat kirim wajib diisi.', $('#do-address')); return; }
 
     var rows = doCollect();
-    if (rows.length === 0) { doFail('Isi qty minimal satu barang.'); return; }
-    for (var i = 0; i < rows.length; i++) {
-        if (rows[i].qty > rows[i].max) { doFail('Qty melebihi stok project (' + rows[i].max + ').', rows[i].$el); return; }
-    }
+    if (rows.length === 0) { doFail('Pilih minimal satu baris stok yang dikirim.'); return; }
 
     $('#do-save').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...');
     $.ajax({
@@ -260,7 +229,7 @@ function doSave() {
             recipient_phone: $('#do-phone').val(),
             shipping_address: $('#do-address').val().trim(),
             note: $('#do-note').val(),
-            items: rows.map(function(r) { return { master_product_id: r.master_product_id, qty: r.qty, remark: r.remark }; })
+            items: rows
         }),
         headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
     }).done(function(res) {

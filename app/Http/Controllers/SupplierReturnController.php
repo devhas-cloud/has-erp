@@ -7,9 +7,13 @@ use App\Models\Log;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\SupplierReturn;
 use App\Models\Warehouse;
+use App\Services\StockException;
+use App\Services\StockService;
+use App\Support\StockPicker;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,8 +24,9 @@ use Illuminate\Support\Facades\DB;
  * Retur ke Supplier (grup Purchasing, Tahap 4). Hanya qty yang sudah diterima
  * dan BELUM ditagih yang bisa diretur — barang yang sudah ditagih harus di-void
  * dulu tagihannya (koreksi lewat dokumen, bukan edit). Disimpan langsung
- * terposting: stok keluar dari gudang (kepemilikan project mengikuti baris PO)
- * untuk barang yang dulu masuk gudang; barang langsung pakai cukup dicatat.
+ * terposting: barang yang dulu masuk gudang diretur dengan memilih baris stok
+ * yang berasal dari penerimaan PO ini (unit ber-SN wajib sudah ber-SN);
+ * barang langsung pakai cukup dicatat qty-nya.
  */
 class SupplierReturnController extends Controller
 {
@@ -42,7 +47,7 @@ class SupplierReturnController extends Controller
     {
         return view('supplier-return.form', [
             'purchaseOrders' => $this->returnablePurchaseOrders(),
-            'warehouses' => Warehouse::active()->orderBy('type')->orderBy('name')->get(),
+            'warehouses' => Warehouse::active()->orderBy('name')->get(),
             'preselectPoId' => $request->integer('purchase_order_id') ?: null,
         ]);
     }
@@ -63,9 +68,28 @@ class SupplierReturnController extends Controller
                 'received' => $item->receivedQty(),
                 'billed' => $item->billedQty(),
                 'returnable' => $this->returnableQty($item),
-                'to_warehouse' => $this->receivedToWarehouse($item) > 0,
+                'stock_returnable' => $this->receivedToWarehouse($item),
+                'direct_returnable' => $this->receivedDirect($item),
             ])->values(),
         ]);
+    }
+
+    /**
+     * Baris stok terbuka yang berasal dari penerimaan satu baris PO (termasuk pecahannya).
+     */
+    public function stockOptions(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'purchase_order_item_id' => 'required|integer|exists:purchase_order_items,id',
+            'warehouse_id' => 'nullable|integer|exists:warehouses,id',
+        ]);
+        $item = PurchaseOrderItem::with('goodsReceiptItems.goodsReceipt')->findOrFail($validated['purchase_order_item_id']);
+
+        return response()->json(['success' => true, 'data' => StockPicker::options([
+            'warehouse_id' => $validated['warehouse_id'] ?? null,
+            'source_ids' => $this->receiptItemIds($item),
+            'limit' => 300,
+        ])]);
     }
 
     public function store(Request $request): JsonResponse
@@ -77,16 +101,18 @@ class SupplierReturnController extends Controller
             'reason' => 'required|string|max:2000',
             'items' => 'required|array|min:1',
             'items.*.purchase_order_item_id' => 'required|integer|distinct',
-            'items.*.qty' => 'required|integer|min:1',
+            'items.*.direct_qty' => 'nullable|integer|min:0',
+            'items.*.picks' => 'nullable|array',
+            'items.*.picks.*.stock_id' => 'required|integer',
+            'items.*.picks.*.qty' => 'required|numeric|gt:0',
         ], [
             'reason.required' => 'Alasan retur wajib diisi.',
-            'items.required' => 'Isi qty minimal satu barang yang diretur.',
+            'items.required' => 'Pilih minimal satu barang yang diretur.',
         ]);
 
         $po = $this->loadPurchaseOrder((int) $validated['purchase_order_id']);
         $fail = fn (string $message) => abort(response()->json(['success' => false, 'message' => $message], 422));
         $poItems = $po->items->keyBy('id');
-        $warehouse = $validated['warehouse_id'] ? Warehouse::find($validated['warehouse_id']) : null;
 
         $rows = [];
         foreach (array_values($validated['items']) as $i => $row) {
@@ -94,71 +120,101 @@ class SupplierReturnController extends Controller
             if (! $item) {
                 $fail('Baris '.($i + 1).' bukan bagian dari PO ini.');
             }
-            $qty = (int) $row['qty'];
             $label = $item->part_number ?: 'baris '.($i + 1);
+            $picks = $row['picks'] ?? [];
+            $fromStock = StockService::round(collect($picks)->sum(fn ($p) => (float) $p['qty']));
+            $direct = (int) ($row['direct_qty'] ?? 0);
+            $qty = $fromStock + $direct;
+
+            if ($qty <= 0) {
+                continue;
+            }
+            if (abs($fromStock - round($fromStock)) >= Stock::EPSILON) {
+                $fail($label.': total qty retur dari stok harus bilangan bulat sesuai satuan PO (dipilih '.$fromStock.').');
+            }
             if ($qty > $this->returnableQty($item)) {
                 $fail($label.': qty retur melebihi yang diterima dan belum ditagih ('.$this->returnableQty($item).'). Barang yang sudah ditagih: void tagihannya dulu.');
             }
-
-            // Barang yang dulu masuk gudang keluar dari stok; sisanya (langsung pakai) cukup dicatat.
-            $fromWarehouse = min($qty, $this->receivedToWarehouse($item));
-            if ($fromWarehouse > 0) {
-                if (! $warehouse) {
-                    $fail('Pilih gudang asal barang yang diretur.');
-                }
-                $balance = StockMovement::balance($warehouse->id, (int) $item->master_product_id, $item->projectId());
-                if ($fromWarehouse > $balance) {
-                    $fail($label.': stok di '.$warehouse->name.' tidak cukup ('.$balance.').');
-                }
+            if ($fromStock > $this->receivedToWarehouse($item)) {
+                $fail($label.': qty dari stok melebihi barang yang dulu masuk gudang ('.$this->receivedToWarehouse($item).').');
             }
-            $rows[] = ['item' => $item, 'qty' => $qty, 'from_warehouse' => $fromWarehouse];
+            if ($direct > $this->receivedDirect($item)) {
+                $fail($label.': qty langsung pakai melebihi yang diterima langsung pakai ('.$this->receivedDirect($item).').');
+            }
+            $rows[] = ['item' => $item, 'picks' => $picks, 'direct' => $direct, 'source_ids' => $this->receiptItemIds($item)];
+        }
+        if (! $rows) {
+            $fail('Isi qty minimal satu barang yang diretur.');
         }
 
-        $return = DB::transaction(function () use ($validated, $po, $rows, $warehouse) {
-            $return = SupplierReturn::create([
-                'return_number' => SupplierReturn::generateNumber($validated['return_date']),
-                'supplier_id' => $po->supplier_id,
-                'purchase_order_id' => $po->id,
-                'warehouse_id' => $warehouse?->id,
-                'return_date' => $validated['return_date'],
-                'reason' => $validated['reason'],
-                'status' => SupplierReturn::STATUS_POSTED,
-                'created_by' => Auth::id(),
-            ]);
+        $service = app(StockService::class);
+        $warehouseId = $validated['warehouse_id'] ?? null;
 
-            foreach ($rows as $i => $row) {
-                $item = $row['item'];
-                $line = $return->items()->create([
-                    'purchase_order_item_id' => $item->id,
-                    'master_product_id' => $item->master_product_id,
-                    'project_id' => $item->projectId(),
-                    'qty' => $row['qty'],
-                    'unit' => $item->unit,
-                    'destination' => $row['from_warehouse'] > 0 ? GoodsReceiptItem::DESTINATION_WAREHOUSE : GoodsReceiptItem::DESTINATION_DIRECT,
-                    'sort_order' => $i + 1,
+        try {
+            $return = DB::transaction(function () use ($validated, $po, $rows, $warehouseId, $service) {
+                $stocks = $service->lock(collect($rows)->flatMap(fn ($r) => collect($r['picks'])->pluck('stock_id')));
+
+                $return = SupplierReturn::create([
+                    'return_number' => SupplierReturn::generateNumber($validated['return_date']),
+                    'supplier_id' => $po->supplier_id,
+                    'purchase_order_id' => $po->id,
+                    'warehouse_id' => $warehouseId,
+                    'return_date' => $validated['return_date'],
+                    'reason' => $validated['reason'],
+                    'status' => SupplierReturn::STATUS_POSTED,
+                    'created_by' => Auth::id(),
                 ]);
 
-                if ($row['from_warehouse'] > 0) {
-                    StockMovement::record([
-                        'warehouse_id' => $warehouse->id,
-                        'master_product_id' => $item->master_product_id,
-                        'project_id' => $item->projectId(),
-                        'type' => StockMovement::TYPE_RETURN_OUT,
-                        'qty' => $row['from_warehouse'],
-                        'unit' => $item->unit,
-                        'source_type' => StockMovement::SOURCE_SUPPLIER_RETURN,
-                        'source_id' => $return->id,
-                        'source_line_id' => $line->id,
-                        'moved_at' => $validated['return_date'],
-                        'note' => 'Retur ke supplier '.$return->return_number,
-                    ]);
+                $sort = 0;
+                foreach ($rows as $row) {
+                    $item = $row['item'];
+                    foreach ($row['picks'] as $pick) {
+                        $stock = $stocks->get((int) $pick['stock_id']);
+                        if (! $stock || $stock->source_type !== Stock::SOURCE_GOODS_RECEIPT_ITEM || ! in_array((int) $stock->source_id, $row['source_ids'], true)) {
+                            throw new StockException(($item->part_number ?: 'Barang').': baris stok yang dipilih bukan dari penerimaan PO ini.');
+                        }
+                        if ($warehouseId) {
+                            $service->assertPosition($stock, (int) $warehouseId, false);
+                        }
+
+                        $line = $return->items()->create([
+                            'purchase_order_item_id' => $item->id,
+                            'stock_id' => $stock->id,
+                            'master_product_id' => $stock->master_product_id,
+                            'project_id' => $stock->project_id,
+                            'qty' => StockService::round((float) $pick['qty']),
+                            'unit' => $stock->unit ?? $item->unit,
+                            'destination' => GoodsReceiptItem::DESTINATION_WAREHOUSE,
+                            'sort_order' => ++$sort,
+                        ]);
+                        $service->take($stock, $line->qty, StockLog::TYPE_RETURN_SUPPLIER, [
+                            'date' => $validated['return_date'],
+                            'ref_type' => StockLog::REF_SUPPLIER_RETURN_ITEM,
+                            'ref_id' => $line->id,
+                            'note' => 'Retur ke supplier '.$return->return_number,
+                        ]);
+                    }
+
+                    if ($row['direct'] > 0) {
+                        $return->items()->create([
+                            'purchase_order_item_id' => $item->id,
+                            'master_product_id' => $item->master_product_id,
+                            'project_id' => $item->projectId(),
+                            'qty' => $row['direct'],
+                            'unit' => $item->unit,
+                            'destination' => GoodsReceiptItem::DESTINATION_DIRECT,
+                            'sort_order' => ++$sort,
+                        ]);
+                    }
                 }
-            }
 
-            $po->refreshReceiptStatus();
+                $po->refreshReceiptStatus();
 
-            return $return;
-        });
+                return $return;
+            });
+        } catch (StockException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
 
         Log::record('supplier_return', 'Retur ke supplier '.$return->return_number.' (PO '.$po->po_number.') diposting oleh '.Auth::user()->display_name, 'MOD_SUPPLIER_RETURN', $return);
 
@@ -167,7 +223,7 @@ class SupplierReturnController extends Controller
 
     public function show($id)
     {
-        $return = SupplierReturn::with(['items.purchaseOrderItem', 'items.project', 'supplier', 'purchaseOrder', 'warehouse', 'creator'])->findOrFail($id);
+        $return = SupplierReturn::with(['items.purchaseOrderItem', 'items.project', 'items.stock.masterProduct', 'supplier', 'purchaseOrder', 'warehouse', 'creator'])->findOrFail($id);
 
         return view('supplier-return.show', compact('return'));
     }
@@ -181,12 +237,35 @@ class SupplierReturnController extends Controller
     /** Qty yang dulu masuk gudang (bukan langsung pakai) dan belum diretur dari stok. */
     private function receivedToWarehouse(PurchaseOrderItem $item): int
     {
-        $toWarehouse = (int) $item->goodsReceiptItems
-            ->filter(fn (GoodsReceiptItem $r) => $r->goodsReceipt?->status === 'posted' && $r->destination === GoodsReceiptItem::DESTINATION_WAREHOUSE)
-            ->sum('qty');
-        $returnedFromStock = (int) $item->returnItems->where('destination', GoodsReceiptItem::DESTINATION_WAREHOUSE)->sum('qty');
+        return $this->receivedRemaining($item, GoodsReceiptItem::DESTINATION_WAREHOUSE);
+    }
 
-        return max(0, $toWarehouse - $returnedFromStock);
+    /** Qty yang dulu diterima langsung pakai dan belum diretur. */
+    private function receivedDirect(PurchaseOrderItem $item): int
+    {
+        return $this->receivedRemaining($item, GoodsReceiptItem::DESTINATION_DIRECT);
+    }
+
+    private function receivedRemaining(PurchaseOrderItem $item, string $destination): int
+    {
+        $received = (int) round($item->goodsReceiptItems
+            ->filter(fn (GoodsReceiptItem $r) => $r->goodsReceipt?->status === 'posted' && $r->destination === $destination)
+            ->sum('qty'));
+        $returned = (int) round($item->returnItems->where('destination', $destination)->sum('qty'));
+
+        return max(0, $received - $returned);
+    }
+
+    /**
+     * Id item GRN (posted, masuk gudang) dari satu baris PO — sumber baris stok yang boleh diretur.
+     *
+     * @return array<int, int>
+     */
+    private function receiptItemIds(PurchaseOrderItem $item): array
+    {
+        return $item->goodsReceiptItems
+            ->filter(fn (GoodsReceiptItem $r) => $r->goodsReceipt?->status === 'posted' && $r->destination === GoodsReceiptItem::DESTINATION_WAREHOUSE)
+            ->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
     }
 
     private function loadPurchaseOrder(int $id): PurchaseOrder

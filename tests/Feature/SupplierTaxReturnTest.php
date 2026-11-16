@@ -7,12 +7,14 @@ use App\Models\GoodsReceipt;
 use App\Models\GoodsRequest;
 use App\Models\MasterProduct;
 use App\Models\PurchaseOrder;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
 /**
@@ -21,6 +23,7 @@ use Tests\TestCase;
  */
 class SupplierTaxReturnTest extends TestCase
 {
+    use InteractsWithStock;
     use RefreshDatabase;
 
     private User $admin;
@@ -40,8 +43,8 @@ class SupplierTaxReturnTest extends TestCase
         $division = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
         $this->admin = User::create(['username' => 'superadmin', 'email' => 'superadmin@has.com', 'password' => bcrypt('secret'), 'division_id' => $division->id, 'role' => 'Admin']);
         $this->supplier = Supplier::create(['name' => 'PT Kalibrasi Jaya', 'status' => 'Active', 'payment_term_days' => 30, 'is_pkp' => true, 'default_pph_percent' => 2]);
-        $this->warehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
-        $this->product = MasterProduct::create(['code' => 'PN-1', 'name' => 'Sensor pH', 'division_id' => $division->id, 'status' => 'Active']);
+        $this->warehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang', 'status' => 'Active']);
+        $this->product = MasterProduct::create(['code' => 'PN-1', 'name' => 'Sensor pH', 'division_id' => $division->id, 'status' => 'Active', 'is_material' => true]);
 
         $request = GoodsRequest::create(['purpose' => GoodsRequest::PURPOSE_INTERNAL, 'division_id' => $division->id, 'status' => GoodsRequest::STATUS_APPROVED, 'created_by' => $this->admin->id]);
         $requestItem = $request->items()->create(['master_product_id' => $this->product->id, 'part_number' => 'PN-1', 'description' => 'Sensor', 'qty' => 10, 'unit' => 'Unit', 'sort_order' => 1]);
@@ -55,7 +58,7 @@ class SupplierTaxReturnTest extends TestCase
         $receipt = GoodsReceipt::create(['receipt_number' => 'GRN-'.uniqid(), 'purchase_order_id' => $this->po->id, 'warehouse_id' => $this->warehouse->id, 'received_date' => now()->toDateString(), 'status' => GoodsReceipt::STATUS_POSTED, 'created_by' => $this->admin->id]);
         $item = $this->po->items()->first();
         $line = $receipt->items()->create(['purchase_order_item_id' => $item->id, 'master_product_id' => $item->master_product_id, 'qty' => $qty, 'destination' => 'warehouse', 'sort_order' => 1]);
-        StockMovement::record(['warehouse_id' => $this->warehouse->id, 'master_product_id' => $this->product->id, 'type' => StockMovement::TYPE_RECEIPT, 'qty' => $qty, 'unit_cost' => 1000, 'source_type' => StockMovement::SOURCE_GOODS_RECEIPT, 'source_id' => $receipt->id, 'source_line_id' => $line->id, 'created_by' => $this->admin->id]);
+        $this->seedStock($this->warehouse->id, $this->product, $qty, ['unit_cost' => 1000, 'source_type' => Stock::SOURCE_GOODS_RECEIPT_ITEM, 'source_id' => $line->id]);
         $this->po->refreshReceiptStatus();
     }
 
@@ -133,16 +136,27 @@ class SupplierTaxReturnTest extends TestCase
 
         $payload = ['purchase_order_id' => $this->po->id, 'warehouse_id' => $this->warehouse->id, 'return_date' => now()->toDateString(), 'reason' => '3 unit pecah'];
         $item = $this->po->items()->first();
-        $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + ['items' => [['purchase_order_item_id' => $item->id, 'qty' => 5]]])->assertStatus(422);
-        $this->actingAs($this->admin)->postJson(route('supplier-return.store'), array_merge($payload, ['reason' => '']) + ['items' => [['purchase_order_item_id' => $item->id, 'qty' => 3]]])->assertStatus(422);
+        $row = Stock::firstOrFail();
+        $this->actingAs($this->admin)->getJson(route('supplier-return.stock-options', ['purchase_order_item_id' => $item->id]))
+            ->assertOk()->assertJsonPath('data.0.id', $row->id);
+        $pick = fn (float $qty) => ['items' => [['purchase_order_item_id' => $item->id, 'picks' => [['stock_id' => $row->id, 'qty' => $qty]]]]];
 
-        $id = $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + ['items' => [['purchase_order_item_id' => $item->id, 'qty' => 3]]])->assertOk()->json('id');
+        $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + $pick(5))->assertStatus(422);
+        $this->actingAs($this->admin)->postJson(route('supplier-return.store'), array_merge($payload, ['reason' => '']) + $pick(3))->assertStatus(422);
+
+        // Baris stok yang bukan dari penerimaan PO ini ditolak.
+        $other = $this->seedStock($this->warehouse->id, $this->product, 5)->first();
+        $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + ['items' => [['purchase_order_item_id' => $item->id, 'picks' => [['stock_id' => $other->id, 'qty' => 3]]]]])
+            ->assertStatus(422);
+
+        $id = $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + $pick(3))->assertOk()->json('id');
 
         $item = $item->fresh();
         $this->assertSame(7, $item->receivedQty());
         $this->assertSame(1, $item->billableQty());
-        $this->assertSame(7, StockMovement::balance($this->warehouse->id, $this->product->id));
-        $this->assertDatabaseHas('stock_movements', ['type' => StockMovement::TYPE_RETURN_OUT, 'qty' => 3, 'source_id' => $id]);
+        $this->assertEquals(7, $row->fresh()->qty);
+        $this->assertDatabaseHas('stock_logs', ['type' => StockLog::TYPE_RETURN_SUPPLIER, 'qty' => -3, 'stock_id' => $row->id]);
+        $this->assertDatabaseHas('supplier_return_items', ['supplier_return_id' => $id, 'stock_id' => $row->id, 'destination' => 'warehouse']);
         // PO kembali menunggu barang pengganti.
         $this->assertSame(PurchaseOrder::STATUS_PARTIALLY_RECEIVED, $this->po->fresh()->status);
 

@@ -75,10 +75,10 @@ class GoodsRequestItem extends Model
      * Pergerakan stok yang memenuhi item ini dari stok bebas (keluar stok
      * internal / alokasi ke project).
      */
-    public function stockFulfillmentMovements(): HasMany
+    public function stockFulfillmentLogs(): HasMany
     {
-        return $this->hasMany(StockMovement::class, 'goods_request_item_id')
-            ->whereIn('type', StockMovement::FULFILLMENT_TYPES);
+        // Sisi pengurang dari stok bebas (keluar internal / alokasi ke project).
+        return $this->hasMany(StockLog::class, 'goods_request_item_id')->where('qty', '<', 0);
     }
 
     /**
@@ -98,11 +98,11 @@ class GoodsRequestItem extends Model
      */
     public function stockQty(): int
     {
-        $movements = $this->relationLoaded('stockFulfillmentMovements')
-            ? $this->stockFulfillmentMovements
-            : $this->stockFulfillmentMovements()->get();
+        $logs = $this->relationLoaded('stockFulfillmentLogs')
+            ? $this->stockFulfillmentLogs
+            : $this->stockFulfillmentLogs()->get();
 
-        return (int) $movements->sum('qty');
+        return (int) round(-$logs->sum('qty'));
     }
 
     /**
@@ -146,6 +146,6 @@ class GoodsRequestItem extends Model
     public const FULFILLMENT_RELATIONS = [
         'purchaseOrderItems.purchaseOrder',
         'purchaseOrderItems.goodsReceiptItems.goodsReceipt',
-        'stockFulfillmentMovements',
+        'stockFulfillmentLogs',
     ];
 }

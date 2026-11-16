@@ -5,21 +5,29 @@ namespace App\Http\Controllers;
 use App\Models\Log;
 use App\Models\MasterProduct;
 use App\Models\Project;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\StockOpname;
+use App\Models\StockOpnameItem;
 use App\Models\Warehouse;
-use App\Support\StockValuation;
+use App\Services\StockException;
+use App\Services\StockService;
+use App\Support\StockCost;
+use App\Support\StockPicker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Stock Opname — hitung fisik per gudang. Baris = (produk, kepemilikan);
- * boleh sebagian produk (cycle count). Draft oleh gudang; Posting
- * (stock-opname.approve -> can_approve) menghitung ulang qty sistem lalu
- * mencatat selisih sebagai adjustment_in / adjustment_out.
+ * Stock Opname — hitung fisik per gudang, per BARIS STOK (batch/SN/harga tepat);
+ * boleh sebagian (cycle count). Barang ber-SN cukup dicentang ada/tidak.
+ * Barang temuan (belum ada di sistem) ditambahkan sebagai baris baru.
+ *
+ * Angka sistem dicatat saat qty fisik diisi/disimpan. Posting
+ * (stock-opname.approve -> can_approve) menerapkan selisih (fisik - angka saat
+ * dihitung) ke qty sekarang, sehingga barang yang keluar/masuk setelah dihitung
+ * tetap benar. Hasil minus ditolak.
  */
 class StockOpnameController extends Controller
 {
@@ -75,13 +83,33 @@ class StockOpnameController extends Controller
     }
 
     /**
-     * Qty sistem per (produk, kepemilikan) di gudang — termasuk saldo 0 yang pernah ada.
+     * Baris stok terbuka di gudang (opsional disaring) untuk dihitung.
      */
     public function systemStock(Request $request): JsonResponse
     {
-        $validated = $request->validate(['warehouse_id' => 'required|integer|exists:warehouses,id']);
+        $validated = $request->validate([
+            'warehouse_id' => 'required|integer|exists:warehouses,id',
+            'q' => 'nullable|string|max:100',
+            'include' => 'nullable|array',
+            'include.*' => 'integer',
+        ]);
 
-        return response()->json(['success' => true, 'items' => $this->systemLines((int) $validated['warehouse_id'])->values()]);
+        $rows = StockPicker::options([
+            'warehouse_id' => $validated['warehouse_id'],
+            'q' => $validated['q'] ?? null,
+            'limit' => 1000,
+        ]);
+
+        // Baris yang sudah ada di draft tetap tampil walau stoknya sudah habis.
+        $missing = collect($validated['include'] ?? [])->diff($rows->pluck('id'));
+        if ($missing->isNotEmpty()) {
+            $extra = Stock::with(['masterProduct:id,code,name,is_material', 'warehouse:id,code,name', 'project:id,project_number,project_name'])
+                ->whereIn('id', $missing)->where('warehouse_id', $validated['warehouse_id'])->get()
+                ->map(fn (Stock $stock) => StockPicker::row($stock));
+            $rows = $rows->concat($extra);
+        }
+
+        return response()->json(['success' => true, 'data' => $rows->values()]);
     }
 
     public function searchProducts(Request $request): JsonResponse
@@ -92,9 +120,11 @@ class StockOpnameController extends Controller
             ->where(fn ($b) => $b->where('name', 'like', "%{$q}%")->orWhere('code', 'like', "%{$q}%")->orWhere('brand', 'like', "%{$q}%"))
             ->orderBy('name')
             ->limit(50)
-            ->get(['id', 'name', 'code', 'brand', 'category']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'is_material']);
 
-        return response()->json(['success' => true, 'data' => $products]);
+        return response()->json(['success' => true, 'data' => $products->map(fn (MasterProduct $p) => $p->only(['id', 'name', 'code', 'brand', 'category']) + [
+            'serialized' => ! $p->isMaterial(),
+        ])]);
     }
 
     public function store(Request $request): JsonResponse
@@ -122,23 +152,24 @@ class StockOpnameController extends Controller
 
     public function show($id)
     {
-        $opname = StockOpname::with(['items.masterProduct', 'items.project', 'warehouse', 'creator', 'postedBy'])->findOrFail($id);
+        $opname = StockOpname::with(['items.masterProduct', 'items.project', 'items.stock', 'warehouse', 'creator', 'postedBy'])->findOrFail($id);
 
-        // Draft: tampilkan qty sistem & harga terkini (yang akan dipakai saat posting).
+        // Draft: tandai baris yang stoknya berubah sejak dihitung (selisih tetap diterapkan ke qty sekarang).
+        $changed = [];
         if ($opname->isDraft()) {
-            $system = $this->systemLines($opname->warehouse_id)->keyBy(fn ($line) => $line['master_product_id'].':'.($line['project_id'] ?? ''));
-            foreach ($opname->items as $item) {
-                $item->system_qty = $system[$item->master_product_id.':'.($item->project_id ?? '')]['system_qty'] ?? 0;
-                $item->unit_cost = StockValuation::averageCost($item->master_product_id);
+            foreach ($opname->items->whereNotNull('stock_id') as $item) {
+                if ($item->stock && abs($item->stock->qty - $item->system_qty) >= Stock::EPSILON) {
+                    $changed[$item->id] = $item->stock->qty;
+                }
             }
         }
 
-        return view('stock-opname.show', compact('opname'));
+        return view('stock-opname.show', compact('opname', 'changed'));
     }
 
     public function edit($id)
     {
-        $opname = StockOpname::with('items.masterProduct')->findOrFail($id);
+        $opname = StockOpname::with(['items.masterProduct', 'items.project'])->findOrFail($id);
         abort_unless($opname->isDraft(), 403, 'Stock opname yang sudah diposting tidak bisa diubah.');
 
         return view('stock-opname.form', $this->formData($opname));
@@ -155,7 +186,6 @@ class StockOpnameController extends Controller
 
         DB::transaction(function () use ($opname, $validated) {
             $opname->update(['opname_date' => $validated['opname_date'], 'note' => $validated['note'] ?? null]);
-            $opname->items()->delete();
             $this->syncItems($opname, $validated['items']);
         });
 
@@ -175,52 +205,87 @@ class StockOpnameController extends Controller
     }
 
     /**
-     * Posting (can_approve): qty sistem dihitung ulang, selisih dicatat sebagai penyesuaian.
+     * Posting (can_approve): selisih (fisik - angka saat dihitung) diterapkan ke
+     * qty sekarang; barang temuan menjadi baris stok baru.
      */
     public function approve($id): JsonResponse
     {
-        $opname = StockOpname::with('items.masterProduct')->findOrFail($id);
+        $opname = StockOpname::with(['items.masterProduct'])->findOrFail($id);
         if (! $opname->isDraft()) {
             return response()->json(['success' => false, 'message' => 'Stock opname sudah diposting.'], 422);
         }
 
-        $adjusted = DB::transaction(function () use ($opname) {
-            $adjusted = 0;
-            foreach ($opname->items as $item) {
-                $systemQty = StockMovement::balance($opname->warehouse_id, $item->master_product_id, $item->project_id);
-                $cost = StockValuation::averageCost($item->master_product_id);
-                $item->update(['system_qty' => $systemQty, 'unit_cost' => $cost]);
+        $service = app(StockService::class);
+        $date = $opname->opname_date?->toDateString() ?? now()->toDateString();
 
-                $difference = $item->difference();
-                if ($difference === 0) {
-                    continue;
+        try {
+            $adjusted = DB::transaction(function () use ($opname, $service, $date) {
+                $adjusted = 0;
+                $stocks = $service->lock($opname->items->pluck('stock_id')->filter());
+
+                foreach ($opname->items as $item) {
+                    $log = [
+                        'date' => $date,
+                        'ref_type' => StockLog::REF_STOCK_OPNAME_ITEM,
+                        'ref_id' => $item->id,
+                        'note' => 'Stock opname '.$opname->opname_number,
+                    ];
+
+                    if (! $item->isFound()) {
+                        $stock = $stocks->get($item->stock_id);
+                        if (! $stock) {
+                            throw new StockException('Baris stok item '.$item->sort_order.' tidak ditemukan.');
+                        }
+                        $diff = $item->difference();
+                        if (abs($diff) >= Stock::EPSILON) {
+                            $service->adjust($stock, $diff, $log);
+                            $adjusted++;
+                        }
+
+                        continue;
+                    }
+
+                    if ((float) $item->counted_qty <= 0) {
+                        continue;
+                    }
+                    $adjusted++;
+                    $product = $item->masterProduct;
+
+                    // SN yang pernah keluar ditemukan lagi: aktifkan baris lamanya.
+                    $existing = $item->serial_number
+                        ? Stock::where('master_product_id', $product->id)->where('serial_number', $item->serial_number)->lockForUpdate()->first()
+                        : null;
+                    if ($existing) {
+                        $service->reactivate($existing, (int) $opname->warehouse_id, $item->project_id, StockLog::TYPE_ADJUST, $log);
+
+                        continue;
+                    }
+
+                    $service->receive($product, (float) $item->counted_qty, [
+                        'warehouse_id' => $opname->warehouse_id,
+                        'project_id' => $item->project_id,
+                        'received_date' => $date,
+                        'expiry_date' => $item->expiry_date,
+                        'batch_number' => $item->batch_number,
+                        'unit' => $item->unit,
+                        'unit_cost' => $item->unit_cost ?? StockCost::standardCost($product->id),
+                        'source_type' => Stock::SOURCE_STOCK_OPNAME_ITEM,
+                        'source_id' => $item->id,
+                        'note' => $item->remark,
+                    ], $item->serial_number ? [$item->serial_number] : [], $log, StockLog::TYPE_ADJUST);
                 }
 
-                StockMovement::record([
-                    'warehouse_id' => $opname->warehouse_id,
-                    'master_product_id' => $item->master_product_id,
-                    'project_id' => $item->project_id,
-                    'type' => $difference > 0 ? StockMovement::TYPE_ADJUSTMENT_IN : StockMovement::TYPE_ADJUSTMENT_OUT,
-                    'qty' => abs($difference),
-                    'unit' => $item->unit,
-                    'unit_cost' => $cost,
-                    'source_type' => StockMovement::SOURCE_STOCK_OPNAME,
-                    'source_id' => $opname->id,
-                    'source_line_id' => $item->id,
-                    'moved_at' => $opname->opname_date?->toDateString() ?? now()->toDateString(),
-                    'note' => 'Stock opname '.$opname->opname_number,
+                $opname->update([
+                    'status' => StockOpname::STATUS_POSTED,
+                    'posted_by' => Auth::id(),
+                    'posted_at' => now(),
                 ]);
-                $adjusted++;
-            }
 
-            $opname->update([
-                'status' => StockOpname::STATUS_POSTED,
-                'posted_by' => Auth::id(),
-                'posted_at' => now(),
-            ]);
-
-            return $adjusted;
-        });
+                return $adjusted;
+            });
+        } catch (StockException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
 
         Log::record('post_stock_opname', 'Stock opname '.$opname->opname_number.' diposting ('.$adjusted.' penyesuaian) oleh '.Auth::user()->display_name, 'MOD_STOCK_OPNAME', $opname);
 
@@ -234,14 +299,22 @@ class StockOpnameController extends Controller
     {
         return [
             'opname' => $opname,
-            'warehouses' => Warehouse::active()->orderBy('type')->orderBy('name')->get(),
-            'items' => $opname?->items->map(fn ($item) => [
+            'warehouses' => Warehouse::active()->orderBy('name')->get(),
+            'projects' => Project::where('status', Project::STATUS_ACTIVE)->orderByDesc('id')->get(['id', 'project_number', 'project_name']),
+            'items' => $opname?->items->map(fn (StockOpnameItem $item) => [
+                'stock_id' => $item->stock_id,
                 'master_product_id' => $item->master_product_id,
                 'project_id' => $item->project_id,
                 'counted_qty' => $item->counted_qty,
+                'system_qty' => $item->system_qty,
                 'remark' => $item->remark,
+                'batch_number' => $item->batch_number,
+                'serial_number' => $item->serial_number,
+                'expiry_date' => $item->expiry_date?->toDateString(),
+                'unit' => $item->unit,
                 'code' => $item->masterProduct?->code,
                 'name' => $item->masterProduct?->name,
+                'serialized' => $item->masterProduct ? ! $item->masterProduct->isMaterial() : false,
             ])->values() ?? [],
         ];
     }
@@ -253,57 +326,95 @@ class StockOpnameController extends Controller
             'opname_date' => 'required|date',
             'note' => 'nullable|string|max:2000',
             'items' => 'required|array|min:1',
-            'items.*.master_product_id' => 'required|integer|exists:master_products,id',
+            'items.*.stock_id' => 'nullable|integer|exists:stocks,id',
+            'items.*.master_product_id' => 'required_without:items.*.stock_id|nullable|integer|exists:master_products,id',
             'items.*.project_id' => 'nullable|integer|exists:projects,id',
-            'items.*.counted_qty' => 'required|integer|min:0',
+            'items.*.counted_qty' => 'required|numeric|min:0',
             'items.*.remark' => 'nullable|string|max:255',
+            'items.*.batch_number' => 'nullable|string|max:100',
+            'items.*.serial_number' => 'nullable|string|max:100',
+            'items.*.expiry_date' => 'nullable|date',
+            'items.*.unit' => 'nullable|string|max:50',
         ], ['items.required' => 'Isi qty hitung minimal satu baris.']);
 
         $validated['warehouse_id'] = $warehouseId ?? (int) $validated['warehouse_id'];
 
-        $keys = collect($validated['items'])->map(fn ($row) => $row['master_product_id'].':'.($row['project_id'] ?? ''));
-        if ($keys->duplicates()->isNotEmpty()) {
-            abort(response()->json(['success' => false, 'message' => 'Produk dengan kepemilikan yang sama tidak boleh muncul dua kali.'], 422));
+        $stockIds = collect($validated['items'])->pluck('stock_id')->filter();
+        if ($stockIds->duplicates()->isNotEmpty()) {
+            abort(response()->json(['success' => false, 'message' => 'Baris stok yang sama tidak boleh muncul dua kali.'], 422));
+        }
+        if (Stock::whereIn('id', $stockIds)->where('warehouse_id', '!=', $validated['warehouse_id'])->exists()) {
+            abort(response()->json(['success' => false, 'message' => 'Ada baris stok yang tidak berada di gudang opname.'], 422));
         }
 
         return $validated;
     }
 
+    /**
+     * Simpan baris draft. Angka sistem dicatat ulang hanya untuk baris yang qty
+     * fisiknya baru diisi/berubah (saat itulah barang dihitung).
+     */
     private function syncItems(StockOpname $opname, array $items): void
     {
-        $system = $this->systemLines($opname->warehouse_id)->keyBy(fn ($line) => $line['master_product_id'].':'.($line['project_id'] ?? ''));
+        $existing = $opname->items()->get()->keyBy(fn (StockOpnameItem $i) => $i->stock_id ? 's'.$i->stock_id : 'f'.$i->id);
+        $stocks = Stock::with('masterProduct')->whereIn('id', collect($items)->pluck('stock_id')->filter())->get()->keyBy('id');
+        $products = MasterProduct::whereIn('id', collect($items)->pluck('master_product_id')->filter())->get()->keyBy('id');
+        $keep = [];
 
         foreach (array_values($items) as $i => $row) {
-            $line = $system->get($row['master_product_id'].':'.($row['project_id'] ?? ''));
-            $opname->items()->create([
-                'master_product_id' => $row['master_product_id'],
+            $counted = StockService::round((float) $row['counted_qty']);
+            $stock = ! empty($row['stock_id']) ? $stocks->get((int) $row['stock_id']) : null;
+
+            if ($stock) {
+                if ($stock->isSerialized() && ! in_array($counted, [0.0, 1.0], true)) {
+                    abort(response()->json(['success' => false, 'message' => $stock->masterProduct?->code.' '.$stock->identity_label.': barang ber-SN dihitung 0 atau 1.'], 422));
+                }
+                $old = $existing->get('s'.$stock->id);
+                $recount = ! $old || abs((float) $old->counted_qty - $counted) >= Stock::EPSILON;
+                $attrs = [
+                    'stock_id' => $stock->id,
+                    'master_product_id' => $stock->master_product_id,
+                    'project_id' => $stock->project_id,
+                    'counted_qty' => $counted,
+                    'unit' => $stock->unit,
+                    'unit_cost' => $stock->unit_cost,
+                    'remark' => $row['remark'] ?? null,
+                    'sort_order' => $i + 1,
+                ] + ($recount ? ['system_qty' => $stock->qty, 'counted_at' => now()] : []);
+
+                if ($old) {
+                    $old->update($attrs);
+                    $keep[] = $old->id;
+                } else {
+                    $keep[] = $opname->items()->create($attrs + ['system_qty' => $stock->qty, 'counted_at' => now()])->id;
+                }
+
+                continue;
+            }
+
+            // Barang temuan: belum ada di sistem.
+            $product = $products->get((int) $row['master_product_id']);
+            if ($product && ! $product->isMaterial() && $counted > 1) {
+                abort(response()->json(['success' => false, 'message' => $product->code.': barang ber-SN ditambahkan per unit (qty 1, SN boleh menyusul).'], 422));
+            }
+            $item = $opname->items()->create([
+                'master_product_id' => $product->id,
                 'project_id' => $row['project_id'] ?? null,
-                'system_qty' => $line['system_qty'] ?? 0,
-                'counted_qty' => (int) $row['counted_qty'],
-                'unit' => $line['unit'] ?? null,
+                'batch_number' => $row['batch_number'] ?? null,
+                'serial_number' => $product->isMaterial() ? null : (($row['serial_number'] ?? '') !== '' ? trim($row['serial_number']) : null),
+                'expiry_date' => $row['expiry_date'] ?? null,
+                'system_qty' => 0,
+                'counted_qty' => $counted,
+                'counted_at' => now(),
+                'unit' => $row['unit'] ?? null,
+                'unit_cost' => StockCost::standardCost($product->id),
                 'remark' => $row['remark'] ?? null,
                 'sort_order' => $i + 1,
             ]);
+            $keep[] = $item->id;
         }
-    }
 
-    private function systemLines(int $warehouseId): Collection
-    {
-        $rows = StockMovement::balancesQuery()->where('warehouse_id', $warehouseId)->get();
-
-        $products = MasterProduct::whereIn('id', $rows->pluck('master_product_id'))->get(['id', 'code', 'name'])->keyBy('id');
-        $projects = Project::whereIn('id', $rows->pluck('project_id')->filter())->get(['id', 'project_number', 'project_name'])->keyBy('id');
-
-        return $rows->map(fn ($row) => [
-            'master_product_id' => (int) $row->master_product_id,
-            'code' => $products[$row->master_product_id]->code ?? '—',
-            'name' => $products[$row->master_product_id]->name ?? '—',
-            'project_id' => $row->project_id ? (int) $row->project_id : null,
-            'ownership' => $row->project_id && isset($projects[$row->project_id])
-                ? $projects[$row->project_id]->project_number.' — '.$projects[$row->project_id]->project_name
-                : 'Stok bebas',
-            'system_qty' => (int) $row->balance,
-            'unit' => $row->unit,
-        ])->sortBy(fn ($line) => $line['code'].'|'.($line['project_id'] ?? 0))->values();
+        // Baris yang tidak dikirim lagi dihapus; baris temuan lama selalu diganti yang baru.
+        $opname->items()->whereNotIn('id', array_filter($keep))->delete();
     }
 }

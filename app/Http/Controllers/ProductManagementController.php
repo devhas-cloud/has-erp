@@ -249,6 +249,12 @@ class ProductManagementController extends Controller
         // Form tanpa field is_material (klien lama) -> nilai lama tetap.
         if ($request->has('is_material')) {
             $validated['is_material'] = $request->boolean('is_material');
+            if ($validated['is_material'] !== $product->isMaterial() && $product->hasStock()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jenis stok (Material / Barang ber-SN) tidak bisa diubah karena produk ini masih punya stok. Kosongkan stoknya dulu.',
+                ], 422);
+            }
         } else {
             unset($validated['is_material']);
         }

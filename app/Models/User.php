@@ -23,11 +23,28 @@ class User extends Authenticatable
         'password',
         'phone_number',
         'division_id',
+        'branch_id',
         'role',
         'task_role_id',
         'icon',
         'salesperson',
     ];
+
+    /**
+     * Branch user (kosong = melihat semua branch; hak tetap lewat akses modul).
+     */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    /**
+     * User yang terikat branch hanya melihat/memproses dokumen branch-nya.
+     */
+    public function canAccessBranch(?int $branchId): bool
+    {
+        return ! $this->branch_id || (int) $this->branch_id === (int) $branchId;
+    }
 
     protected $hidden = [
         'password',

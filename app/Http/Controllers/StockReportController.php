@@ -2,39 +2,73 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
+use App\Models\BranchTransfer;
 use App\Models\MasterProduct;
 use App\Models\Project;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\Warehouse;
-use App\Support\StockValuation;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Laporan Stok — saldo per (produk, gudang, kepemilikan) dari kartu stok, dan
- * Kartu Stok (riwayat pergerakan + saldo berjalan) per produk.
+ * Laporan Stok — saldo per (produk, gudang, kepemilikan) langsung dari baris
+ * stok terbuka (stocks), nilai = SUM(qty x harga modal baris). Kartu Stok per
+ * produk dari stock_logs: saldo awal periode dihitung mundur dari saldo
+ * sekarang (saldo sekarang - log sejak tanggal awal), tanpa membaca seluruh riwayat.
  * Filter kepemilikan: '' = semua, 'free' = stok bebas, angka = project id.
  */
 class StockReportController extends Controller
 {
     public function index()
     {
-        return view('stock-report.index', $this->filterOptions());
+        return view('stock-report.index', array_merge($this->filterOptions(), [
+            'branches' => Branch::orderBy('name')->get(['id', 'code', 'name']),
+            'inTransit' => $this->inTransit(),
+        ]));
+    }
+
+    /**
+     * Branch Transfer yang sedang dalam pengiriman (stok sudah keluar dari gudang asal).
+     */
+    private function inTransit()
+    {
+        return BranchTransfer::visibleTo(Auth::user())
+            ->where('status', BranchTransfer::STATUS_IN_TRANSIT)
+            ->with(['fromBranch', 'toBranch', 'items.stock'])
+            ->orderBy('shipped_at')
+            ->get()
+            ->map(fn (BranchTransfer $t) => [
+                'id' => $t->id,
+                'number' => $t->transfer_number,
+                'from' => $t->fromBranch?->name,
+                'to' => $t->toBranch?->name,
+                'shipped_at' => $t->shipped_at?->format('d/m/Y'),
+                'items' => $t->items->count(),
+                'value' => round($t->items->sum(fn ($item) => $item->qty * (float) ($item->stock?->unit_cost ?? 0)), 2),
+            ]);
     }
 
     public function data(Request $request): JsonResponse
     {
-        $balances = $this->applyFilters(StockMovement::balancesQuery(), $request);
-        if (! $request->boolean('include_zero')) {
-            $balances->havingRaw('balance <> 0');
-        }
+        $balances = $this->applyFilters(DB::table('stocks as s'), $request, 's.')
+            ->join('master_products as mp', 'mp.id', '=', 's.master_product_id')
+            ->when(! $request->boolean('include_zero'), fn ($q) => $q->where('s.is_open', true))
+            ->groupBy('s.master_product_id', 's.warehouse_id', 's.project_id')
+            ->selectRaw('s.master_product_id, s.warehouse_id, s.project_id, SUM(s.qty) AS balance, SUM(s.qty * s.unit_cost) AS value, MAX(s.unit) AS unit,
+                SUM(CASE WHEN s.qty > 0 AND s.serial_number IS NULL AND mp.is_material = 0 THEN 1 ELSE 0 END) AS missing_serial');
 
         $query = DB::query()->fromSub($balances, 'b')
             ->join('master_products as p', 'p.id', '=', 'b.master_product_id')
             ->join('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->leftJoin('projects as pr', 'pr.id', '=', 'b.project_id')
-            ->select('b.*', 'p.code', 'p.name as product_name', 'w.code as warehouse_code', 'w.name as warehouse_name', 'w.type as warehouse_type', 'pr.project_number', 'pr.project_name');
+            ->leftJoin('branches as br', 'br.id', '=', 'w.branch_id')
+            ->when($request->integer('branch_id'), fn ($q, $id) => $q->where('w.branch_id', $id))
+            ->select('b.*', 'p.code', 'p.name as product_name', 'p.is_material', 'w.code as warehouse_code', 'w.name as warehouse_name', 'br.name as branch_name', 'pr.project_number', 'pr.project_name');
 
         $recordsTotal = (clone $query)->count();
 
@@ -47,15 +81,10 @@ class StockReportController extends Controller
         }
 
         $recordsFiltered = (clone $query)->count();
+        $totalValue = (float) (clone $query)->sum('b.value');
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 25);
-
-        // Nilai persediaan = saldo x harga rata-rata produk (lintas gudang/kepemilikan).
-        $filtered = (clone $query)->get(['b.master_product_id', 'b.balance']);
-        $averages = $this->averageCosts($filtered->pluck('master_product_id')->unique()->all());
-        $totalValue = $filtered->sum(fn ($row) => (int) $row->balance * ($averages[$row->master_product_id] ?? 0));
-
         $rows = $query->orderBy('p.code')->orderBy('w.name')->orderBy('pr.project_number')->offset($start)->limit($length)->get();
 
         $data = $rows->map(fn ($row, $i) => [
@@ -63,15 +92,17 @@ class StockReportController extends Controller
             'master_product_id' => (int) $row->master_product_id,
             'code' => $row->code,
             'product_name' => $row->product_name,
+            'serialized' => ! $row->is_material,
             'warehouse_id' => (int) $row->warehouse_id,
             'warehouse' => $row->warehouse_code.' — '.$row->warehouse_name,
-            'warehouse_type' => $row->warehouse_type,
+            'branch' => $row->branch_name,
             'project_id' => $row->project_id ? (int) $row->project_id : null,
             'ownership' => $row->project_id ? $row->project_number.' — '.$row->project_name : 'Stok bebas',
-            'balance' => (int) $row->balance,
+            'balance' => round((float) $row->balance, 4),
             'unit' => $row->unit,
-            'average_cost' => round($averages[$row->master_product_id] ?? 0, 2),
-            'value' => round((int) $row->balance * ($averages[$row->master_product_id] ?? 0), 2),
+            'average_cost' => (float) $row->balance > 0 ? round($row->value / $row->balance, 2) : 0,
+            'value' => round((float) $row->value, 2),
+            'missing_serial' => (int) $row->missing_serial,
         ]);
 
         return response()->json([
@@ -84,86 +115,86 @@ class StockReportController extends Controller
     }
 
     /**
-     * Kartu Stok satu produk — filter gudang & kepemilikan opsional.
+     * Kartu Stok satu produk pada rentang tanggal — filter gudang & kepemilikan opsional.
      */
     public function card(Request $request, $productId)
     {
         $product = MasterProduct::findOrFail($productId);
+        $from = $this->date($request->input('from')) ?? now()->subMonthsNoOverflow(3)->startOfMonth();
+        $to = $this->date($request->input('to')) ?? now();
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
 
-        $movements = $this->applyFilters(StockMovement::query(), $request)
-            ->with(['warehouse', 'project', 'creator'])
-            ->where('master_product_id', $product->id)
-            ->orderBy('moved_at')
-            ->orderBy('id')
+        // Saldo sekarang (posisi) lalu dihitung mundur ke awal periode.
+        $current = $this->applyFilters(Stock::query(), $request)->where('master_product_id', $product->id)
+            ->selectRaw('COALESCE(SUM(qty), 0) AS total_qty, COALESCE(SUM(qty * unit_cost), 0) AS total_value')->first();
+        $logBase = $this->applyFilters(StockLog::query(), $request)->where('master_product_id', $product->id)->where('qty', '!=', 0);
+        $sinceFrom = (clone $logBase)->whereDate('log_date', '>=', $from->toDateString())
+            ->selectRaw('COALESCE(SUM(qty), 0) AS total_qty, COALESCE(SUM(qty * unit_cost), 0) AS total_value')->first();
+
+        $openingQty = round((float) $current->total_qty - (float) $sinceFrom->total_qty, 4);
+        $openingValue = round((float) $current->total_value - (float) $sinceFrom->total_value, 2);
+
+        $logs = (clone $logBase)
+            ->with(['warehouse:id,code', 'project:id,project_number', 'creator', 'stock:id,serial_number,batch_number,master_product_id'])
+            ->whereDate('log_date', '>=', $from->toDateString())
+            ->whereDate('log_date', '<=', $to->toDateString())
+            ->orderBy('log_date')->orderBy('id')
             ->get();
+        StockLog::attachDocuments($logs);
 
-        $running = 0;
-        $runningValue = 0.0;
-        $rows = $movements->map(function (StockMovement $movement) use (&$running, &$runningValue) {
-            $signed = $movement->isIn() ? $movement->qty : -$movement->qty;
-            $running += $signed;
-            $runningValue += $signed * (float) $movement->unit_cost;
-            [$sourceLabel, $sourceUrl] = $movement->sourceReference();
+        $running = $openingQty;
+        $runningValue = $openingValue;
+        $rows = $logs->map(function (StockLog $log) use (&$running, &$runningValue) {
+            $running = round($running + $log->qty, 4);
+            $runningValue = round($runningValue + $log->qty * $log->unit_cost, 2);
 
             return [
-                'movement' => $movement,
-                'in' => $signed > 0 ? $movement->qty : null,
-                'out' => $signed < 0 ? $movement->qty : null,
+                'log' => $log,
+                'in' => $log->qty > 0 ? $log->qty : null,
+                'out' => $log->qty < 0 ? -$log->qty : null,
                 'balance' => $running,
-                'value' => round($runningValue, 2),
-                'source_label' => $sourceLabel,
-                'source_url' => $sourceUrl,
+                'value' => $runningValue,
             ];
         });
 
         return view('stock-report.card', array_merge($this->filterOptions(), [
             'product' => $product,
-            'averageCost' => StockValuation::averageCost($product->id),
+            'openingQty' => $openingQty,
+            'openingValue' => $openingValue,
             'rows' => $rows,
             'filters' => [
                 'warehouse_id' => $request->input('warehouse_id'),
                 'ownership' => $request->input('ownership'),
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
             ],
         ]));
     }
 
-    /**
-     * Harga rata-rata per produk: [master_product_id => cost].
-     */
-    private function averageCosts(array $productIds): array
-    {
-        if (! $productIds) {
-            return [];
-        }
-
-        return StockMovement::valuationQuery()
-            ->whereIn('master_product_id', $productIds)
-            ->get()
-            ->mapWithKeys(fn ($row) => [
-                $row->master_product_id => $row->qty > 0
-                    ? $row->value / $row->qty
-                    : StockValuation::averageCost((int) $row->master_product_id),
-            ])
-            ->all();
-    }
-
-    private function applyFilters($query, Request $request)
+    private function applyFilters($query, Request $request, string $prefix = '')
     {
         $warehouseId = $request->integer('warehouse_id');
         $ownership = (string) $request->input('ownership', '');
 
         return $query
-            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->when($ownership === 'free', fn ($q) => $q->whereNull('project_id'))
-            ->when(ctype_digit($ownership), fn ($q) => $q->where('project_id', (int) $ownership));
+            ->when($warehouseId, fn ($q) => $q->where($prefix.'warehouse_id', $warehouseId))
+            ->when($ownership === 'free', fn ($q) => $q->whereNull($prefix.'project_id'))
+            ->when(ctype_digit($ownership), fn ($q) => $q->where($prefix.'project_id', (int) $ownership));
+    }
+
+    private function date(?string $value): ?Carbon
+    {
+        return $value ? rescue(fn () => Carbon::parse($value)->startOfDay(), null, false) : null;
     }
 
     private function filterOptions(): array
     {
-        $projectIds = StockMovement::whereNotNull('project_id')->distinct()->pluck('project_id');
+        $projectIds = Stock::whereNotNull('project_id')->distinct()->pluck('project_id');
 
         return [
-            'warehouses' => Warehouse::orderBy('type')->orderBy('name')->get(),
+            'warehouses' => Warehouse::with('branch')->orderBy('name')->get(),
             'projects' => Project::whereIn('id', $projectIds)->orderByDesc('id')->get(['id', 'project_number', 'project_name']),
         ];
     }

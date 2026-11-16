@@ -32,10 +32,10 @@
                 <select id="rt-warehouse" class="form-select">
                     <option value="">— Pilih Gudang —</option>
                     @foreach($warehouses as $w)
-                        <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->type_label }})</option>
+                        <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->branch_label }})</option>
                     @endforeach
                 </select>
-                <small style="color:var(--text-muted)">Wajib bila barang dulu masuk gudang.</small>
+                <small style="color:var(--text-muted)">Opsional: saring baris stok per gudang.</small>
             </div>
             <div class="col-lg-2">
                 <label class="form-label" for="rt-date">Tanggal <span class="text-danger">*</span></label>
@@ -54,7 +54,7 @@
     <div class="card-body-custom p-2">
         <div class="table-responsive">
             <table class="table table-custom mb-0">
-                <thead><tr><th>Barang</th><th style="width:220px">Diterima / Ditagih</th><th class="text-center" style="width:120px">Qty Retur</th></tr></thead>
+                <thead><tr><th>Barang</th><th style="width:220px">Diterima / Ditagih</th><th class="text-center" style="width:150px">Langsung Pakai</th></tr></thead>
                 <tbody id="rt-lines"><tr><td colspan="3" class="text-center py-4" style="color:var(--text-muted)">Pilih PO terlebih dahulu.</td></tr></tbody>
             </table>
         </div>
@@ -67,7 +67,10 @@
 @endsection
 
 @section('scripts')
+@include('partials.stock-pick')
 <script>
+const rtOptionsUrl = '{{ route("supplier-return.stock-options") }}';
+
 function rtEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
 
 function rtLoad() {
@@ -77,34 +80,53 @@ function rtLoad() {
         var html = '';
         res.lines.forEach(function(l) {
             var locked = l.returnable <= 0;
-            html += '<tr data-id="' + l.purchase_order_item_id + '" data-max="' + l.returnable + '"' + (locked ? ' style="opacity:.55"' : '') + '>';
+            html += '<tr data-id="' + l.purchase_order_item_id + '" data-max="' + l.returnable + '" data-direct-max="' + l.direct_returnable + '"' + (locked ? ' style="opacity:.55"' : '') + '>';
             html += '<td><div class="fw-semibold" style="font-size:13px">' + rtEsc(l.part_number || '—') + '</div><div style="font-size:12px;color:var(--text-muted)">' + (l.description || '') + '</div></td>';
             html += '<td style="font-size:12.5px">Diterima ' + l.received + ' · Ditagih ' + l.billed + '<div class="fw-semibold" style="color:' + (locked ? 'var(--text-muted)' : 'var(--accent)') + '">' + (locked ? 'Tidak bisa diretur' : 'Bisa diretur ' + l.returnable + ' ' + rtEsc(l.unit || '')) + '</div></td>';
-            html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm text-center rt-qty" placeholder="0"' + (locked ? ' disabled' : '') + ' aria-label="Qty retur ' + rtEsc(l.part_number) + '"></td>';
+            html += '<td>' + (l.direct_returnable > 0 && !locked
+                ? '<input type="text" inputmode="numeric" class="form-control form-control-sm text-center rt-direct" placeholder="0" aria-label="Qty retur langsung pakai ' + rtEsc(l.part_number) + '"><div style="font-size:11px;color:var(--text-muted)">maks ' + l.direct_returnable + '</div>'
+                : '<span style="font-size:12px;color:var(--text-muted)">—</span>') + '</td>';
             html += '</tr>';
+            if (!locked && l.stock_returnable > 0) {
+                html += '<tr class="rt-stock-row" data-for="' + l.purchase_order_item_id + '"><td colspan="3" style="padding-top:0">'
+                    + '<div style="font-size:12px;color:var(--text-muted)" class="mb-1">Retur dari stok (maks ' + l.stock_returnable + ') — pilih baris stok asal penerimaan PO ini:</div>'
+                    + '<div class="rt-picker" data-item="' + l.purchase_order_item_id + '"></div></td></tr>';
+            }
         });
         $('#rt-lines').html(html);
+        rtLoadPickers();
     }).fail(function(xhr) {
         $('#rt-lines').html('<tr><td colspan="3" class="text-center py-4 text-danger">' + rtEsc(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memuat.') + '</td></tr>');
     });
 }
 
+function rtLoadPickers() {
+    $('#rt-lines .rt-picker').each(function() {
+        StockPick.load($(this), rtOptionsUrl, { purchase_order_item_id: $(this).data('item'), warehouse_id: $('#rt-warehouse').val() }, { requireSerial: true });
+    });
+}
+
 $(document).on('change', '#rt-po', rtLoad);
-$(document).on('input', '.rt-qty', function() { this.value = this.value.replace(/\D/g, ''); });
+$(document).on('change', '#rt-warehouse', rtLoadPickers);
+$(document).on('input', '.rt-direct', function() { this.value = this.value.replace(/\D/g, ''); });
 
 function rtSave() {
     if (!$('#rt-po').val()) { toastr.error('Pilih PO.'); return; }
     if (!$('#rt-reason').val().trim()) { toastr.error('Alasan retur wajib diisi.'); $('#rt-reason').focus(); return; }
     var items = [];
-    var invalid = false;
+    var invalid = null;
     $('#rt-lines tr[data-id]').each(function() {
-        var qty = parseInt($(this).find('.rt-qty').val(), 10) || 0;
-        if (!qty) return;
-        if (qty > parseInt($(this).data('max'), 10)) invalid = true;
-        items.push({ purchase_order_item_id: $(this).data('id'), qty: qty });
+        var id = $(this).data('id');
+        var direct = parseInt($(this).find('.rt-direct').val(), 10) || 0;
+        var picks = StockPick.picks($('#rt-lines .rt-picker[data-item="' + id + '"]'));
+        var fromStock = picks.reduce(function(s, p) { return s + p.qty; }, 0);
+        if (!direct && !picks.length) return;
+        if (direct > parseInt($(this).data('direct-max'), 10)) invalid = 'Qty langsung pakai melebihi batas.';
+        if (direct + fromStock > parseFloat($(this).data('max'))) invalid = 'Qty retur melebihi yang bisa diretur.';
+        items.push({ purchase_order_item_id: id, direct_qty: direct, picks: picks });
     });
-    if (invalid) { toastr.error('Qty retur melebihi yang bisa diretur.'); return; }
-    if (!items.length) { toastr.error('Isi qty minimal satu barang.'); return; }
+    if (invalid) { toastr.error(invalid); return; }
+    if (!items.length) { toastr.error('Pilih baris stok atau isi qty langsung pakai minimal satu barang.'); return; }
 
     Swal.fire({ title: 'Posting retur?', text: 'Stok berkurang dan PO kembali menunggu barang pengganti. Retur tidak bisa diubah.', icon: 'question', showCancelButton: true, confirmButtonText: 'Ya, Posting', cancelButtonText: 'Batal' })
         .then(function(r) {
@@ -118,7 +140,10 @@ function rtSave() {
                 toastr.success(res.message);
                 setTimeout(function() { location.href = '{{ route("supplier-return.show", "__ID__") }}'.replace('__ID__', res.id); }, 700);
             }).fail(function(xhr) {
-                toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memposting retur.');
+                var msg = 'Gagal memposting retur.';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                if (xhr.responseJSON && xhr.responseJSON.errors) msg = xhr.responseJSON.errors[Object.keys(xhr.responseJSON.errors)[0]][0];
+                toastr.error(msg);
                 $('#rt-save').prop('disabled', false);
             });
         });

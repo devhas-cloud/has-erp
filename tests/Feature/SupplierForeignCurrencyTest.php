@@ -68,7 +68,7 @@ class SupplierForeignCurrencyTest extends TestCase
 
     private function receive(int $qty): void
     {
-        $warehouse = Warehouse::firstOrCreate(['code' => 'G1'], ['name' => 'Gudang', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
+        $warehouse = Warehouse::firstOrCreate(['code' => 'G1'], ['name' => 'Gudang', 'status' => 'Active']);
         $receipt = GoodsReceipt::create(['receipt_number' => 'GRN-'.uniqid(), 'purchase_order_id' => $this->po->id, 'warehouse_id' => $warehouse->id, 'received_date' => now()->toDateString(), 'status' => GoodsReceipt::STATUS_POSTED, 'created_by' => $this->staff->id]);
         $item = $this->po->items()->first();
         $receipt->items()->create(['purchase_order_item_id' => $item->id, 'master_product_id' => $item->master_product_id, 'qty' => $qty, 'destination' => 'warehouse', 'sort_order' => 1]);

@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
 use App\Models\GoodsReceipt;
-use App\Models\StockMovement;
+use App\Models\Stock;
 use App\Models\Warehouse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,12 +13,14 @@ class WarehouseController extends Controller
 {
     public function index()
     {
-        return view('warehouse.index');
+        return view('warehouse.index', [
+            'branches' => Branch::orderBy('name')->get(['id', 'code', 'name']),
+        ]);
     }
 
     public function data(Request $request): JsonResponse
     {
-        $query = Warehouse::query();
+        $query = Warehouse::with('branch');
 
         $recordsTotal = Warehouse::count();
 
@@ -41,8 +44,8 @@ class WarehouseController extends Controller
             'id' => $warehouse->id,
             'code' => $warehouse->code,
             'name' => $warehouse->name,
-            'type' => $warehouse->type,
-            'type_label' => $warehouse->type_label,
+            'branch_id' => $warehouse->branch_id,
+            'branch_name' => $warehouse->branch?->name,
             'status' => $warehouse->status,
         ])->values();
 
@@ -91,7 +94,7 @@ class WarehouseController extends Controller
     {
         $warehouse = Warehouse::findOrFail($id);
 
-        if (GoodsReceipt::where('warehouse_id', $id)->exists() || StockMovement::where('warehouse_id', $id)->exists()) {
+        if (GoodsReceipt::where('warehouse_id', $id)->exists() || Stock::where('warehouse_id', $id)->exists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Gudang masih dipakai transaksi stok dan tidak dapat dihapus.',
@@ -112,7 +115,7 @@ class WarehouseController extends Controller
         return [
             'code' => 'required|string|max:50|unique:warehouses,code'.($ignoreId ? ','.$ignoreId : ''),
             'name' => 'required|string|max:150',
-            'type' => 'required|in:'.implode(',', array_keys(Warehouse::TYPE_LABELS)),
+            'branch_id' => 'required|integer|exists:branches,id',
             'status' => 'required|in:Active,Inactive',
         ];
     }

@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
  * Modul "Direct Purchase": pembelian langsung tanpa Permintaan Barang / PO formal.
  * Purpose menentukan tujuan barang saat diterima lewat Penerimaan Barang:
  *   - stock   : masuk gudang stok (stok bebas);
- *   - project : masuk gudang transit, dialokasikan ke project;
+ *   - project : masuk gudang sebagai stok milik project;
  *   - direct  : langsung pakai (konfirmasi terima saja, tidak masuk stok).
  * Item wajib master product. Approval satu approver (can_approve). Satu dokumen
  * satu mata uang, tanpa kurs. Tanpa terms/delivery/your ref/diskon.

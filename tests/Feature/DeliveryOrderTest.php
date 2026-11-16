@@ -8,11 +8,13 @@ use App\Models\Division;
 use App\Models\MasterProduct;
 use App\Models\Module;
 use App\Models\Project;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
 /**
@@ -21,6 +23,7 @@ use Tests\TestCase;
  */
 class DeliveryOrderTest extends TestCase
 {
+    use InteractsWithStock;
     use RefreshDatabase;
 
     private Division $division;
@@ -54,7 +57,7 @@ class DeliveryOrderTest extends TestCase
             'can_approve' => false,
         ]);
 
-        $this->transit = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'type' => Warehouse::TYPE_TRANSIT, 'status' => 'Active']);
+        $this->transit = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'status' => 'Active']);
         $company = AccountCompany::create([
             'account_name' => 'PT Maju Bersama',
             'status' => 'Active',
@@ -75,20 +78,14 @@ class DeliveryOrderTest extends TestCase
             'status' => Project::STATUS_ACTIVE,
             'created_by' => $this->admin->id,
         ]);
-        $this->product = MasterProduct::create(['code' => 'PN-1', 'name' => 'Sensor pH', 'division_id' => $this->division->id, 'status' => 'Active']);
+        $this->product = MasterProduct::create(['code' => 'PN-1', 'name' => 'Sensor pH', 'division_id' => $this->division->id, 'status' => 'Active', 'is_material' => true]);
 
-        StockMovement::record([
-            'warehouse_id' => $this->transit->id,
-            'master_product_id' => $this->product->id,
-            'project_id' => $this->project->id,
-            'type' => StockMovement::TYPE_ALLOCATE_IN,
-            'qty' => 5,
-            'unit' => 'Unit',
-            'created_by' => $this->admin->id,
-        ]);
+        $this->row = $this->seedStock($this->transit->id, $this->product, 5, ['project_id' => $this->project->id])->first();
     }
 
-    private function payload(int $qty): array
+    private Stock $row;
+
+    private function payload(float $qty, ?int $stockId = null): array
     {
         return [
             'project_id' => $this->project->id,
@@ -96,7 +93,7 @@ class DeliveryOrderTest extends TestCase
             'delivery_date' => '2026-11-02',
             'recipient_name' => 'PT Maju Bersama',
             'shipping_address' => 'Jl. Industri 5, Gresik',
-            'items' => [['master_product_id' => $this->product->id, 'qty' => $qty, 'remark' => 'S/N 001']],
+            'items' => [['stock_id' => $stockId ?? $this->row->id, 'qty' => $qty, 'remark' => 'Panel A']],
         ];
     }
 
@@ -104,8 +101,10 @@ class DeliveryOrderTest extends TestCase
     {
         $this->actingAs($this->user)->getJson(route('delivery-order.project-stock', ['project_id' => $this->project->id]))
             ->assertOk()
-            ->assertJsonPath('items.0.balance', 5)
+            ->assertJsonPath('warehouses.0.id', $this->transit->id)
             ->assertJsonPath('recipient.address', 'Jl. Industri 5, Gresik');
+        $this->actingAs($this->user)->getJson(route('delivery-order.stock-options', ['project_id' => $this->project->id, 'warehouse_id' => $this->transit->id]))
+            ->assertOk()->assertJsonPath('data.0.id', $this->row->id)->assertJsonPath('data.0.qty', 5);
 
         $this->actingAs($this->user)->postJson(route('delivery-order.store'), $this->payload(6))->assertStatus(422);
         $this->actingAs($this->user)->postJson(route('delivery-order.store'), array_merge($this->payload(1), ['recipient_name' => '']))
@@ -115,10 +114,11 @@ class DeliveryOrderTest extends TestCase
         $order = DeliveryOrder::with('items')->findOrFail($id);
         $this->assertSame('DO-26110001', $order->do_number);
         $this->assertSame('Unit', $order->items->first()->unit);
-        $this->assertSame(5, StockMovement::balance($this->transit->id, $this->product->id, $this->project->id), 'draft tidak mengurangi stok');
+        $this->assertEquals(5, $this->stockBalance($this->transit->id, $this->product->id, $this->project->id), 'draft tidak mengurangi stok');
 
-        $this->actingAs($this->user)->putJson(route('delivery-order.update', $id), $this->payload(4))->assertOk();
-        $this->assertSame(4, $order->items()->first()->qty);
+        // Material boleh dikirim sebagian (desimal) dari satu baris stok.
+        $this->actingAs($this->user)->putJson(route('delivery-order.update', $id), $this->payload(3.5))->assertOk();
+        $this->assertSame(3.5, $order->items()->first()->qty);
 
         foreach (['index', 'create'] as $page) {
             $this->actingAs($this->user)->get(route('delivery-order.'.$page))->assertOk();
@@ -132,8 +132,8 @@ class DeliveryOrderTest extends TestCase
         $order->refresh();
         $this->assertSame(DeliveryOrder::STATUS_POSTED, $order->status);
         $this->assertSame($this->user->id, $order->posted_by);
-        $this->assertSame(1, StockMovement::balance($this->transit->id, $this->product->id, $this->project->id));
-        $this->assertDatabaseHas('stock_movements', ['type' => StockMovement::TYPE_DELIVERY, 'source_type' => StockMovement::SOURCE_DELIVERY_ORDER, 'source_id' => $id, 'qty' => 4]);
+        $this->assertEquals(1.5, $this->stockBalance($this->transit->id, $this->product->id, $this->project->id));
+        $this->assertDatabaseHas('stock_logs', ['type' => StockLog::TYPE_OUT, 'ref_type' => StockLog::REF_DELIVERY_ORDER_ITEM, 'ref_id' => $order->items()->value('id'), 'qty' => -3.5]);
 
         $this->actingAs($this->user)->postJson(route('delivery-order.post', $id))->assertStatus(422);
         $this->actingAs($this->user)->putJson(route('delivery-order.update', $id), $this->payload(1))->assertStatus(422);
@@ -153,7 +153,7 @@ class DeliveryOrderTest extends TestCase
         $this->actingAs($this->user)->postJson(route('delivery-order.post', $second))
             ->assertStatus(422)->assertJsonPath('success', false);
         $this->assertSame(DeliveryOrder::STATUS_DRAFT, DeliveryOrder::find($second)->status);
-        $this->assertSame(1, StockMovement::balance($this->transit->id, $this->product->id, $this->project->id));
+        $this->assertEquals(1, $this->stockBalance($this->transit->id, $this->product->id, $this->project->id));
 
         $this->actingAs($this->user)->deleteJson(route('delivery-order.destroy', $second))->assertOk();
         $this->assertDatabaseMissing('delivery_orders', ['id' => $second]);
@@ -161,17 +161,31 @@ class DeliveryOrderTest extends TestCase
 
     public function test_free_stock_cannot_be_delivered_directly(): void
     {
-        StockMovement::record([
-            'warehouse_id' => $this->transit->id,
-            'master_product_id' => MasterProduct::create(['code' => 'PN-2', 'name' => 'Logger', 'division_id' => $this->division->id, 'status' => 'Active'])->id,
-            'type' => StockMovement::TYPE_MISC_IN,
-            'qty' => 10,
-            'created_by' => $this->admin->id,
-        ]);
+        $logger = MasterProduct::create(['code' => 'PN-2', 'name' => 'Logger', 'division_id' => $this->division->id, 'status' => 'Active', 'is_material' => true]);
+        $free = $this->seedStock($this->transit->id, $logger, 10)->first();
 
-        $payload = $this->payload(1);
-        $payload['items'] = [['master_product_id' => MasterProduct::where('code', 'PN-2')->value('id'), 'qty' => 1]];
+        $this->actingAs($this->user)->postJson(route('delivery-order.store'), $this->payload(1, $free->id))->assertStatus(422);
+    }
 
-        $this->actingAs($this->user)->postJson(route('delivery-order.store'), $payload)->assertStatus(422);
+    public function test_serialized_unit_without_serial_is_blocked_until_completed(): void
+    {
+        $inverter = MasterProduct::create(['code' => 'INV-5', 'name' => 'Inverter', 'division_id' => $this->division->id, 'status' => 'Active']);
+        [$withSn, $withoutSn] = $this->seedStock($this->transit->id, $inverter, 2, ['project_id' => $this->project->id], ['SN-001'])->all();
+
+        $this->assertSame('SN-001', $withSn->serial_number);
+        $this->assertNull($withoutSn->serial_number);
+
+        // Unit tanpa SN tidak bisa dikirim; barang ber-SN selalu utuh.
+        $this->actingAs($this->user)->postJson(route('delivery-order.store'), $this->payload(1, $withoutSn->id))
+            ->assertStatus(422)->assertJsonPath('success', false);
+        $this->actingAs($this->user)->postJson(route('delivery-order.store'), $this->payload(0.5, $withSn->id))->assertStatus(422);
+
+        $id = $this->actingAs($this->user)->postJson(route('delivery-order.store'), $this->payload(1, $withSn->id))->assertOk()->json('id');
+        $this->actingAs($this->user)->postJson(route('delivery-order.post', $id))->assertOk();
+        $this->assertFalse($withSn->fresh()->is_open);
+
+        // Surat jalan mencantumkan SN.
+        $this->actingAs($this->user)->get(route('delivery-order.pdf', $id))->assertOk();
+        $this->assertStringContainsString('SN-001', view('delivery-order.pdf', ['order' => DeliveryOrder::with(['items.stock.masterProduct', 'project.company', 'warehouse', 'creator'])->find($id)])->render());
     }
 }

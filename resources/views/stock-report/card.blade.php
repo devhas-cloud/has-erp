@@ -19,7 +19,15 @@
 <div class="card-custom fade-in mb-3">
     <div class="card-body-custom">
         <form method="GET" action="{{ route('stock-report.card', $product->id) }}" class="row g-3 align-items-end">
-            <div class="col-lg-4">
+            <div class="col-lg-2">
+                <label class="form-label">Dari</label>
+                <input type="date" name="from" class="form-control" value="{{ $filters['from'] }}">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">Sampai</label>
+                <input type="date" name="to" class="form-control" value="{{ $filters['to'] }}">
+            </div>
+            <div class="col-lg-3">
                 <label class="form-label">Gudang</label>
                 <select name="warehouse_id" class="form-select">
                     <option value="">Semua gudang</option>
@@ -28,7 +36,7 @@
                     @endforeach
                 </select>
             </div>
-            <div class="col-lg-5">
+            <div class="col-lg-3">
                 <label class="form-label">Kepemilikan</label>
                 <select name="ownership" class="form-select">
                     <option value="">Semua</option>
@@ -38,7 +46,7 @@
                     @endforeach
                 </select>
             </div>
-            <div class="col-lg-3">
+            <div class="col-lg-2">
                 <button type="submit" class="btn btn-primary btn-sm"><i class="fa fa-filter me-1"></i> Terapkan</button>
             </div>
         </form>
@@ -48,7 +56,8 @@
 <div class="card-custom fade-in">
     <div class="card-header-custom d-flex justify-content-between align-items-center">
         <span><i class="fa-solid fa-clock-rotate-left me-2" style="color:var(--accent)"></i>Riwayat Pergerakan</span>
-        <span class="fw-semibold">Saldo akhir: {{ $rows->last()['balance'] ?? 0 }} &middot; Harga rata-rata saat ini: {{ \App\Models\Currency::baseName() }} {{ \App\Support\StockValuation::format($averageCost) }}</span>
+        @php $closing = $rows->last()['balance'] ?? $openingQty; $closingValue = $rows->last()['value'] ?? $openingValue; @endphp
+        <span class="fw-semibold">Saldo akhir: {{ \App\Support\StockCost::qty($closing) }} &middot; Nilai: {{ \App\Models\Currency::baseName() }} {{ \App\Support\StockCost::format($closingValue) }}</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -58,6 +67,7 @@
                         <th style="width:95px">Tanggal</th>
                         <th>Jenis</th>
                         <th>Dokumen</th>
+                        <th>SN / Batch</th>
                         <th>Gudang</th>
                         <th>Kepemilikan</th>
                         <th class="text-end" style="width:80px">Masuk</th>
@@ -69,30 +79,41 @@
                     </tr>
                 </thead>
                 <tbody>
+                    <tr style="background:var(--bg-soft, #f8fafc)">
+                        <td>{{ \Carbon\Carbon::parse($filters['from'])->format('d/m/Y') }}</td>
+                        <td colspan="7" class="fw-semibold">Saldo awal</td>
+                        <td class="text-end fw-semibold">{{ \App\Support\StockCost::qty($openingQty) }}</td>
+                        <td></td>
+                        <td class="text-end">{{ \App\Support\StockCost::format($openingValue) }}</td>
+                        <td></td>
+                    </tr>
                     @forelse($rows as $row)
-                        @php $m = $row['movement']; @endphp
+                        @php $log = $row['log']; [$docLabel, $docUrl] = $log->ref_document; @endphp
                         <tr>
-                            <td>{{ $m->moved_at?->format('d/m/Y') }}</td>
-                            <td><span class="badge" style="background:{{ $row['in'] ? 'var(--accent-soft);color:var(--accent)' : 'var(--danger-soft);color:#7f1d1d' }};font-size:10px">{{ $m->type_label }}</span></td>
+                            <td>{{ $log->log_date?->format('d/m/Y') }}</td>
+                            <td><span class="badge" style="background:{{ $row['in'] ? 'var(--accent-soft);color:var(--accent)' : 'var(--danger-soft);color:#7f1d1d' }};font-size:10px">{{ $log->type_label }}</span></td>
                             <td>
-                                @if($row['source_url'])
-                                    <a href="{{ $row['source_url'] }}">{{ $m->note ?: $row['source_label'] }}</a>
+                                @if($docUrl)
+                                    <a href="{{ $docUrl }}">{{ $docLabel }}</a>
                                 @else
-                                    {{ $m->note ?: $row['source_label'] }}
+                                    {{ $docLabel }}
                                 @endif
                             </td>
-                            <td>{{ $m->warehouse?->code ?? '—' }}</td>
-                            <td>{{ $m->project ? $m->project->project_number : 'Stok bebas' }}</td>
-                            <td class="text-end">{{ $row['in'] ?? '' }}</td>
-                            <td class="text-end">{{ $row['out'] ?? '' }}</td>
-                            <td class="text-end fw-semibold">{{ $row['balance'] }}</td>
-                            <td class="text-end">{{ \App\Support\StockValuation::format($m->unit_cost) }}</td>
-                            <td class="text-end">{{ \App\Support\StockValuation::format($row['value']) }}</td>
-                            <td style="font-size:12px">{{ $m->creator?->display_name ?? '—' }}</td>
+                            <td style="font-size:12px">
+                                <a href="{{ route('stock-detail.show', $log->stock_id) }}">{{ $log->stock?->serial_number ? 'SN '.$log->stock->serial_number : ($log->stock?->batch_number ? 'Batch '.$log->stock->batch_number : '#'.$log->stock_id) }}</a>
+                            </td>
+                            <td>{{ $log->warehouse?->code ?? '—' }}</td>
+                            <td>{{ $log->project ? $log->project->project_number : 'Stok bebas' }}</td>
+                            <td class="text-end">{{ $row['in'] !== null ? \App\Support\StockCost::qty($row['in']) : '' }}</td>
+                            <td class="text-end">{{ $row['out'] !== null ? \App\Support\StockCost::qty($row['out']) : '' }}</td>
+                            <td class="text-end fw-semibold">{{ \App\Support\StockCost::qty($row['balance']) }}</td>
+                            <td class="text-end">{{ \App\Support\StockCost::format($log->unit_cost) }}</td>
+                            <td class="text-end">{{ \App\Support\StockCost::format($row['value']) }}</td>
+                            <td style="font-size:12px">{{ $log->creator?->display_name ?? '—' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Belum ada pergerakan stok.</td>
+                            <td colspan="12" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Tidak ada pergerakan stok pada periode ini.</td>
                         </tr>
                     @endforelse
                 </tbody>

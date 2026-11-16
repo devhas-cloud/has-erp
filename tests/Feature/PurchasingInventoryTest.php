@@ -13,11 +13,13 @@ use App\Models\MasterProduct;
 use App\Models\Module;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
 /**
@@ -27,6 +29,7 @@ use Tests\TestCase;
  */
 class PurchasingInventoryTest extends TestCase
 {
+    use InteractsWithStock;
     use RefreshDatabase;
 
     private Division $division;
@@ -72,13 +75,14 @@ class PurchasingInventoryTest extends TestCase
             ]);
         }
 
-        $this->stockWarehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang 12', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
-        $this->transitWarehouse = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'type' => Warehouse::TYPE_TRANSIT, 'status' => 'Active']);
+        $this->stockWarehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang 12', 'status' => 'Active']);
+        $this->transitWarehouse = Warehouse::create(['code' => 'T1', 'name' => 'Transit', 'status' => 'Active']);
     }
 
     private function product(string $code): MasterProduct
     {
-        return MasterProduct::firstOrCreate(['code' => $code], ['name' => 'Produk '.$code, 'division_id' => $this->division->id, 'status' => 'Active']);
+        // Default material (dihitung per jumlah); test barang ber-SN membuat produknya sendiri.
+        return MasterProduct::firstOrCreate(['code' => $code], ['name' => 'Produk '.$code, 'division_id' => $this->division->id, 'status' => 'Active', 'is_material' => true]);
     }
 
     private function project(): Project
@@ -169,8 +173,8 @@ class PurchasingInventoryTest extends TestCase
         $this->assertSame(GoodsReceipt::STATUS_POSTED, $receipt->status);
         $this->assertSame(PurchaseOrder::STATUS_PARTIALLY_RECEIVED, $po->fresh()->status);
         // Stok project di gudang transit, bukan stok bebas.
-        $this->assertSame(2, StockMovement::balance($this->transitWarehouse->id, $requestItem->master_product_id, $project->id));
-        $this->assertSame(0, StockMovement::balance($this->transitWarehouse->id, $requestItem->master_product_id));
+        $this->assertEquals(2, $this->stockBalance($this->transitWarehouse->id, $requestItem->master_product_id, $project->id));
+        $this->assertEquals(0, $this->stockBalance($this->transitWarehouse->id, $requestItem->master_product_id));
 
         $this->receive('po', $po->id, [['source_line_id' => $line->id, 'qty' => 3, 'destination' => 'warehouse']], $this->transitWarehouse->id)->assertOk();
         $this->assertSame(PurchaseOrder::STATUS_RECEIVED, $po->fresh()->status);
@@ -190,7 +194,8 @@ class PurchasingInventoryTest extends TestCase
 
         $this->receive('po', $po->id, [['source_line_id' => $po->items->first()->id, 'qty' => 2, 'destination' => 'warehouse']], $this->stockWarehouse->id)->assertOk();
 
-        $this->assertEquals(1350000, StockMovement::where('type', StockMovement::TYPE_RECEIPT)->value('unit_cost'));
+        $this->assertEquals(1350000, Stock::value('unit_cost'));
+        $this->assertEquals(1350000, StockLog::where('type', StockLog::TYPE_IN)->value('unit_cost'));
     }
 
     public function test_receipt_rejects_over_receipt_and_requires_warehouse_for_stock_lines(): void
@@ -219,7 +224,8 @@ class PurchasingInventoryTest extends TestCase
         $this->receive('po', $po->id, [['source_line_id' => $po->items->first()->id, 'qty' => 2, 'destination' => 'direct']])->assertOk();
 
         $this->assertSame(PurchaseOrder::STATUS_RECEIVED, $po->fresh()->status);
-        $this->assertSame(0, StockMovement::count());
+        $this->assertSame(0, Stock::count());
+        $this->assertSame(0, StockLog::count());
     }
 
     public function test_direct_purchase_flow_with_purpose_and_receipt(): void
@@ -259,46 +265,72 @@ class PurchasingInventoryTest extends TestCase
         $this->receive('dp', $dp->id, [['source_line_id' => $line->id, 'qty' => 11, 'destination' => 'warehouse']], $this->stockWarehouse->id)->assertStatus(422);
         $this->receive('dp', $dp->id, [['source_line_id' => $line->id, 'qty' => 10, 'destination' => 'warehouse']], $this->stockWarehouse->id)->assertOk();
 
-        $this->assertSame(10, StockMovement::balance($this->stockWarehouse->id, $product->id));
+        $this->assertEquals(10, $this->stockBalance($this->stockWarehouse->id, $product->id));
         $this->assertFalse($dp->fresh('items.goodsReceiptItems.goodsReceipt')->isReceivable());
     }
 
     public function test_internal_request_is_issued_from_free_stock(): void
     {
         $product = $this->product('PN-1');
-        StockMovement::record(['warehouse_id' => $this->stockWarehouse->id, 'master_product_id' => $product->id, 'type' => StockMovement::TYPE_MISC_IN, 'qty' => 3, 'created_by' => $this->admin->id]);
+        $row = $this->seedStock($this->stockWarehouse->id, $product, 3)->first();
         $requestItem = $this->approvedRequest(5, null, $product);
 
         $this->actingAs($this->warehouseUser)->get(route('stock-out.index'))->assertOk()->assertSee('Keluarkan');
+        $this->actingAs($this->warehouseUser)
+            ->getJson(route('stock-out.stock-options', ['goods_request_item_id' => $requestItem->id, 'warehouse_id' => $this->stockWarehouse->id]))
+            ->assertOk()->assertJsonPath('data.0.id', $row->id);
 
-        $store = fn (int $qty) => $this->actingAs($this->warehouseUser)->postJson(route('stock-out.store'), [
+        $store = fn (float $qty) => $this->actingAs($this->warehouseUser)->postJson(route('stock-out.store'), [
             'goods_request_item_id' => $requestItem->id,
             'warehouse_id' => $this->stockWarehouse->id,
-            'qty' => $qty,
+            'picks' => [['stock_id' => $row->id, 'qty' => $qty]],
         ]);
 
         $store(4)->assertStatus(422); // stok hanya 3
+        $store(2.5)->assertStatus(422); // total harus bulat sesuai satuan permintaan
         $store(3)->assertOk();
 
-        $this->assertSame(0, StockMovement::balance($this->stockWarehouse->id, $product->id));
+        $this->assertEquals(0, $this->stockBalance($this->stockWarehouse->id, $product->id));
+        $this->assertSame(-3.0, StockLog::where('type', StockLog::TYPE_OUT)->value('qty'));
         $fresh = GoodsRequestItem::findOrFail($requestItem->id);
         $this->assertSame(3, $fresh->stockQty());
         $this->assertSame(2, $fresh->remainingQty());
+    }
+
+    public function test_project_request_can_be_allocated_in_the_same_warehouse(): void
+    {
+        $project = $this->project();
+        $product = $this->product('PN-2');
+        $row = $this->seedStock($this->stockWarehouse->id, $product, 4)->first();
+        $requestItem = $this->approvedRequest(4, $project, $product);
+
+        // Tanpa gudang tujuan = tetap di gudang asal, hanya pindah kepemilikan (baris utuh, tidak dipecah).
+        $this->actingAs($this->warehouseUser)->postJson(route('stock-out.store'), [
+            'goods_request_item_id' => $requestItem->id,
+            'warehouse_id' => $this->stockWarehouse->id,
+            'picks' => [['stock_id' => $row->id, 'qty' => 4]],
+        ])->assertOk();
+
+        $this->assertEquals(4, $this->stockBalance($this->stockWarehouse->id, $product->id, $project->id));
+        $this->assertSame(1, Stock::count());
+        $this->assertSame([-4.0, 4.0], StockLog::where('type', StockLog::TYPE_ALLOCATE)->orderBy('id')->pluck('qty')->all());
+        $this->assertSame(4, GoodsRequestItem::findOrFail($requestItem->id)->stockQty());
     }
 
     public function test_project_request_is_allocated_to_transit_warehouse(): void
     {
         $project = $this->project();
         $product = $this->product('PN-1');
-        StockMovement::record(['warehouse_id' => $this->stockWarehouse->id, 'master_product_id' => $product->id, 'type' => StockMovement::TYPE_MISC_IN, 'qty' => 5, 'created_by' => $this->admin->id]);
+        $row = $this->seedStock($this->stockWarehouse->id, $product, 5)->first();
         $requestItem = $this->approvedRequest(2, $project, $product);
 
-        $payload = ['goods_request_item_id' => $requestItem->id, 'warehouse_id' => $this->stockWarehouse->id, 'qty' => 2];
-        $this->actingAs($this->warehouseUser)->postJson(route('stock-out.store'), $payload)->assertStatus(422);
+        $payload = ['goods_request_item_id' => $requestItem->id, 'warehouse_id' => $this->stockWarehouse->id, 'picks' => [['stock_id' => $row->id, 'qty' => 2]]];
         $this->actingAs($this->warehouseUser)->postJson(route('stock-out.store'), $payload + ['destination_warehouse_id' => $this->transitWarehouse->id])->assertOk();
 
-        $this->assertSame(3, StockMovement::balance($this->stockWarehouse->id, $product->id));
-        $this->assertSame(2, StockMovement::balance($this->transitWarehouse->id, $product->id, $project->id));
+        $this->assertEquals(3, $this->stockBalance($this->stockWarehouse->id, $product->id));
+        $this->assertEquals(2, $this->stockBalance($this->transitWarehouse->id, $product->id, $project->id));
+        // Baris asal dipecah: pecahan milik project menyimpan asal (parent_id).
+        $this->assertSame($row->id, Stock::where('project_id', $project->id)->value('parent_id'));
         $this->assertSame(0, GoodsRequestItem::findOrFail($requestItem->id)->remainingQty());
     }
 

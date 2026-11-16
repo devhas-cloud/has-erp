@@ -77,9 +77,9 @@
                     @endforeach
                 </select>
                 <select id="filter-stock-kind" onchange="productTable.ajax.reload()">
-                    <option value="">Material &amp; SN</option>
-                    <option value="material">Material</option>
-                    <option value="serial">Non-material</option>
+                    <option value="">All stock types</option>
+                    <option value="material">Material (by quantity)</option>
+                    <option value="serial">Serialized item (SN)</option>
                 </select>
                 <select id="filter-division" onchange="productTable.ajax.reload()">
                     <option value="">All Divisions</option>
@@ -238,8 +238,9 @@
                             <div class="mb-3">
                                 <div class="form-check mt-4">
                                     <input class="form-check-input" type="checkbox" id="product-is-material">
-                                    <label class="form-check-label" for="product-is-material">Material</label>
+                                    <label class="form-check-label" for="product-is-material">Material (counted by quantity)</label>
                                 </div>
+                                <div class="form-text" id="product-is-material-help">Unchecked = serialized item: stock is recorded per unit with a serial number. Cannot be changed while the product has stock.</div>
                             </div>
                         </div>
                         <div class="col-md-12">
@@ -344,7 +345,7 @@
                                 <td id="pd-type">—</td>
                             </tr>
                             <tr>
-                                <td>Material</td>
+                                <td>Stock type</td>
                                 <td id="pd-is-material">—</td>
                             </tr>
                             <tr>
@@ -608,7 +609,7 @@ function openDetailModal(id) {
         $('#pd-brand').text(p.brand || '—');
         $('#pd-category').text(p.category || '—');
         $('#pd-type').text(p.type || '—');
-        $('#pd-is-material').text(p.is_material === true || p.is_material === 1 ? 'Ya' : 'Tidak');
+        $('#pd-is-material').text(p.is_material === true || p.is_material === 1 ? 'Material (by quantity)' : 'Serialized item (SN)');
         $('#pd-parameter').text(p.parameter || '—');
         $('#pd-division').text(p.division_name || '—');
         // Harga jual = hasil formulasi dari harga beli (selalu IDR). Harga beli

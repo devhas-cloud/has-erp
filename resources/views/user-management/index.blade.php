@@ -97,6 +97,9 @@ function initUsersTable() {
                         html += ' <span class="status-badge" style="background:var(--success-soft);color:#065f46;font-size:10.5px" title="Dipantau di Dashboard Task Planner">'
                             + '<i class="fa-solid fa-briefcase" style="font-size:9px"></i> Salesperson</span>';
                     }
+                    if (row.branch_name) {
+                        html += '<div style="font-size:11.5px;color:var(--text-muted)"><i class="fa-solid fa-code-branch" style="font-size:10px"></i> ' + $('<div>').text(row.branch_name).html() + '</div>';
+                    }
                     return html;
                 }
             },

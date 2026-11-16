@@ -404,7 +404,7 @@ class Project extends Model
             'Permintaan Barang' => DB::table('goods_requests')->where('project_id', $this->id)->count(),
             'Direct Purchase' => DB::table('direct_purchases')->where('project_id', $this->id)->count(),
             'tagihan supplier' => DB::table('supplier_bill_items')->where('project_id', $this->id)->distinct()->count('supplier_bill_id'),
-            'pergerakan stok' => DB::table('stock_movements')->where('project_id', $this->id)->count(),
+            'riwayat stok' => DB::table('stock_logs')->where('project_id', $this->id)->count(),
             'Transfer Stok' => DB::table('stock_transfers')->where('from_project_id', $this->id)->orWhere('to_project_id', $this->id)->count(),
             'Masuk Stok Lain-lain' => DB::table('stock_entries')->where('project_id', $this->id)->count(),
             'Stock Opname' => DB::table('stock_opname_items')->where('project_id', $this->id)->distinct()->count('stock_opname_id'),

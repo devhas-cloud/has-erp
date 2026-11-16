@@ -41,7 +41,7 @@
             </tr>
             <tr>
                 <td>Gudang</td>
-                <td>{{ $receipt->warehouse ? $receipt->warehouse->code.' — '.$receipt->warehouse->name.' ('.$receipt->warehouse->type_label.')' : 'Tidak ada (semua langsung pakai)' }}</td>
+                <td>{{ $receipt->warehouse ? $receipt->warehouse->code.' — '.$receipt->warehouse->name.' ('.$receipt->warehouse->branch_label.')' : 'Tidak ada (semua langsung pakai)' }}</td>
             </tr>
             <tr>
                 <td>Tanggal Terima</td>
@@ -106,6 +106,30 @@
                                 @endif
                             </td>
                         </tr>
+                        @if($item->destination !== 'direct' && $item->stocks->isNotEmpty())
+                            @php
+                                $missing = $item->stocks->filter(fn ($st) => ! $st->canLeave())->count();
+                                $serials = $item->stocks->pluck('serial_number')->filter();
+                            @endphp
+                            <tr>
+                                <td></td>
+                                <td colspan="6" style="font-size:12px;padding-top:0;color:var(--text-muted)">
+                                    @if($item->batch_number)<span class="me-3">Batch / No. MFG: <strong>{{ $item->batch_number }}</strong></span>@endif
+                                    @if($item->expiry_date)<span class="me-3">Kedaluwarsa: <strong>{{ $item->expiry_date->format('d/m/Y') }}</strong></span>@endif
+                                    @if($item->warranty_until)<span class="me-3">Garansi s/d: <strong>{{ $item->warranty_until->format('d/m/Y') }}</strong></span>@endif
+                                    @if($item->note)<span class="me-3">Catatan: {{ $item->note }}</span>@endif
+                                    @if($serials->isNotEmpty())
+                                        <div class="mt-1">SN: {{ $serials->implode(', ') }}</div>
+                                    @endif
+                                    @if($missing > 0)
+                                        <div class="mt-1" style="color:#b45309">
+                                            <i class="fa fa-triangle-exclamation me-1"></i>{{ $missing }} unit SN belum diisi —
+                                            <a href="{{ route('stock-detail.index', ['goods_receipt_id' => $receipt->id]) }}">lengkapi sekarang</a>
+                                        </div>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endif
                     @empty
                         <tr>
                             <td colspan="7" class="text-center py-4" style="color:var(--text-muted)">Belum ada item.</td>

@@ -12,12 +12,14 @@ use App\Models\ProjectAchievement;
 use App\Models\ProjectBillingTerm;
 use App\Models\Quotation;
 use App\Models\SalesAchievement;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
 use App\Support\Number;
 use App\Support\PayableReport;
+use App\Support\StockCost;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -259,26 +261,33 @@ class ProjectController extends Controller
      */
     private function projectGoods(Project $project)
     {
-        $balances = StockMovement::balancesQuery()->where('project_id', $project->id)->get();
-        $delivered = StockMovement::where('project_id', $project->id)
-            ->where('type', StockMovement::TYPE_DELIVERY)
+        $balances = Stock::open()->where('project_id', $project->id)
+            ->groupBy('master_product_id', 'warehouse_id')
+            ->selectRaw('master_product_id, warehouse_id, SUM(qty) AS balance, MAX(unit) AS unit')
+            ->get();
+        $delivered = StockLog::where('project_id', $project->id)
+            ->where('type', StockLog::TYPE_OUT)
+            ->where('ref_type', StockLog::REF_DELIVERY_ORDER_ITEM)
             ->groupBy('master_product_id')
-            ->selectRaw('master_product_id, SUM(qty) AS qty')
+            ->selectRaw('master_product_id, -SUM(qty) AS qty')
             ->pluck('qty', 'master_product_id');
+        $productIds = $balances->pluck('master_product_id')->merge($delivered->keys())->unique();
 
-        $products = MasterProduct::whereIn('id', $balances->pluck('master_product_id'))->get(['id', 'code', 'name'])->keyBy('id');
+        $products = MasterProduct::whereIn('id', $productIds)->get(['id', 'code', 'name'])->keyBy('id');
         $warehouses = Warehouse::whereIn('id', $balances->pluck('warehouse_id'))->get(['id', 'code'])->keyBy('id');
 
-        return $balances->groupBy('master_product_id')
+        $byProduct = $balances->groupBy('master_product_id');
+
+        return $productIds->mapWithKeys(fn ($productId) => [$productId => $byProduct[$productId] ?? collect()])
             ->map(fn ($rows, $productId) => [
                 'master_product_id' => (int) $productId,
                 'code' => $products[$productId]->code ?? '—',
                 'name' => $products[$productId]->name ?? '—',
                 'unit' => $rows->pluck('unit')->filter()->first(),
-                'in_stock' => (int) $rows->sum('balance'),
+                'in_stock' => round((float) $rows->sum('balance'), 4),
                 'locations' => $rows->filter(fn ($row) => $row->balance > 0)
-                    ->map(fn ($row) => ($warehouses[$row->warehouse_id]->code ?? '?').': '.(int) $row->balance)->values()->all(),
-                'delivered' => (int) ($delivered[$productId] ?? 0),
+                    ->map(fn ($row) => ($warehouses[$row->warehouse_id]->code ?? '?').': '.StockCost::qty((float) $row->balance))->values()->all(),
+                'delivered' => round((float) ($delivered[$productId] ?? 0), 4),
             ])
             ->filter(fn ($row) => $row['in_stock'] > 0 || $row['delivered'] > 0)
             ->sortBy('code')

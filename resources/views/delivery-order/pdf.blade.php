@@ -98,14 +98,26 @@
             </tr>
         </thead>
         <tbody>
-            @foreach($order->items as $i => $item)
+            @php
+                // Satu baris per produk; SN / batch dicantumkan di bawah nama barang.
+                $lines = $order->items->groupBy(fn ($item) => $item->stock?->master_product_id ?? 'x'.$item->id)->values();
+            @endphp
+            @foreach($lines as $i => $group)
+            @php
+                $product = $group->first()->stock?->masterProduct;
+                $serials = $group->map(fn ($item) => $item->stock?->serial_number)->filter();
+                $batches = $group->map(fn ($item) => $item->stock?->batch_number)->filter()->unique();
+            @endphp
             <tr>
                 <td class="c">{{ $i + 1 }}</td>
-                <td>{{ $item->masterProduct?->code }}</td>
-                <td>{{ $item->masterProduct?->name }}</td>
-                <td class="c">{{ $item->qty }}</td>
-                <td class="c">{{ $item->unit }}</td>
-                <td>{{ $item->remark }}</td>
+                <td>{{ $product?->code }}</td>
+                <td>{{ $product?->name }}
+                    @if($serials->isNotEmpty())<div style="font-size:9px">SN: {{ $serials->implode(', ') }}</div>@endif
+                    @if($batches->isNotEmpty())<div style="font-size:9px">Batch / MFG: {{ $batches->implode(', ') }}</div>@endif
+                </td>
+                <td class="c">{{ \App\Support\StockCost::qty($group->sum('qty')) }}</td>
+                <td class="c">{{ $group->first()->unit }}</td>
+                <td>{{ $group->pluck('remark')->filter()->unique()->implode('; ') }}</td>
             </tr>
             @endforeach
         </tbody>

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Direct Purchase: pembelian langsung tanpa Permintaan Barang / PO formal.
  * `purpose` menentukan tujuan barang saat diterima (Penerimaan Barang):
  *   - stock   -> masuk gudang stok (stok bebas);
- *   - project -> masuk gudang transit, dialokasikan ke project_id;
+ *   - project -> masuk gudang sebagai stok milik project_id;
  *   - direct  -> langsung pakai (konfirmasi terima, tidak masuk stok).
  * Approval satu approver (can_approve). Satu dokumen satu mata uang, tanpa
  * kurs; total = Subtotal -> PPN -> Total (tanpa diskon/terms/delivery/ref).

@@ -50,7 +50,7 @@
                         <select id="gr-warehouse" class="form-select" style="width:100%">
                             <option value="">— Pilih Gudang —</option>
                             @foreach($warehouses as $w)
-                                <option value="{{ $w->id }}" data-type="{{ $w->type }}">{{ $w->code }} — {{ $w->name }} ({{ $w->type_label }})</option>
+                                <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->branch_label }})</option>
                             @endforeach
                         </select>
                         <small style="color:var(--text-muted)" id="gr-warehouse-hint">Wajib bila ada baris Masuk Gudang.</small>
@@ -99,7 +99,8 @@
                 </div>
                 <div class="px-2 pt-2" style="font-size:12px;color:var(--text-muted)">
                     <i class="fa fa-circle-info me-1"></i>
-                    Barang project tercatat sebagai stok milik project (umumnya di gudang transit) sampai dikirim. <strong>Langsung Pakai</strong> hanya konfirmasi terima, tidak menambah stok. Qty tidak boleh melebihi sisa.
+                    Barang project tercatat sebagai stok milik project sampai dikirim. <strong>Langsung Pakai</strong> hanya konfirmasi terima, tidak menambah stok. Qty tidak boleh melebihi sisa.
+                    <strong>Barang ber-SN</strong> dicatat per unit; SN, batch / No. MFG, kedaluwarsa, dan garansi boleh dikosongkan dan dilengkapi nanti di <a href="{{ route('stock-detail.index') }}">Lengkapi Data Stok</a>. Unit tanpa SN belum bisa dikirim, diretur, atau dipakai.
                 </div>
             </div>
         </div>
@@ -133,6 +134,9 @@ const grFetchItemsUrl = '{{ route("goods-receipt.fetch-source-items") }}';
 const grStoreUrl = '{{ route("goods-receipt.store") }}';
 const grShowUrl = '{{ route("goods-receipt.show", "__ID__") }}';
 const grSaveLabel = '<i class="fa fa-check me-1"></i> Terima &amp; Posting';
+const grProductUrl = '{{ route("product-management.index") }}';
+// Satuan yang wajar untuk barang ber-SN (dicatat per unit).
+const grUnitUnits = ['unit', 'units', 'pcs', 'pc', 'ea', 'set', 'buah', 'bh', 'nos', 'no', 'lot'];
 
 function grEsc(s) {
     return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -156,6 +160,31 @@ function grDestinationSelect(value) {
         + '</select>';
 }
 
+// Rincian stok per baris: batch / No. MFG, kedaluwarsa, garansi, catatan, dan SN (barang ber-SN).
+function grDetailRow(it) {
+    var unit = String(it.unit || '').trim().toLowerCase();
+    var warn = it.serialized && ((unit && grUnitUnits.indexOf(unit) === -1) || it.remaining > 50)
+        ? '<div class="mt-1" style="font-size:12px;color:#b45309"><i class="fa fa-triangle-exclamation me-1"></i>'
+          + grEsc(it.product_code || 'Produk ini') + ' tercatat <strong>Barang ber-SN</strong> (1 baris stok per unit). Kalau barang ini dihitung per jumlah (' + grEsc(it.unit || 'satuan') + '), ubah ke Material di <a href="' + grProductUrl + '" target="_blank">master produk</a> sebelum diterima.</div>'
+        : '';
+    var html = '<tr class="gr-detail" data-for="' + it.source_line_id + '"><td></td><td colspan="5" style="padding-top:0">';
+    html += '<div class="row g-2 align-items-start" style="font-size:12px">';
+    html += '<div class="col-md-3"><label class="form-label mb-0" style="font-size:11.5px">Batch / No. MFG</label><input type="text" class="form-control form-control-sm gr-batch" maxlength="100" placeholder="Opsional"></div>';
+    html += '<div class="col-md-2"><label class="form-label mb-0" style="font-size:11.5px">Kedaluwarsa</label><input type="date" class="form-control form-control-sm gr-expiry"></div>';
+    html += '<div class="col-md-2"><label class="form-label mb-0" style="font-size:11.5px">Garansi supplier s/d</label><input type="date" class="form-control form-control-sm gr-warranty"></div>';
+    html += '<div class="col-md-5"><label class="form-label mb-0" style="font-size:11.5px">Catatan barang</label><input type="text" class="form-control form-control-sm gr-item-note" maxlength="255" placeholder="Opsional, tampil di pemilih stok"></div>';
+    if (it.serialized) {
+        html += '<div class="col-12"><label class="form-label mb-0" style="font-size:11.5px">SN — satu per baris, boleh dikosongkan (<span class="gr-sn-count">0</span> / <span class="gr-sn-need">' + it.remaining + '</span>)</label>'
+            + '<textarea class="form-control form-control-sm gr-serials" rows="2" placeholder="Tempel atau scan SN di sini"></textarea></div>';
+    }
+    html += '</div>' + warn + '</td></tr>';
+    return html;
+}
+
+function grSerialList(text) {
+    return String(text || '').split(/[\r\n,;]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+}
+
 function grLoadItems() {
     var source = grSource();
     if (!source) {
@@ -175,9 +204,7 @@ function grLoadItems() {
                 return;
             }
             var html = '';
-            var hasProject = false;
             items.forEach(function(it) {
-                if (it.project_id) hasProject = true;
                 html += '<tr data-line-id="' + it.source_line_id + '" data-remaining="' + it.remaining + '">';
                 html += '<td><input type="checkbox" class="gr-check" checked></td>';
                 html += '<td style="font-size:12.5px"><div class="fw-semibold">' + grEsc(it.part_number || '—') + '</div><div style="color:var(--text-muted)">' + grEsc(it.product_name || $('<div>').html(it.description || '').text()) + '</div></td>';
@@ -188,11 +215,13 @@ function grLoadItems() {
                 html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm text-center gr-qty" value="' + it.remaining + '"></td>';
                 html += '<td>' + grDestinationSelect(it.destination) + '</td>';
                 html += '</tr>';
+                html += grDetailRow(it);
             });
             $('#gr-items-body').html(html);
+            $('#gr-items-body .gr-dest').trigger('change');
             $('#gr-bulk').attr('style', '');
             $('#gr-check-all').prop('checked', true);
-            grSuggestWarehouse(hasProject);
+            grSuggestWarehouse();
             grUpdateSummary();
         })
         .fail(function(xhr) {
@@ -200,19 +229,15 @@ function grLoadItems() {
         });
 }
 
-// Barang project disarankan masuk gudang transit (bila ada); hanya jika gudang belum dipilih.
-function grSuggestWarehouse(hasProject) {
+// Hanya satu gudang yang bisa dipilih: isi otomatis bila belum dipilih.
+function grSuggestWarehouse() {
     if ($('#gr-warehouse').val()) return;
-    var type = hasProject ? 'transit' : 'stock';
-    var $opt = $('#gr-warehouse option[data-type="' + type + '"]').first();
-    if ($opt.length) {
-        $('#gr-warehouse').val($opt.val()).trigger('change');
-        $('#gr-warehouse-hint').text(hasProject ? 'Disarankan gudang transit untuk barang project — bisa diganti.' : 'Wajib bila ada baris Masuk Gudang.');
-    }
+    var $opts = $('#gr-warehouse option').filter(function() { return this.value !== ''; });
+    if ($opts.length === 1) $('#gr-warehouse').val($opts.val()).trigger('change');
 }
 
 function grSetAllDestination(value) {
-    $('#gr-items-body .gr-dest').val(value);
+    $('#gr-items-body .gr-dest').val(value).trigger('change');
     grUpdateSummary();
 }
 
@@ -241,7 +266,19 @@ function grSave() {
         var remaining = parseInt($row.attr('data-remaining'), 10) || 0;
         if (qty < 1) { ok = false; toastr.error('Qty baris ' + (i + 1) + ' minimal 1 (hapus centang bila belum datang).'); return false; }
         if (qty > remaining) { ok = false; toastr.error('Qty baris ' + (i + 1) + ' melebihi sisa (' + remaining + ').'); return false; }
-        items.push({ source_line_id: $row.attr('data-line-id'), qty: qty, destination: $row.find('.gr-dest').val() });
+        var $detail = $('#gr-items-body tr.gr-detail[data-for="' + $row.attr('data-line-id') + '"]');
+        var serials = grSerialList($detail.find('.gr-serials').val());
+        if (serials.length > qty) { ok = false; toastr.error('Jumlah SN baris ' + (i + 1) + ' (' + serials.length + ') melebihi qty diterima (' + qty + ').'); return false; }
+        items.push({
+            source_line_id: $row.attr('data-line-id'),
+            qty: qty,
+            destination: $row.find('.gr-dest').val(),
+            serial_numbers: serials,
+            batch_number: $detail.find('.gr-batch').val() || '',
+            expiry_date: $detail.find('.gr-expiry').val() || '',
+            warranty_until: $detail.find('.gr-warranty').val() || '',
+            note: $detail.find('.gr-item-note').val() || ''
+        });
     });
     if (!ok) return;
     if (!items.length) { toastr.error('Centang minimal satu baris yang diterima.'); return; }
@@ -295,13 +332,22 @@ $(document).ready(function() {
     });
 
     $('#gr-check-all').on('change', function() {
-        $('#gr-items-body .gr-check').prop('checked', $(this).is(':checked'));
+        $('#gr-items-body .gr-check').prop('checked', $(this).is(':checked')).trigger('change');
         grUpdateSummary();
     });
-    $(document).on('change', '.gr-check, .gr-dest', grUpdateSummary);
+    $(document).on('change', '.gr-check, .gr-dest', function() {
+        var $row = $(this).closest('tr');
+        var show = $row.find('.gr-check').is(':checked') && $row.find('.gr-dest').val() === 'warehouse';
+        $('#gr-items-body tr.gr-detail[data-for="' + $row.attr('data-line-id') + '"]').toggle(show);
+        grUpdateSummary();
+    });
+    $(document).on('input', '.gr-serials', function() {
+        $(this).closest('tr').find('.gr-sn-count').text(grSerialList($(this).val()).length);
+    });
     $(document).on('input', '.gr-qty', function() {
         var clean = $(this).val().replace(/\D/g, '');
         if (clean !== $(this).val()) $(this).val(clean);
+        $('#gr-items-body tr.gr-detail[data-for="' + $(this).closest('tr').attr('data-line-id') + '"] .gr-sn-need').text(clean || 0);
         grUpdateSummary();
     });
 

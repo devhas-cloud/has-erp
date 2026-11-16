@@ -30,7 +30,7 @@
                         <select id="st-from-warehouse" class="form-select mb-2">
                             <option value="">— Pilih Gudang —</option>
                             @foreach($warehouses as $w)
-                                <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->type_label }})</option>
+                                <option value="{{ $w->id }}" data-branch="{{ $w->branch_id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->branch_label }})</option>
                             @endforeach
                         </select>
                         <label class="form-label">Kepemilikan Asal</label>
@@ -47,7 +47,7 @@
                         <select id="st-to-warehouse" class="form-select mb-2">
                             <option value="">— Pilih Gudang —</option>
                             @foreach($warehouses as $w)
-                                <option value="{{ $w->id }}" data-type="{{ $w->type }}">{{ $w->code }} — {{ $w->name }} ({{ $w->type_label }})</option>
+                                <option value="{{ $w->id }}" data-branch="{{ $w->branch_id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->branch_label }})</option>
                             @endforeach
                         </select>
                         <label class="form-label">Kepemilikan Tujuan</label>
@@ -72,25 +72,12 @@
 
         <div class="card-custom fade-in">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Stok Tersedia di Asal</span>
-                <button type="button" class="btn btn-secondary btn-sm" id="st-fill-all" style="display:none" onclick="stFillAll()"><i class="fa fa-angles-right me-1"></i> Pindahkan Semua</button>
+                <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Pilih Baris Stok di Asal</span>
+                <input type="search" id="st-q" class="form-control form-control-sm" style="max-width:260px" placeholder="Cari kode, nama, SN, batch">
             </div>
             <div class="card-body-custom p-2">
-                <div class="table-responsive">
-                    <table class="table table-custom align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width:45px" class="text-center">#</th>
-                                <th>Produk</th>
-                                <th class="text-center" style="width:110px">Tersedia</th>
-                                <th class="text-center" style="width:140px">Qty Transfer</th>
-                            </tr>
-                        </thead>
-                        <tbody id="st-items">
-                            <tr><td colspan="4" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Pilih gudang asal terlebih dahulu.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <div id="st-picker"><div class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Pilih gudang asal terlebih dahulu.</div></div>
+                <div class="px-2 pt-2" style="font-size:12px;color:var(--text-muted)"><i class="fa fa-circle-info me-1"></i>Material boleh dipindah sebagian (baris dipecah). Barang ber-SN pindah per unit dan boleh belum ber-SN.</div>
             </div>
         </div>
     </div>
@@ -103,7 +90,7 @@
             <div class="card-body-custom">
                 <table class="info-table" style="width:100%">
                     <tr><td>Jenis</td><td class="text-end"><span id="st-kind" class="status-badge" style="background:var(--accent-soft);color:var(--accent);">—</span></td></tr>
-                    <tr><td>Produk</td><td class="text-end fw-semibold" id="st-sum-lines">0</td></tr>
+                    <tr><td>Baris stok</td><td class="text-end fw-semibold" id="st-sum-lines">0</td></tr>
                     <tr><td>Total Qty</td><td class="text-end fw-semibold" id="st-sum-qty">0</td></tr>
                 </table>
                 <div id="st-kind-hint" style="font-size:12px;color:var(--text-muted);margin-top:8px"></div>
@@ -112,7 +99,7 @@
                     <i class="fa fa-check me-1"></i> Posting Transfer
                 </button>
                 @endif
-                <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Transfer langsung terposting dan tidak bisa diubah. Koreksi dengan transfer balik.</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Transfer langsung terposting dan tidak bisa diubah. Koreksi dengan transfer balik. Hanya antar gudang dalam satu branch; pengiriman ke branch lain lewat <a href="{{ route('branch-transfer.index') }}">Branch Transfer</a>.</div>
             </div>
         </div>
     </div>
@@ -120,72 +107,37 @@
 @endsection
 
 @section('scripts')
+@include('partials.stock-pick')
 <script>
 const stAvailableUrl = '{{ route("stock-transfer.available-stock") }}';
 const stStoreUrl = '{{ route("stock-transfer.store") }}';
 const stShowUrl = '{{ route("stock-transfer.show", "__ID__") }}';
-let stItems = [];
 
 function stEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
 
 function stLoadAvailable() {
     var warehouseId = $('#st-from-warehouse').val();
-    stItems = [];
-    $('#st-fill-all').hide();
     if (!warehouseId) {
-        $('#st-items').html('<tr><td colspan="4" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Pilih gudang asal terlebih dahulu.</td></tr>');
+        $('#st-picker').html('<div class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Pilih gudang asal terlebih dahulu.</div>');
         stSummary();
         return;
     }
-    $('#st-items').html('<tr><td colspan="4" class="text-center py-4"><span class="spinner-border spinner-border-sm me-1"></span> Memuat stok...</td></tr>');
-    $.get(stAvailableUrl, { warehouse_id: warehouseId, project_id: $('#st-from-project').val() })
-        .done(function(res) {
-            stItems = res.items || [];
-            if (stItems.length === 0) {
-                $('#st-items').html('<tr><td colspan="4" class="text-center py-4" style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i> Tidak ada stok di asal ini.</td></tr>');
-                stSummary();
-                return;
-            }
-            var html = '';
-            stItems.forEach(function(item, i) {
-                html += '<tr data-product-id="' + item.master_product_id + '" data-max="' + item.balance + '">';
-                html += '<td class="text-center" style="color:var(--text-muted)">' + (i + 1) + '</td>';
-                html += '<td><div class="fw-semibold" style="font-size:13px">' + stEsc(item.name) + '</div><div style="font-size:11px;color:var(--text-muted)">' + stEsc(item.code) + '</div></td>';
-                html += '<td class="text-center">' + item.balance + ' ' + stEsc(item.unit || '') + '</td>';
-                html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm text-center st-qty" placeholder="0"></td>';
-                html += '</tr>';
-            });
-            $('#st-items').html(html);
-            $('#st-fill-all').show();
-            stSummary();
-        })
-        .fail(function() {
-            $('#st-items').html('<tr><td colspan="4" class="text-center py-4" style="color:var(--danger)">Gagal memuat stok.</td></tr>');
-        });
-}
-
-function stFillAll() {
-    $('#st-items tr[data-product-id]').each(function() {
-        $(this).find('.st-qty').val($(this).data('max')).removeClass('is-invalid');
+    StockPick.load($('#st-picker'), stAvailableUrl, { warehouse_id: warehouseId, project_id: $('#st-from-project').val(), q: $('#st-q').val() }, {
+        requireSerial: false,
+        onChange: stSummary
     });
-    stSummary();
 }
 
 function stKind() {
     var from = $('#st-from-project').val(), to = $('#st-to-project').val();
-    if (!from && to) return ['Alokasi ke Project', 'Stok bebas menjadi milik project tujuan (umumnya ke gudang transit sebelum Delivery Order).'];
+    if (!from && to) return ['Alokasi ke Project', 'Stok bebas menjadi milik project tujuan (boleh tetap di gudang yang sama) sampai dikirim lewat Delivery Order.'];
     if (from && !to) return ['Lepas Alokasi', 'Stok project dikembalikan menjadi stok bebas.'];
     if (from && to && from !== to) return ['Pindah Project', 'Stok berpindah kepemilikan dari satu project ke project lain.'];
     return ['Pindah Gudang', 'Kepemilikan tetap, hanya lokasi gudang yang berubah.'];
 }
 
 function stCollect() {
-    var rows = [];
-    $('#st-items tr[data-product-id]').each(function() {
-        var qty = parseInt($(this).find('.st-qty').val(), 10) || 0;
-        if (qty > 0) rows.push({ master_product_id: $(this).data('product-id'), qty: qty, max: $(this).data('max'), $el: $(this).find('.st-qty') });
-    });
-    return rows;
+    return StockPick.picks($('#st-picker'));
 }
 
 function stSummary() {
@@ -194,22 +146,29 @@ function stSummary() {
     $('#st-kind').text(kind[0]);
     $('#st-kind-hint').text(kind[1]);
     $('#st-sum-lines').text(rows.length);
-    $('#st-sum-qty').text(rows.reduce(function(sum, r) { return sum + r.qty; }, 0));
+    $('#st-sum-qty').text(Num.format(rows.reduce(function(sum, r) { return sum + r.qty; }, 0), 4));
 }
 
 $(document).on('change', '#st-from-warehouse, #st-from-project', stLoadAvailable);
+// Transfer Stok hanya dalam satu branch: gudang tujuan dibatasi ke branch gudang asal.
+$(document).on('change', '#st-from-warehouse', function() {
+    var branch = String($(this).find('option:selected').data('branch') || '');
+    $('#st-to-warehouse option[value!=""]').each(function() {
+        $(this).prop('disabled', !!branch && String($(this).data('branch') || '') !== branch);
+    });
+    if ($('#st-to-warehouse option:selected').prop('disabled')) $('#st-to-warehouse').val('');
+});
 $(document).on('change', '#st-to-project', function() {
-    // Alokasi ke project: sarankan gudang transit bila tujuan belum dipilih.
-    if ($(this).val() && !$('#st-to-warehouse').val()) {
-        var $transit = $('#st-to-warehouse option[data-type="transit"]').first();
-        if ($transit.length) $('#st-to-warehouse').val($transit.val());
+    // Alokasi ke project boleh di gudang yang sama: isi gudang tujuan = asal bila belum dipilih.
+    if ($(this).val() && !$('#st-to-warehouse').val() && $('#st-from-warehouse').val()) {
+        $('#st-to-warehouse').val($('#st-from-warehouse').val()).trigger('change');
     }
     stSummary();
 });
-$(document).on('input', '.st-qty', function() {
-    this.value = this.value.replace(/\D/g, '');
-    $(this).removeClass('is-invalid');
-    stSummary();
+let stSearchTimer = null;
+$(document).on('input', '#st-q', function() {
+    clearTimeout(stSearchTimer);
+    stSearchTimer = setTimeout(stLoadAvailable, 350);
 });
 
 function stSave() {
@@ -220,18 +179,11 @@ function stSave() {
     if (fromWh === toWh && fromProject === toProject) { toastr.error('Asal dan tujuan sama. Ubah gudang atau kepemilikan tujuan.'); return; }
 
     var rows = stCollect();
-    if (rows.length === 0) { toastr.error('Isi qty minimal satu produk.'); return; }
-    for (var i = 0; i < rows.length; i++) {
-        if (rows[i].qty > rows[i].max) {
-            rows[i].$el.addClass('is-invalid')[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            toastr.error('Qty melebihi stok tersedia (' + rows[i].max + ').');
-            return;
-        }
-    }
+    if (rows.length === 0) { toastr.error('Pilih minimal satu baris stok.'); return; }
 
     Swal.fire({
         title: 'Posting Transfer?',
-        text: stKind()[0] + ' — ' + rows.length + ' produk. Stok langsung berpindah.',
+        text: stKind()[0] + ' — ' + rows.length + ' baris stok. Stok langsung berpindah.',
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Ya, Posting',
@@ -250,7 +202,7 @@ function stSave() {
                 to_project_id: toProject || null,
                 transfer_date: $('#st-date').val(),
                 note: $('#st-note').val(),
-                items: rows.map(function(r) { return { master_product_id: r.master_product_id, qty: r.qty }; })
+                items: rows
             }),
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
         }).done(function(res) {

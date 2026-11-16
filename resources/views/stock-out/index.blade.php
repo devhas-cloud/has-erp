@@ -14,7 +14,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Pemenuhan dari Stok</h1>
-        <p class="page-header-sub">Penuhi item Permintaan Barang dari stok bebas — partial diperbolehkan. Permintaan internal: keluar stok. Permintaan project: dialokasikan ke gudang tujuan (umumnya transit) sebagai stok project.</p>
+        <p class="page-header-sub">Penuhi item Permintaan Barang dari stok bebas — pilih baris stok yang dipakai, partial diperbolehkan. Permintaan internal: barang keluar. Permintaan project: stok menjadi milik project (boleh tetap di gudang yang sama).</p>
     </div>
 </div>
 
@@ -62,7 +62,7 @@
                                 @if($totalStock > 0)
                                     @foreach($p['stock'] as $w)
                                         <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px;margin:1px 2px 1px 0">
-                                            {{ $w['code'] }}: {{ $w['balance'] }}
+                                            {{ $w['code'] }}: {{ $w['balance_label'] }}
                                         </span>
                                     @endforeach
                                 @else
@@ -95,7 +95,7 @@
 
 @push('modals')
 <div class="modal fade" id="issueModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title"><i class="fa-solid fa-boxes-stacked me-2" style="color:var(--accent)"></i><span id="issue-title">Penuhi dari Stok</span></h6>
@@ -108,20 +108,20 @@
                     <select id="issue-warehouse" class="form-select"></select>
                 </div>
                 <div class="mb-3" id="issue-destination-wrap">
-                    <label class="form-label">Gudang Tujuan Alokasi <span class="text-danger">*</span></label>
+                    <label class="form-label">Gudang Tujuan Alokasi</label>
                     <select id="issue-destination" class="form-select">
-                        <option value="">— Pilih Gudang Tujuan —</option>
+                        <option value="">Sama dengan gudang asal</option>
                         @foreach($allWarehouses as $w)
-                            <option value="{{ $w->id }}" data-type="{{ $w->type }}">{{ $w->code }} — {{ $w->name }} ({{ $w->type_label }})</option>
+                            <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }} ({{ $w->branch_label }})</option>
                         @endforeach
                     </select>
-                    <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Barang menjadi stok milik project di gudang ini sampai dikirim lewat Delivery Order.{{ $transitWarehouses->isEmpty() ? ' Belum ada gudang transit — buat di menu Gudang bila perlu.' : '' }}</div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Barang menjadi stok milik project di gudang ini sampai dikirim lewat Delivery Order.</div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Qty <span class="text-danger">*</span></label>
-                    <input type="number" id="issue-qty" class="form-control" min="1">
-                    <div id="issue-available" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
+                <label class="form-label">Pilih Baris Stok <span class="text-danger">*</span></label>
+                <div id="issue-picker" style="border:1px solid var(--border-color, #e5e7eb);border-radius:8px;padding:8px">
+                    <div class="text-center py-3" style="color:var(--text-muted);font-size:13px">Pilih gudang asal dulu.</div>
                 </div>
+                <div id="issue-available" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
@@ -135,9 +135,11 @@
 @endpush
 
 @section('scripts')
+@include('partials.stock-pick')
 <script>
 const pendingMap = @json($pendingMap);
 const stockOutStoreUrl = '{{ route("stock-out.store") }}';
+const stockOutOptionsUrl = '{{ route("stock-out.stock-options") }}';
 let issueModalInstance = null;
 let issueItemId = null;
 
@@ -150,37 +152,41 @@ function openIssueModal(btn) {
 
     var opts = '<option value="">— Pilih Gudang —</option>';
     item.stock.forEach(function(w) {
-        opts += '<option value="' + w.id + '" data-balance="' + w.balance + '">' + w.code + ' — ' + w.name + ' (stok ' + w.balance + ')</option>';
+        opts += '<option value="' + w.id + '">' + w.code + ' — ' + w.name + ' (stok ' + w.balance_label + ')</option>';
     });
     $('#issue-warehouse').html(opts);
-    $('#issue-qty').val(item.remaining_qty);
-    $('#issue-available').text('');
+    $('#issue-picker').html('<div class="text-center py-3" style="color:var(--text-muted);font-size:13px">Pilih gudang asal dulu.</div>');
+    $('#issue-available').text('Sisa kebutuhan: ' + item.remaining_qty + ' ' + (item.unit || ''));
     $('#issue-title').text(item.for_project ? 'Alokasikan Stok ke Project' : 'Keluarkan Stok (Internal)');
     $('#issue-destination-wrap').toggle(!!item.for_project);
-    var $transit = $('#issue-destination option[data-type="transit"]').first();
-    $('#issue-destination').val($transit.length ? $transit.val() : '');
+    $('#issue-destination').val('');
 
     if (!issueModalInstance) issueModalInstance = new bootstrap.Modal(document.getElementById('issueModal'));
     issueModalInstance.show();
 }
 
 $(document).on('change', '#issue-warehouse', function() {
-    var bal = $('#issue-warehouse option:selected').data('balance') || 0;
-    $('#issue-available').text('Stok tersedia: ' + bal);
-    var max = bal;
-    $('#issue-qty').attr('max', max);
-    if (parseInt($('#issue-qty').val(), 10) > max) $('#issue-qty').val(max);
+    var item = pendingMap[issueItemId] || {};
+    if (!$(this).val()) return;
+    // Internal = barang keluar: unit ber-SN wajib sudah ber-SN. Alokasi project boleh tanpa SN.
+    StockPick.load($('#issue-picker'), stockOutOptionsUrl, { goods_request_item_id: issueItemId, warehouse_id: $(this).val() }, {
+        requireSerial: !item.for_project,
+        onChange: function(total) {
+            $('#issue-available').html('Dipilih ' + Num.format(total, 4) + ' dari sisa kebutuhan ' + item.remaining_qty + ' ' + (item.unit || '')
+                + (total > item.remaining_qty ? ' <span class="text-danger">— melebihi sisa</span>' : ''));
+        }
+    });
 });
 
 function submitIssue() {
     var warehouseId = $('#issue-warehouse').val();
-    var qty = parseInt($('#issue-qty').val(), 10);
+    var picks = StockPick.picks($('#issue-picker'));
+    var qty = StockPick.total($('#issue-picker'));
 
     var item = pendingMap[issueItemId] || {};
     var destinationId = $('#issue-destination').val();
     if (!warehouseId) { toastr.error('Pilih gudang asal.'); return; }
-    if (item.for_project && !destinationId) { toastr.error('Pilih gudang tujuan alokasi.'); return; }
-    if (!qty || qty < 1) { toastr.error('Qty harus lebih dari 0.'); return; }
+    if (!picks.length) { toastr.error('Pilih minimal satu baris stok.'); return; }
     if (qty > item.remaining_qty) { toastr.error('Qty melebihi sisa kebutuhan (' + item.remaining_qty + ').'); return; }
 
     $('#issue-submit').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Proses...');
@@ -188,13 +194,14 @@ function submitIssue() {
     $.ajax({
         url: stockOutStoreUrl,
         method: 'POST',
-        data: {
+        contentType: 'application/json',
+        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+        data: JSON.stringify({
             goods_request_item_id: issueItemId,
             warehouse_id: warehouseId,
-            destination_warehouse_id: item.for_project ? destinationId : '',
-            qty: qty,
-            _token: '{{ csrf_token() }}'
-        }
+            destination_warehouse_id: item.for_project && destinationId ? destinationId : null,
+            picks: picks
+        })
     }).done(function(res) {
         toastr.success(res.message || 'Berhasil.');
         setTimeout(function() { window.location.reload(); }, 800);

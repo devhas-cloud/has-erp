@@ -5,11 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Baris retur. destination 'warehouse' = dari baris stok (stock_id) hasil
+ * penerimaan PO; 'direct' = barang langsung pakai (tanpa stok).
+ */
 class SupplierReturnItem extends Model
 {
     protected $fillable = [
         'supplier_return_id',
         'purchase_order_item_id',
+        'stock_id',
         'master_product_id',
         'project_id',
         'qty',
@@ -21,7 +26,7 @@ class SupplierReturnItem extends Model
     protected function casts(): array
     {
         return [
-            'qty' => 'integer',
+            'qty' => 'float',
         ];
     }
 
@@ -38,6 +43,11 @@ class SupplierReturnItem extends Model
     public function masterProduct(): BelongsTo
     {
         return $this->belongsTo(MasterProduct::class);
+    }
+
+    public function stock(): BelongsTo
+    {
+        return $this->belongsTo(Stock::class);
     }
 
     public function project(): BelongsTo

@@ -386,6 +386,13 @@ class ProductImportService
 
                 $existing = MasterProduct::where('code', $data['code'])->first();
 
+                if ($existing && $isMaterial !== null && $isMaterial !== $existing->isMaterial() && $existing->hasStock()) {
+                    $failed++;
+                    $errors[] = "Line {$lineNumber}: Jenis stok {$data['code']} tidak bisa diubah karena produk masih punya stok.";
+
+                    continue;
+                }
+
                 if (! $this->withPrices) {
                     unset($record['selling_price'], $record['purchase_price']);
                     if ($existing) {

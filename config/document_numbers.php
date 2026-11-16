@@ -29,6 +29,7 @@ return [
     'stock_transfers' => 'ST',     // Stock Transfer
     'stock_entries' => 'SE',       // Stock Entry (masuk stok lain-lain)
     'stock_opnames' => 'SC',       // Stock Count (stock opname)
+    'branch_transfers' => 'BT',    // Branch Transfer (pengiriman antar branch + surat jalan)
 
     // Finance
     'invoices' => 'INV',           // Sales Invoice

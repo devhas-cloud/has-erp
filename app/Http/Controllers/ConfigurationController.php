@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AccountType;
+use App\Models\Branch;
 use App\Models\BusinessEntity;
 use App\Models\BusinessValue;
 use App\Models\ContactMethod;
@@ -31,6 +32,30 @@ class ConfigurationController extends Controller
     public function __construct()
     {
         $this->config = [
+            'branches' => [
+                'model' => Branch::class,
+                'label' => 'Branch',
+                'slug' => 'branches',
+                // Kolom pertama = isian utama form; kode lewat extra field.
+                'columns' => ['name', 'code', 'status'],
+                'column_labels' => [
+                    'name' => 'Nama Branch',
+                    'code' => 'Kode',
+                    'status' => 'Status',
+                ],
+                // {id} diganti id record saat update (aturan unik).
+                'rules' => [
+                    'code' => 'required|string|max:20|unique:branches,code,{id}',
+                    'name' => 'required|string|max:150',
+                    'status' => 'required|in:Active,Inactive',
+                ],
+                'extra_fields' => [
+                    'code' => [
+                        'label' => 'Kode',
+                        'type' => 'text',
+                    ],
+                ],
+            ],
             'divisions' => [
                 'model' => Division::class,
                 'label' => 'Division',
@@ -453,7 +478,7 @@ class ConfigurationController extends Controller
             ]);
         }
 
-        $validated = $request->validate($cfg['rules']);
+        $validated = $request->validate($this->rulesFor($cfg, null));
 
         $record = $cfg['model']::create($validated);
 
@@ -490,7 +515,7 @@ class ConfigurationController extends Controller
 
         $record = $cfg['model']::findOrFail($id);
 
-        $validated = $request->validate($cfg['rules']);
+        $validated = $request->validate($this->rulesFor($cfg, $id));
 
         $record->update($validated);
 
@@ -520,6 +545,14 @@ class ConfigurationController extends Controller
         }
 
         $record = $cfg['model']::findOrFail($id);
+
+        if ($record instanceof Branch && ($blocker = $record->usageBlocker())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Branch '.$record->name.' tidak bisa dihapus karena '.$blocker.'. Nonaktifkan saja.',
+            ], 422);
+        }
+
         $record->delete();
 
         return response()->json([
@@ -568,6 +601,18 @@ class ConfigurationController extends Controller
             'label' => 'Penanganan',
             'display_map' => null,
         ]);
+    }
+
+    /**
+     * Aturan validasi; placeholder {id} pada aturan unik diganti id record (update)
+     * atau dihapus (create).
+     */
+    private function rulesFor(array $cfg, ?int $id): array
+    {
+        return array_map(
+            fn ($rule) => is_string($rule) ? str_replace(',{id}', $id ? ','.$id : '', $rule) : $rule,
+            $cfg['rules']
+        );
     }
 
     private function getConfig(string $table): ?array

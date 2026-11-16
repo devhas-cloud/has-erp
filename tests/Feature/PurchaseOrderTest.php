@@ -12,17 +12,18 @@ use App\Models\MasterProduct;
 use App\Models\Module;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
-use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
 class PurchaseOrderTest extends TestCase
 {
+    use InteractsWithStock;
     use RefreshDatabase;
 
     private Division $division;
@@ -167,7 +168,7 @@ class PurchaseOrderTest extends TestCase
 
     private function receive(PurchaseOrder $po, int $qty): void
     {
-        $warehouse = Warehouse::firstOrCreate(['code' => 'G1'], ['name' => 'Gudang 12', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
+        $warehouse = Warehouse::firstOrCreate(['code' => 'G1'], ['name' => 'Gudang 12', 'status' => 'Active']);
         $receipt = GoodsReceipt::create([
             'receipt_number' => 'GRN-'.uniqid(),
             'purchase_order_id' => $po->id,
@@ -572,8 +573,9 @@ class PurchaseOrderTest extends TestCase
         $draft = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-3', 'description' => 'Draft', 'qty' => 1, 'unit' => 'Unit']]);
         $draft->update(['status' => GoodsRequest::STATUS_DRAFT]);
 
-        $warehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang 12', 'type' => Warehouse::TYPE_STOCK, 'status' => 'Active']);
-        StockMovement::record(['warehouse_id' => $warehouse->id, 'master_product_id' => $grProject->items->first()->master_product_id, 'type' => StockMovement::TYPE_MISC_IN, 'qty' => 7, 'created_by' => $this->admin->id]);
+        $warehouse = Warehouse::create(['code' => 'G1', 'name' => 'Gudang 12', 'status' => 'Active']);
+        MasterProduct::whereKey($grProject->items->first()->master_product_id)->update(['is_material' => true]);
+        $this->seedStock($warehouse->id, $grProject->items->first()->master_product_id, 7);
 
         $this->storePo([$this->line($grProject->items->first(), 1)])->assertOk();
 
@@ -582,7 +584,7 @@ class PurchaseOrderTest extends TestCase
         $projectGroup = collect($data['data'])->firstWhere('goods_request_id', $grProject->id);
         $this->assertSame('SPARING Gresik', $projectGroup['project_name']);
         $this->assertSame(3, $projectGroup['items'][0]['remaining_qty']);
-        $this->assertSame(7, $projectGroup['items'][0]['free_stock']);
+        $this->assertEquals(7, $projectGroup['items'][0]['free_stock']);
         $this->assertSame($project->id, $data['projects'][0]['id']);
 
         $internal = $this->actingAs($this->creator)->getJson(route('purchase-order.fetch-available-items', ['project_id' => 'internal']))->json('data');

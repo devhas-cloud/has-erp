@@ -54,8 +54,10 @@ class ModulesTableSeeder extends Seeder
             'MOD_STOCK_OUT',
             'MOD_DELIVERY_ORDER',
             'MOD_STOCK_TRANSFER',
+            'MOD_BRANCH_TRANSFER',
             'MOD_STOCK_ENTRY',
             'MOD_STOCK_OPNAME',
+            'MOD_STOCK_DETAIL',
             'MOD_STOCK_REPORT',
         ],
         'Finance' => [
@@ -317,9 +319,17 @@ class ModulesTableSeeder extends Seeder
             [
                 'module_code' => 'MOD_STOCK_TRANSFER',
                 'module_name' => 'Transfer Stok',
-                'description' => 'Pindah stok antar gudang dan/atau kepemilikan — termasuk alokasi stok bebas ke project dan lepas alokasi',
+                'description' => 'Pindah stok antar gudang dalam satu branch dan/atau kepemilikan — termasuk alokasi stok bebas ke project dan lepas alokasi',
                 'route_name' => 'stock-transfer',
                 'icon' => 'fa fa-arrow-right-arrow-left',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_BRANCH_TRANSFER',
+                'module_name' => 'Branch Transfer',
+                'description' => 'Pengiriman barang antar branch dengan surat jalan — stok dalam pengiriman sampai diterima dan diperiksa branch tujuan',
+                'route_name' => 'branch-transfer',
+                'icon' => 'fa fa-truck-fast',
                 'group' => 'Inventory',
             ],
             [
@@ -328,6 +338,14 @@ class ModulesTableSeeder extends Seeder
                 'description' => 'Barang masuk tanpa dokumen pembelian — saldo awal, retur, hibah/sampel',
                 'route_name' => 'stock-entry',
                 'icon' => 'fa fa-square-plus',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_STOCK_DETAIL',
+                'module_name' => 'Lengkapi Data Stok',
+                'description' => 'Lengkapi SN, batch / No. MFG, kedaluwarsa, dan garansi barang yang sudah masuk stok; riwayat per SN',
+                'route_name' => 'stock-detail',
+                'icon' => 'fa fa-barcode',
                 'group' => 'Inventory',
             ],
             [

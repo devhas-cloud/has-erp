@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\DeliveryOrder;
 use App\Models\Log;
-use App\Models\MasterProduct;
 use App\Models\Project;
-use App\Models\StockMovement;
+use App\Models\Stock;
+use App\Models\StockLog;
 use App\Models\Warehouse;
+use App\Services\StockException;
+use App\Services\StockService;
+use App\Support\StockCost;
+use App\Support\StockPicker;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,11 +20,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Delivery Order (Surat Jalan) — kirim stok milik project dari satu gudang
- * (umumnya transit) ke customer. Draft boleh diubah/dihapus; Posting oleh
- * gudang (tanpa approval) mengecek ulang saldo lalu mencatat stok keluar
- * 'delivery'. Stok bebas harus dialokasikan dulu (Pemenuhan dari Stok /
- * Transfer) agar tercatat sebagai barang project.
+ * Delivery Order (Surat Jalan) — kirim stok milik project dari satu gudang ke
+ * customer. Item = baris stok yang dipilih user (material boleh sebagian; unit
+ * ber-SN wajib sudah ber-SN). Draft boleh diubah/dihapus; Posting oleh gudang
+ * (tanpa approval) mengunci & mengecek ulang baris stok lalu mencatat log 'out'.
+ * Stok bebas harus dialokasikan dulu (Pemenuhan dari Stok / Transfer).
  */
 class DeliveryOrderController extends Controller
 {
@@ -90,7 +94,7 @@ class DeliveryOrderController extends Controller
 
         return response()->json([
             'success' => true,
-            'items' => $this->projectBalances($project->id)->values(),
+            'warehouses' => $this->projectWarehouses($project->id),
             'recipient' => [
                 'name' => $project->company?->account_name,
                 'phone' => $project->company?->phone,
@@ -121,13 +125,9 @@ class DeliveryOrderController extends Controller
 
     public function show($id)
     {
-        $order = DeliveryOrder::with(['items.masterProduct', 'project.company', 'warehouse', 'creator', 'postedBy'])->findOrFail($id);
+        $order = DeliveryOrder::with(['items.stock.masterProduct', 'project.company', 'warehouse', 'creator', 'postedBy'])->findOrFail($id);
 
-        $balances = $order->isDraft()
-            ? $this->projectBalances($order->project_id, $order->warehouse_id)->keyBy('master_product_id')
-            : collect();
-
-        return view('delivery-order.show', compact('order', 'balances'));
+        return view('delivery-order.show', compact('order'));
     }
 
     public function edit($id)
@@ -173,46 +173,39 @@ class DeliveryOrderController extends Controller
      */
     public function post($id): JsonResponse
     {
-        $order = DeliveryOrder::with(['items.masterProduct'])->findOrFail($id);
+        $order = DeliveryOrder::with('items')->findOrFail($id);
         if (! $order->isDraft()) {
             return response()->json(['success' => false, 'message' => 'Delivery Order sudah terkirim.'], 422);
         }
 
-        $error = DB::transaction(function () use ($order) {
-            foreach ($order->items as $item) {
-                $balance = StockMovement::balance($order->warehouse_id, $item->master_product_id, $order->project_id);
-                if ($item->qty > $balance) {
-                    return 'Stok project '.($item->masterProduct?->code ?? 'item').' di gudang tidak cukup (tersedia '.$balance.', dikirim '.$item->qty.').';
+        $service = app(StockService::class);
+        $date = $order->delivery_date?->toDateString() ?? now()->toDateString();
+
+        try {
+            DB::transaction(function () use ($order, $service, $date) {
+                $stocks = $service->lock($order->items->pluck('stock_id'));
+                foreach ($order->items as $item) {
+                    $stock = $stocks->get($item->stock_id);
+                    if (! $stock) {
+                        throw new StockException('Baris stok item '.$item->sort_order.' tidak ditemukan.');
+                    }
+                    $service->assertPosition($stock, (int) $order->warehouse_id, (int) $order->project_id);
+                    $service->take($stock, (float) $item->qty, StockLog::TYPE_OUT, [
+                        'date' => $date,
+                        'ref_type' => StockLog::REF_DELIVERY_ORDER_ITEM,
+                        'ref_id' => $item->id,
+                        'note' => 'Delivery Order '.$order->do_number,
+                    ]);
                 }
-            }
 
-            foreach ($order->items as $item) {
-                StockMovement::record([
-                    'warehouse_id' => $order->warehouse_id,
-                    'master_product_id' => $item->master_product_id,
-                    'project_id' => $order->project_id,
-                    'type' => StockMovement::TYPE_DELIVERY,
-                    'qty' => $item->qty,
-                    'unit' => $item->unit,
-                    'source_type' => StockMovement::SOURCE_DELIVERY_ORDER,
-                    'source_id' => $order->id,
-                    'source_line_id' => $item->id,
-                    'moved_at' => $order->delivery_date?->toDateString() ?? now()->toDateString(),
-                    'note' => 'Delivery Order '.$order->do_number,
+                $order->update([
+                    'status' => DeliveryOrder::STATUS_POSTED,
+                    'posted_by' => Auth::id(),
+                    'posted_at' => now(),
                 ]);
-            }
-
-            $order->update([
-                'status' => DeliveryOrder::STATUS_POSTED,
-                'posted_by' => Auth::id(),
-                'posted_at' => now(),
-            ]);
-
-            return null;
-        });
-
-        if ($error) {
-            return response()->json(['success' => false, 'message' => $error], 422);
+            });
+        } catch (StockException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
 
         Log::record('post_delivery_order', 'Delivery Order '.$order->do_number.' diposting (terkirim) oleh '.Auth::user()->display_name, 'MOD_DELIVERY_ORDER', $order);
@@ -222,7 +215,7 @@ class DeliveryOrderController extends Controller
 
     public function pdf($id)
     {
-        $order = DeliveryOrder::with(['items.masterProduct', 'project.company', 'warehouse', 'creator'])->findOrFail($id);
+        $order = DeliveryOrder::with(['items.stock.masterProduct', 'project.company', 'warehouse', 'creator'])->findOrFail($id);
 
         return Pdf::loadView('delivery-order.pdf', compact('order'))
             ->setPaper('a4', 'portrait')
@@ -231,7 +224,7 @@ class DeliveryOrderController extends Controller
 
     private function formData(?DeliveryOrder $order, ?int $projectId): array
     {
-        $projectIds = StockMovement::whereNotNull('project_id')->distinct()->pluck('project_id');
+        $projectIds = Stock::open()->whereNotNull('project_id')->distinct()->pluck('project_id');
 
         return [
             'order' => $order,
@@ -240,8 +233,9 @@ class DeliveryOrderController extends Controller
                 ->when($projectId, fn ($q) => $q->orWhere('id', $projectId))
                 ->orderByDesc('id')
                 ->get(['id', 'project_number', 'project_name']),
-            'warehouses' => Warehouse::orderBy('type', 'desc')->orderBy('name')->get(),
-            'items' => $order?->items->map(fn ($item) => ['master_product_id' => $item->master_product_id, 'qty' => $item->qty, 'remark' => $item->remark])->values() ?? [],
+            'warehouses' => Warehouse::with('branch')->orderBy('name')->get(),
+            // Pilihan awal pemilih stok saat edit: {stock_id: qty}.
+            'selected' => $order?->items->mapWithKeys(fn ($item) => [$item->stock_id => $item->qty]) ?? collect(),
         ];
     }
 
@@ -257,26 +251,39 @@ class DeliveryOrderController extends Controller
             'courier' => 'nullable|string|max:150',
             'note' => 'nullable|string|max:2000',
             'items' => 'required|array|min:1',
-            'items.*.master_product_id' => 'required|integer|distinct',
-            'items.*.qty' => 'required|integer|min:1',
+            'items.*.stock_id' => 'required|integer|distinct',
+            'items.*.qty' => 'required|numeric|gt:0',
             'items.*.remark' => 'nullable|string|max:255',
         ], [
-            'items.required' => 'Isi qty minimal satu barang yang dikirim.',
-            'items.*.master_product_id.distinct' => 'Produk yang sama tidak boleh muncul dua kali.',
+            'items.required' => 'Pilih minimal satu baris stok yang dikirim.',
+            'items.*.stock_id.distinct' => 'Baris stok yang sama tidak boleh dipilih dua kali.',
         ]);
 
-        $available = $this->projectBalances((int) $validated['project_id'], (int) $validated['warehouse_id'])->keyBy('master_product_id');
-        foreach (array_values($validated['items']) as $i => $row) {
-            $stock = $available->get((int) $row['master_product_id']);
-            if (! $stock) {
-                abort(response()->json(['success' => false, 'message' => 'Baris '.($i + 1).': produk tidak ada di stok project pada gudang ini.'], 422));
+        // Cek awal (posting mengecek ulang dengan mengunci baris).
+        $service = app(StockService::class);
+        $stocks = Stock::with('masterProduct')->whereIn('id', collect($validated['items'])->pluck('stock_id'))->get()->keyBy('id');
+        try {
+            foreach (array_values($validated['items']) as $i => $row) {
+                $stock = $stocks->get((int) $row['stock_id']);
+                if (! $stock || ! $stock->is_open) {
+                    throw new StockException('Baris '.($i + 1).': stok sudah tidak tersedia.');
+                }
+                $service->assertPosition($stock, (int) $validated['warehouse_id'], (int) $validated['project_id']);
+                if ((float) $row['qty'] > $stock->qty + Stock::EPSILON) {
+                    throw new StockException('Qty '.$service->label($stock).' melebihi sisa ('.StockCost::qty($stock->qty).').');
+                }
+                if (! $stock->canLeave()) {
+                    throw new StockException('Unit '.$service->label($stock).' belum punya SN. Lengkapi SN dulu sebelum dikirim.');
+                }
+                if ($stock->isSerialized() && abs((float) $row['qty'] - $stock->qty) >= Stock::EPSILON) {
+                    throw new StockException($service->label($stock).' adalah barang ber-SN dan harus dikirim utuh.');
+                }
             }
-            if ((int) $row['qty'] > $stock['balance']) {
-                abort(response()->json(['success' => false, 'message' => 'Qty '.$stock['code'].' melebihi stok project di gudang (tersedia '.$stock['balance'].').'], 422));
-            }
+        } catch (StockException $e) {
+            abort(response()->json(['success' => false, 'message' => $e->getMessage()], 422));
         }
 
-        $validated['units'] = $available->map(fn ($stock) => $stock['unit'])->all();
+        $validated['units'] = $stocks->map(fn (Stock $stock) => $stock->unit)->all();
 
         return $validated;
     }
@@ -289,15 +296,15 @@ class DeliveryOrderController extends Controller
     }
 
     /**
-     * @param  array<int, ?string>  $units  satuan per master_product_id dari kartu stok
+     * @param  array<int, ?string>  $units  satuan per stock_id
      */
     private function syncItems(DeliveryOrder $order, array $items, array $units): void
     {
         foreach (array_values($items) as $i => $row) {
             $order->items()->create([
-                'master_product_id' => $row['master_product_id'],
-                'qty' => (int) $row['qty'],
-                'unit' => $units[(int) $row['master_product_id']] ?? null,
+                'stock_id' => $row['stock_id'],
+                'qty' => StockService::round((float) $row['qty']),
+                'unit' => $units[(int) $row['stock_id']] ?? null,
                 'remark' => $row['remark'] ?? null,
                 'sort_order' => $i + 1,
             ]);
@@ -305,27 +312,32 @@ class DeliveryOrderController extends Controller
     }
 
     /**
-     * Saldo stok milik project (> 0) per gudang & produk.
+     * Baris stok milik project di satu gudang (untuk pemilih stok form DO).
      */
-    private function projectBalances(int $projectId, ?int $warehouseId = null): Collection
+    public function stockOptions(Request $request): JsonResponse
     {
-        $rows = StockMovement::balancesQuery()
-            ->where('project_id', $projectId)
-            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->havingRaw('balance > 0')
-            ->get();
+        $validated = $request->validate([
+            'project_id' => 'required|integer|exists:projects,id',
+            'warehouse_id' => 'required|integer|exists:warehouses,id',
+            'q' => 'nullable|string|max:100',
+        ]);
 
-        $products = MasterProduct::whereIn('id', $rows->pluck('master_product_id'))->get(['id', 'code', 'name'])->keyBy('id');
-        $warehouses = Warehouse::whereIn('id', $rows->pluck('warehouse_id'))->get()->keyBy('id');
+        return response()->json(['success' => true, 'data' => StockPicker::options([
+            'warehouse_id' => $validated['warehouse_id'],
+            'project' => (int) $validated['project_id'],
+            'q' => $validated['q'] ?? null,
+            'limit' => 300,
+        ])]);
+    }
 
-        return $rows->map(fn ($row) => [
-            'warehouse_id' => (int) $row->warehouse_id,
-            'warehouse' => ($warehouses[$row->warehouse_id]->code ?? '').' — '.($warehouses[$row->warehouse_id]->name ?? ''),
-            'master_product_id' => (int) $row->master_product_id,
-            'code' => $products[$row->master_product_id]->code ?? '—',
-            'name' => $products[$row->master_product_id]->name ?? '—',
-            'balance' => (int) $row->balance,
-            'unit' => $row->unit,
-        ])->sortBy('code')->values();
+    /**
+     * Gudang yang menyimpan stok milik project (untuk pilihan gudang asal).
+     */
+    private function projectWarehouses(int $projectId): Collection
+    {
+        $ids = Stock::open()->where('project_id', $projectId)->distinct()->pluck('warehouse_id');
+
+        return Warehouse::whereIn('id', $ids)->orderBy('name')->get()
+            ->map(fn (Warehouse $w) => ['id' => $w->id, 'label' => $w->code.' — '.$w->name])->values();
     }
 }
