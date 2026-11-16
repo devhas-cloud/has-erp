@@ -78,6 +78,7 @@ class Quotation extends Model
         'attn_phone',
         'attn_email',
         'from_name',
+        'sales_ids',
         'contact_phone',
         'parameter_note',
         'notes',
@@ -126,6 +127,7 @@ class Quotation extends Model
             'ppn_percent' => 'float',
             'ppn_amount' => 'float',
             'formula' => 'array',
+            'sales_ids' => 'array',
         ];
     }
 
@@ -168,6 +170,38 @@ class Quotation extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Sales quotation dari snapshot. Quotation lama tanpa snapshot memakai
+     * sales task secara live.
+     */
+    public function salesUsers()
+    {
+        $ids = collect($this->sales_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($ids->isNotEmpty()) {
+            $users = User::whereIn('id', $ids)->get()->keyBy('id');
+
+            return $ids->map(fn ($id) => $users->get($id))->filter()->values();
+        }
+
+        return $this->task ? $this->task->salesUsers() : collect();
+    }
+
+    public function salesNames(): string
+    {
+        $names = $this->salesUsers()
+            ->map(fn (User $user) => $user->display_name)
+            ->filter();
+
+        return $names->isNotEmpty()
+            ? $names->implode(', ')
+            : (string) ($this->from_name ?? '');
     }
 
     public function finalChecker(): BelongsTo

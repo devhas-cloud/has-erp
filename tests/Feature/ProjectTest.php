@@ -223,6 +223,18 @@ class ProjectTest extends TestCase
             ->assertOk()->assertSee('pj-value-breakdown', false);
     }
 
+    public function test_fetch_quotation_returns_sales_for_prefill(): void
+    {
+        $quotation = $this->makeQuotation();
+        $quotation->update(['sales_ids' => [$this->creator->id, $this->admin->id]]);
+
+        $this->actingAs($this->creator)->getJson(route('project.fetch-quotation', ['quotation_id' => $quotation->id]))
+            ->assertOk()
+            ->assertJsonPath('data.sales_ids', [$this->creator->id, $this->admin->id])
+            ->assertJsonPath('data.sales.0.text', 'creator')
+            ->assertJsonPath('data.sales.1.text', 'superadmin');
+    }
+
     public function test_project_name_defaults_to_opportunity_name(): void
     {
         $quotation = $this->makeQuotation();

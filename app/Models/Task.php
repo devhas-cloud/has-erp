@@ -106,6 +106,25 @@ class Task extends Model
             ->withTimestamps();
     }
 
+    /**
+     * Sales yang terlibat: pembuat task dulu, lalu assignee yang berada di
+     * divisi Sales. Assignee non-sales diabaikan.
+     */
+    public function salesUsers()
+    {
+        $assignees = $this->assignees()
+            ->with('division')
+            ->get()
+            ->filter(fn (User $user) => strcasecmp(trim((string) $user->division?->division_name), 'Sales') === 0)
+            ->sortBy(fn (User $user) => (string) $user->pivot?->assigned_at);
+
+        return collect([$this->creator])
+            ->filter()
+            ->merge($assignees)
+            ->unique('id')
+            ->values();
+    }
+
     public function activities(): HasMany
     {
         return $this->hasMany(TaskActivity::class);

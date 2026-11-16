@@ -27,6 +27,8 @@ class QuotationTest extends TestCase
 
     private Division $imsDivision;
 
+    private Division $salesDivision;
+
     private User $admin;
 
     private User $user;
@@ -55,6 +57,13 @@ class QuotationTest extends TestCase
         $this->imsDivision = Division::create([
             'division_name' => 'IMS',
             'description' => 'Integrated Monitoring System',
+            'type' => 'Internal',
+            'status' => 'Active',
+        ]);
+
+        $this->salesDivision = Division::create([
+            'division_name' => 'Sales',
+            'description' => 'Sales',
             'type' => 'Internal',
             'status' => 'Active',
         ]);
@@ -388,6 +397,80 @@ class QuotationTest extends TestCase
         $this->assertSame(5, count($response->json('data.items')));
         $this->assertSame(5, count($response->json('data.products')));
         $this->assertSame(123100000.0, (float) $response->json('data.items.0.selling_price'));
+    }
+
+    public function test_fetch_task_returns_creator_and_sales_assignees_only(): void
+    {
+        $config = $this->createApprovedConfiguration();
+        $task = Task::findOrFail($config->task_id);
+
+        $salesAssignee = User::create([
+            'username' => 'sales2',
+            'full_name' => 'Budi Sales',
+            'email' => 'sales2@has.com',
+            'password' => bcrypt('secret'),
+            'division_id' => $this->salesDivision->id,
+            'role' => 'User',
+        ]);
+
+        $task->assignees()->attach($salesAssignee->id, ['assigned_at' => now()]);
+        $task->assignees()->attach($this->user->id, ['assigned_at' => now()]);
+
+        $response = $this->actingAs($this->admin)
+            ->getJson(route('quotation.fetch-task').'?task_id='.$task->id)
+            ->assertOk();
+
+        $this->assertSame([$this->sales->id, $salesAssignee->id], $response->json('data.sales_ids'));
+        $this->assertSame(['zuri', 'Budi Sales'], $response->json('data.sales'));
+    }
+
+    public function test_store_and_submit_snapshot_sales_from_task(): void
+    {
+        $config = $this->createApprovedConfiguration();
+        $task = Task::findOrFail($config->task_id);
+
+        $salesAssignee = User::create([
+            'username' => 'sales2',
+            'full_name' => 'Budi Sales',
+            'email' => 'sales2@has.com',
+            'password' => bcrypt('secret'),
+            'division_id' => $this->salesDivision->id,
+            'role' => 'User',
+        ]);
+
+        $task->assignees()->attach($salesAssignee->id, ['assigned_at' => now()]);
+        // Flag salesperson tidak dipakai: divisi non-Sales tetap diabaikan.
+        $this->user->update(['salesperson' => true]);
+        $task->assignees()->attach($this->user->id, ['assigned_at' => now()]);
+
+        $this->actingAs($this->admin)->postJson(route('quotation.store'), [
+            'task_id' => $task->id,
+            'quote_configuration_ids' => [$config->id],
+            'from_name' => 'Zuri Muriani',
+            'items' => [$this->itemPayload($config, ['description' => 'Item A'])],
+        ])->assertOk();
+
+        $quotation = Quotation::latest('id')->firstOrFail();
+        $this->assertSame([$this->sales->id, $salesAssignee->id], $quotation->sales_ids);
+        $this->assertSame('zuri, Budi Sales', $quotation->salesNames());
+
+        $this->actingAs($this->admin)->postJson(route('quotation.submit', $quotation->id))->assertOk();
+
+        $quotation->refresh();
+        $this->assertSame([$this->sales->id, $salesAssignee->id], $quotation->sales_ids);
+
+        // Assignee baru setelah submit tidak boleh mengubah snapshot.
+        $lateSales = User::create([
+            'username' => 'sales3',
+            'full_name' => 'Late Sales',
+            'email' => 'sales3@has.com',
+            'password' => bcrypt('secret'),
+            'division_id' => $this->salesDivision->id,
+            'role' => 'User',
+        ]);
+        $task->assignees()->attach($lateSales->id, ['assigned_at' => now()]);
+
+        $this->assertStringNotContainsString('Late Sales', $quotation->salesNames());
     }
 
     public function test_fetch_task_merges_water_and_ims_configs(): void

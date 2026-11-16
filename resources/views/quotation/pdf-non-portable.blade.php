@@ -290,7 +290,11 @@
                 <tr>
                     <td class="kr">From</td>
                     <td class="right">
-                        {{ $quotation->from_name ?? '—' }}
+                        @forelse($quotation->salesUsers() as $sales)
+                            {{ $sales->display_name }}@if(!$loop->last)<br>@endif
+                        @empty
+                            {{ $quotation->from_name ?: '—' }}
+                        @endforelse
                     </td>
                 </tr>
                 <tr>
@@ -449,8 +453,13 @@
                 </td>
                 <td>
                     <div class="name">
-                        {{ ucfirst($quotation->from_name ?? '________') }}<br>
-                        <span class="phone">{{ $quotation->contact_phone ?? '' }}</span>
+                        @forelse($quotation->salesUsers() as $sales)
+                            {{ ucfirst($sales->display_name) }}@if($quotation->contact_phone) <span class="phone">{{ $quotation->contact_phone }}</span>@endif
+                            @if(!$loop->last)<br>@endif
+                        @empty
+                            {{ ucfirst($quotation->from_name ?: '________') }}<br>
+                            <span class="phone">{{ $quotation->contact_phone ?? '' }}</span>
+                        @endforelse
                     </div>
                 </td>
             </tr>

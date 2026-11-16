@@ -919,6 +919,9 @@ function pjApplyQuotation(id) {
             pjRecalcTerms();
             //pjRenderQuotationInfo(d);
             $('#pj-sync-note').html('<i class="fa fa-lock me-1"></i> Read-only from quotation ' + pjEsc(d.quotation_number || ('#' + id)) + '.');
+            if (!pjIsEdit) {
+                pjSetSales(d.sales || []);
+            }
             pjRenderSalesSplit();
         })
         .fail(function(xhr) {
@@ -952,6 +955,21 @@ function pjInitSales() {
         pjClearInvalid(this);
         pjRenderSalesSplit();
     });
+}
+
+function pjSetSales(sales) {
+    var $select = $('#pj-sales');
+    var ids = [];
+
+    (sales || []).forEach(function(s) {
+        var id = String(s.id);
+        if (!$select.find('option[value="' + id + '"]').length) {
+            $select.append(new Option(s.text || ('User #' + id), id, false, false));
+        }
+        ids.push(id);
+    });
+
+    $select.val(ids).trigger('change');
 }
 
 function pjRenderSalesSplit() {

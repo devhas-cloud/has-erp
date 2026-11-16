@@ -526,7 +526,7 @@
             <div class="info-item">
                 <div class="info-label">From</div>
                 <div class="info-value">
-                    {{ $quotation->from_name ?? '—' }}
+                    {{ $quotation->salesNames() ?: '—' }}
                 </div>
             </div>
 

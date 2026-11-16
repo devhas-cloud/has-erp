@@ -324,6 +324,7 @@ class QuotationController extends Controller
         }
 
         $sales = $task->creator;
+        $salesUsers = $task->salesUsers();
 
         // Mode edit: bandingkan configuration approved terakhir dengan snapshot
         // quotation (tab List Configuration) -> status per item + info revisi.
@@ -348,6 +349,8 @@ class QuotationController extends Controller
                 'attn_phone' => $config->pic_phone,
                 'attn_email' => $config->pic_email,
                 'from_name' => $config->sales_name,
+                'sales' => $salesUsers->map(fn ($user) => $user->display_name)->values(),
+                'sales_ids' => $salesUsers->pluck('id')->values(),
                 'contact_phone' => $sales?->phone_number,
                 'date' => $task->due_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
                 'configs' => $configList,
@@ -791,7 +794,7 @@ class QuotationController extends Controller
             ->groupBy('group_id')
             ->pluck('id');
 
-        $query = Quotation::with(['creator', 'task', 'opportunity.division', 'configurations.division'])
+        $query = Quotation::with(['creator', 'task', 'task.creator', 'task.assignees.division', 'opportunity.division', 'configurations.division'])
             ->whereIn('id', $latestIds);
 
         $recordsTotal = Quotation::query()
@@ -843,7 +846,7 @@ class QuotationController extends Controller
                 'division_name' => $quotation->opportunity?->division?->division_name ?? '—',
                 'date' => $quotation->date?->format('d/m/Y') ?? '—',
                 'date_raw' => $quotation->date?->toISOString(),
-                'sales_name' => $quotation->from_name ?? '—',
+                'sales_name' => $quotation->salesNames() ?: '—',
                 'item_count' => $quotation->items()->count(),
                 'grand_total' => $quotation->grand_total,
                 'grand_total_label' => Quotation::formatMoney($quotation->grand_total),
@@ -898,6 +901,9 @@ class QuotationController extends Controller
             ], 422);
         }
 
+        $salesUsers = $task->salesUsers();
+        $fromName = ($validated['from_name'] ?? null) ?: $salesUsers->first()?->display_name;
+
         $configs = $this->approvedConfigsOfTask($task);
         [$selectedIds, $invalid, $remapped] = $this->remapConfigIdsToLatest($validated['quote_configuration_ids'], $configs, $this->referencedConfigIds($validated));
 
@@ -909,7 +915,7 @@ class QuotationController extends Controller
         }
 
         try {
-            $quotation = DB::transaction(function () use ($validated, $task, $selectedIds, $remapped) {
+            $quotation = DB::transaction(function () use ($validated, $task, $selectedIds, $remapped, $salesUsers, $fromName) {
                 $quotation = Quotation::create([
                     'quote_configuration_id' => $selectedIds[0] ?? null,
                     'opportunity_id' => $task->opportunity_id,
@@ -925,7 +931,8 @@ class QuotationController extends Controller
                     'attn_name' => $validated['attn_name'] ?? null,
                     'attn_phone' => $validated['attn_phone'] ?? null,
                     'attn_email' => $validated['attn_email'] ?? null,
-                    'from_name' => $validated['from_name'] ?? null,
+                    'from_name' => $fromName,
+                    'sales_ids' => $salesUsers->pluck('id')->all(),
                     'contact_phone' => $validated['contact_phone'] ?? null,
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
@@ -1126,6 +1133,9 @@ class QuotationController extends Controller
             ], 422);
         }
 
+        $salesUsers = $task->salesUsers();
+        $fromName = ($validated['from_name'] ?? null) ?: $salesUsers->first()?->display_name;
+
         $configs = $this->approvedConfigsOfTask($task);
         [$selectedIds, $invalid, $remapped] = $this->remapConfigIdsToLatest($validated['quote_configuration_ids'], $configs, $this->referencedConfigIds($validated));
 
@@ -1137,7 +1147,7 @@ class QuotationController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($quotation, $task, $selectedIds, $validated, $remapped) {
+            DB::transaction(function () use ($quotation, $task, $selectedIds, $validated, $remapped, $salesUsers, $fromName) {
                 $quotation->update([
                     'quote_configuration_id' => $selectedIds[0] ?? null,
                     'opportunity_id' => $task->opportunity_id,
@@ -1153,7 +1163,8 @@ class QuotationController extends Controller
                     'attn_name' => $validated['attn_name'] ?? null,
                     'attn_phone' => $validated['attn_phone'] ?? null,
                     'attn_email' => $validated['attn_email'] ?? null,
-                    'from_name' => $validated['from_name'] ?? null,
+                    'from_name' => $fromName,
+                    'sales_ids' => $salesUsers->pluck('id')->all(),
                     'contact_phone' => $validated['contact_phone'] ?? null,
                     'parameter_note' => $validated['parameter_note'] ?? null,
                     'notes' => $validated['notes'] ?? null,
@@ -1344,7 +1355,12 @@ class QuotationController extends Controller
             ], 422);
         }
 
-        $quotation->update(['status' => Quotation::STATUS_WAITING_APPROVAL]);
+        $quotation->update([
+            'status' => Quotation::STATUS_WAITING_APPROVAL,
+            'sales_ids' => $quotation->task
+                ? $quotation->task->salesUsers()->pluck('id')->all()
+                : $quotation->sales_ids,
+        ]);
 
         Log::record(
             'submit_quotation',
@@ -1562,6 +1578,7 @@ class QuotationController extends Controller
                 'attn_phone' => $source->attn_phone,
                 'attn_email' => $source->attn_email,
                 'from_name' => $source->from_name,
+                'sales_ids' => $source->sales_ids,
                 'contact_phone' => $source->contact_phone,
                 'parameter_note' => $source->parameter_note,
                 'notes' => $source->notes,

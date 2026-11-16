@@ -273,7 +273,11 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">From (Sales)</label>
-                    <input type="text" class="form-control" id="qt-from" name="from_name" value="{{ $quotation?->from_name }}">
+                    <div class="form-control d-flex flex-wrap gap-1 align-items-center" id="qt-sales" style="min-height:38px">
+                        <span style="color:var(--text-muted)">{{ $quotation?->salesNames() ?: '—' }}</span>
+                    </div>
+                    <input type="hidden" id="qt-from" name="from_name" value="{{ $quotation?->from_name }}">
+                    <small style="color:var(--text-muted);font-weight:400">Sales mengikuti pembuat task + assignee divisi Sales. Ubah di Task Planner.</small>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Address</label>
@@ -1187,6 +1191,15 @@ function qtCollectItems() {
     return items;
 }
 
+function qtSetSales(names) {
+    var list = (names || []).filter(Boolean);
+    $('#qt-sales').html(list.length
+        ? list.map(function(name) {
+            return '<span class="badge bg-primary-subtle text-primary-emphasis me-1">' + qtEscHtml(name) + '</span>';
+        }).join('')
+        : '<span style="color:var(--text-muted)">—</span>');
+}
+
 function qtFillForm(data) {
     $('#qt-task-id').val(data.task_id || '');
     $('#qt-to').val(data.to_name || '');
@@ -1195,6 +1208,7 @@ function qtFillForm(data) {
     $('#qt-phone').val(data.attn_phone || '');
     $('#qt-email').val(data.attn_email || '');
     $('#qt-from').val(data.from_name || '');
+    qtSetSales(data.sales || []);
     $('#qt-contact-phone').val(data.contact_phone || '');
     if (data.date) $('#qt-date').val(data.date);
 }

@@ -576,8 +576,12 @@ class ProjectController extends Controller
     {
         $request->validate(['quotation_id' => 'required|integer|exists:quotations,id']);
 
-        $quotation = Quotation::with(['opportunity.accountCompany', 'profitEstimate'])
-            ->findOrFail($request->input('quotation_id'));
+        $quotation = Quotation::with([
+            'opportunity.accountCompany',
+            'profitEstimate',
+            'task.creator',
+            'task.assignees.division',
+        ])->findOrFail($request->input('quotation_id'));
 
         if (! in_array($quotation->status, [Quotation::STATUS_APPROVED, Quotation::STATUS_FINISH], true)) {
             return response()->json([
@@ -602,6 +606,8 @@ class ProjectController extends Controller
             ], 422);
         }
 
+        $salesUsers = $quotation->salesUsers();
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -612,6 +618,11 @@ class ProjectController extends Controller
                 'company_name' => $company->account_name,
                 'total_sale_amount' => (float) $quotation->grand_total,
                 'net_sale_amount' => (float) $estimate->real_project_value,
+                'sales' => $salesUsers->map(fn ($user) => [
+                    'id' => $user->id,
+                    'text' => $user->display_name,
+                ])->values(),
+                'sales_ids' => $salesUsers->pluck('id')->values(),
                 'billing_base_amount' => (new Project)->setRelation('quotation', $quotation)->billingBaseAmount(),
                 // Rincian dari Estimasi PL: Nilai Awal -> PPN -> Discount -> Referen -> Nilai Real Project.
                 'breakdown' => [
