@@ -42,6 +42,7 @@ class ModulesTableSeeder extends Seeder
             'MOD_QUOTATION',
             'MOD_PROFIT_ESTIMATE',
             'MOD_PROJECT',
+            'MOD_PROJECT_TRACKING',
             'MOD_PO_SUPPLIER_APPROVAL',
         ],
         'Purchasing' => [
@@ -386,6 +387,14 @@ class ModulesTableSeeder extends Seeder
                 'route_name' => 'production',
                 'icon' => 'fa fa-industry',
                 'group' => 'Produksi',
+            ],
+            [
+                'module_code' => 'MOD_PROJECT_TRACKING',
+                'module_name' => 'Project Tracking',
+                'description' => 'Monitoring proses setiap project dalam 7 tahap — dari opportunity sampai penagihan — beserta peringatan',
+                'route_name' => 'project-tracking',
+                'icon' => 'fa fa-route',
+                'group' => 'Admin',
             ],
             [
                 'module_code' => 'MOD_PACKING_LIST',

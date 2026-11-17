@@ -8,6 +8,7 @@ use App\Http\Controllers\MaterialHandoverController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\PackingListController;
 use App\Http\Controllers\ProductionController;
+use App\Http\Controllers\ProjectTrackingController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
@@ -328,6 +329,10 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('project/{id}/documents/{document}', [ProjectController::class, 'viewDocument'])->name('project.documents.show');
     Route::delete('project/{id}/documents/{document}', [ProjectController::class, 'deleteDocument'])->name('project.documents.destroy');
     Route::resource('project', ProjectController::class);
+
+    Route::get('project-tracking', [ProjectTrackingController::class, 'index'])->name('project-tracking.index');
+    Route::get('project-tracking/data', [ProjectTrackingController::class, 'data'])->name('project-tracking.data');
+    Route::get('project-tracking/{id}', [ProjectTrackingController::class, 'show'])->whereNumber('id')->name('project-tracking.show');
 
     Route::get('invoice/data', [InvoiceController::class, 'data'])->name('invoice.data');
     Route::get('invoice/search-projects', [InvoiceController::class, 'searchProjects'])->name('invoice.search-projects');
