@@ -76,6 +76,25 @@
         background: var(--accent-subtle); border-radius: var(--radius-sm); color: var(--text-muted);
     }
 
+    /* Picker configuration: seluruh baris bisa diklik untuk memilih */
+    .gr-picker-division { border: 1px solid var(--card-border); border-radius: var(--radius); overflow: hidden; }
+    .gr-picker-div-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--card-border); cursor: pointer; user-select: none; }
+    .gr-picker-div-head:hover { background: #ecfdf5; }
+    /* Skin baris = sama dengan picker IH Configuration (configuration.partials._product-picker-modal) */
+    .gr-picker-item-row { cursor: pointer; user-select: none; transition: background-color .15s ease; }
+    .gr-picker-item-row.is-selected, .gr-picker-item-row.is-selected td { background-color: #ecfdf5 !important; }
+    .gr-picker-item-row:not(.is-added):hover, .gr-picker-item-row:not(.is-added):hover td { background-color: #d1fae5 !important; color: #065f46; }
+    .gr-picker-item-row:not(.is-added):hover code { color: #065f46; }
+    .gr-picker-item-row.is-added { cursor: default; }
+    .gr-picker-item-row.is-added td { opacity: .75; }
+    .gr-existing-badge { display: inline-block; margin-left: .35rem; font-size: 10px; padding: .05rem .4rem; border-radius: 4px; background: #fef3c7; color: #92400e; vertical-align: middle; }
+    .gr-picker-check, .gr-picker-check-div, #gr-picker-check-all, .gr-product-check, #gr-product-check-all { width: 16px; height: 16px; cursor: pointer; }
+    .gr-picker-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+    .gr-picker-toolbar .gr-pp-search { flex: 1 1 260px; }
+    .gr-picker-selbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; padding: 8px 12px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: var(--bg); font-size: 12.5px; }
+    .gr-picker-selcount { font-weight: 600; }
+    .gr-picker-selcount.has { display: inline-flex; align-items: center; font-size: 11.5px; padding: .15rem .6rem; border-radius: 999px; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+
     /* Picker katalog */
     .gr-pp-toolbar { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 8px; }
     @media (max-width: 767.98px) { .gr-pp-toolbar { grid-template-columns: 1fr; } }
@@ -84,15 +103,18 @@
     .gr-pp-search input { padding-left: 30px; }
     .gr-pp-table-wrap { border: 1px solid var(--card-border); border-radius: var(--radius-sm); overflow: auto; max-height: 52vh; }
     .gr-pp-table-wrap thead th { position: sticky; top: 0; z-index: 1; background: var(--card); }
-    #gr-product-body tr { cursor: pointer; }
-    #gr-product-body tr.is-selected { background: var(--accent-subtle); }
-    #gr-product-body tr.is-added { opacity: .55; cursor: default; }
+    #gr-product-body tr { cursor: pointer; transition: background-color .15s ease; }
+    #gr-product-body tr.is-selected, #gr-product-body tr.is-selected td { background-color: #ecfdf5 !important; }
+    #gr-product-body tr:not(.is-added):hover, #gr-product-body tr:not(.is-added):hover td { background-color: #d1fae5 !important; color: #065f46; }
+    #gr-product-body tr:not(.is-added):hover code, #gr-product-body tr:not(.is-added):hover .gr-pp-desc, #gr-product-body tr:not(.is-added):hover .gr-pp-meta { color: #065f46; }
+    #gr-product-body tr.is-added { cursor: default; }
+    #gr-product-body tr.is-added td { opacity: .75; }
     .gr-pp-name { font-weight: 600; font-size: 13px; }
     .gr-pp-desc { font-size: 12px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .gr-pp-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
     .gr-pp-footer-info { font-size: 12.5px; color: var(--text-muted); }
     .gr-pp-pager .page-link { font-size: 12.5px; padding: 3px 9px; }
-    .gr-pp-selected-badge { font-size: 12px; }
+    .gr-pp-selected-badge { font-size: 11.5px; background: #d1fae5 !important; color: #065f46 !important; border: 1px solid #a7f3d0; border-radius: 999px; }
 </style>
 @endsection
 
@@ -252,20 +274,28 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <label class="d-flex align-items-center gap-2 mb-0" style="font-size:12px;color:var(--text-muted);cursor:pointer">
-                        <input type="checkbox" id="gr-picker-check-all"> Select All
-                    </label>
-                    <small style="color:var(--text-muted)">Each configuration is shown as a separate table, ordered by parent → child hierarchy.</small>
+                <div class="gr-picker-toolbar">
+                    <div class="gr-pp-search">
+                        <i class="fa fa-magnifying-glass"></i>
+                        <input type="text" class="form-control form-control-sm" id="gr-picker-search" placeholder="Search no, part number, item name..." autocomplete="off">
+                    </div>
                 </div>
+                <div class="gr-picker-selbar">
+                    <label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer">
+                        <input type="checkbox" id="gr-picker-check-all"> <span>Select all shown</span>
+                    </label>
+                    <span class="gr-picker-selcount" id="gr-picker-selcount">No items selected</span>
+                    <button type="button" class="btn btn-link btn-sm p-0" id="gr-picker-clear" style="display:none">Clear selection</button>
+                </div>
+                <small class="d-block mb-3" style="color:var(--text-muted)"><i class="fa fa-hand-pointer me-1"></i>Click a row to select it, Shift+click to select a range, click a configuration header to select all of it. Items are ordered by parent → child hierarchy.</small>
                 <div id="gr-picker-body">
                     <div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="grApplyPicked()">
-                    <i class="fa fa-plus me-1"></i> Add Selected
+                <button type="button" class="btn btn-primary btn-sm" id="gr-picker-apply" onclick="grApplyPicked()" disabled>
+                    <i class="fa fa-plus me-1"></i> <span id="gr-picker-apply-label">Add Selected</span>
                 </button>
             </div>
         </div>
@@ -621,7 +651,9 @@ function grLoadPicker() {
     }
 
     $('#gr-picker-body').html('<div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>');
-    $('#gr-picker-check-all').prop('checked', false);
+    $('#gr-picker-search').val('');
+    grPickerLastIdx = null;
+    grPickerSync();
     if (!grPickerInstance) {
         grPickerInstance = new bootstrap.Modal(document.getElementById('grPickerModal'));
     }
@@ -637,9 +669,12 @@ function grLoadPicker() {
             if (grPickerPool.length === 0) {
                 $('#gr-picker-body').html(hiddenNote + '<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>'
                     + (hidden ? 'All configuration items have already been requested.' : 'No approved configuration items for this opportunity yet.') + '</div>');
+                grPickerSync();
                 return;
             }
-            $('#gr-picker-body').html(hiddenNote + grBuildPickerGroupsHtml(grPickerPool));
+            $('#gr-picker-body').html(hiddenNote + grBuildPickerGroupsHtml(grPickerPool)
+                + '<div class="config-card-empty" id="gr-picker-noresult" style="display:none"><i class="fa-solid fa-magnifying-glass"></i>No items match the search.</div>');
+            grPickerSync();
         })
         .fail(function() {
             $('#gr-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load items.</div>');
@@ -672,13 +707,13 @@ function grBuildPickerGroupsHtml(pool) {
         var divGroup = 'd' + (divIdx++);
         var divLabel = /configuration/i.test(div) ? div : (div + ' Configuration');
 
-        html += '<div class="gr-picker-division mb-3" style="border:1px solid var(--card-border);border-radius:var(--radius);overflow:hidden">';
-        html += '<div class="d-flex justify-content-between align-items-center px-3 py-2" style="background:var(--bg);border-bottom:1px solid var(--card-border)">';
-        html += '<label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer">';
-        html += '<input type="checkbox" class="gr-picker-check-div" data-group="' + divGroup + '">';
+        html += '<div class="gr-picker-division mb-3" data-group="' + divGroup + '">';
+        html += '<div class="gr-picker-div-head" title="Click to select / deselect all items in this configuration">';
+        html += '<span class="d-flex align-items-center gap-2">';
+        html += '<input type="checkbox" class="gr-picker-check-div" data-group="' + divGroup + '" aria-label="Select configuration">';
         html += '<strong style="font-size:13px">' + grEsc(divLabel) + '</strong>';
-        html += '</label>';
-        html += '<span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px">' + d.count + ' item</span>';
+        html += '</span>';
+        html += '<span class="badge gr-picker-div-count" style="background:var(--accent-soft);color:var(--accent);font-size:11px">' + d.count + ' item</span>';
         html += '</div>';
         html += '<div class="table-responsive">';
         html += '<table class="table table-custom align-middle mb-0">';
@@ -695,15 +730,17 @@ function grBuildPickerGroupsHtml(pool) {
             var it = pool[idx];
             var pad = (it.depth || 0) * 18;
             var isAdded = it.quote_configuration_item_id && added[it.quote_configuration_item_id];
-            html += '<tr class="gr-picker-item-row" data-group="' + divGroup + '"' + (isAdded ? ' style="opacity:.55"' : '') + '>';
+            var searchText = [it.item_no, it.part_number, it.name, $('<div>').html(it.description || '').text()].join(' ').toLowerCase();
+            html += '<tr class="gr-picker-item-row' + (isAdded ? ' is-added' : '') + '" data-group="' + divGroup + '" data-search="' + grEsc(searchText) + '"'
+                + (isAdded ? ' title="Already in the list"' : '') + '>';
             html += '<td>' + (isAdded
                 ? '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>'
-                : '<input type="checkbox" class="gr-picker-check" data-idx="' + idx + '">') + '</td>';
+                : '<input type="checkbox" class="gr-picker-check" data-idx="' + idx + '" aria-label="Select item">') + '</td>';
             html += '<td>' + grEsc(it.item_no || '') + '</td>';
             html += '<td style="padding-left:' + pad + 'px">' + grEsc(it.part_number || '—') + '</td>';
             {{-- Deskripsi sudah HTML tersanitasi dari server (Quotation::renderDescription) --}}
             html += '<td style="padding-left:' + pad + 'px">' + (it.description || it.name || '—')
-                + (isAdded ? ' <span class="gr-chip manual">Already added</span>' : '') + '</td>';
+                + (isAdded ? ' <span class="gr-existing-badge">Already added</span>' : '') + '</td>';
             html += '<td class="text-center">' + grEsc(it.qty || '') + '</td>';
             html += '<td>' + grEsc(it.currency || '') + '</td>';
             html += '</tr>';
@@ -715,10 +752,71 @@ function grBuildPickerGroupsHtml(pool) {
     return html;
 }
 
-$(document).on('change', '.gr-picker-check-div', function() {
-    var group = $(this).data('group');
-    var checked = $(this).is(':checked');
-    $('.gr-picker-item-row[data-group="' + group + '"]').find('.gr-picker-check').prop('checked', checked);
+// ── Picker configuration: pemilihan per baris ──
+let grPickerLastIdx = null; // untuk Shift+klik (rentang)
+
+function grPickerSync() {
+    $('.gr-picker-item-row').each(function() {
+        $(this).toggleClass('is-selected', $(this).find('.gr-picker-check').prop('checked') === true);
+    });
+
+    // Checkbox per configuration: centang / sebagian (indeterminate) / kosong + jumlah terpilih
+    $('.gr-picker-division').each(function() {
+        var $div = $(this);
+        var $all = $div.find('.gr-picker-check');
+        var $shown = $div.find('.gr-picker-item-row:visible .gr-picker-check');
+        var selected = $all.filter(':checked').length;
+        var total = $div.find('.gr-picker-item-row').length;
+        $div.find('.gr-picker-check-div')
+            .prop('disabled', $shown.length === 0)
+            .prop('checked', $shown.length > 0 && $shown.filter(':checked').length === $shown.length)
+            .prop('indeterminate', selected > 0 && $shown.filter(':checked').length < $shown.length);
+        $div.find('.gr-picker-div-count').text(selected ? selected + ' / ' + total + ' selected' : total + ' item');
+    });
+
+    var $shown = $('.gr-picker-item-row:visible .gr-picker-check');
+    var shownChecked = $shown.filter(':checked').length;
+    $('#gr-picker-check-all')
+        .prop('disabled', $shown.length === 0)
+        .prop('checked', $shown.length > 0 && shownChecked === $shown.length)
+        .prop('indeterminate', shownChecked > 0 && shownChecked < $shown.length);
+
+    var count = $('.gr-picker-check:checked').length;
+    var hidden = $('.gr-picker-item-row:hidden .gr-picker-check:checked').length;
+    $('#gr-picker-selcount').toggleClass('has', count > 0).text(count
+        ? count + ' item selected' + (hidden ? ' (' + hidden + ' hidden by search)' : '')
+        : 'No items selected');
+    $('#gr-picker-clear').toggle(count > 0);
+    $('#gr-picker-apply').prop('disabled', count === 0);
+    $('#gr-picker-apply-label').text(count ? 'Add ' + count + ' Item' + (count > 1 ? 's' : '') : 'Add Selected');
+}
+
+// Klik di mana saja pada baris = toggle; Shift+klik = pilih rentang.
+$(document).on('click', '.gr-picker-item-row', function(e) {
+    var $cb = $(this).find('.gr-picker-check');
+    if (!$cb.length) return; // sudah ada di daftar
+    var checked = $(e.target).is('.gr-picker-check') ? $cb.prop('checked') : !$cb.prop('checked');
+
+    var $rows = $('.gr-picker-item-row:visible');
+    var idx = $rows.index(this);
+    if (e.shiftKey && grPickerLastIdx !== null && grPickerLastIdx !== idx) {
+        var from = Math.min(grPickerLastIdx, idx), to = Math.max(grPickerLastIdx, idx);
+        $rows.slice(from, to + 1).find('.gr-picker-check').prop('checked', checked);
+        window.getSelection && window.getSelection().removeAllRanges();
+    } else {
+        $cb.prop('checked', checked);
+    }
+    grPickerLastIdx = idx;
+    grPickerSync();
+});
+
+// Header configuration (atau checkbox-nya) = pilih / batal semua item tampil di configuration tsb.
+$(document).on('click', '.gr-picker-div-head', function(e) {
+    var $dcb = $(this).find('.gr-picker-check-div');
+    if ($dcb.prop('disabled')) return;
+    var checked = $(e.target).is('.gr-picker-check-div') ? $dcb.prop('checked') : !$dcb.prop('checked');
+    $(this).closest('.gr-picker-division').find('.gr-picker-item-row:visible .gr-picker-check').prop('checked', checked);
+    grPickerSync();
 });
 
 function grApplyPicked() {
@@ -778,7 +876,7 @@ function grRenderProductPool(meta) {
                 ? '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>'
                 : '<input type="checkbox" class="gr-product-check" data-idx="' + idx + '"' + (isSelected ? ' checked' : '') + '>') + '</td>';
             html += '<td style="font-size:12.5px">' + grEsc(p.code || '—') + '</td>';
-            html += '<td><div class="gr-pp-name">' + grEsc(p.name || desc || '—') + (isAdded ? ' <span class="gr-chip manual">Already added</span>' : '') + '</div>';
+            html += '<td><div class="gr-pp-name">' + grEsc(p.name || desc || '—') + (isAdded ? ' <span class="gr-existing-badge">Already added</span>' : '') + '</div>';
             if (desc && desc !== p.name) html += '<div class="gr-pp-desc">' + grEsc(desc) + '</div>';
             if (meta) html += '<div class="gr-pp-meta"><i class="fa fa-tag me-1"></i>' + grEsc(meta) + '</div>';
             html += '</td>';
@@ -1071,9 +1169,28 @@ $(document).ready(function() {
 
     $('#gr-btn-pick').on('click', grLoadPicker);
 
+    $('#gr-picker-clear').on('click', function() {
+        $('.gr-picker-check').prop('checked', false);
+        grPickerLastIdx = null;
+        grPickerSync();
+    });
+
+    $('#gr-picker-search').on('input', function() {
+        var q = $.trim($(this).val()).toLowerCase();
+        $('.gr-picker-item-row').each(function() {
+            $(this).toggle(!q || String($(this).data('search')).indexOf(q) !== -1);
+        });
+        $('.gr-picker-division').each(function() {
+            $(this).toggle(!q || $(this).find('.gr-picker-item-row:visible').length > 0);
+        });
+        $('#gr-picker-noresult').toggle(!!q && $('.gr-picker-item-row:visible').length === 0);
+        grPickerLastIdx = null;
+        grPickerSync();
+    });
+
     $('#gr-picker-check-all').on('change', function() {
-        var checked = $(this).is(':checked');
-        $('.gr-picker-check, .gr-picker-check-div').prop('checked', checked);
+        $('.gr-picker-item-row:visible .gr-picker-check').prop('checked', $(this).is(':checked'));
+        grPickerSync();
     });
 
     $('#gr-product-check-all').on('change', function() {

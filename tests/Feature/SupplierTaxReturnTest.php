@@ -163,7 +163,11 @@ class SupplierTaxReturnTest extends TestCase
         // Barang retur tidak bisa ditagih: sisa yang bisa ditagih hanya 1.
         $this->storeBill(2)->assertStatus(422);
 
-        $this->actingAs($this->admin)->get(route('supplier-return.index'))->assertOk()->assertSee('3 unit pecah');
+        $this->actingAs($this->admin)->get(route('supplier-return.index'))->assertOk();
+        $this->actingAs($this->admin)->getJson(route('supplier-return.data', ['draw' => 1, 'supplier' => $this->po->supplier_id]))
+            ->assertOk()->assertJsonPath('recordsFiltered', 1)->assertSee('3 unit pecah');
+        $this->actingAs($this->admin)->getJson(route('supplier-return.data', ['draw' => 1, 'warehouse' => 'direct']))
+            ->assertOk()->assertJsonPath('recordsFiltered', 0);
         $this->actingAs($this->admin)->get(route('supplier-return.show', $id))->assertOk();
         $this->actingAs($this->admin)->get(route('supplier-return.create'))->assertOk();
         $this->actingAs($this->admin)->get(route('purchase-order.show', $this->po->id))->assertOk()->assertSee('Retur ke Supplier');

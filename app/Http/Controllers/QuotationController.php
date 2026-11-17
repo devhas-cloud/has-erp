@@ -44,7 +44,10 @@ class QuotationController extends Controller
 
     public function index()
     {
-        return view('quotation.index');
+        $divisions = Division::where('type', 'Internal')->where('status', 'Active')->orderBy('division_name')->get();
+        $statuses = Quotation::STATUS_LABELS;
+
+        return view('quotation.index', compact('divisions', 'statuses'));
     }
 
     /**
@@ -803,6 +806,25 @@ class QuotationController extends Controller
             ->get()
             ->count();
 
+        $filters = $request->validate([
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
+            'status' => 'nullable|string|in:'.implode(',', array_keys(Quotation::STATUS_LABELS)),
+            'division_id' => 'nullable|integer',
+        ]);
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('date', '>=', $filters['date_from']);
+        }
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('date', '<=', $filters['date_to']);
+        }
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (! empty($filters['division_id'])) {
+            $query->whereHas('opportunity', fn ($o) => $o->where('division_id', $filters['division_id']));
+        }
+
         $searchValue = $request->input('search.value');
         if ($searchValue) {
             $query->where(function ($q) use ($searchValue) {
@@ -821,7 +843,7 @@ class QuotationController extends Controller
         $orderDirection = $request->input('order.0.dir', 'asc');
 
         $columnOrderMap = [
-            3 => 'date',
+            4 => 'date',
             6 => 'grand_total',
         ];
 

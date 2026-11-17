@@ -45,12 +45,19 @@ class GoodsReceiptController extends Controller
 
     public function index()
     {
-        return view('goods-receipt.index');
+        $suppliers = PurchaseOrder::whereHas('goodsReceipts')->whereNotNull('supplier_name')->pluck('supplier_name')
+            ->merge(DirectPurchase::whereHas('goodsReceipts')->whereNotNull('supplier_name')->pluck('supplier_name'))
+            ->unique()->sort()->values();
+
+        return view('goods-receipt.index', [
+            'suppliers' => $suppliers,
+            'warehouses' => Warehouse::with('branch')->whereIn('id', GoodsReceipt::whereNotNull('warehouse_id')->select('warehouse_id'))->orderBy('name')->get(),
+        ]);
     }
 
     public function data(Request $request): JsonResponse
     {
-        $query = GoodsReceipt::withCount('items')->with(['purchaseOrder', 'directPurchase', 'warehouse', 'creator']);
+        $query = GoodsReceipt::withCount('items')->with(['purchaseOrder', 'directPurchase', 'warehouse.branch', 'items:id,goods_receipt_id']);
 
         $recordsTotal = (clone $query)->count();
 
@@ -58,11 +65,26 @@ class GoodsReceiptController extends Controller
         if ($searchValue) {
             $query->where(function ($q) use ($searchValue) {
                 $q->where('receipt_number', 'like', "%{$searchValue}%")
+                    ->orWhere('note', 'like', "%{$searchValue}%")
                     ->orWhereHas('purchaseOrder', fn ($po) => $po->where('po_number', 'like', "%{$searchValue}%")->orWhere('supplier_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('directPurchase', fn ($dp) => $dp->where('dp_number', 'like', "%{$searchValue}%")->orWhere('supplier_name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('warehouse', fn ($w) => $w->where('name', 'like', "%{$searchValue}%"));
             });
         }
+
+        // Filter bar: jenis dokumen, gudang (direct = langsung pakai), supplier, tanggal terima, SN belum lengkap, milik saya.
+        $supplier = $request->input('supplier');
+        $query->when($request->input('source_type') === self::SOURCE_PO, fn ($q) => $q->whereNotNull('purchase_order_id'))
+            ->when($request->input('source_type') === self::SOURCE_DP, fn ($q) => $q->whereNotNull('direct_purchase_id'))
+            ->when($request->input('warehouse') === 'direct', fn ($q) => $q->whereNull('warehouse_id'))
+            ->when(ctype_digit((string) $request->input('warehouse')), fn ($q) => $q->where('warehouse_id', (int) $request->input('warehouse')))
+            ->when($supplier, fn ($q) => $q->where(fn ($w) => $w
+                ->whereHas('purchaseOrder', fn ($po) => $po->where('supplier_name', $supplier))
+                ->orWhereHas('directPurchase', fn ($dp) => $dp->where('supplier_name', $supplier))))
+            ->when($request->input('date_from'), fn ($q, $from) => $q->whereDate('received_date', '>=', $from))
+            ->when($request->input('date_to'), fn ($q, $to) => $q->whereDate('received_date', '<=', $to))
+            ->when($request->boolean('missing_sn'), fn ($q) => $q->whereHas('items.stocks', fn ($s) => $s->missingSerial()))
+            ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', Auth::id()));
 
         $recordsFiltered = (clone $query)->count();
 
@@ -71,15 +93,31 @@ class GoodsReceiptController extends Controller
 
         $receipts = $query->orderBy('id', 'desc')->offset($start)->limit($length)->get();
 
+        // Unit barang ber-SN yang SN-nya belum diisi, per penerimaan (satu query).
+        $itemToReceipt = collect();
+        foreach ($receipts as $r) {
+            foreach ($r->items as $item) {
+                $itemToReceipt[$item->id] = $r->id;
+            }
+        }
+        $missing = $itemToReceipt->isEmpty() ? collect() : Stock::missingSerial()
+            ->where('source_type', Stock::SOURCE_GOODS_RECEIPT_ITEM)
+            ->whereIn('source_id', $itemToReceipt->keys())
+            ->pluck('source_id')
+            ->countBy(fn ($itemId) => $itemToReceipt[$itemId]);
+
         $data = $receipts->map(fn (GoodsReceipt $receipt, $i) => [
             'DT_RowIndex' => $start + $i + 1,
             'id' => $receipt->id,
             'receipt_number' => $receipt->receipt_number ?: '—',
             'source' => $receipt->sourceNumber(),
+            'source_kind' => $receipt->purchase_order_id ? 'PO' : 'DPO',
             'supplier_name' => $receipt->supplierName() ?? '—',
-            'warehouse_name' => $receipt->warehouse?->name ?? 'Langsung pakai',
+            'warehouse_name' => $receipt->warehouse?->name,
+            'warehouse_branch' => $receipt->warehouse?->branch?->name,
             'received_date' => $receipt->received_date?->format('d/m/Y') ?? '—',
             'item_count' => $receipt->items_count,
+            'missing_serial' => (int) ($missing[$receipt->id] ?? 0),
             'status' => $receipt->status,
             'status_label' => $receipt->status_label,
             'status_badge' => $receipt->statusBadgeHtml(),

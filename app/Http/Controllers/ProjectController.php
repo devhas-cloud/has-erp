@@ -47,7 +47,11 @@ class ProjectController extends Controller
 {
     public function index()
     {
-        return view('project.index');
+        return view('project.index', [
+            'statuses' => Project::STATUS_LABELS,
+            'types' => Project::TYPE_LABELS,
+            'divisions' => Division::where('status', 'Active')->where('type', 'Internal')->orderBy('division_name')->get(),
+        ]);
     }
 
     public function data(Request $request): JsonResponse
@@ -55,6 +59,25 @@ class ProjectController extends Controller
         $query = Project::with(['company', 'quotation', 'creator', 'warranty']);
 
         $recordsTotal = (clone $query)->count();
+
+        $filters = $request->validate([
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
+            'status' => 'nullable|string|in:'.implode(',', array_keys(Project::STATUS_LABELS)),
+            'type' => 'nullable|string|in:'.implode(',', array_keys(Project::TYPE_LABELS)),
+        ]);
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('po_date', '>=', $filters['date_from']);
+        }
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('po_date', '<=', $filters['date_to']);
+        }
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (! empty($filters['type'])) {
+            $query->where('type_of_achievement', $filters['type']);
+        }
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {
@@ -694,6 +717,25 @@ class ProjectController extends Controller
         ]);
 
         $recordsTotal = (clone $query)->count();
+
+        $filters = $request->validate([
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
+            'division_id' => 'nullable|integer',
+        ]);
+        if (! empty($filters['date_from']) || ! empty($filters['date_to'])) {
+            $query->whereHas('project', function ($p) use ($filters) {
+                if (! empty($filters['date_from'])) {
+                    $p->whereDate('po_date', '>=', $filters['date_from']);
+                }
+                if (! empty($filters['date_to'])) {
+                    $p->whereDate('po_date', '<=', $filters['date_to']);
+                }
+            });
+        }
+        if (! empty($filters['division_id'])) {
+            $query->where('division_id', $filters['division_id']);
+        }
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {

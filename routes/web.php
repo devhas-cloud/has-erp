@@ -480,6 +480,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::delete('supplier-refund/{id}/documents/{document}', [SupplierRefundController::class, 'deleteDocument'])->name('supplier-refund.documents.destroy');
     Route::resource('supplier-refund', SupplierRefundController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
 
+    Route::get('supplier-return/data', [SupplierReturnController::class, 'data'])->name('supplier-return.data');
     Route::get('supplier-return/returnable-lines', [SupplierReturnController::class, 'returnableLines'])->name('supplier-return.returnable-lines');
     Route::get('supplier-return/stock-options', [SupplierReturnController::class, 'stockOptions'])->name('supplier-return.stock-options');
     Route::resource('supplier-return', SupplierReturnController::class)->only(['index', 'create', 'store', 'show']);

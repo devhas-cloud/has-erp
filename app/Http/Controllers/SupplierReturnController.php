@@ -9,6 +9,7 @@ use App\Models\PurchaseOrderItem;
 use App\Models\Quotation;
 use App\Models\Stock;
 use App\Models\StockLog;
+use App\Models\Supplier;
 use App\Models\SupplierReturn;
 use App\Models\Warehouse;
 use App\Services\StockException;
@@ -19,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Retur ke Supplier (grup Purchasing, Tahap 4). Hanya qty yang sudah diterima
@@ -39,7 +41,68 @@ class SupplierReturnController extends Controller
     public function index()
     {
         return view('supplier-return.index', [
-            'returns' => SupplierReturn::with(['supplier', 'purchaseOrder', 'warehouse'])->withSum('items', 'qty')->orderByDesc('id')->limit(200)->get(),
+            // Hanya supplier & gudang yang pernah dipakai retur.
+            'suppliers' => Supplier::whereIn('id', SupplierReturn::select('supplier_id'))->orderBy('name')->get(['id', 'name']),
+            'warehouses' => Warehouse::whereIn('id', SupplierReturn::whereNotNull('warehouse_id')->select('warehouse_id'))->orderBy('name')->get(['id', 'name']),
+            'hasDirect' => SupplierReturn::whereNull('warehouse_id')->exists(),
+        ]);
+    }
+
+    public function data(Request $request): JsonResponse
+    {
+        $query = SupplierReturn::with(['supplier', 'purchaseOrder', 'warehouse', 'creator'])->withSum('items', 'qty');
+
+        $recordsTotal = (clone $query)->count();
+
+        $searchValue = $request->input('search.value');
+        if ($searchValue) {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('return_number', 'like', "%{$searchValue}%")
+                    ->orWhere('reason', 'like', "%{$searchValue}%")
+                    ->orWhereHas('purchaseOrder', fn ($po) => $po->where('po_number', 'like', "%{$searchValue}%"))
+                    ->orWhereHas('supplier', fn ($sup) => $sup->where('name', 'like', "%{$searchValue}%"))
+                    ->orWhereHas('items.purchaseOrderItem', fn ($i) => $i->where('part_number', 'like', "%{$searchValue}%"));
+            });
+        }
+
+        // Filter bar: supplier, gudang ("direct" = langsung pakai), tanggal retur, milik saya.
+        $query->when($request->input('supplier'), fn ($q, $supplier) => $q->where('supplier_id', $supplier))
+            ->when($request->input('warehouse'), fn ($q, $warehouse) => $warehouse === 'direct'
+                ? $q->whereNull('warehouse_id')
+                : $q->where('warehouse_id', $warehouse))
+            ->when($request->input('date_from'), fn ($q, $from) => $q->whereDate('return_date', '>=', $from))
+            ->when($request->input('date_to'), fn ($q, $to) => $q->whereDate('return_date', '<=', $to))
+            ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', Auth::id()));
+
+        $recordsFiltered = $query->count();
+
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+
+        $returns = $query->orderByDesc('id')->offset($start)->limit($length)->get();
+
+        $data = [];
+        foreach ($returns as $i => $return) {
+            $data[] = [
+                'DT_RowIndex' => $start + $i + 1,
+                'id' => $return->id,
+                'return_number' => $return->return_number,
+                'date' => $return->return_date?->format('d/m/Y') ?? '—',
+                'purchase_order_id' => $return->purchase_order_id,
+                'po_number' => $return->purchaseOrder?->po_number ?? '—',
+                'supplier_name' => $return->supplier?->name ?? '—',
+                'warehouse_name' => $return->warehouse?->name ?? 'Langsung pakai',
+                'qty' => (int) $return->items_sum_qty,
+                'reason' => Str::limit((string) $return->reason, 90),
+                'creator_name' => $return->creator?->display_name ?? '—',
+            ];
+        }
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
         ]);
     }
 

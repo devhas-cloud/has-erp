@@ -78,6 +78,22 @@
 
     .po-picker-toolbar { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
     @media (max-width: 767.98px) { .po-picker-toolbar { grid-template-columns: 1fr; } }
+
+    /* Picker: seluruh baris bisa diklik untuk memilih */
+    .po-picker-group { border: 1px solid var(--card-border); border-radius: var(--radius); overflow: hidden; }
+    .po-picker-group-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--card-border); cursor: pointer; user-select: none; }
+    .po-picker-group-head:hover { background: #ecfdf5; }
+    /* Skin baris = sama dengan picker IH Configuration & Goods Request */
+    .po-picker-item-row { cursor: pointer; user-select: none; transition: background-color .15s ease; }
+    .po-picker-item-row.is-selected, .po-picker-item-row.is-selected td { background-color: #ecfdf5 !important; }
+    .po-picker-item-row:not(.is-disabled):hover, .po-picker-item-row:not(.is-disabled):hover td { background-color: #d1fae5 !important; color: #065f46; }
+    .po-picker-item-row:not(.is-disabled):hover .po-hint { color: #065f46; }
+    .po-picker-item-row.is-disabled { cursor: not-allowed; }
+    .po-picker-item-row.is-disabled td { opacity: .5; }
+    .po-picker-check, .po-picker-check-group, #po-picker-check-all { width: 16px; height: 16px; cursor: pointer; }
+    .po-picker-selbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding: 8px 12px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: var(--bg); font-size: 12.5px; }
+    .po-picker-selbar .po-picker-selcount { font-weight: 600; }
+    .po-picker-selbar .po-picker-selcount.has { display: inline-flex; align-items: center; font-size: 11.5px; padding: .15rem .6rem; border-radius: 999px; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
 </style>
 @endsection
 
@@ -347,20 +363,22 @@
                     </select>
                     <input type="text" class="form-control form-control-sm" id="po-picker-search" placeholder="Search part number / item name..." autocomplete="off">
                 </div>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <label class="d-flex align-items-center gap-2 mb-0" style="font-size:12px;color:var(--text-muted);cursor:pointer">
-                        <input type="checkbox" id="po-picker-check-all"> Select All
+                <div class="po-picker-selbar">
+                    <label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer">
+                        <input type="checkbox" id="po-picker-check-all"> <span>Select all shown</span>
                     </label>
-                    <small style="color:var(--text-muted)">Only Approved items with remaining need. Free stock is informational only — still purchasable.</small>
+                    <span class="po-picker-selcount" id="po-picker-selcount">No items selected</span>
+                    <button type="button" class="btn btn-link btn-sm p-0" id="po-picker-clear" style="display:none">Clear selection</button>
                 </div>
+                <small class="d-block mb-2" style="color:var(--text-muted)"><i class="fa fa-hand-pointer me-1"></i>Click a row to select it, Shift+click to select a range. Only Approved items with remaining need; free stock is informational only — still purchasable.</small>
                 <div id="po-picker-body">
                     <div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="poApplyPicked()">
-                    <i class="fa fa-plus me-1"></i> Add Selected
+                <button type="button" class="btn btn-primary btn-sm" id="po-picker-apply" onclick="poApplyPicked()" disabled>
+                    <i class="fa fa-plus me-1"></i> <span id="po-picker-apply-label">Add Selected</span>
                 </button>
             </div>
         </div>
@@ -572,13 +590,13 @@ function poBuildPickerGroupsHtml(groups) {
         var title = (gr.project_number ? gr.project_number + ' — ' : '') + gr.project_name + ' · ' + (gr.division_name || 'No Division') + ' · Request ' + gr.request_number;
         var sourceLabel = 'Request ' + gr.request_number + ' / ' + (gr.division_name || '-');
 
-        html += '<div class="po-picker-group mb-3" style="border:1px solid var(--card-border);border-radius:var(--radius);overflow:hidden">';
-        html += '<div class="d-flex justify-content-between align-items-center px-3 py-2" style="background:var(--bg);border-bottom:1px solid var(--card-border)">';
-        html += '<label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer">';
-        html += '<input type="checkbox" class="po-picker-check-group" data-group="' + group + '">';
+        html += '<div class="po-picker-group mb-3" data-group="' + group + '">';
+        html += '<div class="po-picker-group-head" data-group="' + group + '" title="Click to select / deselect all items in this group">';
+        html += '<span class="d-flex align-items-center gap-2">';
+        html += '<input type="checkbox" class="po-picker-check-group" data-group="' + group + '" aria-label="Select group">';
         html += '<strong style="font-size:13px">' + poEsc(title) + '</strong>';
-        html += '</label>';
-        html += '<span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px">' + gr.items.length + ' item</span>';
+        html += '</span>';
+        html += '<span class="badge po-picker-group-count" style="background:var(--accent-soft);color:var(--accent);font-size:11px">' + gr.items.length + ' item</span>';
         html += '</div>';
         html += '<div class="table-responsive"><table class="table table-custom align-middle mb-0"><thead><tr>';
         html += '<th style="width:36px"></th><th style="width:18%">Product</th><th>Description</th>';
@@ -591,10 +609,9 @@ function poBuildPickerGroupsHtml(groups) {
             var otherCurrency = poActive && it.currency && it.currency !== poActive;
             var desc = $('<div>').html(it.description || '').text();
 
-            html += '<tr class="po-picker-item-row" data-group="' + group + '" data-search="' + poEsc(((it.part_number || '') + ' ' + (it.product_name || '') + ' ' + desc).toLowerCase()) + '">';
-            html += '<td>' + (otherCurrency
-                ? '<i class="fa fa-ban" style="color:var(--text-muted)" title="Currency differs from this PO"></i>'
-                : '<input type="checkbox" class="po-picker-check" data-idx="' + poolIdx + '" data-currency="' + poEsc(it.currency || '') + '">') + '</td>';
+            html += '<tr class="po-picker-item-row" data-group="' + group + '" data-currency="' + poEsc(it.currency || '') + '" data-search="' + poEsc(((it.part_number || '') + ' ' + (it.product_name || '') + ' ' + desc).toLowerCase()) + '">';
+            html += '<td><input type="checkbox" class="po-picker-check" data-idx="' + poolIdx + '" data-currency="' + poEsc(it.currency || '') + '"'
+                + (otherCurrency ? ' data-locked="1" disabled title="Currency differs from this PO"' : '') + ' aria-label="Select item"></td>';
             html += '<td style="font-size:12.5px"><div class="fw-semibold">' + poEsc(it.part_number || '—') + '</div><div class="po-hint">' + poEsc(it.product_name || '') + '</div></td>';
             html += '<td style="font-size:12.5px">' + poEsc(desc.length > 120 ? desc.slice(0, 120) + '…' : desc) + '</td>';
             html += '<td class="text-center fw-semibold">' + it.remaining_qty + ' <span class="po-hint">/ ' + it.requested_qty + ' ' + poEsc(it.unit || '') + '</span></td>';
@@ -611,10 +628,103 @@ function poBuildPickerGroupsHtml(groups) {
     return html;
 }
 
-$(document).on('change', '.po-picker-check-group', function() {
-    var group = $(this).data('group');
-    var checked = $(this).is(':checked');
-    $('.po-picker-item-row[data-group="' + group + '"]:visible').find('.po-picker-check').prop('checked', checked);
+// ── Picker: pemilihan per baris ──
+let poPickerLastIdx = null; // untuk Shift+klik (rentang)
+
+// Mata uang yang "mengunci" pilihan: mata uang PO (item yang sudah ada) atau item pertama yang dicentang.
+function poPickerLockCurrency() {
+    return poActiveCurrency() || ($('.po-picker-check:checked').first().data('currency') || null);
+}
+
+// Baris yang bisa dipilih: tampil (lolos pencarian) & tidak terkunci mata uang.
+function poPickerSelectable($scope) {
+    return ($scope || $('#po-picker-body')).find('.po-picker-item-row:visible').filter(function() {
+        return !$(this).find('.po-picker-check').prop('disabled');
+    }).find('.po-picker-check');
+}
+
+function poPickerSync() {
+    var lock = poPickerLockCurrency();
+
+    $('.po-picker-item-row').each(function() {
+        var $row = $(this);
+        var $cb = $row.find('.po-picker-check');
+        var currency = $row.data('currency') || '';
+        var locked = !!$cb.data('locked');
+        var mismatch = !locked && lock && currency && currency !== lock && !$cb.prop('checked');
+        if (!locked) {
+            $cb.prop('disabled', !!mismatch);
+            $row.attr('title', mismatch ? 'Different currency (' + currency + ') from selected items (' + lock + ') — use a separate PO' : '');
+        }
+        $row.toggleClass('is-disabled', $cb.prop('disabled'));
+        $row.toggleClass('is-selected', $cb.prop('checked'));
+    });
+
+    // Checkbox grup: centang / sebagian (indeterminate) / kosong + jumlah terpilih
+    $('.po-picker-group').each(function() {
+        var $group = $(this);
+        var $all = $group.find('.po-picker-check').not(':disabled');
+        var selected = $group.find('.po-picker-check:checked').length;
+        var total = $group.find('.po-picker-check').length;
+        var $gcb = $group.find('.po-picker-check-group');
+        $gcb.prop('disabled', $all.length === 0)
+            .prop('checked', $all.length > 0 && $all.filter(':checked').length === $all.length)
+            .prop('indeterminate', selected > 0 && $all.filter(':checked').length < $all.length);
+        $group.find('.po-picker-group-count').text(selected ? selected + ' / ' + total + ' selected' : total + ' item');
+    });
+
+    var $selectable = poPickerSelectable();
+    var visibleChecked = $selectable.filter(':checked').length;
+    $('#po-picker-check-all')
+        .prop('disabled', $selectable.length === 0)
+        .prop('checked', $selectable.length > 0 && visibleChecked === $selectable.length)
+        .prop('indeterminate', visibleChecked > 0 && visibleChecked < $selectable.length);
+
+    var count = $('.po-picker-check:checked').length;
+    var hidden = $('.po-picker-item-row:hidden .po-picker-check:checked').length;
+    $('#po-picker-selcount').toggleClass('has', count > 0).text(count
+        ? count + ' item selected' + (lock ? ' · ' + lock : '') + (hidden ? ' (' + hidden + ' hidden by search)' : '')
+        : 'No items selected');
+    $('#po-picker-clear').toggle(count > 0);
+    $('#po-picker-apply').prop('disabled', count === 0);
+    $('#po-picker-apply-label').text(count ? 'Add ' + count + ' Item' + (count > 1 ? 's' : '') : 'Add Selected');
+}
+
+// Klik di mana saja pada baris = toggle; Shift+klik = pilih rentang.
+$(document).on('click', '.po-picker-item-row', function(e) {
+    var $cb = $(this).find('.po-picker-check');
+    if ($cb.prop('disabled')) return;
+    var onCheckbox = $(e.target).is('.po-picker-check');
+    var checked = onCheckbox ? $cb.prop('checked') : !$cb.prop('checked');
+
+    var $rows = $('.po-picker-item-row:visible');
+    var idx = $rows.index(this);
+    if (e.shiftKey && poPickerLastIdx !== null && poPickerLastIdx !== idx) {
+        var from = Math.min(poPickerLastIdx, idx), to = Math.max(poPickerLastIdx, idx);
+        $rows.slice(from, to + 1).find('.po-picker-check').not(':disabled').prop('checked', checked);
+        window.getSelection && window.getSelection().removeAllRanges();
+    } else {
+        $cb.prop('checked', checked);
+    }
+    poPickerLastIdx = idx;
+    poPickerSync();
+});
+
+// Header grup (atau checkbox-nya) = pilih / batal semua item tampil di grup.
+$(document).on('click', '.po-picker-group-head', function(e) {
+    var $gcb = $(this).find('.po-picker-check-group');
+    if ($gcb.prop('disabled')) return;
+    var checked = $(e.target).is('.po-picker-check-group') ? $gcb.prop('checked') : !$gcb.prop('checked');
+    var $group = $(this).closest('.po-picker-group');
+    if (checked) {
+        // Pilih satu per satu agar kunci mata uang ikut berlaku
+        poPickerSelectable($group).each(function() {
+            if (!$(this).prop('disabled')) { $(this).prop('checked', true); poPickerSync(); }
+        });
+    } else {
+        $group.find('.po-picker-item-row:visible .po-picker-check').prop('checked', false);
+    }
+    poPickerSync();
 });
 
 function poCurrentGoodsRequestItemIds() {
@@ -640,9 +750,10 @@ function poLoadPicker() {
 
 function poFetchPickerItems() {
     $('#po-picker-body').html('<div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>');
-    $('#po-picker-check-all').prop('checked', false);
     $('#po-picker-search').val('');
     poPickerPool = [];
+    poPickerLastIdx = null;
+    poPickerSync();
     $.get(poFetchAvailableItemsUrl, {
         exclude_goods_request_item_ids: poCurrentGoodsRequestItemIds(),
         project_id: $('#po-picker-project').val() || ''
@@ -659,9 +770,12 @@ function poFetchPickerItems() {
             var groups = res.data || [];
             if (groups.length === 0) {
                 $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>No Approved Goods Request items with remaining need.</div>');
+                poPickerSync();
                 return;
             }
-            $('#po-picker-body').html(poBuildPickerGroupsHtml(groups));
+            $('#po-picker-body').html(poBuildPickerGroupsHtml(groups)
+                + '<div class="config-card-empty" id="po-picker-noresult" style="display:none"><i class="fa-solid fa-magnifying-glass"></i>No items match the search.</div>');
+            poPickerSync();
         })
         .fail(function() {
             $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load items.</div>');
@@ -824,8 +938,20 @@ $(document).ready(function() {
     poRecalc();
 
     $('#po-picker-check-all').on('change', function() {
-        var checked = $(this).is(':checked');
-        $('.po-picker-item-row:visible .po-picker-check, .po-picker-group:visible .po-picker-check-group').prop('checked', checked);
+        if ($(this).is(':checked')) {
+            poPickerSelectable().each(function() {
+                if (!$(this).prop('disabled')) { $(this).prop('checked', true); poPickerSync(); }
+            });
+        } else {
+            $('.po-picker-item-row:visible .po-picker-check').prop('checked', false);
+        }
+        poPickerSync();
+    });
+
+    $('#po-picker-clear').on('click', function() {
+        $('.po-picker-check').prop('checked', false);
+        poPickerLastIdx = null;
+        poPickerSync();
     });
 
     $(document).on('input change', '.po-qty, .po-price', poRecalc);
@@ -848,6 +974,9 @@ $(document).ready(function() {
         $('.po-picker-group').each(function() {
             $(this).toggle($(this).find('.po-picker-item-row:visible').length > 0 || !q);
         });
+        $('#po-picker-noresult').toggle(!!q && $('.po-picker-item-row:visible').length === 0);
+        poPickerLastIdx = null;
+        poPickerSync();
     });
 
     $('#po-supplier-select').select2({
