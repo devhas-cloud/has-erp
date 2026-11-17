@@ -247,7 +247,8 @@ class GoodsRequestController extends Controller
                 'part_number' => $item->part_number,
                 'description' => Quotation::renderDescription($item->description),
                 'qty' => $item->qty,
-                'unit' => $item->unit,
+                // Satuan murni dari master produk (mengikuti data master saat ini).
+                'unit' => $item->masterProduct ? $item->masterProduct->unit : $item->unit,
                 'currency' => $item->currency,
             ])->all(),
             'currencies' => Currency::formOptions(),
@@ -457,6 +458,7 @@ class GoodsRequestController extends Controller
         $item->update([
             'master_product_id' => $product->id,
             'part_number' => $item->part_number ?: $product->code,
+            'unit' => $product->unit,
             'currency' => $item->quote_configuration_item_id
                 ? $item->currency
                 : GoodsRequestItem::normalizeCurrency($product->currency?->name),
@@ -508,7 +510,7 @@ class GoodsRequestController extends Controller
 
         // Master product wajib: cocokkan part number item configuration dengan kode produk.
         $productsByCode = MasterProduct::whereIn('code', $configs->flatMap->items->pluck('part_number')->filter()->map(fn ($v) => trim($v))->unique())
-            ->get(['id', 'code', 'name'])->keyBy('code');
+            ->get(['id', 'code', 'name', 'unit'])->keyBy('code');
 
         // Item yang sudah diminta di Permintaan Barang lain (selain Rejected)
         // disembunyikan agar tidak terjadi permintaan ganda.
@@ -533,7 +535,8 @@ class GoodsRequestController extends Controller
                     'part_number' => $item->part_number,
                     'description' => Quotation::renderDescription($item->description),
                     'qty' => $item->qty,
-                    'unit' => $item->unit,
+                    // Satuan murni dari master produk; item belum terhubung produk -> satuan configuration (sementara).
+                    'unit' => $product ? $product->unit : $item->unit,
                     'currency' => GoodsRequestItem::normalizeCurrency($item->currency),
                     'division_name' => $config->division?->division_name,
                 ]);
@@ -625,7 +628,7 @@ class GoodsRequestController extends Controller
             $query->where('division_id', $divisionId);
         }
 
-        $products = $query->paginate($perPage, ['id', 'name', 'code', 'brand', 'category', 'division_id', 'currency_id', 'description']);
+        $products = $query->paginate($perPage, ['id', 'name', 'code', 'brand', 'category', 'unit', 'division_id', 'currency_id', 'description']);
 
         $response = [
             'success' => true,
@@ -635,6 +638,7 @@ class GoodsRequestController extends Controller
                 'code' => $product->code,
                 'brand' => $product->brand,
                 'category' => $product->category,
+                'unit' => $product->unit,
                 'description' => Quotation::renderDescription($product->description),
                 'division_name' => $product->division?->division_name,
                 'currency' => GoodsRequestItem::normalizeCurrency($product->currency?->name),
@@ -719,8 +723,9 @@ class GoodsRequestController extends Controller
             ->pluck('currency', 'id');
         $productCurrencies = MasterProduct::with('currency')
             ->whereIn('id', collect($items)->pluck('master_product_id')->filter())
-            ->get(['id', 'currency_id'])
-            ->mapWithKeys(fn (MasterProduct $product) => [$product->id => $product->currency?->name]);
+            ->get(['id', 'currency_id', 'unit']);
+        $productUnits = $productCurrencies->pluck('unit', 'id');
+        $productCurrencies = $productCurrencies->mapWithKeys(fn (MasterProduct $product) => [$product->id => $product->currency?->name]);
         $allowedCurrencies = Currency::pluck('name')->map(fn ($name) => strtoupper($name))->all();
 
         $payload = [];
@@ -742,7 +747,8 @@ class GoodsRequestController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
-                'unit' => $item['unit'] ?? null,
+                // Satuan murni dari master produk — nilai dari client diabaikan.
+                'unit' => $productId ? ($productUnits[$productId] ?? null) : null,
                 'currency' => GoodsRequestItem::normalizeCurrency($currency),
                 'sort_order' => $i + 1,
                 'created_at' => now(),

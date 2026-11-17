@@ -388,4 +388,24 @@ class ImsConfigurationApprovalTest extends TestCase
         $this->assertSame($this->water->id, $second->division_id);
         $this->assertSame($task->id, $second->task_id);
     }
+    public function test_item_unit_follows_master_product_and_manual_row_stays_editable(): void
+    {
+        $product = MasterProduct::create([
+            'name' => 'Kabel IMS', 'code' => 'CBL-IMS-001', 'unit' => 'Roll',
+            'division_id' => $this->ims->id, 'status' => 'Active',
+        ]);
+        $task = $this->createQuoteTask();
+
+        $this->actingAs($this->creator)->postJson(route('ims-configuration.store'), [
+            'task_id' => $task->id,
+            'items' => [
+                ['_key' => 'new-1', 'product_id' => $product->id, 'description' => 'Kabel', 'qty' => 1, 'unit' => 'Pcs'],
+                ['_key' => 'new-2', 'description' => 'Jasa instalasi', 'qty' => 1, 'unit' => 'Lot'],
+            ],
+        ])->assertOk();
+
+        $items = QuoteConfiguration::latest('id')->firstOrFail()->items()->orderBy('sort_order')->get();
+        $this->assertSame('Roll', $items[0]->unit); // ber-produk: satuan master, input client diabaikan
+        $this->assertSame('Lot', $items[1]->unit);  // baris manual: satuan isian user
+    }
 }

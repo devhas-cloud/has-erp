@@ -384,6 +384,11 @@ class ProductImportService
                     $record['is_material'] = $isMaterial;
                 }
 
+                // Kolom unit opsional: tidak ada di file -> satuan produk lama tetap.
+                if (array_key_exists('unit', $data)) {
+                    $record['unit'] = $this->nullIfEmpty($data['unit'], 50);
+                }
+
                 $existing = MasterProduct::where('code', $data['code'])->first();
 
                 if ($existing && $isMaterial !== null && $isMaterial !== $existing->isMaterial() && $existing->hasStock()) {
@@ -456,6 +461,7 @@ class ProductImportService
             'division' => $divisions,
             'currency' => $currencies,
             'type' => array_values(array_unique(array_merge(['Acc', 'Main', 'Service'], MasterProduct::typeOptions()))),
+            'unit' => 'Teks bebas, opsional (mis. '.implode(', ', array_slice(MasterProduct::unitOptions(), 0, 8)).'). Kolom tidak ada = satuan produk lama tetap.',
             'material' => ['ya (stok per qty)', 'tidak (per Serial Number, default)'],
             'status' => ['Active', 'Inactive'],
         ];

@@ -501,7 +501,7 @@ class PurchaseOrderController extends Controller
                     'qty' => $item->remainingQty(),
                     'remaining_qty' => $item->remainingQty(),
                     'requested_qty' => (int) $item->qty,
-                    'unit' => $item->unit,
+                    'unit' => $item->unit ?: $item->masterProduct?->unit,
                     'currency' => GoodsRequestItem::normalizeCurrency($item->currency),
                     'price' => $this->defaultPrice($item),
                     'free_stock' => $freeStock[$item->master_product_id] ?? 0,
@@ -582,7 +582,7 @@ class PurchaseOrderController extends Controller
         $items = array_values($items);
         $fail = fn (string $message) => abort(response()->json(['success' => false, 'message' => $message], 422));
 
-        $requestItems = GoodsRequestItem::with(array_merge(['goodsRequest'], GoodsRequestItem::FULFILLMENT_RELATIONS))
+        $requestItems = GoodsRequestItem::with(array_merge(['goodsRequest', 'masterProduct.currency'], GoodsRequestItem::FULFILLMENT_RELATIONS))
             ->whereIn('id', collect($items)->pluck('goods_request_item_id'))
             ->get()
             ->keyBy('id');
@@ -622,7 +622,7 @@ class PurchaseOrderController extends Controller
                 'part_number' => $requestItem->part_number,
                 'description' => Quotation::sanitizeDescription($row['description'] ?? $requestItem->description ?? ''),
                 'qty' => (int) $row['qty'],
-                'unit' => $requestItem->unit,
+                'unit' => $requestItem->unit ?: $requestItem->masterProduct?->unit,
                 'price' => $price,
                 'currency' => GoodsRequestItem::normalizeCurrency($requestItem->currency),
                 'sort_order' => $i + 1,

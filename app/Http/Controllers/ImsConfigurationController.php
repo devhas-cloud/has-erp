@@ -399,7 +399,7 @@ class ImsConfigurationController extends Controller
         $products = $query
             ->skip($start)
             ->take($length)
-            ->get(['id', 'name', 'code', 'brand', 'category', 'description', 'division_id', 'purchase_price']);
+            ->get(['id', 'name', 'code', 'brand', 'category', 'unit', 'description', 'division_id', 'purchase_price']);
 
         $data = $products->map(function ($product) use ($imsId) {
             $isOwnDivision = (int) $product->division_id === (int) $imsId;
@@ -411,6 +411,7 @@ class ImsConfigurationController extends Controller
                 'code' => $product->code,
                 'brand' => $product->brand,
                 'category' => $product->category,
+                'unit' => $product->unit,
                 'description' => $product->description,
                 'division_id' => $product->division_id,
                 'selling_price' => $price,
@@ -1017,7 +1018,7 @@ class ImsConfigurationController extends Controller
 
         $imsId = $this->templateDivisionId();
         $products = MasterProduct::whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
-            ->get(['id', 'division_id', 'purchase_price'])
+            ->get(['id', 'division_id', 'purchase_price', 'unit'])
             ->keyBy('id');
 
         foreach (array_values($items) as $i => $item) {
@@ -1046,7 +1047,9 @@ class ImsConfigurationController extends Controller
                 'selling_price_currency' => $price,
                 'purchase_price_currency' => $purchasePrice,
                 'currency' => $price ? 'IDR' : null,
-                'unit' => $item['unit'] ?? null,
+                // Item ber-produk: satuan murni dari master produk (tidak bisa diubah);
+                // baris manual tanpa produk: satuan diisi user.
+                'unit' => $product ? $product->unit : (trim((string) ($item['unit'] ?? '')) ?: null),
                 'sort_order' => $i + 1,
                 'created_at' => now(),
                 'updated_at' => now(),

@@ -27,8 +27,9 @@ class ProductManagementController extends Controller
             ->pluck('category');
 
         $types = MasterProduct::typeOptions();
+        $units = MasterProduct::unitOptions();
 
-        return view('product-management.index', compact('divisions', 'currencies', 'categories', 'types'));
+        return view('product-management.index', compact('divisions', 'currencies', 'categories', 'types', 'units'));
     }
 
     public function data(Request $request): JsonResponse
@@ -52,6 +53,7 @@ class ProductManagementController extends Controller
             'brand' => 'brand',
             'category' => 'category',
             'type' => 'type',
+            'unit' => 'unit',
             'status' => 'status',
         ];
         // Urut harga beli hanya untuk Admin: IMS hanya melihat sebagian harga, urutan
@@ -104,6 +106,7 @@ class ProductManagementController extends Controller
                 'brand' => $product->brand ?? '—',
                 'category' => $product->category ?? '—',
                 'type' => $product->type ?? '—',
+                'unit' => $product->unit,
                 'is_material' => $product->isMaterial(),
                 'parameter' => $product->parameter ?? '—',
                 'division_name' => $product->division?->division_name ?? '—',
@@ -142,6 +145,7 @@ class ProductManagementController extends Controller
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
             'type' => 'nullable|string|max:50',
+            'unit' => 'nullable|string|max:50',
             'is_material' => 'nullable|boolean',
             'parameter' => 'nullable|string|max:255',
             'division_id' => 'nullable|exists:divisions,id',
@@ -154,6 +158,7 @@ class ProductManagementController extends Controller
         ]);
 
         $validated['type'] = MasterProduct::normalizeType($validated['type'] ?? null);
+        $validated['unit'] = trim((string) ($validated['unit'] ?? '')) ?: null;
         // Tidak diisi = bukan Material (barang ber-SN); Material = stok per qty.
         $validated['is_material'] = $request->boolean('is_material');
 
@@ -234,6 +239,7 @@ class ProductManagementController extends Controller
             'brand' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
             'type' => 'nullable|string|max:50',
+            'unit' => 'nullable|string|max:50',
             'is_material' => 'nullable|boolean',
             'parameter' => 'nullable|string|max:255',
             'division_id' => 'nullable|exists:divisions,id',
@@ -246,6 +252,7 @@ class ProductManagementController extends Controller
         ]);
 
         $validated['type'] = MasterProduct::normalizeType($validated['type'] ?? null);
+        $validated['unit'] = trim((string) ($validated['unit'] ?? '')) ?: null;
         // Form tanpa field is_material (klien lama) -> nilai lama tetap.
         if ($request->has('is_material')) {
             $validated['is_material'] = $request->boolean('is_material');
@@ -448,6 +455,7 @@ class ProductManagementController extends Controller
                     ->orWhere('brand', 'like', "%{$searchValue}%")
                     ->orWhere('category', 'like', "%{$searchValue}%")
                     ->orWhere('type', 'like', "%{$searchValue}%")
+                    ->orWhere('unit', 'like', "%{$searchValue}%")
                     ->orWhere('parameter', 'like', "%{$searchValue}%")
                     ->orWhereHas('division', function ($q) use ($searchValue) {
                         $q->where('division_name', 'like', "%{$searchValue}%");

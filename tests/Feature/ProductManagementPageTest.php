@@ -588,4 +588,39 @@ class ProductManagementPageTest extends TestCase
             ->assertOk()
             ->assertJsonPath('recordsFiltered', 1);
     }
+    public function test_unit_is_saved_updated_listed_and_imported(): void
+    {
+        $division = $this->createDivision();
+
+        $this->actingAs($this->admin)->postJson(route('product-management.store'), [
+            'code' => 'UNIT-001', 'unit' => '  Meter ', 'status' => 'Active', 'division_id' => $division->id,
+        ])->assertOk();
+        $product = MasterProduct::where('code', 'UNIT-001')->firstOrFail();
+        $this->assertSame('Meter', $product->unit);
+
+        $this->actingAs($this->admin)->getJson(route('product-management.edit', $product->id))
+            ->assertOk()->assertJsonPath('data.unit', 'Meter');
+        $this->actingAs($this->admin)->getJson(route('product-management.data', ['search' => ['value' => 'Meter']]))
+            ->assertOk()->assertJsonPath('recordsFiltered', 1)->assertJsonPath('data.0.unit', 'Meter');
+
+        $this->actingAs($this->admin)->putJson(route('product-management.update', $product->id), [
+            'code' => 'UNIT-001', 'unit' => '', 'status' => 'Active',
+        ])->assertOk();
+        $this->assertNull($product->fresh()->unit);
+
+        $this->actingAs($this->admin)->putJson(route('product-management.update', $product->id), [
+            'code' => 'UNIT-001', 'unit' => str_repeat('x', 51), 'status' => 'Active',
+        ])->assertStatus(422)->assertJsonValidationErrors('unit');
+
+        // Import: kolom unit mengisi satuan; tanpa kolom unit -> satuan lama tetap.
+        $import = function (string $csv) {
+            $this->actingAs($this->admin)->post(route('product-management.import'), [
+                'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+            ])->assertOk();
+        };
+        $import("code,unit,status\nUNIT-001,Roll,Active\n");
+        $this->assertSame('Roll', $product->fresh()->unit);
+        $import("code,status\nUNIT-001,Active\n");
+        $this->assertSame('Roll', $product->fresh()->unit);
+    }
 }

@@ -63,6 +63,8 @@
     .gr-qty-group { flex-wrap: nowrap; }
     .gr-qty-group .btn { padding: 0 8px; }
     .gr-qty-group .gr-qty { text-align: center; min-width: 48px; }
+    /* Satuan = dari master produk, tidak bisa diubah */
+    .gr-unit[readonly] { background: var(--bg, #f8fafc); cursor: not-allowed; }
 
     .gr-empty-actions { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
 
@@ -259,10 +261,6 @@
     </div>
 </div>
 
-<datalist id="gr-unit-options">
-    <option value="Unit"><option value="Pcs"><option value="Set"><option value="Lot">
-    <option value="Package"><option value="Box"><option value="Meter"><option value="Roll">
-</datalist>
 @endsection
 
 @push('modals')
@@ -524,7 +522,7 @@ function grRowHtml(item) {
     html += '<input type="text" inputmode="numeric" class="form-control gr-qty" value="' + (item.qty != null && item.qty !== '' ? parseInt(item.qty, 10) || '' : '') + '">';
     html += '<button type="button" class="btn btn-outline-secondary gr-qty-step" data-step="1" tabindex="-1">+</button>';
     html += '</div></td>';
-    html += '<td><input type="text" class="form-control form-control-sm gr-unit" maxlength="50" list="gr-unit-options" placeholder="Unit" value="' + grEsc(item.unit || '') + '"></td>';
+    html += '<td><input type="text" class="form-control form-control-sm gr-unit" readonly tabindex="-1" placeholder="—" title="Unit from master product — change it in Product Management" value="' + grEsc(item.unit || '') + '"></td>';
     html += '<td>' + grCurrencyCell(item, source) + '</td>';
     html += '<td class="text-center"><button type="button" class="btn-icon text-danger mt-1" title="Remove row" onclick="grRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
     html += '</tr>';
@@ -555,6 +553,7 @@ function grApplyProductToRow($row, p) {
     };
     $row.attr('data-product-id', p.id);
     $row.find('.gr-pn').val(p.code || '');
+    $row.find('.gr-unit').val(p.unit || ''); // satuan murni dari master produk
     $row.find('.gr-product-cell').replaceWith(grProductCell(item));
     if (!grPlainText($row.find('.gr-desc').html())) $row.find('.gr-desc').html(p.description || grEsc(p.name || ''));
     // Mata uang item configuration dikunci sesuai configuration; selain itu ikut produk.
@@ -1018,7 +1017,7 @@ function grApplyProductPicked() {
             part_number: p.code,
             description: p.description || grEsc(p.name || ''),
             qty: 1,
-            unit: 'Unit',
+            unit: p.unit || '',
             currency: p.currency
         });
         picked++;
@@ -1028,7 +1027,7 @@ function grApplyProductPicked() {
         toastr.error('Select at least one product.');
         return;
     }
-    toastr.success(picked + ' item(s) added. Adjust qty and unit if needed.');
+    toastr.success(picked + ' item(s) added. Adjust qty if needed.');
     if (grProductPickerInstance) grProductPickerInstance.hide();
 }
 

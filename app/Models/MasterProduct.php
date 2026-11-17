@@ -16,6 +16,7 @@ class MasterProduct extends Model
         'brand',
         'category',
         'type',
+        'unit',
         'is_material',
         'parameter',
         'division_id',
@@ -52,6 +53,16 @@ class MasterProduct extends Model
     public function hasStock(): bool
     {
         return Stock::where('master_product_id', $this->id)->where('is_open', true)->exists();
+    }
+
+    /** Satuan yang umum + yang sudah dipakai di master — saran isian di form. */
+    public static function unitOptions(): array
+    {
+        $used = static::query()->whereNotNull('unit')->where('unit', '!=', '')
+            ->distinct()->orderBy('unit')->pluck('unit')->all();
+
+        return collect(['Unit', 'Pcs', 'Set', 'Lot', 'Package', 'Box', 'Meter', 'Roll'])
+            ->merge($used)->unique(fn ($u) => mb_strtolower($u))->values()->all();
     }
 
     /** Nilai type yang sudah dipakai — saran isian di form & template import. */

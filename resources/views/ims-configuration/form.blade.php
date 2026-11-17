@@ -81,6 +81,9 @@
     .wc-unit[contenteditable="true"] {
         min-height: 34px;
     }
+    /* Satuan item ber-produk = dari master produk, tidak bisa diubah */
+    .wc-unit.wc-unit-locked { min-height: 34px; background: var(--bg, #f8fafc); color: var(--text-primary); cursor: not-allowed; }
+    .wc-unit.wc-unit-locked:empty::before { content: '—'; color: var(--text-muted); }
     .wc-item-no[contenteditable="true"]:empty::before,
     .wc-qty[contenteditable="true"]:empty::before,
     .wc-unit[contenteditable="true"]:empty::before {
@@ -248,7 +251,12 @@
                                 echo '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
                                 echo '</div></div></td>';
                                 echo '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">'.$item->qty.'</div></td>';
-                                echo '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">'.e($item->unit).'</div></td>';
+                                if ($item->product_id) {
+                                    // Satuan murni dari master produk (mengikuti data master saat ini).
+                                    echo '<td><div class="form-control form-control-sm wc-unit wc-unit-locked" title="Satuan dari master produk — ubah di Product Management">'.e($item->product?->unit).'</div></td>';
+                                } else {
+                                    echo '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">'.e($item->unit).'</div></td>';
+                                }
                                 echo '<td><input type="hidden" class="wc-price" value="'.e($price).'" readonly>';
                                 echo '<input type="hidden" class="wc-purchase-price" value="'.e($purchasePrice).'" readonly>';
                                 echo '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="'.($isPriceVisible ? ($price ? number_format($price, 0, '.', ',') : '') : '—').'" placeholder="0" readonly></td>';
@@ -445,7 +453,11 @@ function addItemRow(item, parentKey) {
     html += '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>';
     html += '</div></div></td>';
     html += '<td class="text-center"><div class="form-control form-control-sm wc-qty text-center" contenteditable="true" data-placeholder="0">' + (item.qty != null && item.qty !== '' ? item.qty : 1) + '</div></td>';
-    html += '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">' + (item.unit || '') + '</div></td>';
+    // Item ber-produk: satuan murni dari master produk (dikunci). Baris manual: bisa diisi.
+    var unitText = $('<div>').text(item.unit || '').html();
+    html += (item.id || item.product_id)
+        ? '<td><div class="form-control form-control-sm wc-unit wc-unit-locked" title="Satuan dari master produk — ubah di Product Management">' + unitText + '</div></td>'
+        : '<td><div class="form-control form-control-sm wc-unit" contenteditable="true" data-placeholder="pcs/lot">' + unitText + '</div></td>';
     html += '<td><input type="hidden" class="wc-price" value="' + priceRaw + '" readonly>';
     html += '<input type="hidden" class="wc-purchase-price" value="' + purchaseRaw + '" readonly>';
     html += '<input type="text" inputmode="decimal" class="form-control form-control-sm wc-price-display text-end" value="' + (isPriceVisible ? (priceRaw !== '' ? priceDisplayOf(priceRaw) : '') : '—') + '" placeholder="0" readonly></td>';
@@ -765,6 +777,7 @@ $(document).ready(function() {
                     name: rowData.name,
                     category: rowData.category,
                     description: rowData.description,
+                    unit: rowData.unit,
                     division_id: rowData.division_id,
                     selling_price: rowData.selling_price,
                     purchase_price_currency: rowData.purchase_price_currency

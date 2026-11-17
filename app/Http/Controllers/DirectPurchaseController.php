@@ -352,7 +352,7 @@ class DirectPurchaseController extends Controller
             ->when($category !== '', fn ($query) => $query->where('category', $category))
             ->when($divisionId, fn ($query) => $query->where('division_id', $divisionId))
             ->orderBy('name')
-            ->paginate($perPage, ['id', 'name', 'code', 'brand', 'category', 'description', 'purchase_price', 'currency_id', 'division_id']);
+            ->paginate($perPage, ['id', 'name', 'code', 'brand', 'category', 'unit', 'description', 'purchase_price', 'currency_id', 'division_id']);
 
         $response = [
             'success' => true,
@@ -362,6 +362,7 @@ class DirectPurchaseController extends Controller
                 'name' => $product->name,
                 'brand' => $product->brand,
                 'category' => $product->category,
+                'unit' => $product->unit,
                 'description' => Quotation::renderDescription($product->description),
                 'division_name' => $product->division?->division_name,
                 'price' => (float) $product->purchase_price,
@@ -474,7 +475,7 @@ class DirectPurchaseController extends Controller
         $productIds = collect($items)->pluck('master_product_id')->filter()->unique()->values();
         $products = MasterProduct::with('currency')
             ->whereIn('id', $productIds)
-            ->get(['id', 'purchase_price', 'currency_id'])
+            ->get(['id', 'purchase_price', 'currency_id', 'unit'])
             ->keyBy('id');
         $baseCurrency = Currency::baseName();
 
@@ -505,7 +506,8 @@ class DirectPurchaseController extends Controller
                 'part_number' => $item['part_number'] ?? null,
                 'description' => Quotation::sanitizeDescription($item['description'] ?? ''),
                 'qty' => isset($item['qty']) && $item['qty'] !== '' ? (int) $item['qty'] : null,
-                'unit' => $item['unit'] ?? null,
+                // Satuan diisi user; kosong -> satuan bawaan master produk.
+                'unit' => trim((string) ($item['unit'] ?? '')) ?: $product?->unit,
                 'currency' => $currency,
                 'price' => $price,
                 'sort_order' => $i + 1,

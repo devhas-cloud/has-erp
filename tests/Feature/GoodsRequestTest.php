@@ -1005,4 +1005,24 @@ class GoodsRequestTest extends TestCase
             ->assertJsonPath('data.0.request_number', $prefix.'0002');
         $this->actingAs($this->creator)->get(route('goods-request.show', $second->id))->assertOk()->assertSee('Purchase Request '.$prefix.'0002');
     }
+    public function test_item_unit_always_follows_master_product(): void
+    {
+        $product = $this->product('PN-UNIT');
+        $product->update(['unit' => 'Meter']);
+
+        // Satuan dari client diabaikan: selalu satuan master produk.
+        $id = $this->actingAs($this->creator)->postJson(route('goods-request.store'), [
+            'purpose' => GoodsRequest::PURPOSE_INTERNAL,
+            'items' => [['master_product_id' => $product->id, 'description' => 'Kabel', 'qty' => 5, 'unit' => 'Box']],
+        ])->assertOk()->json('id');
+        $this->assertSame('Meter', GoodsRequest::findOrFail($id)->items()->first()->unit);
+
+        // Master tanpa satuan -> satuan item kosong.
+        $product->update(['unit' => null]);
+        $this->actingAs($this->creator)->putJson(route('goods-request.update', $id), [
+            'purpose' => GoodsRequest::PURPOSE_INTERNAL,
+            'items' => [['master_product_id' => $product->id, 'description' => 'Kabel', 'qty' => 5, 'unit' => 'Box']],
+        ])->assertOk();
+        $this->assertNull(GoodsRequest::findOrFail($id)->items()->first()->unit);
+    }
 }

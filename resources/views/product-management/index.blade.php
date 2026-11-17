@@ -113,6 +113,7 @@
                         <th>Brand</th>
                         <th>Kategori</th>
                         <th>Tipe</th>
+                        <th>Unit</th>
                         <th>Divisi</th>
                         @if($canViewPrice)
                         <th>Harga Beli</th>
@@ -176,6 +177,19 @@
                                         <option value="{{ $t }}">
                                     @endforeach
                                 </datalist>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Unit <small class="text-muted">(opsional)</small></label>
+                                <input type="text" id="product-unit" class="form-control" list="product-unit-options" maxlength="50" autocomplete="off" placeholder="Ketik atau pilih, mis. Unit / Pcs / Meter">
+                                <datalist id="product-unit-options">
+                                    @foreach($units as $u)
+                                        <option value="{{ $u }}">
+                                    @endforeach
+                                </datalist>
+                                <div class="form-text">Satuan bawaan saat produk dipilih di Configuration, Purchase Request, PO &amp; Direct Purchase.</div>
                             </div>
                         </div>
 
@@ -345,6 +359,10 @@
                                 <td id="pd-type">—</td>
                             </tr>
                             <tr>
+                                <td>Unit</td>
+                                <td id="pd-unit">—</td>
+                            </tr>
+                            <tr>
                                 <td>Stock type</td>
                                 <td id="pd-is-material">—</td>
                             </tr>
@@ -485,6 +503,9 @@ function initProductTable() {
             { data: 'type', orderable: true, searchable: true, width: '8%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
+            { data: 'unit', orderable: true, searchable: true, width: '6%',
+                render: function(data) { return data ? $('<span>').text(data).html() : '<span style="color:var(--text-muted)">—</span>'; }
+            },
             { data: 'division_name', orderable: false, searchable: true, width: '9%',
                 render: function(data) { return data || '<span style="color:var(--text-muted)">—</span>'; }
             },
@@ -580,6 +601,7 @@ function openEditModal(id) {
         $('#product-brand').val(p.brand || '');
         $('#product-category').val(p.category || '');
         $('#product-type').val(p.type || '');
+        $('#product-unit').val(p.unit || '');
         $('#product-is-material').prop('checked', p.is_material === true || p.is_material === 1);
         $('#product-parameter').val(p.parameter || '');
         $('#product-division').val(p.division_id || '');
@@ -609,6 +631,7 @@ function openDetailModal(id) {
         $('#pd-brand').text(p.brand || '—');
         $('#pd-category').text(p.category || '—');
         $('#pd-type').text(p.type || '—');
+        $('#pd-unit').text(p.unit || '—');
         $('#pd-is-material').text(p.is_material === true || p.is_material === 1 ? 'Material (by quantity)' : 'Serialized item (SN)');
         $('#pd-parameter').text(p.parameter || '—');
         $('#pd-division').text(p.division_name || '—');
@@ -680,6 +703,7 @@ $(document).on('click', '#btn-save-product', function() {
     fd.append('brand', $('#product-brand').val().trim());
     fd.append('category', $('#product-category').val().trim());
     fd.append('type', $('#product-type').val().trim());
+    fd.append('unit', $('#product-unit').val().trim());
     fd.append('is_material', $('#product-is-material').is(':checked') ? '1' : '0');
     fd.append('parameter', $('#product-parameter').val().trim());
     fd.append('division_id', $('#product-division').val());
@@ -731,6 +755,7 @@ $(document).on('click', '#btn-save-product', function() {
                     brand: 'product-brand',
                     category: 'product-category',
                     type: 'product-type',
+                    unit: 'product-unit',
                     is_material: 'product-is-material',
                     parameter: 'product-parameter',
                     division_id: 'product-division',

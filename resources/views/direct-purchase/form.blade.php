@@ -667,6 +667,7 @@ function dpApplyProductPicked() {
         var $row = dpPickerTargetRow;
         $row.attr('data-master-product-id', p.id);
         $row.find('.dp-pn').val(p.code || '');
+        if (!$.trim($row.find('.dp-unit').val()) && p.unit) $row.find('.dp-unit').val(p.unit);
         $row.find('.dp-currency').val(p.currency);
         $row.find('.dp-price-currency').text(p.currency);
         $row.find('.dp-product-cell').replaceWith(dpProductCell({ part_number: p.code, product_name: p.name }));
@@ -676,7 +677,7 @@ function dpApplyProductPicked() {
         toastr.success('Row product replaced.');
     } else {
         picked.forEach(function(p) {
-            dpAddRow({ master_product_id: p.id, part_number: p.code, product_name: p.name, description: p.description || dpEsc(p.name || ''), qty: 1, unit: 'Unit', currency: p.currency, price: p.price || null });
+            dpAddRow({ master_product_id: p.id, part_number: p.code, product_name: p.name, description: p.description || dpEsc(p.name || ''), qty: 1, unit: p.unit || 'Unit', currency: p.currency, price: p.price || null });
         });
         toastr.success(picked.length + ' items added. Adjust qty and price as needed.');
     }

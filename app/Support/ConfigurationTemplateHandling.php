@@ -83,7 +83,8 @@ trait ConfigurationTemplateHandling
                     'qty' => $item->qty,
                     'selling_price' => $isPriceVisible ? $item->selling_price : null,
                     'purchase_price_currency' => $isPriceVisible ? $item->purchase_price_currency : null,
-                    'unit' => $item->unit,
+                    // Item ber-produk ikut satuan master produk saat ini.
+                    'unit' => $item->product ? $item->product->unit : $item->unit,
                 ];
                 $walk($item->id);
             }

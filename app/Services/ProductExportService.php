@@ -178,7 +178,7 @@ class ProductExportService
     private function headers(): array
     {
         $headers = [
-            'Name', 'Code', 'Brand', 'Category', 'Type', 'Material', 'Parameter', 'Division',
+            'Name', 'Code', 'Brand', 'Category', 'Type', 'Unit', 'Material', 'Parameter', 'Division',
             'Description', 'Currency',
         ];
         if ($this->withPurchase) {
@@ -200,6 +200,7 @@ class ProductExportService
             $product->brand ?? '',
             $product->category ?? '',
             $product->type ?? '',
+            $product->unit ?? '',
             $product->is_material ? 'ya' : 'tidak',
             $product->parameter ?? '',
             $product->division?->division_name ?? '',
