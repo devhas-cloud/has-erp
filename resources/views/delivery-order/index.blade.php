@@ -40,7 +40,8 @@
                         <th>Project</th>
                         <th>Penerima</th>
                         <th>Gudang</th>
-                        <th class="text-center">Jml Item</th>
+                        <th>Jalur</th>
+                        <th class="text-center">Jml Baris</th>
                         <th>Status</th>
                         <th class="text-center" style="width:120px">Aksi</th>
                     </tr>
@@ -86,6 +87,7 @@ $(document).ready(function() {
             { data: 'project', orderable: false, searchable: true, render: function(data) { return doEsc(data); } },
             { data: 'recipient_name', orderable: false, searchable: true, render: function(data) { return doEsc(data); } },
             { data: 'warehouse_name', orderable: false, searchable: false, render: function(data) { return doEsc(data); } },
+            { data: 'mode', orderable: false, searchable: false, render: function(data) { return '<span style="font-size:12px">' + doEsc(data) + '</span>'; } },
             { data: 'item_count', orderable: false, searchable: false, className: 'text-center' },
             { data: 'status_badge', orderable: false, searchable: false },
             { data: 'id', orderable: false, searchable: false, className: 'text-center',

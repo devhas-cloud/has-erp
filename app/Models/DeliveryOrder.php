@@ -8,9 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Delivery Order (Surat Jalan) — kirim stok milik project dari satu gudang ke
- * customer. Draft -> Posted (oleh gudang, tanpa approval). Posting mencatat
- * stok keluar 'delivery' dari (gudang, project); dokumen posted terkunci.
+ * Delivery Order — acuan pengiriman project dari satu gudang ke customer.
+ * Dua jalur (tidak boleh campur):
+ *   - Langsung: tiap baris dokumen berisi baris stok (delivery_order_item_stocks);
+ *   - Dengan Packing List: memuat PKL Siap Kirim; baris dokumen terisi dari koli.
+ * Draft -> Posted (oleh gudang, tanpa approval). Posting mengeluarkan stok
+ * (log out) dari isi baris / isi koli; dokumen posted terkunci.
  */
 class DeliveryOrder extends Model
 {
@@ -27,12 +30,19 @@ class DeliveryOrder extends Model
         'do_number',
         'project_id',
         'warehouse_id',
+        'uses_packing_list',
         'delivery_date',
         'recipient_name',
         'recipient_phone',
+        'recipient_attn',
         'shipping_address',
+        'customer_ref',
+        'customer_ref_date',
         'courier',
         'note',
+        'checked_by_name',
+        'acknowledged_by_name',
+        'sent_by_name',
         'status',
         'created_by',
         'posted_by',
@@ -43,13 +53,20 @@ class DeliveryOrder extends Model
     {
         return [
             'delivery_date' => 'date',
+            'customer_ref_date' => 'date',
             'posted_at' => 'datetime',
+            'uses_packing_list' => 'boolean',
         ];
     }
 
     public function items(): HasMany
     {
         return $this->hasMany(DeliveryOrderItem::class)->orderBy('sort_order');
+    }
+
+    public function packingLists(): HasMany
+    {
+        return $this->hasMany(PackingList::class)->orderBy('id');
     }
 
     public function project(): BelongsTo

@@ -53,6 +53,7 @@ class ModulesTableSeeder extends Seeder
         'Inventory' => [
             'MOD_GOODS_RECEIPT',
             'MOD_STOCK_OUT',
+            'MOD_PACKING_LIST',
             'MOD_DELIVERY_ORDER',
             'MOD_STOCK_TRANSFER',
             'MOD_BRANCH_TRANSFER',
@@ -385,6 +386,14 @@ class ModulesTableSeeder extends Seeder
                 'route_name' => 'production',
                 'icon' => 'fa fa-industry',
                 'group' => 'Produksi',
+            ],
+            [
+                'module_code' => 'MOD_PACKING_LIST',
+                'module_name' => 'Packing List',
+                'description' => 'Gudang mengemas barang milik project per koli (dimensi, berat) — stok dipesan saat Siap Kirim, keluar saat Delivery Order diposting',
+                'route_name' => 'packing-list',
+                'icon' => 'fa fa-box',
+                'group' => 'Inventory',
             ],
             [
                 'module_code' => 'MOD_DELIVERY_ORDER',

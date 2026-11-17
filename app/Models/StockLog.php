@@ -56,7 +56,11 @@ class StockLog extends Model
 
     public const REF_STOCK_TRANSFER_ITEM = 'stock_transfer_item';
 
-    public const REF_DELIVERY_ORDER_ITEM = 'delivery_order_item';
+    /** Isi koli Packing List yang keluar saat DO diposting. */
+    public const REF_PACKING_LIST_ITEM = 'packing_list_item';
+
+    /** Isi baris DO jalur Langsung yang keluar saat DO diposting. */
+    public const REF_DELIVERY_ORDER_ITEM_STOCK = 'delivery_order_item_stock';
 
     public const REF_SUPPLIER_RETURN_ITEM = 'supplier_return_item';
 
@@ -69,13 +73,14 @@ class StockLog extends Model
     /** Barang jadi masuk / batal produksi (ref_id = productions.id). */
     public const REF_PRODUCTION = 'production';
 
-    /** ref_type => [model item, relasi header (null = model itu sendiri), route show]. */
+    /** ref_type => [model item, relasi header (boleh bertingkat; null = model itu sendiri), route show]. */
     private const REF_MAP = [
         self::REF_GOODS_RECEIPT_ITEM => [GoodsReceiptItem::class, 'goodsReceipt', 'goods-receipt.show'],
         self::REF_STOCK_ENTRY_ITEM => [StockEntryItem::class, 'stockEntry', 'stock-entry.show'],
         self::REF_STOCK_OPNAME_ITEM => [StockOpnameItem::class, 'stockOpname', 'stock-opname.show'],
         self::REF_STOCK_TRANSFER_ITEM => [StockTransferItem::class, 'stockTransfer', 'stock-transfer.show'],
-        self::REF_DELIVERY_ORDER_ITEM => [DeliveryOrderItem::class, 'deliveryOrder', 'delivery-order.show'],
+        self::REF_PACKING_LIST_ITEM => [PackingListItem::class, 'packingList.deliveryOrder', 'delivery-order.show'],
+        self::REF_DELIVERY_ORDER_ITEM_STOCK => [DeliveryOrderItemStock::class, 'deliveryOrderItem.deliveryOrder', 'delivery-order.show'],
         self::REF_SUPPLIER_RETURN_ITEM => [SupplierReturnItem::class, 'supplierReturn', 'supplier-return.show'],
         self::REF_GOODS_REQUEST_ITEM => [GoodsRequestItem::class, 'goodsRequest', 'goods-request.show'],
         self::REF_BRANCH_TRANSFER_ITEM => [BranchTransferItem::class, 'branchTransfer', 'branch-transfer.show'],
@@ -171,7 +176,7 @@ class StockLog extends Model
             $items = $class::with($header ? [$header] : [])->whereIn('id', $group->pluck('ref_id')->unique())->get()->keyBy('id');
             foreach ($group as $log) {
                 $item = $items[$log->ref_id] ?? null;
-                $doc = $header ? $item?->{$header} : $item;
+                $doc = $header ? data_get($item, $header) : $item;
                 $log->setAttribute('ref_document', $doc ? [self::documentNumber($doc), route($route, $doc->id)] : ['#'.$log->ref_id, null]);
             }
         }

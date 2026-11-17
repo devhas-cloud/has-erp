@@ -2,144 +2,105 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Surat Jalan {{ $order->do_number }}</title>
+    <title>Delivery Order {{ $order->do_number }}</title>
     <style>
         @page { margin: 12mm 14mm 14mm 14mm !important; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: #111; line-height: 1.35; }
         table { border-collapse: collapse; }
-
-        .doc-footer { position: fixed; bottom: -9mm; left: 0; right: 0; }
-        .doc-footer td { font-size: 7.5px; color: #777; }
-        .doc-footer td.pg { text-align: right; }
-        .doc-footer td.pg:after { content: counter(page); }
-
-        table.head { width: 100%; }
-        table.head td { vertical-align: top; }
-        .logo { width: 118px; height: auto; display: block; }
-        .company { font-size: 15px; font-weight: 700; font-style: italic; margin-top: 2px; padding-bottom: 1px; border-bottom: 3px double #111; width: 340px; }
-        .addr { font-size: 9.5px; margin-top: 3px; }
-        .banner { background: #3a3a3a; color: #fff; font-size: 17px; font-weight: 700; letter-spacing: .5px; text-align: center; padding: 4px 10px; margin-top: 30px; }
-        table.meta-right { width: 100%; margin-top: 8px; }
-        table.meta-right td { font-size: 10px; padding: 1.5px 0; vertical-align: top; }
-        table.meta-right td.k { width: 78px; }
-        table.meta-right td.sep { width: 12px; }
-
-        .to-box { border: 1.5px solid #111; padding: 5px 7px; margin-top: 14px; width: 62%; }
-        .to-box .label { font-size: 9px; color: #444; }
-        .to-box .name { font-weight: 700; font-size: 11px; }
-
+        h1 { font-family: 'DejaVu Serif', serif; font-size: 18px; margin: 14px 0 10px; }
+        table.meta { width: 100%; }
+        table.meta td { vertical-align: top; padding: 1px 0; font-size: 10px; }
+        table.meta td.k { width: 52px; }
+        table.meta td.sep { width: 10px; }
         table.items { width: 100%; margin-top: 12px; border: 1.5px solid #111; }
-        table.items th { border: 1.5px solid #111; background: #d9d9d9; font-size: 10px; font-weight: 700; padding: 3px 4px; text-align: center; }
-        table.items td { border: 1px solid #111; padding: 3px 4px; font-size: 10px; vertical-align: top; }
-        table.items thead { display: table-header-group; }
-        table.items tr { page-break-inside: avoid; }
+        table.items th { border: 1px solid #111; border-bottom: 2px solid #111; font-size: 9.5px; font-weight: 400; padding: 2px 4px; text-align: center; }
+        table.items td { border-left: 1px solid #111; border-right: 1px solid #111; padding: 3px 4px; font-size: 9.5px; vertical-align: top; }
+        table.items tr.first td { padding-top: 10px; }
+        table.items tr.last td { border-bottom: 1.5px solid #111; height: 60px; }
         table.items td.c { text-align: center; }
-
-        .notes { font-size: 9px; margin-top: 6px; }
-        table.sign { width: 100%; margin-top: 26px; page-break-inside: avoid; }
-        table.sign td { width: 33.33%; text-align: center; font-size: 10px; vertical-align: top; }
-        table.sign .space { height: 60px; }
-        table.sign .name { border-top: 1px solid #111; margin: 0 18px; padding-top: 2px; font-weight: 700; }
+        table.foot { width: 100%; margin-top: 12px; page-break-inside: avoid; }
+        table.foot td { vertical-align: top; font-size: 10px; }
+        .line { display: inline-block; min-width: 160px; border-bottom: 1px solid #111; padding: 0 3px; }
+        .recv { border: 1.5px solid #111; width: 100%; }
+        .recv td { text-align: center; padding: 4px; }
     </style>
 </head>
 <body>
-    <div class="doc-footer">
-        <table style="width:100%"><tr><td>Surat Jalan {{ $order->do_number }}</td><td class="pg">Hal. </td></tr></table>
-    </div>
+@php
+    $fmtQty = fn ($v) => \App\Support\StockCost::qty($v);
+    $fmtDate = fn ($d) => $d ? \Illuminate\Support\Carbon::parse($d)->locale('id')->translatedFormat('d F Y') : '';
+@endphp
+    @include('partials.pdf-letterhead')
 
-    <table class="head">
+    <h1>DELIVERY ORDER</h1>
+
+    <table class="meta">
         <tr>
-            <td style="width:62%">
-                <img class="logo" src="{{ public_path('img/has.jpg') }}" alt="HAS">
-                <div class="company">PT. HAS ENVIRONMENTAL</div>
-                <div class="addr">
-                    <div>RUKO MEGA CEMPAKA MAS BLOK I - 12</div>
-                    <div>JL. LETJEND. SUPRAPTO CEMPAKA PUTIH,</div>
-                    <div>JAKARTA PUSAT 10640</div>
-                </div>
+            <td style="width:58%">
+                <table style="width:100%">
+                    <tr><td class="k">To</td><td class="sep">:</td><td>{{ $order->recipient_name }}</td></tr>
+                    <tr><td class="k">Address</td><td class="sep">:</td><td style="white-space:pre-line">{{ $order->shipping_address }}</td></tr>
+                    <tr><td style="height:8px" colspan="3"></td></tr>
+                    <tr><td class="k">Phone</td><td class="sep">:</td><td>{{ $order->recipient_phone }}</td></tr>
+                    <tr><td class="k">Attn</td><td class="sep">:</td><td>{{ $order->recipient_attn }}</td></tr>
+                </table>
             </td>
-            <td style="width:38%">
-                <div class="banner">SURAT JALAN</div>
-                <table class="meta-right">
-                    <tr><td class="k">No. DO</td><td class="sep">:</td><td><strong>{{ $order->do_number }}</strong></td></tr>
-                    <tr><td class="k">Tanggal</td><td class="sep">:</td><td>{{ $order->delivery_date?->format('d/m/Y') }}</td></tr>
-                    <tr><td class="k">Project</td><td class="sep">:</td><td>{{ $order->project?->project_number }} — {{ $order->project?->project_name }}</td></tr>
-                    @if($order->project?->po_number_company)
-                    <tr><td class="k">PO Customer</td><td class="sep">:</td><td>{{ $order->project->po_number_company }}</td></tr>
-                    @endif
-                    @if($order->courier)
-                    <tr><td class="k">Ekspedisi</td><td class="sep">:</td><td>{{ $order->courier }}</td></tr>
-                    @endif
+            <td style="width:42%">
+                <table style="width:100%">
+                    <tr><td style="width:82px">DO Number</td><td class="sep">:</td><td>{{ $order->do_number }}</td></tr>
+                    <tr><td>Date</td><td class="sep">:</td><td>{{ $fmtDate($order->delivery_date) }}</td></tr>
+                    <tr><td style="height:8px" colspan="3"></td></tr>
+                    <tr><td>PO/SPK/ No</td><td class="sep">:</td><td>{{ $order->customer_ref }}</td></tr>
+                    <tr><td>Date</td><td class="sep">:</td><td>{{ $fmtDate($order->customer_ref_date) }}</td></tr>
                 </table>
             </td>
         </tr>
     </table>
 
-    <div class="to-box">
-        <div class="label">Kepada Yth.</div>
-        <div class="name">{{ $order->recipient_name }}</div>
-        @if($order->project?->company && $order->project->company->account_name !== $order->recipient_name)
-            <div>{{ $order->project->company->account_name }}</div>
-        @endif
-        <div style="white-space:pre-line">{{ $order->shipping_address }}</div>
-        @if($order->recipient_phone)<div>Telp: {{ $order->recipient_phone }}</div>@endif
-    </div>
-
     <table class="items">
         <thead>
             <tr>
-                <th style="width:6%">NO</th>
-                <th style="width:18%">KODE</th>
-                <th style="width:38%">NAMA BARANG</th>
-                <th style="width:8%">QTY</th>
-                <th style="width:10%">SATUAN</th>
-                <th style="width:20%">KETERANGAN</th>
+                <th style="width:5%">No</th>
+                <th>Description</th>
+                <th style="width:11%">Qty</th>
+                <th style="width:28%">Serial Number/Part Number</th>
             </tr>
         </thead>
         <tbody>
-            @php
-                // Satu baris per produk; SN / batch dicantumkan di bawah nama barang.
-                $lines = $order->items->groupBy(fn ($item) => $item->stock?->master_product_id ?? 'x'.$item->id)->values();
-            @endphp
-            @foreach($lines as $i => $group)
-            @php
-                $product = $group->first()->stock?->masterProduct;
-                $serials = $group->map(fn ($item) => $item->stock?->serial_number)->filter();
-                $batches = $group->map(fn ($item) => $item->stock?->batch_number)->filter()->unique();
-            @endphp
-            <tr>
+            @foreach($order->items as $i => $item)
+            <tr class="{{ $i === 0 ? 'first' : '' }}">
                 <td class="c">{{ $i + 1 }}</td>
-                <td>{{ $product?->code }}</td>
-                <td>{{ $product?->name }}
-                    @if($serials->isNotEmpty())<div style="font-size:9px">SN: {{ $serials->implode(', ') }}</div>@endif
-                    @if($batches->isNotEmpty())<div style="font-size:9px">Batch / MFG: {{ $batches->implode(', ') }}</div>@endif
-                </td>
-                <td class="c">{{ \App\Support\StockCost::qty($group->sum('qty')) }}</td>
-                <td class="c">{{ $group->first()->unit }}</td>
-                <td>{{ $group->pluck('remark')->filter()->unique()->implode('; ') }}</td>
+                <td style="white-space:pre-line">{{ $item->description }}</td>
+                <td class="c">{{ $fmtQty($item->qty) }} {{ $item->unit }}</td>
+                <td class="c">{{ $item->serialLabel() }}</td>
             </tr>
             @endforeach
+            <tr class="last"><td></td><td></td><td></td><td></td></tr>
         </tbody>
     </table>
 
-    @if($order->note)
-        <div class="notes"><strong>Catatan:</strong> {{ $order->note }}</div>
-    @endif
-    <div class="notes">Barang telah diterima dalam keadaan baik dan lengkap.</div>
-
-    <table class="sign">
+    <table class="foot">
         <tr>
-            <td>Disiapkan oleh,</td>
-            <td>Pengirim,</td>
-            <td>Diterima oleh,</td>
-        </tr>
-        <tr><td class="space"></td><td class="space"></td><td class="space"></td></tr>
-        <tr>
-            <td><div class="name">{{ $order->creator?->display_name ?? 'Gudang' }}</div></td>
-            <td><div class="name">&nbsp;</div></td>
-            <td><div class="name">&nbsp;</div></td>
+            <td style="width:64%">
+                <div>Note: Good has been Purchased can not be Returned, Refund or Exchange</div>
+                <table style="margin-top:4px">
+                    <tr><td style="width:80px">Cek By</td><td>:</td></tr>
+                    <tr><td></td><td style="padding:4px 0 10px"><span class="line">{{ $order->checked_by_name }}</span></td></tr>
+                    <tr><td>Acknowledge</td><td>:</td></tr>
+                    <tr><td></td><td style="padding:4px 0 10px"><span class="line">{{ $order->acknowledged_by_name }}</span></td></tr>
+                    <tr><td>Send by</td><td>:</td></tr>
+                    <tr><td></td><td style="padding:12px 0 10px"><span class="line">{{ $order->sent_by_name }}</span></td></tr>
+                </table>
+            </td>
+            <td style="width:36%;padding-top:10px">
+                <table class="recv">
+                    <tr><td style="height:95px;vertical-align:top;border-bottom:1.5px solid #111">Received in good Condition<br>By</td></tr>
+                    <tr><td style="height:32px;vertical-align:top">Please sign and Stamp Here</td></tr>
+                </table>
+            </td>
         </tr>
     </table>
+    <div style="margin-top:12px">PS : Please Fax to 021 - 4264624 after receipt and sign. Thank you</div>
 </body>
 </html>

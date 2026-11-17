@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BranchTransferController;
 use App\Http\Controllers\MaterialHandoverController;
 use App\Http\Controllers\MaterialRequestController;
+use App\Http\Controllers\PackingListController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
@@ -461,7 +462,16 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('stock-report/data', [StockReportController::class, 'data'])->name('stock-report.data');
     Route::get('stock-report/card/{productId}', [StockReportController::class, 'card'])->name('stock-report.card');
 
+    Route::get('packing-list/data', [PackingListController::class, 'data'])->name('packing-list.data');
+    Route::get('packing-list/project-data', [PackingListController::class, 'projectData'])->name('packing-list.project-data');
+    Route::get('packing-list/stock-options', [PackingListController::class, 'stockOptions'])->name('packing-list.stock-options');
+    Route::post('packing-list/{id}/ready', [PackingListController::class, 'ready'])->whereNumber('id')->name('packing-list.ready');
+    Route::post('packing-list/{id}/reopen', [PackingListController::class, 'reopen'])->whereNumber('id')->name('packing-list.reopen');
+    Route::get('packing-list/{id}/pdf', [PackingListController::class, 'pdf'])->whereNumber('id')->name('packing-list.pdf');
+    Route::resource('packing-list', PackingListController::class);
+
     Route::get('delivery-order/data', [DeliveryOrderController::class, 'data'])->name('delivery-order.data');
+    Route::get('delivery-order/packing-lists', [DeliveryOrderController::class, 'packingLists'])->name('delivery-order.packing-lists');
     Route::get('delivery-order/project-stock', [DeliveryOrderController::class, 'projectStock'])->name('delivery-order.project-stock');
     Route::get('delivery-order/stock-options', [DeliveryOrderController::class, 'stockOptions'])->name('delivery-order.stock-options');
     Route::post('delivery-order/{id}/post', [DeliveryOrderController::class, 'post'])->name('delivery-order.post');

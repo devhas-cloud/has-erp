@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MasterProduct;
+use App\Models\PackingListItem;
 use App\Models\Stock;
 use App\Models\StockLog;
 use Illuminate\Support\Collection;
@@ -15,6 +16,10 @@ use Illuminate\Support\Facades\Auth;
  *
  * Parameter $log: ['date' => 'Y-m-d', 'ref_type' => ?, 'ref_id' => ?,
  * 'note' => ?, 'goods_request_item_id' => ?].
+ *
+ * Reservasi: qty yang dipesan Packing List Siap Kirim tidak bisa diambil,
+ * dipindah, atau dikurangi opname. Posting DO melepas PKL-nya (status
+ * Terkirim) lebih dulu, baru mengambil stoknya.
  */
 class StockService
 {
@@ -166,6 +171,10 @@ class StockService
             if ($stock->qty + $delta < -Stock::EPSILON) {
                 throw new StockException('Penyesuaian '.$this->label($stock).' membuat stok minus (sisa sekarang '.self::round($stock->qty).', selisih '.$delta.').');
             }
+            $reserved = PackingListItem::reservedQty($stock->id);
+            if ($stock->qty + $delta < $reserved - Stock::EPSILON) {
+                throw new StockException($this->reservedMessage($stock, $reserved));
+            }
             $stock->qty = $this->remaining($stock->qty + $delta);
             $stock->save();
             $this->writeLog($stock, StockLog::TYPE_ADJUST, $delta, $log);
@@ -304,11 +313,26 @@ class StockService
         if ($qty > $stock->qty + Stock::EPSILON) {
             throw new StockException('Sisa '.$this->label($stock).' tinggal '.self::round($stock->qty).' (diminta '.$qty.').');
         }
+        $reserved = PackingListItem::reservedQty($stock->id);
+        if ($reserved > Stock::EPSILON && $qty > $stock->qty - $reserved + Stock::EPSILON) {
+            throw new StockException($this->reservedMessage($stock, $reserved));
+        }
         if ($stock->isSerialized() && abs($qty - $stock->qty) >= Stock::EPSILON) {
             throw new StockException($this->label($stock).' adalah barang ber-SN dan harus diambil utuh.');
         }
 
         return min($qty, $stock->qty);
+    }
+
+    /** Qty baris stok yang belum dipesan Packing List Siap Kirim. */
+    public static function available(Stock $stock, ?int $exceptPackingListId = null): float
+    {
+        return max(0.0, self::round($stock->qty - PackingListItem::reservedQty($stock->id, $exceptPackingListId)));
+    }
+
+    private function reservedMessage(Stock $stock, float $reserved): string
+    {
+        return $this->label($stock).': '.self::round($reserved).' dari sisa '.self::round($stock->qty).' sedang dipesan Packing List Siap Kirim. Buka kembali Packing List-nya dulu bila ingin dipakai.';
     }
 
     private function assertWholeUnits(MasterProduct $product, float $qty): int

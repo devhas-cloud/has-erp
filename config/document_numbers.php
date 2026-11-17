@@ -25,6 +25,7 @@ return [
 
     // Inventory
     'goods_receipts' => 'GRN',     // Goods Receipt Note
+    'packing_lists' => 'PKL',      // Packing List (koli barang siap kirim)
     'delivery_orders' => 'DO',     // Delivery Order
     'stock_transfers' => 'ST',     // Stock Transfer
     'stock_entries' => 'SE',       // Stock Entry (masuk stok lain-lain)

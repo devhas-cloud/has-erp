@@ -290,7 +290,7 @@ class ProjectController extends Controller
             ->get();
         $delivered = StockLog::where('project_id', $project->id)
             ->where('type', StockLog::TYPE_OUT)
-            ->where('ref_type', StockLog::REF_DELIVERY_ORDER_ITEM)
+            ->whereIn('ref_type', [StockLog::REF_PACKING_LIST_ITEM, StockLog::REF_DELIVERY_ORDER_ITEM_STOCK])
             ->groupBy('master_product_id')
             ->selectRaw('master_product_id, -SUM(qty) AS qty')
             ->pluck('qty', 'master_product_id');

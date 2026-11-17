@@ -18,8 +18,9 @@ use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
 /**
- * Fase 3: Delivery Order — draft dari stok milik project, posting oleh gudang
- * (tanpa approval) mengurangi stok, dokumen terkunci, Surat Jalan & integrasi project.
+ * Delivery Order jalur Langsung — baris dokumen berisi baris stok milik project,
+ * posting oleh gudang (tanpa approval) mengurangi stok, dokumen terkunci,
+ * Surat Jalan & integrasi project. Jalur Packing List: PackingListTest.
  */
 class DeliveryOrderTest extends TestCase
 {
@@ -93,7 +94,13 @@ class DeliveryOrderTest extends TestCase
             'delivery_date' => '2026-11-02',
             'recipient_name' => 'PT Maju Bersama',
             'shipping_address' => 'Jl. Industri 5, Gresik',
-            'items' => [['stock_id' => $stockId ?? $this->row->id, 'qty' => $qty, 'remark' => 'Panel A']],
+            'uses_packing_list' => false,
+            'lines' => [[
+                'description' => "PN-1\nSensor pH",
+                'qty' => 1,
+                'unit' => 'Set',
+                'stocks' => [['stock_id' => $stockId ?? $this->row->id, 'qty' => $qty]],
+            ]],
         ];
     }
 
@@ -113,12 +120,13 @@ class DeliveryOrderTest extends TestCase
         $id = $this->actingAs($this->user)->postJson(route('delivery-order.store'), $this->payload(3))->assertOk()->json('id');
         $order = DeliveryOrder::with('items')->findOrFail($id);
         $this->assertSame('DO-26110001', $order->do_number);
-        $this->assertSame('Unit', $order->items->first()->unit);
+        $this->assertSame('Set', $order->items->first()->unit);
+        $this->assertSame('Unit', $order->items->first()->stocks()->value('unit'), 'satuan isi stok dari baris stok');
         $this->assertEquals(5, $this->stockBalance($this->transit->id, $this->product->id, $this->project->id), 'draft tidak mengurangi stok');
 
         // Material boleh dikirim sebagian (desimal) dari satu baris stok.
         $this->actingAs($this->user)->putJson(route('delivery-order.update', $id), $this->payload(3.5))->assertOk();
-        $this->assertSame(3.5, $order->items()->first()->qty);
+        $this->assertSame(3.5, $order->items()->first()->stocks()->first()->qty);
 
         foreach (['index', 'create'] as $page) {
             $this->actingAs($this->user)->get(route('delivery-order.'.$page))->assertOk();
@@ -133,7 +141,7 @@ class DeliveryOrderTest extends TestCase
         $this->assertSame(DeliveryOrder::STATUS_POSTED, $order->status);
         $this->assertSame($this->user->id, $order->posted_by);
         $this->assertEquals(1.5, $this->stockBalance($this->transit->id, $this->product->id, $this->project->id));
-        $this->assertDatabaseHas('stock_logs', ['type' => StockLog::TYPE_OUT, 'ref_type' => StockLog::REF_DELIVERY_ORDER_ITEM, 'ref_id' => $order->items()->value('id'), 'qty' => -3.5]);
+        $this->assertDatabaseHas('stock_logs', ['type' => StockLog::TYPE_OUT, 'ref_type' => StockLog::REF_DELIVERY_ORDER_ITEM_STOCK, 'ref_id' => $order->items()->first()->stocks()->value('id'), 'qty' => -3.5]);
 
         $this->actingAs($this->user)->postJson(route('delivery-order.post', $id))->assertStatus(422);
         $this->actingAs($this->user)->putJson(route('delivery-order.update', $id), $this->payload(1))->assertStatus(422);
@@ -186,6 +194,6 @@ class DeliveryOrderTest extends TestCase
 
         // Surat jalan mencantumkan SN.
         $this->actingAs($this->user)->get(route('delivery-order.pdf', $id))->assertOk();
-        $this->assertStringContainsString('SN-001', view('delivery-order.pdf', ['order' => DeliveryOrder::with(['items.stock.masterProduct', 'project.company', 'warehouse', 'creator'])->find($id)])->render());
+        $this->assertStringContainsString('SN-001', view('delivery-order.pdf', ['order' => DeliveryOrder::with(['items.stocks.stock.masterProduct', 'packingLists', 'project.company', 'warehouse', 'creator'])->find($id)])->render());
     }
 }

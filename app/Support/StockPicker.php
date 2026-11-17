@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\PackingListItem;
 use App\Models\Stock;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -9,6 +10,8 @@ use Illuminate\Support\Collection;
 /**
  * Daftar baris stok yang bisa dipilih user (Transfer, DO, Retur, Stock Out).
  * Hanya baris terbuka (qty > 0), lewat index pick (produk, gudang, is_open, project).
+ * Qty yang dipesan Packing List Siap Kirim dikurangkan; baris yang habis
+ * dipesan tidak ditampilkan (kolom available).
  *
  * Filter:
  *  - warehouse_id   : gudang (wajib di hampir semua dokumen)
@@ -27,8 +30,14 @@ class StockPicker
         $project = $filters['project'] ?? 'any';
         $q = trim((string) ($filters['q'] ?? ''));
 
+        $reserved = PackingListItem::reservedSql('stocks.id');
+
         return Stock::query()
+            ->select('stocks.*')
+            ->selectRaw("stocks.qty - {$reserved} AS available")
             ->open()
+            // Literal (bukan binding): SQLite membandingkan binding float sebagai teks.
+            ->whereRaw("stocks.qty - {$reserved} > 0.00005")
             ->with(['masterProduct:id,code,name,is_material', 'warehouse:id,code,name', 'project:id,project_number,project_name'])
             ->when($filters['warehouse_id'] ?? null, fn (Builder $b, $id) => $b->where('warehouse_id', (int) $id))
             ->when($project === 'free', fn (Builder $b) => $b->whereNull('project_id'))
@@ -73,8 +82,9 @@ class StockPicker
             'received_date' => $s->received_date?->format('d/m/Y'),
             'expiry_date' => $s->expiry_date?->format('d/m/Y'),
             'warranty_until' => $s->warranty_until?->format('d/m/Y'),
-            'qty' => $s->qty,
-            'qty_label' => StockCost::qty($s->qty),
+            // Qty yang bisa dipilih = sisa dikurangi pesanan Packing List Siap Kirim.
+            'qty' => $available = round((float) ($s->available ?? $s->qty), 4),
+            'qty_label' => StockCost::qty($available),
             'unit' => $s->unit,
             'note' => $s->note,
             'warehouse_id' => $s->warehouse_id,
