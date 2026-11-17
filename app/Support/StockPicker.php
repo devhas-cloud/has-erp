@@ -13,6 +13,7 @@ use Illuminate\Support\Collection;
  * Filter:
  *  - warehouse_id   : gudang (wajib di hampir semua dokumen)
  *  - project        : 'free' (stok bebas), 'any', atau id project
+ *  - free_or_project: stok bebas ATAU milik project ini (serah terima produksi)
  *  - product_id     : satu produk
  *  - product_ids    : beberapa produk (mis. baris PO yang diretur)
  *  - source_ids     : hanya baris dari item GRN tertentu (retur supplier)
@@ -32,6 +33,7 @@ class StockPicker
             ->when($filters['warehouse_id'] ?? null, fn (Builder $b, $id) => $b->where('warehouse_id', (int) $id))
             ->when($project === 'free', fn (Builder $b) => $b->whereNull('project_id'))
             ->when(is_numeric($project), fn (Builder $b) => $b->where('project_id', (int) $project))
+            ->when($filters['free_or_project'] ?? null, fn (Builder $b, $id) => $b->where(fn (Builder $w) => $w->whereNull('project_id')->orWhere('project_id', (int) $id)))
             ->when($filters['product_id'] ?? null, fn (Builder $b, $id) => $b->where('master_product_id', (int) $id))
             ->when($filters['product_ids'] ?? null, fn (Builder $b, $ids) => $b->whereIn('master_product_id', (array) $ids))
             ->when(array_key_exists('source_ids', $filters), fn (Builder $b) => $b

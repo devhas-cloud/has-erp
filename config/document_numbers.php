@@ -31,6 +31,11 @@ return [
     'stock_opnames' => 'SC',       // Stock Count (stock opname)
     'branch_transfers' => 'BT',    // Branch Transfer (pengiriman antar branch + surat jalan)
 
+    // Produksi
+    'material_requests' => 'MR',   // Material Request (kebutuhan material project)
+    'material_handovers' => 'MH',  // Material Handover (serah terima ke produksi)
+    'productions' => 'MO',         // Manufacturing Order (produksi barang jadi)
+
     // Finance
     'invoices' => 'INV',           // Sales Invoice
     'customer_receipts' => 'RV',   // Receipt Voucher (penerimaan customer)

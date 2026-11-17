@@ -64,7 +64,12 @@ class StockLog extends Model
 
     public const REF_BRANCH_TRANSFER_ITEM = 'branch_transfer_item';
 
-    /** ref_type => [model item, relasi header, route show]. */
+    public const REF_MATERIAL_HANDOVER_ITEM = 'material_handover_item';
+
+    /** Barang jadi masuk / batal produksi (ref_id = productions.id). */
+    public const REF_PRODUCTION = 'production';
+
+    /** ref_type => [model item, relasi header (null = model itu sendiri), route show]. */
     private const REF_MAP = [
         self::REF_GOODS_RECEIPT_ITEM => [GoodsReceiptItem::class, 'goodsReceipt', 'goods-receipt.show'],
         self::REF_STOCK_ENTRY_ITEM => [StockEntryItem::class, 'stockEntry', 'stock-entry.show'],
@@ -74,6 +79,8 @@ class StockLog extends Model
         self::REF_SUPPLIER_RETURN_ITEM => [SupplierReturnItem::class, 'supplierReturn', 'supplier-return.show'],
         self::REF_GOODS_REQUEST_ITEM => [GoodsRequestItem::class, 'goodsRequest', 'goods-request.show'],
         self::REF_BRANCH_TRANSFER_ITEM => [BranchTransferItem::class, 'branchTransfer', 'branch-transfer.show'],
+        self::REF_MATERIAL_HANDOVER_ITEM => [MaterialHandoverItem::class, 'materialHandover', 'material-handover.show'],
+        self::REF_PRODUCTION => [Production::class, null, 'production.show'],
     ];
 
     protected $fillable = [
@@ -161,9 +168,10 @@ class StockLog extends Model
             if (! $class) {
                 continue;
             }
-            $items = $class::with($header)->whereIn('id', $group->pluck('ref_id')->unique())->get()->keyBy('id');
+            $items = $class::with($header ? [$header] : [])->whereIn('id', $group->pluck('ref_id')->unique())->get()->keyBy('id');
             foreach ($group as $log) {
-                $doc = $items[$log->ref_id]?->{$header};
+                $item = $items[$log->ref_id] ?? null;
+                $doc = $header ? $item?->{$header} : $item;
                 $log->setAttribute('ref_document', $doc ? [self::documentNumber($doc), route($route, $doc->id)] : ['#'.$log->ref_id, null]);
             }
         }
@@ -177,7 +185,7 @@ class StockLog extends Model
 
     private static function documentNumber(Model $doc): string
     {
-        foreach (['receipt_number', 'entry_number', 'opname_number', 'transfer_number', 'do_number', 'return_number', 'request_number'] as $column) {
+        foreach (['receipt_number', 'entry_number', 'opname_number', 'transfer_number', 'do_number', 'return_number', 'request_number', 'handover_number', 'production_number'] as $column) {
             // transfer_number dipakai Stock Transfer maupun Branch Transfer.
             if (! empty($doc->{$column})) {
                 return $doc->{$column};

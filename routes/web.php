@@ -4,6 +4,9 @@ use App\Http\Controllers\AccountManagementController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BranchTransferController;
+use App\Http\Controllers\MaterialHandoverController;
+use App\Http\Controllers\MaterialRequestController;
+use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ContactManagementController;
 use App\Http\Controllers\CurrencyController;
@@ -388,6 +391,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('direct-purchase/data', [DirectPurchaseController::class, 'data'])->name('direct-purchase.data');
     Route::get('direct-purchase/search-products', [DirectPurchaseController::class, 'searchProducts'])->name('direct-purchase.search-products');
+    Route::get('direct-purchase/material-requests', [DirectPurchaseController::class, 'materialRequests'])->name('direct-purchase.material-requests');
     Route::post('direct-purchase/{id}/submit', [DirectPurchaseController::class, 'submit'])->name('direct-purchase.submit');
     Route::post('direct-purchase/{id}/approve', [DirectPurchaseController::class, 'approve'])->name('direct-purchase.approve');
     Route::post('direct-purchase/{id}/reject', [DirectPurchaseController::class, 'reject'])->name('direct-purchase.reject');
@@ -425,6 +429,24 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('branch-transfer/{id}/items/{item}/photos/{document}', [BranchTransferController::class, 'viewPhoto'])->whereNumber('id')->name('branch-transfer.photos.show');
     Route::delete('branch-transfer/{id}/items/{item}/photos/{document}', [BranchTransferController::class, 'deletePhoto'])->whereNumber('id')->name('branch-transfer.photos.destroy');
     Route::resource('branch-transfer', BranchTransferController::class);
+
+    // Produksi: Material Request -> Serah Terima -> Produksi
+    Route::get('material-request/data', [MaterialRequestController::class, 'data'])->name('material-request.data');
+    Route::get('material-request/search-products', [MaterialRequestController::class, 'searchProducts'])->name('material-request.search-products');
+    Route::post('material-request/{id}/approve', [MaterialRequestController::class, 'approve'])->whereNumber('id')->name('material-request.approve');
+    Route::post('material-request/{id}/reject', [MaterialRequestController::class, 'reject'])->whereNumber('id')->name('material-request.reject');
+    Route::patch('material-request/{id}/close', [MaterialRequestController::class, 'close'])->whereNumber('id')->name('material-request.close');
+    Route::resource('material-request', MaterialRequestController::class);
+
+    Route::get('material-handover/data', [MaterialHandoverController::class, 'data'])->name('material-handover.data');
+    Route::get('material-handover/stock-options', [MaterialHandoverController::class, 'stockOptions'])->name('material-handover.stock-options');
+    Route::resource('material-handover', MaterialHandoverController::class)->only(['index', 'create', 'store', 'show']);
+
+    Route::get('production/data', [ProductionController::class, 'data'])->name('production.data');
+    Route::get('production/pool', [ProductionController::class, 'pool'])->name('production.pool');
+    Route::get('production/search-products', [ProductionController::class, 'searchProducts'])->name('production.search-products');
+    Route::post('production/{id}/void', [ProductionController::class, 'void'])->whereNumber('id')->name('production.void');
+    Route::resource('production', ProductionController::class)->only(['index', 'create', 'store', 'show']);
 
     Route::get('stock-entry/data', [StockEntryController::class, 'data'])->name('stock-entry.data');
     Route::get('stock-entry/search-products', [StockEntryController::class, 'searchProducts'])->name('stock-entry.search-products');

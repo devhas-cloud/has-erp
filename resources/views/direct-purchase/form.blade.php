@@ -177,9 +177,14 @@
                     <span class="dp-chip ms-1" id="dp-items-count">0 items</span>
                     <span class="dp-chip muted ms-1" id="dp-doc-currency" style="display:none" title="One document one currency, following the product"></span>
                 </span>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="dpOpenProductPicker()">
-                    <i class="fa fa-magnifying-glass me-1"></i> Add from Catalog
-                </button>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-primary btn-sm dp-mr-btn" onclick="dpOpenMrPicker()">
+                        <i class="fa fa-clipboard-list me-1"></i> Add from Material Request
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="dpOpenProductPicker()">
+                        <i class="fa fa-magnifying-glass me-1"></i> Add from Catalog
+                    </button>
+                </div>
             </div>
             <div class="card-body-custom p-2">
                 <div class="table-responsive">
@@ -202,6 +207,9 @@
                 <div class="config-card-empty" id="dp-items-empty">
                     <i class="fa-solid fa-inbox"></i> No items yet.
                     <div class="dp-empty-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm dp-mr-btn" onclick="dpOpenMrPicker()">
+                            <i class="fa fa-clipboard-list me-1"></i> Material Request
+                        </button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="dpOpenProductPicker()">
                             <i class="fa fa-magnifying-glass me-1"></i> Search Catalog
                         </button>
@@ -284,6 +292,51 @@
 @endsection
 
 @push('modals')
+<div class="modal fade" id="dpMrPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa-solid fa-clipboard-list me-2" style="color:var(--accent)"></i>Add from Material Request</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="dp-hint mb-0" for="dp-mr-branch">Branch</label>
+                        <select id="dp-mr-branch" class="form-select form-select-sm" style="width:auto;min-width:180px"></select>
+                    </div>
+                    <span class="dp-hint"><i class="fa fa-circle-info me-1"></i>Reference only — approved Material Requests, same product merged. Suggested = remaining − available stock − on order.</span>
+                </div>
+                <div class="dp-pp-table-wrap">
+                    <table class="table table-custom align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:36px" class="text-center"></th>
+                                <th>Product</th>
+                                <th>Material Request</th>
+                                <th class="text-end" style="width:100px">Remaining</th>
+                                <th class="text-end" style="width:100px">In Stock</th>
+                                <th class="text-end" style="width:100px">On Order</th>
+                                <th class="text-center" style="width:110px">Qty to Buy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dp-mr-body">
+                            <tr><td colspan="7" class="config-card-empty"><span class="config-spinner"></span>Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <small class="dp-hint">In Stock = free stock + stock of those projects in this branch's warehouses. On Order = Stock-purpose direct purchases not yet received.</small>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="dp-mr-apply" onclick="dpApplyMrPicked()" disabled><i class="fa fa-plus me-1"></i> Add 0 Items</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="dpProductPickerModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
@@ -684,6 +737,98 @@ function dpApplyProductPicked() {
     dpPickerInstance.hide();
 }
 
+// ── Picker Material Request (acuan pembelian, baris DP tidak terhubung ke MR) ──
+
+const dpMrUrl = '{{ route("direct-purchase.material-requests") }}';
+let dpMrInstance = null;
+let dpMrRows = [];
+
+function dpOpenMrPicker() {
+    if (dpPurpose() !== 'stock') { toastr.error('Material Request items can only be bought with purpose "For Stock".'); return; }
+    if (!dpMrInstance) dpMrInstance = new bootstrap.Modal(document.getElementById('dpMrPickerModal'));
+    dpMrInstance.show();
+    dpLoadMr($('#dp-mr-branch').val() || '');
+}
+
+function dpLoadMr(branchId) {
+    $('#dp-mr-body').html('<tr><td colspan="7" class="config-card-empty"><span class="config-spinner"></span>Loading...</td></tr>');
+    $.get(dpMrUrl, branchId ? { branch_id: branchId } : {}).done(function(res) {
+        var opts = '';
+        (res.branches || []).forEach(function(b) { opts += '<option value="' + b.id + '"' + (b.id === res.branch_id ? ' selected' : '') + '>' + dpEsc(b.name) + '</option>'; });
+        $('#dp-mr-branch').html(opts || '<option value="">—</option>');
+        dpMrRows = res.data || [];
+        dpRenderMr();
+    }).fail(function() {
+        $('#dp-mr-body').html('<tr><td colspan="7" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load Material Requests.</td></tr>');
+    });
+}
+
+function dpRenderMr() {
+    if (!dpMrRows.length) {
+        $('#dp-mr-body').html('<tr><td colspan="7" class="config-card-empty"><i class="fa-solid fa-inbox"></i>No approved Material Request waiting in this branch.</td></tr>');
+        dpSyncMrSelection();
+        return;
+    }
+    var added = dpExistingProductIds();
+    var html = '';
+    dpMrRows.forEach(function(r, idx) {
+        var isAdded = !!added[r.id];
+        var qty = r.suggested > 0 ? r.suggested : Math.max(1, Math.ceil(r.need - 0.00005));
+        html += '<tr data-idx="' + idx + '" class="' + (isAdded ? 'is-added' : '') + '">';
+        html += '<td class="text-center">' + (isAdded
+            ? '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>'
+            : '<input type="checkbox" class="dp-mr-check"' + (r.suggested > 0 ? ' checked' : '') + '>') + '</td>';
+        html += '<td><div class="dp-pp-name">' + dpEsc(r.code) + (isAdded ? ' <span class="dp-chip muted">Already added</span>' : '') + '</div><div class="dp-pp-desc">' + dpEsc(r.name || '') + '</div></td>';
+        html += '<td style="font-size:12px">' + r.requests.map(dpEsc).join(', ') + '</td>';
+        html += '<td class="text-end">' + Num.format(r.need, 4) + ' <span class="dp-hint">' + dpEsc(r.unit || '') + '</span></td>';
+        html += '<td class="text-end">' + Num.format(r.available, 4) + '</td>';
+        html += '<td class="text-end">' + Num.format(r.on_order, 4) + '</td>';
+        html += '<td>' + (isAdded ? '' : '<input type="text" inputmode="numeric" class="form-control form-control-sm text-center dp-mr-qty" value="' + qty + '">')
+            + (r.suggested <= 0 && !isAdded ? '<div class="dp-hint text-center" style="font-size:11px">covered</div>' : '') + '</td>';
+        html += '</tr>';
+    });
+    $('#dp-mr-body').html(html);
+    dpSyncMrSelection();
+}
+
+function dpSyncMrSelection() {
+    var n = $('#dp-mr-body .dp-mr-check:checked').length;
+    $('#dp-mr-apply').prop('disabled', n === 0).html('<i class="fa fa-plus me-1"></i> Add ' + n + ' Items');
+}
+
+function dpApplyMrPicked() {
+    var picked = [];
+    $('#dp-mr-body tr[data-idx]').each(function() {
+        if (!$(this).find('.dp-mr-check').is(':checked')) return;
+        var r = dpMrRows[$(this).data('idx')];
+        var qty = parseInt($(this).find('.dp-mr-qty').val(), 10) || 0;
+        if (r && qty > 0) picked.push($.extend({}, r, { qty: qty }));
+    });
+    if (!picked.length) { toastr.error('Select at least one item with qty.'); return; }
+
+    // Satu dokumen satu mata uang.
+    var currencies = picked.map(function(p) { return p.currency; }).filter(function(c, i, all) { return all.indexOf(c) === i; });
+    var docCurrency = dpDocCurrency();
+    if (currencies.length > 1 || (docCurrency && currencies[0] !== docCurrency)) {
+        toastr.error('One document may only use one currency (' + (docCurrency || currencies.join(', ')) + '). Create a separate document for other currencies.');
+        return;
+    }
+
+    picked.forEach(function(p) {
+        dpAddRow({ master_product_id: p.id, part_number: p.code, product_name: p.name, description: p.description || dpEsc(p.name || ''), qty: p.qty, unit: p.unit || 'Unit', currency: p.currency, price: p.price || null });
+    });
+    toastr.success(picked.length + ' items added. Adjust qty and price as needed.');
+    dpMrInstance.hide();
+}
+
+$(document).on('change', '#dp-mr-body .dp-mr-check', dpSyncMrSelection);
+$(document).on('input', '#dp-mr-body .dp-mr-qty', function() {
+    this.value = this.value.replace(/\D/g, '');
+    $(this).closest('tr').find('.dp-mr-check').prop('checked', (parseInt(this.value, 10) || 0) > 0);
+    dpSyncMrSelection();
+});
+$(document).on('change', '#dp-mr-branch', function() { dpLoadMr($(this).val()); });
+
 // ── Simpan ──
 
 function dpFail(message, $el) {
@@ -702,6 +847,8 @@ function dpPurpose() {
 
 function dpSyncPurpose() {
     $('#dp-project-wrap').toggle(dpPurpose() === 'project');
+    $('.dp-mr-btn').prop('disabled', dpPurpose() !== 'stock')
+        .attr('title', dpPurpose() === 'stock' ? '' : 'Only for purpose "For Stock"');
     $('#dp-sum-purpose').text($('input[name="dp-purpose"]:checked').next('label').find('strong').text().trim() || '—');
 }
 

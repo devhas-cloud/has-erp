@@ -25,6 +25,9 @@ class Stock extends Model
 
     public const SOURCE_STOCK_OPNAME_ITEM = 'stock_opname_item';
 
+    /** Barang jadi hasil produksi (source_id = productions.id). */
+    public const SOURCE_PRODUCTION = 'production';
+
     /** Selisih qty di bawah ini dianggap 0 (sisa pecahan desimal). */
     public const EPSILON = 0.00005;
 

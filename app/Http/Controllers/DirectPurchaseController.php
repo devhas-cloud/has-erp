@@ -7,7 +7,11 @@ use App\Models\Currency;
 use App\Models\DirectPurchase;
 use App\Models\DirectPurchaseItem;
 use App\Models\Division;
+use App\Models\Branch;
 use App\Models\MasterProduct;
+use App\Models\MaterialRequest;
+use App\Models\MaterialRequestItem;
+use App\Models\Stock;
 use App\Models\Project;
 use App\Models\Quotation;
 use App\Models\Supplier;
@@ -325,6 +329,77 @@ class DirectPurchaseController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Direct purchase ditolak.']);
+    }
+
+    /**
+     * Acuan pembelian dari Material Request (pop-up "Add from Material Request").
+     * Hanya acuan — baris DP tidak terhubung ke MR. Per branch, produk yang sama
+     * digabung menjadi satu baris:
+     *   need      = Σ sisa item MR Disetujui di branch ini
+     *   available = stok bebas + stok milik project MR tsb di gudang branch ini
+     *   on_order  = qty DP bertujuan Stok (belum ditolak) yang belum diterima
+     *   suggested = ceil(max(0, need − available − on_order))
+     */
+    public function materialRequests(Request $request): JsonResponse
+    {
+        $pending = MaterialRequest::visibleTo(Auth::user())
+            ->where('status', MaterialRequest::STATUS_APPROVED)
+            ->with(['branch:id,name', 'items.handoverItems', 'items.masterProduct.currency'])
+            ->get()
+            ->filter(fn (MaterialRequest $mr) => $mr->remainingQty() > 0);
+
+        $branches = $pending->pluck('branch')->filter()->unique('id')->sortBy('name')->values();
+        $branchId = $request->integer('branch_id') ?: (Auth::user()->branch_id ?? $branches->first()?->id);
+        $requests = $pending->where('branch_id', $branchId);
+
+        $groups = $requests->flatMap(fn (MaterialRequest $mr) => $mr->items->map(fn (MaterialRequestItem $item) => [$mr, $item]))
+            ->filter(fn ($pair) => $pair[1]->remainingQty() > 0)
+            ->groupBy(fn ($pair) => $pair[1]->master_product_id);
+
+        $productIds = $groups->keys()->all();
+        $warehouseIds = $branchId ? DB::table('warehouses')->where('branch_id', $branchId)->pluck('id')->all() : [];
+        $stocks = Stock::open()->whereIn('master_product_id', $productIds ?: [0])->whereIn('warehouse_id', $warehouseIds ?: [0])
+            ->get(['master_product_id', 'project_id', 'qty'])->groupBy('master_product_id');
+        $onOrder = DirectPurchaseItem::with('goodsReceiptItems.goodsReceipt')
+            ->whereIn('master_product_id', $productIds ?: [0])
+            ->whereHas('directPurchase', fn ($q) => $q->where('purpose', DirectPurchase::PURPOSE_STOCK)
+                ->whereIn('status', [DirectPurchase::STATUS_DRAFT, DirectPurchase::STATUS_WAITING_APPROVAL, DirectPurchase::STATUS_APPROVED]))
+            ->get()
+            ->groupBy('master_product_id')
+            ->map(fn ($items) => $items->sum(fn (DirectPurchaseItem $item) => $item->remainingReceiptQty()));
+        $base = Currency::baseName();
+
+        $rows = $groups->map(function ($pairs, $productId) use ($stocks, $onOrder, $base) {
+            $product = $pairs->first()[1]->masterProduct;
+            $projectIds = $pairs->map(fn ($pair) => (int) $pair[0]->project_id)->unique()->all();
+            $need = round($pairs->sum(fn ($pair) => $pair[1]->remainingQty()), 4);
+            $available = round(($stocks[$productId] ?? collect())
+                ->filter(fn ($s) => $s->project_id === null || in_array((int) $s->project_id, $projectIds, true))
+                ->sum('qty'), 4);
+            $ordered = (float) ($onOrder[$productId] ?? 0);
+
+            return [
+                'id' => $product->id,
+                'code' => $product->code,
+                'name' => $product->name,
+                'unit' => $product->unit,
+                'description' => Quotation::renderDescription($product->description),
+                'price' => (float) $product->purchase_price,
+                'currency' => $product->currency && ! $product->currency->isBase() ? strtoupper($product->currency->name) : $base,
+                'requests' => $pairs->map(fn ($pair) => $pair[0]->request_number)->unique()->values(),
+                'need' => $need,
+                'available' => $available,
+                'on_order' => $ordered,
+                'suggested' => (int) ceil(max(0, $need - $available - $ordered) - 0.00005),
+            ];
+        })->sortBy('code')->values();
+
+        return response()->json([
+            'success' => true,
+            'branch_id' => $branchId,
+            'branches' => $branches->map(fn (Branch $b) => ['id' => $b->id, 'name' => $b->name]),
+            'data' => $rows,
+        ]);
     }
 
     /**
