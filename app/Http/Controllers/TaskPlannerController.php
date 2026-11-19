@@ -853,6 +853,14 @@ class TaskPlannerController extends Controller
 
         $task->update(['status' => 'done']);
 
+
+        // cek apakah task terikat dengan lead
+        $lead = $task->lead;
+        // jika status lead adalah "New", dan Task diubah menjadi "done", maka ubah status lead menjadi "approach"
+        if ($lead && $task->status='done' && $lead->lead_status === 'New') {
+            $lead->update(['lead_status' => 'Approach']);
+        }
+
         // Task kategori quote/proposal diselesaikan lewat tombol "Complete Task",
         // sehingga log & pesan menyesuaikan (bukan approve).
         $isCompleteCategory = $taskCategory && in_array(strtolower($taskCategory->name), ['quote', 'proposal'], true);
@@ -868,6 +876,7 @@ class TaskPlannerController extends Controller
             $action = 'complete_task';
             $description = "{$task->title} di-complete";
         }
+
 
         Log::record($action, $description, 'MOD_TASK_PLANNER', $task);
         return response()->json([
