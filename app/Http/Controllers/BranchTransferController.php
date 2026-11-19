@@ -36,23 +36,50 @@ class BranchTransferController extends Controller
 {
     public function index()
     {
-        return view('branch-transfer.index');
+        $user = Auth::user();
+        $visible = BranchTransfer::visibleTo($user);
+        $branchIds = (clone $visible)->pluck('from_branch_id')->merge((clone $visible)->pluck('to_branch_id'))->unique()->values();
+
+        return view('branch-transfer.index', [
+            'branches' => Branch::whereIn('id', $branchIds)->orderBy('name')->get(['id', 'code', 'name']),
+            'warehouses' => Warehouse::whereIn('id', (clone $visible)->select('from_warehouse_id'))
+                ->orWhereIn('id', (clone $visible)->whereNotNull('to_warehouse_id')->select('to_warehouse_id'))
+                ->orderBy('name')->get(['id', 'code', 'name']),
+            'userBranchId' => $user->branch_id,
+        ]);
     }
 
     public function data(Request $request): JsonResponse
     {
         $query = BranchTransfer::visibleTo(Auth::user())
             ->withCount('items')
-            ->with(['fromBranch', 'toBranch', 'fromWarehouse', 'toWarehouse']);
+            ->with(['fromBranch', 'toBranch', 'fromWarehouse', 'toWarehouse', 'creator']);
 
         $recordsTotal = (clone $query)->count();
+        $user = Auth::user();
 
-        if ($status = $request->input('status')) {
-            $query->where('status', $status);
-        }
+        $query
+            ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
+            ->when($request->integer('from_branch'), fn ($q, $id) => $q->where('from_branch_id', $id))
+            ->when($request->integer('to_branch'), fn ($q, $id) => $q->where('to_branch_id', $id))
+            ->when($request->integer('warehouse'), fn ($q, $id) => $q->where(fn ($w) => $w->where('from_warehouse_id', $id)->orWhere('to_warehouse_id', $id)))
+            // Arah relatif branch user: keluar = dikirim dari branch saya, masuk = menuju branch saya.
+            ->when($user->branch_id && $request->input('direction') === 'out', fn ($q) => $q->where('from_branch_id', $user->branch_id))
+            ->when($user->branch_id && $request->input('direction') === 'in', fn ($q) => $q->where('to_branch_id', $user->branch_id))
+            ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('transfer_date', '>=', $date))
+            ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('transfer_date', '<=', $date))
+            ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', $user->id));
+
         $search = trim((string) $request->input('search.value', ''));
         if ($search !== '') {
-            $query->where(fn ($q) => $q->where('transfer_number', 'like', "%{$search}%")->orWhere('note', 'like', "%{$search}%"));
+            $query->where(fn ($q) => $q->where('transfer_number', 'like', "%{$search}%")
+                ->orWhere('note', 'like', "%{$search}%")
+                ->orWhere('courier', 'like', "%{$search}%")
+                ->orWhere('vehicle_no', 'like', "%{$search}%")
+                ->orWhere('driver_name', 'like', "%{$search}%")
+                ->orWhereHas('items.stock', fn ($st) => $st->where('serial_number', 'like', "%{$search}%")
+                    ->orWhere('batch_number', 'like', "%{$search}%")
+                    ->orWhereHas('masterProduct', fn ($p) => $p->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"))));
         }
 
         $recordsFiltered = (clone $query)->count();
@@ -71,6 +98,13 @@ class BranchTransferController extends Controller
                 'transfer_date' => $t->transfer_date?->format('d/m/Y'),
                 'from' => ($t->fromBranch?->name ?? '—').' · '.($t->fromWarehouse?->code ?? '—'),
                 'to' => ($t->toBranch?->name ?? '—').($t->toWarehouse ? ' · '.$t->toWarehouse->code : ''),
+                'from_branch' => $t->fromBranch?->name ?? '—',
+                'from_warehouse' => $t->fromWarehouse ? $t->fromWarehouse->code.' — '.$t->fromWarehouse->name : '—',
+                'to_branch' => $t->toBranch?->name ?? '—',
+                'to_warehouse' => $t->toWarehouse ? $t->toWarehouse->code.' — '.$t->toWarehouse->name : null,
+                'direction' => $user->branch_id ? ((int) $t->from_branch_id === (int) $user->branch_id ? 'out' : 'in') : null,
+                'courier' => trim(implode(' · ', array_filter([$t->courier, $t->vehicle_no]))),
+                'creator' => $t->creator?->display_name ?? '—',
                 'item_count' => $t->items_count,
                 'status' => $t->status,
                 'status_badge' => $t->statusBadgeHtml(),
@@ -98,7 +132,8 @@ class BranchTransferController extends Controller
         return response()->json(['success' => true, 'data' => StockPicker::options([
             'warehouse_id' => $warehouse->id,
             'q' => $validated['q'] ?? null,
-            'limit' => 300,
+            // Semua baris gudang dimuat sekali; pencarian & filter di browser.
+            'limit' => 2000,
         ])]);
     }
 

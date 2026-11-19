@@ -198,6 +198,17 @@ class BranchTransferTest extends TestCase
         $this->actingAs($stranger)->get(route('branch-transfer.show', $id))->assertNotFound();
         $this->actingAs($this->headOffice)->getJson(route('branch-transfer.data'))->assertOk()->assertJsonPath('recordsTotal', 1);
 
+        // Filter daftar: arah relatif branch user, branch asal/tujuan, tanggal, cari barang.
+        $data = fn (User $user, array $params) => $this->actingAs($user)->getJson(route('branch-transfer.data', $params + ['draw' => 1]))->assertOk();
+        $data($this->receiver, ['direction' => 'in'])->assertJsonPath('recordsFiltered', 1)->assertJsonPath('data.0.direction', 'in');
+        $data($this->receiver, ['direction' => 'out'])->assertJsonPath('recordsFiltered', 0);
+        $data($this->sender, ['direction' => 'out'])->assertJsonPath('data.0.direction', 'out')->assertJsonPath('data.0.to_branch', $this->bandung->name);
+        $data($this->headOffice, ['from_branch' => $this->jakarta->id, 'to_branch' => $this->bandung->id])->assertJsonPath('recordsFiltered', 1);
+        $data($this->headOffice, ['to_branch' => $this->jakarta->id])->assertJsonPath('recordsFiltered', 0);
+        $data($this->headOffice, ['date_from' => '2026-11-18'])->assertJsonPath('recordsFiltered', 0);
+        $data($this->headOffice, ['search' => ['value' => $this->cable->code]])->assertJsonPath('recordsFiltered', 1);
+        $data($this->headOffice, ['mine' => 1])->assertJsonPath('recordsFiltered', 0);
+
         foreach (['index', 'create'] as $page) {
             $this->actingAs($this->sender)->get(route('branch-transfer.'.$page))->assertOk();
         }
