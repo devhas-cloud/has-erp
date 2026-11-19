@@ -252,21 +252,50 @@ class MaterialRequestController extends Controller
         return response()->json(['success' => true, 'message' => 'Material Request ditutup. Sisa permintaan tidak akan diserahkan.']);
     }
 
+    /**
+     * Pencarian produk untuk popup "Pilih Produk" (form MR & form template):
+     * server-side, per halaman, filter jenis stok & kategori.
+     */
     public function searchProducts(Request $request): JsonResponse
     {
         $q = trim((string) $request->input('q', ''));
-        $products = MasterProduct::where('status', 'Active')
-            ->when($q !== '', fn ($b) => $b->where(fn ($w) => $w->where('code', 'like', "%{$q}%")->orWhere('name', 'like', "%{$q}%")))
-            ->orderBy('code')
-            ->limit(30)
-            ->get(['id', 'code', 'name', 'unit', 'is_material']);
+        $perPage = min(50, max(5, (int) $request->input('per_page', 15)));
 
-        return response()->json(['results' => $products->map(fn (MasterProduct $p) => [
-            'id' => $p->id,
-            'text' => $p->code.' — '.$p->name,
-            'unit' => $p->unit,
-            'is_material' => $p->isMaterial(),
-        ])]);
+        $products = MasterProduct::where('status', 'Active')
+            ->when($q !== '', fn ($b) => $b->where(fn ($w) => $w->where('code', 'like', "%{$q}%")
+                ->orWhere('name', 'like', "%{$q}%")
+                ->orWhere('brand', 'like', "%{$q}%")
+                ->orWhere('description', 'like', "%{$q}%")))
+            ->when($request->input('kind') === 'material', fn ($b) => $b->where('is_material', true))
+            ->when($request->input('kind') === 'serial', fn ($b) => $b->where('is_material', false))
+            ->when($request->filled('category'), fn ($b) => $b->where('category', $request->input('category')))
+            ->orderBy('code')
+            ->paginate($perPage, ['id', 'code', 'name', 'brand', 'category', 'unit', 'is_material', 'description']);
+
+        $categories = $request->boolean('with_categories')
+            ? MasterProduct::where('status', 'Active')->whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')
+            : null;
+
+        return response()->json([
+            'data' => collect($products->items())->map(fn (MasterProduct $p) => [
+                'id' => $p->id,
+                'code' => $p->code,
+                'name' => $p->name,
+                'brand' => $p->brand,
+                'category' => $p->category,
+                'description' => $p->description ? \Illuminate\Support\Str::limit(strip_tags($p->description), 120) : null,
+                'unit' => $p->unit,
+                'is_material' => $p->isMaterial(),
+            ]),
+            'meta' => [
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'total' => $products->total(),
+                'from' => $products->firstItem(),
+                'to' => $products->lastItem(),
+            ],
+            'categories' => $categories,
+        ]);
     }
 
     private function find($id, array $with = []): MaterialRequest

@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BranchTransferController;
 use App\Http\Controllers\MaterialHandoverController;
 use App\Http\Controllers\MaterialRequestController;
+use App\Http\Controllers\MaterialRequestTemplateController;
 use App\Http\Controllers\PackingListController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProjectTrackingController;
@@ -437,6 +438,16 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::resource('branch-transfer', BranchTransferController::class);
 
     // Produksi: Material Request -> Serah Terima -> Produksi
+    // Template Material Request (tab di daftar MR; hak mengikuti modul Material Request).
+    Route::get('material-request/templates/data', [MaterialRequestTemplateController::class, 'data'])->name('material-request.template-data');
+    Route::get('material-request/templates/options', [MaterialRequestTemplateController::class, 'options'])->name('material-request.template-options');
+    Route::get('material-request/templates/create', [MaterialRequestTemplateController::class, 'create'])->name('material-request.template-create');
+    Route::post('material-request/templates', [MaterialRequestTemplateController::class, 'store'])->name('material-request.template-store');
+    Route::get('material-request/templates/{id}/items', [MaterialRequestTemplateController::class, 'items'])->whereNumber('id')->name('material-request.template-items');
+    Route::get('material-request/templates/{id}/edit', [MaterialRequestTemplateController::class, 'edit'])->whereNumber('id')->name('material-request.template-edit');
+    Route::put('material-request/templates/{id}', [MaterialRequestTemplateController::class, 'update'])->whereNumber('id')->name('material-request.template-update');
+    Route::post('material-request/templates/{id}/duplicate', [MaterialRequestTemplateController::class, 'duplicate'])->whereNumber('id')->name('material-request.template-duplicate');
+    Route::delete('material-request/templates/{id}', [MaterialRequestTemplateController::class, 'destroy'])->whereNumber('id')->name('material-request.template-destroy');
     Route::get('material-request/data', [MaterialRequestController::class, 'data'])->name('material-request.data');
     Route::get('material-request/search-products', [MaterialRequestController::class, 'searchProducts'])->name('material-request.search-products');
     Route::post('material-request/{id}/approve', [MaterialRequestController::class, 'approve'])->whereNumber('id')->name('material-request.approve');
