@@ -210,7 +210,7 @@
                                 </select>
                             </div>
                         </div>
-                        @if($canManagePrice)
+                        @if($canInputPrice)
 
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -236,6 +236,9 @@
                                 </select>
                                 <div class="form-text">Kosongkan untuk memakai mata uang base.</div>
                             </div>
+                        </div>
+                        <div class="col-12 d-none" id="product-price-locked-note">
+                            <div class="form-text mt-n2 mb-3" style="color:#92400e"><i class="fa fa-lock me-1"></i>Harga hanya bisa diubah untuk produk divisi Anda.</div>
                         </div>
                         @endif
                         <div class="col-md-6">
@@ -422,6 +425,7 @@
 @section('scripts')
 <script>
 let productModalInstance = null;
+const scopedDivisionId = {{ $scopedDivisionId ? (int) $scopedDivisionId : 'null' }};
 let productDetailModalInstance = null;
 let productTable = null;
 
@@ -540,11 +544,15 @@ function initProductTable() {
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1">';
                     btn += '<button class="btn-icon" title="Detail" onclick="openDetailModal(' + data + ')"><i class="fa-solid fa-eye"></i></button>';
+                    // IMS: edit/hapus hanya produk divisinya (row.can_manage dari server).
                     @if($canUpdate)
-                    btn += '<button class="btn-icon" title="Edit" onclick="openEditModal(' + data + ')"><i class="fa-solid fa-pen"></i></button>';
+                    if (row.can_manage) btn += '<button class="btn-icon" title="Edit" onclick="openEditModal(' + data + ')"><i class="fa-solid fa-pen"></i></button>';
                     @endif
                     @if($canDelete)
-                    btn += '<button class="btn-icon danger" title="Hapus" onclick="deleteProduct(' + data + ', \'' + row.name + '\')"><i class="fa-solid fa-trash-can"></i></button>';
+                    if (row.can_manage) btn += '<button class="btn-icon danger" title="Hapus" onclick="deleteProduct(' + data + ', \'' + row.name + '\')"><i class="fa-solid fa-trash-can"></i></button>';
+                    @endif
+                    @if($scopedDivisionId && ($canUpdate || $canDelete))
+                    if (!row.can_manage) btn += '<span class="btn-icon" style="opacity:.4;cursor:default" title="Produk divisi lain — hanya bisa dilihat"><i class="fa-solid fa-lock"></i></span>';
                     @endif
                     btn += '</div>';
                     return btn;
@@ -561,6 +569,17 @@ function resetProductForm() {
     $('#product-currency').val('');
     $('#product-image-preview').empty();
     $('#product-form .is-invalid').removeClass('is-invalid');
+    setPriceEditable(true);
+    // IMS: divisi produk selalu divisi user (server juga menimpa).
+    if (scopedDivisionId) {
+        $('#product-division').val(String(scopedDivisionId)).prop('disabled', true)
+            .attr('title', 'Produk Anda selalu tercatat di divisi Anda');
+    }
+}
+
+function setPriceEditable(editable) {
+    $('#product-purchase-price, #product-currency').prop('disabled', !editable);
+    $('#product-price-locked-note').toggleClass('d-none', editable);
 }
 
 function showImagePreview(input) {
@@ -604,7 +623,8 @@ function openEditModal(id) {
         $('#product-unit').val(p.unit || '');
         $('#product-is-material').prop('checked', p.is_material === true || p.is_material === 1);
         $('#product-parameter').val(p.parameter || '');
-        $('#product-division').val(p.division_id || '');
+        if (!scopedDivisionId) $('#product-division').val(p.division_id || '');
+        setPriceEditable(p.can_edit_price !== false);
         $('#product-purchase-price').val(p.purchase_price ? Num.format(p.purchase_price, 2) : '');
         $('#product-currency').val(p.currency_id || '');
         $('#product-status').val(p.status || 'Active');
@@ -708,11 +728,12 @@ $(document).on('click', '#btn-save-product', function() {
     fd.append('parameter', $('#product-parameter').val().trim());
     fd.append('division_id', $('#product-division').val());
     fd.append('description', $('#product-description').val().trim());
-    @if($canManagePrice)
-    fd.append('purchase_price', purchasePrice);
-    @endif
-    @if($canManagePrice)
-    fd.append('currency_id', $('#product-currency').val());
+    @if($canInputPrice)
+    // Harga terkunci (produk divisi lain) -> tidak dikirim, harga DB tetap.
+    if (!$('#product-purchase-price').prop('disabled')) {
+        fd.append('purchase_price', purchasePrice);
+        fd.append('currency_id', $('#product-currency').val());
+    }
     @endif
     fd.append('status', status);
     var imageFile = $('#product-image')[0].files[0];

@@ -11,7 +11,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Harga beli master product: role Admin, divisi Admin, divisi IMS.
+ * Harga beli master product: role Admin / divisi Admin semua produk; divisi IMS hanya
+ * produk divisinya (lihat, ubah harga & currency, edit, hapus).
  * Harga jual master product: hanya role Admin atau divisi Admin.
  * Aturan sama di view (canViewPrice / canViewSellingPrice) dan di server.
  */
@@ -60,28 +61,51 @@ class ProductPriceAccessTest extends TestCase
         $this->assertFalse($this->user('nodiv', null)->canViewSellingPrice());
     }
 
-    public function test_ims_sees_purchase_price_but_not_selling_price(): void
+    private function imsProduct(): MasterProduct
+    {
+        $ims = Division::firstOrCreate(['division_name' => 'IMS'], ['description' => 'IMS', 'type' => 'Internal', 'status' => 'Active']);
+
+        return MasterProduct::create(['name' => 'Analyzer IMS', 'code' => 'IMS-1', 'division_id' => $ims->id, 'purchase_price' => 500000, 'selling_price' => 0, 'status' => 'Active']);
+    }
+
+    public function test_ims_sees_purchase_price_of_own_division_only(): void
     {
         $ims = $this->user('ims', 'IMS');
         $admin = $this->user('admindiv', 'Admin');
         $water = $this->user('water', 'Water');
+        $own = $this->imsProduct();
 
-        $this->actingAs($ims)->getJson(route('product-management.show', $this->product->id))
+        // Produk divisi IMS: harga beli terlihat & bisa diubah; harga jual tidak.
+        $this->actingAs($ims)->getJson(route('product-management.show', $own->id))
             ->assertOk()
-            ->assertJsonPath('data.purchase_price', '1000000.00')
+            ->assertJsonPath('data.purchase_price', '500000.00')
+            ->assertJsonPath('data.can_manage', true)
+            ->assertJsonPath('data.can_edit_price', true)
             ->assertJsonPath('data.selling_price', null)
             ->assertJsonPath('data.selling_price_formula', null);
+        // Produk divisi lain / tanpa divisi: harga tersembunyi, tidak bisa dikelola.
+        $this->actingAs($ims)->getJson(route('product-management.show', $this->product->id))
+            ->assertOk()
+            ->assertJsonPath('data.purchase_price', null)
+            ->assertJsonPath('data.can_manage', false)
+            ->assertJsonPath('data.can_edit_price', false);
         $this->actingAs($admin)->getJson(route('product-management.show', $this->product->id))
             ->assertOk()
             ->assertJsonPath('data.purchase_price', '1000000.00')
-            ->assertJsonPath('data.selling_price', '1500000.00');
+            ->assertJsonPath('data.selling_price', '1500000.00')
+            ->assertJsonPath('data.can_edit_price', true);
         $this->actingAs($water)->getJson(route('product-management.show', $this->product->id))
             ->assertOk()
             ->assertJsonPath('data.purchase_price', null)
-            ->assertJsonPath('data.selling_price', null);
+            ->assertJsonPath('data.selling_price', null)
+            ->assertJsonPath('data.can_manage', true);
 
-        $this->actingAs($ims)->getJson(route('product-management.data'))
-            ->assertOk()->assertJsonPath('data.0.selling_price', null)->assertJsonPath('data.0.purchase_price', 1000000);
+        $rows = collect($this->actingAs($ims)->getJson(route('product-management.data'))->assertOk()->json('data'))->keyBy('code');
+        $this->assertEquals(500000, $rows['IMS-1']['purchase_price']);
+        $this->assertTrue($rows['IMS-1']['can_manage']);
+        $this->assertNull($rows['PN-1']['purchase_price']);
+        $this->assertFalse($rows['PN-1']['can_manage']);
+        $this->assertNull($rows['PN-1']['selling_price']);
         $this->actingAs($admin)->getJson(route('product-management.data'))
             ->assertOk()->assertJsonPath('data.0.selling_price_formatted', fn ($v) => $v !== null);
 
@@ -94,13 +118,73 @@ class ProductPriceAccessTest extends TestCase
             ->assertDontSee('<label class="form-label">Harga Beli</label>', false);
     }
 
-    public function test_ims_can_update_purchase_price(): void
+    public function test_ims_can_update_price_and_currency_of_own_division_product(): void
     {
-        $this->actingAs($this->user('ims', 'IMS'))->putJson(route('product-management.update', $this->product->id), [
-            'code' => 'PN-1', 'purchase_price' => 2000000, 'status' => 'Active',
+        $own = $this->imsProduct();
+        $usd = \App\Models\Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 16000, 'is_base' => false, 'status' => 'Active']);
+        $other = Division::firstOrCreate(['division_name' => 'Water'], ['description' => 'Water', 'type' => 'Internal', 'status' => 'Active']);
+
+        // division_id dikirim divisi lain -> server tetap mencatat divisi IMS.
+        $this->actingAs($this->user('ims', 'IMS'))->putJson(route('product-management.update', $own->id), [
+            'code' => 'IMS-1', 'purchase_price' => 2000000, 'currency_id' => $usd->id, 'division_id' => $other->id, 'status' => 'Active',
         ])->assertOk();
 
-        $this->assertEquals(2000000, (float) $this->product->fresh()->purchase_price);
+        $own->refresh();
+        $this->assertEquals(2000000, (float) $own->purchase_price);
+        $this->assertSame($usd->id, (int) $own->currency_id);
+        $this->assertSame('IMS', $own->division->division_name);
+    }
+
+    public function test_ims_cannot_edit_or_delete_other_division_product(): void
+    {
+        $ims = $this->user('ims', 'IMS');
+        UserAccessControl::where('user_id', $ims->id)->update(['can_delete' => true]);
+
+        $this->actingAs($ims)->putJson(route('product-management.update', $this->product->id), [
+            'code' => 'PN-1', 'name' => 'Diubah', 'purchase_price' => 1, 'status' => 'Active',
+        ])->assertForbidden();
+        $this->actingAs($ims)->deleteJson(route('product-management.destroy', $this->product->id))->assertForbidden();
+
+        $fresh = $this->product->fresh();
+        $this->assertSame('Sensor', $fresh->name);
+        $this->assertEquals(1000000, (float) $fresh->purchase_price);
+
+        // Produk baru IMS selalu berdivisi IMS dan harganya boleh diisi.
+        $this->actingAs($ims)->postJson(route('product-management.store'), [
+            'code' => 'IMS-NEW', 'purchase_price' => 750000, 'status' => 'Active',
+        ])->assertOk();
+        $new = MasterProduct::where('code', 'IMS-NEW')->firstOrFail();
+        $this->assertSame((int) $ims->division_id, (int) $new->division_id);
+        $this->assertEquals(750000, (float) $new->purchase_price);
+
+        // Divisi lain (non-IMS) tetap bisa mengedit field selain harga semua produk.
+        $this->actingAs($this->user('water', 'Water'))->putJson(route('product-management.update', $this->product->id), [
+            'code' => 'PN-1', 'name' => 'Sensor Baru', 'purchase_price' => 1, 'status' => 'Active',
+        ])->assertOk();
+        $this->assertSame('Sensor Baru', $this->product->fresh()->name);
+        $this->assertEquals(1000000, (float) $this->product->fresh()->purchase_price);
+    }
+
+    public function test_ims_import_only_touches_own_division(): void
+    {
+        $own = $this->imsProduct();
+        $ims = $this->user('ims', 'IMS');
+        $csv = "code,name,division,purchase_price,currency,status\n"
+            ."IMS-1,Analyzer IMS,Water,900000,,Active\n"
+            ."PN-1,Sensor Hack,,1,,Active\n"
+            ."IMS-2,Produk Baru,Water,300000,,Active\n";
+        $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('products.csv', $csv);
+
+        $this->actingAs($ims)->post(route('product-management.import'), ['file' => $file], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('result.failed', 1);
+
+        $this->assertEquals(900000, (float) $own->fresh()->purchase_price);
+        $this->assertSame((int) $ims->division_id, (int) $own->fresh()->division_id);
+        $this->assertSame('Sensor', $this->product->fresh()->name);
+        $this->assertEquals(1000000, (float) $this->product->fresh()->purchase_price);
+        $new = MasterProduct::where('code', 'IMS-2')->firstOrFail();
+        $this->assertSame((int) $ims->division_id, (int) $new->division_id);
+        $this->assertEquals(300000, (float) $new->purchase_price);
     }
 
     public function test_export_columns_follow_price_permissions(): void

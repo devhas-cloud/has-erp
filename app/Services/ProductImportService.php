@@ -19,8 +19,11 @@ class ProductImportService
      * @param  bool  $withPrices  false = kolom harga & currency di file diabaikan (importer bukan
      *                            Admin): produk baru tanpa harga ber-currency base, produk lama
      *                            harga & currency-nya tidak berubah.
+     * @param  int|null  $scopedDivisionId  diisi untuk importer IMS: kolom divisi diabaikan (semua
+     *                                       produk dicatat berdivisi ini) dan baris yang mengubah
+     *                                       produk divisi lain ditolak.
      */
-    public function __construct(private bool $withPrices = true) {}
+    public function __construct(private bool $withPrices = true, private ?int $scopedDivisionId = null) {}
 
     private function resolveLookups(): void
     {
@@ -301,8 +304,10 @@ class ProductImportService
                 // Resolve division name → id (case-insensitive).
                 // Hanya divisi tipe Internal yang valid; nama tak dikenal (termasuk External) → baris gagal.
                 $divisionId = null;
-                $divisionInput = trim($data['division'] ?? '');
-                if ($divisionInput !== '') {
+                $divisionInput = $this->scopedDivisionId ? '' : trim($data['division'] ?? '');
+                if ($this->scopedDivisionId) {
+                    $divisionId = $this->scopedDivisionId;
+                } elseif ($divisionInput !== '') {
                     $divisionKey = mb_strtolower($divisionInput);
                     if (! isset($this->divisionLookup[$divisionKey])) {
                         $failed++;
@@ -390,6 +395,13 @@ class ProductImportService
                 }
 
                 $existing = MasterProduct::where('code', $data['code'])->first();
+
+                if ($existing && $this->scopedDivisionId && (int) $existing->division_id !== $this->scopedDivisionId) {
+                    $failed++;
+                    $errors[] = "Line {$lineNumber}: Produk {$data['code']} milik divisi lain — Anda hanya bisa mengubah produk divisi Anda sendiri.";
+
+                    continue;
+                }
 
                 if ($existing && $isMaterial !== null && $isMaterial !== $existing->isMaterial() && $existing->hasStock()) {
                     $failed++;

@@ -89,11 +89,15 @@ class User extends Authenticatable
         );
     }
 
-    /** Divisi yang melihat SEMUA harga master product serta boleh input/edit harga. */
+    /** Divisi yang melihat SEMUA harga master product serta boleh input/edit harga semua produk. */
     public const PRICE_MANAGER_DIVISIONS = ['Admin'];
 
-    /** Divisi yang hanya melihat harga beli produk milik divisinya sendiri. */
-    public const PRICE_DIVISION_SCOPED_VIEWERS = ['IMS'];
+    /**
+     * Divisi yang hanya mengelola produk milik divisinya sendiri: melihat & mengubah
+     * harga beli/currency, mengedit dan menghapus produk divisinya; produk divisi lain
+     * hanya bisa dilihat (harga beli tersembunyi). Produk baru/diedit selalu berdivisi user.
+     */
+    public const PRICE_DIVISION_SCOPED_MANAGERS = ['IMS'];
 
     /** Divisi yang boleh melihat harga jual master product. */
     public const SELLING_PRICE_VIEWER_DIVISIONS = ['Admin'];
@@ -105,12 +109,12 @@ class User extends Authenticatable
      */
     public function canViewProductPrice(): bool
     {
-        return $this->canManageProductPrice() || $this->inDivision(self::PRICE_DIVISION_SCOPED_VIEWERS);
+        return $this->canManageProductPrice() || $this->isDivisionScopedProductManager();
     }
 
     /**
-     * Input & edit harga master product (form, import): hanya role Admin atau divisi Admin.
-     * Admin juga melihat harga beli semua produk.
+     * Pengelola harga penuh: role Admin atau divisi Admin — melihat & mengubah harga
+     * beli semua produk, urut berdasarkan harga beli.
      */
     public function canManageProductPrice(): bool
     {
@@ -118,18 +122,55 @@ class User extends Authenticatable
     }
 
     /**
-     * Harga beli satu produk: Admin melihat semua; IMS hanya produk yang divisinya
-     * sama dengan divisi user; lainnya tidak.
+     * User berdivisi IMS (bukan Admin): hanya mengelola produk divisinya sendiri.
+     */
+    public function isDivisionScopedProductManager(): bool
+    {
+        return ! $this->canManageProductPrice()
+            && $this->division_id !== null
+            && $this->inDivision(self::PRICE_DIVISION_SCOPED_MANAGERS);
+    }
+
+    /**
+     * Field harga beli & currency tampil di form produk: Admin atau IMS.
+     * Per produk tetap disaring canEditPurchasePriceOf().
+     */
+    public function canInputProductPrice(): bool
+    {
+        return $this->canManageProductPrice() || $this->isDivisionScopedProductManager();
+    }
+
+    /**
+     * Produk milik divisi user (untuk divisi ber-scope seperti IMS).
+     */
+    public function ownsProductDivision(MasterProduct $product): bool
+    {
+        return $product->division_id !== null && (int) $product->division_id === (int) $this->division_id;
+    }
+
+    /**
+     * Edit/hapus produk: IMS hanya produk divisinya; user lain mengikuti hak akses modul.
+     */
+    public function canManageProduct(MasterProduct $product): bool
+    {
+        return ! $this->isDivisionScopedProductManager() || $this->ownsProductDivision($product);
+    }
+
+    /**
+     * Harga beli satu produk terlihat: Admin semua; IMS hanya produk divisinya; lainnya tidak.
      */
     public function canViewPurchasePriceOf(MasterProduct $product): bool
     {
-        if ($this->canManageProductPrice()) {
-            return true;
-        }
+        return $this->canManageProductPrice()
+            || ($this->isDivisionScopedProductManager() && $this->ownsProductDivision($product));
+    }
 
-        return $this->inDivision(self::PRICE_DIVISION_SCOPED_VIEWERS)
-            && $product->division_id !== null
-            && (int) $product->division_id === (int) $this->division_id;
+    /**
+     * Ubah harga beli & currency satu produk: Admin semua; IMS hanya produk divisinya.
+     */
+    public function canEditPurchasePriceOf(MasterProduct $product): bool
+    {
+        return $this->canViewPurchasePriceOf($product);
     }
 
     /**

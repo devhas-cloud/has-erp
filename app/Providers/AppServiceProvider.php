@@ -75,6 +75,8 @@ class AppServiceProvider extends ServiceProvider
             $view->with('canViewPrice', Auth::user()->canViewProductPrice());
             // Input/edit harga master product: hanya role Admin atau divisi Admin (User::canManageProductPrice).
             $view->with('canManagePrice', Auth::user()->canManageProductPrice());
+            // Field harga beli & currency di form produk: Admin, atau IMS untuk produk divisinya (User::canInputProductPrice).
+            $view->with('canInputPrice', Auth::user()->canInputProductPrice());
             // Harga jual master product: hanya role Admin atau divisi Admin (User::canViewSellingPrice).
             $view->with('canViewSellingPrice', Auth::user()->canViewSellingPrice());
         });

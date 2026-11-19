@@ -28,8 +28,10 @@ class ProductManagementController extends Controller
 
         $types = MasterProduct::typeOptions();
         $units = MasterProduct::unitOptions();
+        // IMS: divisi produk terkunci ke divisi user.
+        $scopedDivisionId = $this->scopedDivisionId();
 
-        return view('product-management.index', compact('divisions', 'currencies', 'categories', 'types', 'units'));
+        return view('product-management.index', compact('divisions', 'currencies', 'categories', 'types', 'units', 'scopedDivisionId'));
     }
 
     public function data(Request $request): JsonResponse
@@ -120,6 +122,7 @@ class ProductManagementController extends Controller
                 'currency_symbol' => '',
                 'status' => $product->status ?? 'Active',
                 'image_url' => $product->image_url,
+                'can_manage' => $this->canManageProduct($product),
             ];
         }
 
@@ -162,10 +165,16 @@ class ProductManagementController extends Controller
         // Tidak diisi = bukan Material (barang ber-SN); Material = stok per qty.
         $validated['is_material'] = $request->boolean('is_material');
 
-        // Harga beli & currency hanya boleh diisi role Admin / divisi Admin;
+        // IMS: produk baru selalu milik divisinya sendiri.
+        if ($scopedDivisionId = $this->scopedDivisionId()) {
+            $validated['division_id'] = $scopedDivisionId;
+        }
+
+        // Harga beli & currency hanya boleh diisi Admin, atau IMS untuk produk divisinya;
         // selain itu produk baru memakai currency base.
-        $validated['currency_id'] = $this->resolveCurrencyId($this->canManagePrice() ? $request->input('currency_id') : null);
-        if (! $this->canManagePrice()) {
+        $canInputPrice = $this->canInputPrice();
+        $validated['currency_id'] = $this->resolveCurrencyId($canInputPrice ? $request->input('currency_id') : null);
+        if (! $canInputPrice) {
             unset($validated['purchase_price']);
         }
         // Harga jual tidak pernah diterima dari input: selalu hasil formulasi harga beli.
@@ -208,6 +217,8 @@ class ProductManagementController extends Controller
             // Harga beli: Admin semua produk; IMS hanya produk divisinya.
             $data['purchase_price'] = null;
         }
+        $data['can_manage'] = $this->canManageProduct($product);
+        $data['can_edit_price'] = (bool) Auth::user()?->canEditPurchasePriceOf($product);
         if (! $this->canViewSellingPrice()) {
             // Harga jual hanya untuk role Admin / divisi Admin.
             $data['selling_price'] = null;
@@ -232,6 +243,9 @@ class ProductManagementController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $product = MasterProduct::findOrFail($id);
+        if (! $this->canManageProduct($product)) {
+            return $this->notOwnDivision();
+        }
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:150|unique:master_products,name,'.$product->id,
@@ -253,6 +267,10 @@ class ProductManagementController extends Controller
 
         $validated['type'] = MasterProduct::normalizeType($validated['type'] ?? null);
         $validated['unit'] = trim((string) ($validated['unit'] ?? '')) ?: null;
+        // IMS tidak bisa memindahkan produk keluar dari divisinya.
+        if ($scopedDivisionId = $this->scopedDivisionId()) {
+            $validated['division_id'] = $scopedDivisionId;
+        }
         // Form tanpa field is_material (klien lama) -> nilai lama tetap.
         if ($request->has('is_material')) {
             $validated['is_material'] = $request->boolean('is_material');
@@ -266,15 +284,17 @@ class ProductManagementController extends Controller
             unset($validated['is_material']);
         }
 
-        // Harga beli & currency hanya bisa diubah role Admin / divisi Admin; harga jual
-        // ikut dihitung ulang dari formulasi. Lainnya -> harga & currency DB tetap.
-        // Admin dengan form tanpa field purchase_price -> harga DB tetap.
-        if ($this->canManagePrice()) {
+        // Harga beli & currency hanya bisa diubah Admin (semua produk) atau IMS (produk
+        // divisinya); harga jual ikut dihitung ulang dari formulasi. Lainnya -> harga &
+        // currency DB tetap. Form tanpa field purchase_price -> harga DB tetap.
+        $canEditPrice = (bool) Auth::user()?->canEditPurchasePriceOf($product);
+        if ($canEditPrice && $request->has('currency_id')) {
             $validated['currency_id'] = $this->resolveCurrencyId($request->input('currency_id'));
         } else {
             unset($validated['currency_id']);
         }
-        if ($this->canManagePrice() && array_key_exists('purchase_price', $validated)) {
+        if ($canEditPrice && array_key_exists('purchase_price', $validated)) {
+            $validated['currency_id'] ??= $product->currency_id;
             $validated['selling_price'] = $this->formula_selling_price($validated['currency_id'], $validated['purchase_price']);
         } else {
             unset($validated['selling_price'], $validated['purchase_price']);
@@ -298,6 +318,9 @@ class ProductManagementController extends Controller
     public function destroy($id): JsonResponse
     {
         $product = MasterProduct::findOrFail($id);
+        if (! $this->canManageProduct($product)) {
+            return $this->notOwnDivision();
+        }
 
         if ($product->image) {
             Storage::disk('public')->delete($product->image);
@@ -375,13 +398,19 @@ class ProductManagementController extends Controller
         try {
             // Harga dari file hanya dipakai bila importer Admin; selain itu harga diabaikan
             // (produk baru tanpa harga, produk lama harganya tetap).
-            $canManagePrice = $this->canManagePrice();
-            $service = new ProductImportService($canManagePrice);
+            // IMS: hanya produk divisinya — produk baru otomatis berdivisi IMS, baris produk
+            // divisi lain ditolak; harga & currency dipakai untuk produk divisinya.
+            $canInputPrice = $this->canInputPrice();
+            $scopedDivisionId = $this->scopedDivisionId();
+            $service = new ProductImportService($canInputPrice, $scopedDivisionId);
             $result = $service->import($fullPath);
 
             $message = "Import selesai. {$result['success']} baru, {$result['updated']} diupdate, {$result['failed']} gagal.";
-            if (! $canManagePrice) {
-                $message .= ' Kolom harga & currency diabaikan (hanya Admin yang boleh mengisi).';
+            if (! $canInputPrice) {
+                $message .= ' Kolom harga & currency diabaikan (hanya Admin / IMS untuk produk divisinya yang boleh mengisi).';
+            }
+            if ($scopedDivisionId) {
+                $message .= ' Kolom divisi diabaikan: semua produk dicatat sebagai divisi Anda.';
             }
 
             return response()->json([
@@ -418,11 +447,45 @@ class ProductManagementController extends Controller
     }
 
     /**
-     * Input/edit harga (form & import): hanya role Admin atau divisi Admin.
+     * Pengelola harga penuh (semua produk, urut harga beli): role Admin atau divisi Admin.
      */
     private function canManagePrice(): bool
     {
         return (bool) Auth::user()?->canManageProductPrice();
+    }
+
+    /**
+     * Input harga & currency di form/import: Admin, atau IMS (produk divisinya).
+     */
+    private function canInputPrice(): bool
+    {
+        return (bool) Auth::user()?->canInputProductPrice();
+    }
+
+    /**
+     * Divisi user bila user hanya boleh mengelola produk divisinya (IMS); null = tanpa batas.
+     */
+    private function scopedDivisionId(): ?int
+    {
+        $user = Auth::user();
+
+        return $user?->isDivisionScopedProductManager() ? (int) $user->division_id : null;
+    }
+
+    /**
+     * Edit/hapus produk: IMS hanya produk divisinya.
+     */
+    private function canManageProduct(MasterProduct $product): bool
+    {
+        return (bool) Auth::user()?->canManageProduct($product);
+    }
+
+    private function notOwnDivision(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Produk ini milik divisi lain. Anda hanya bisa mengubah produk divisi Anda sendiri.',
+        ], 403);
     }
 
     /**
