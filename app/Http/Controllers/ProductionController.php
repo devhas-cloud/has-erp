@@ -127,7 +127,7 @@ class ProductionController extends Controller
         abort_unless(Auth::user()->canAccessBranch((int) $validated['branch_id']), 403, 'Branch bukan milik Anda.');
 
         $rows = MaterialHandoverItem::pool((int) $validated['project_id'], (int) $validated['branch_id'])
-            ->with(['stock.masterProduct', 'materialHandover'])
+            ->with(['stock.masterProduct', 'materialHandover', 'outLog'])
             ->orderBy('id')
             ->get()
             ->filter(fn (MaterialHandoverItem $item) => $item->remainingQty() > 0)
@@ -298,11 +298,12 @@ class ProductionController extends Controller
     public function show($id)
     {
         $production = Production::visibleTo(Auth::user())
-            ->with(['project', 'outputProduct', 'outputWarehouse.branch', 'outputStock.warehouse', 'creator', 'canceller', 'items.handoverItem.stock.masterProduct', 'items.handoverItem.materialHandover'])
+            ->with(['project', 'outputProduct', 'outputWarehouse.branch', 'outputStock.warehouse', 'creator', 'canceller', 'items.handoverItem.stock.masterProduct', 'items.handoverItem.materialHandover', 'items.handoverItem.outLog'])
             ->findOrFail($id);
 
         return view('production.show', [
             'production' => $production,
+            'outputStock' => $this->outputBalance($production),
             'canVoid' => $production->isPosted() && $this->untouched($production),
         ]);
     }
@@ -320,11 +321,13 @@ class ProductionController extends Controller
 
         try {
             DB::transaction(function () use ($production, $service, $validated) {
-                $stock = $production->outputStock()->lockForUpdate()->first();
+                $stock = $this->outputBalance($production, true);
                 if (! $stock || ! $this->untouched($production, $stock)) {
                     throw new StockException('Barang jadi sudah dipakai, dipindah, atau dikirim — produksi tidak bisa dibatalkan.');
                 }
-                $service->take($stock, (float) $stock->qty, StockLog::TYPE_OUT, [
+                // Material: hanya qty hasil produksi ini yang dikeluarkan dari saldo.
+                $qty = $stock->isSerialized() ? (float) $stock->qty : (float) $production->output_qty;
+                $service->take($stock, $qty, StockLog::TYPE_OUT, [
                     'date' => now()->toDateString(),
                     'ref_type' => StockLog::REF_PRODUCTION,
                     'ref_id' => $production->id,
@@ -348,9 +351,28 @@ class ProductionController extends Controller
     }
 
     /** Baris barang jadi masih utuh di posisi awal (belum dipakai / dipindah / dikirim). */
+    /**
+     * Baris stok barang jadi: barang ber-SN = baris yang dibuat produksi ini;
+     * material = saldo produk di gudang + project output (bisa berisi stok lain).
+     */
+    private function outputBalance(Production $production, bool $lock = false): ?Stock
+    {
+        $product = $production->outputProduct ?? MasterProduct::find($production->output_product_id);
+        if ($product && $product->isMaterial()) {
+            return StockService::balanceRow((int) $product->id, (int) $production->output_warehouse_id, $production->project_id ? (int) $production->project_id : null, $lock);
+        }
+
+        return $lock ? $production->outputStock()->lockForUpdate()->first() : $production->outputStock;
+    }
+
     private function untouched(Production $production, ?Stock $stock = null): bool
     {
-        $stock ??= $production->outputStock;
+        $stock ??= $this->outputBalance($production);
+
+        // Material: tidak bisa tahu unit mana yang dipakai; cukup saldo masih memuat qty hasil produksi.
+        if ($stock && ! $stock->isSerialized()) {
+            return StockService::available($stock) + Stock::EPSILON >= (float) $production->output_qty;
+        }
 
         return $stock
             && abs($stock->qty - $stock->qty_in) < Stock::EPSILON

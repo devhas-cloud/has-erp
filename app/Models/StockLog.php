@@ -35,6 +35,8 @@ class StockLog extends Model
 
     public const TYPE_SHIP_IN = 'ship_in';             // Branch Transfer diterima di gudang tujuan
 
+    public const TYPE_MERGE = 'merge';                 // penggabungan baris material lama ke satu saldo
+
     public const TYPE_LABELS = [
         self::TYPE_IN => 'Masuk',
         self::TYPE_OUT => 'Keluar',
@@ -46,6 +48,7 @@ class StockLog extends Model
         self::TYPE_DETAIL_UPDATE => 'Lengkapi Data',
         self::TYPE_SHIP_OUT => 'Kirim Antar Branch',
         self::TYPE_SHIP_IN => 'Terima Antar Branch',
+        self::TYPE_MERGE => 'Penggabungan Saldo',
     ];
 
     public const REF_GOODS_RECEIPT_ITEM = 'goods_receipt_item';

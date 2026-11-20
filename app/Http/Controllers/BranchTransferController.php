@@ -159,7 +159,7 @@ class BranchTransferController extends Controller
 
     public function show($id)
     {
-        $transfer = $this->find($id, ['items.stock.masterProduct', 'items.receivedStock', 'items.photos.uploader', 'fromBranch', 'toBranch', 'fromWarehouse', 'toWarehouse', 'creator', 'shippedBy', 'receivedBy']);
+        $transfer = $this->find($id, ['items.stock.masterProduct', 'items.stock.project', 'items.receivedStock', 'items.photos.uploader', 'fromBranch', 'toBranch', 'fromWarehouse', 'toWarehouse', 'creator', 'shippedBy', 'receivedBy']);
         $user = Auth::user();
 
         return view('branch-transfer.show', [
@@ -353,6 +353,11 @@ class BranchTransferController extends Controller
         try {
             DB::transaction(function () use ($transfer, $warehouse, $service, $date) {
                 $origins = $service->lock($transfer->items->pluck('stock_id'));
+                // Harga material saat dikirim (saldo asal bisa berubah harga rata-ratanya setelah itu).
+                $shipCosts = StockLog::where('ref_type', StockLog::REF_BRANCH_TRANSFER_ITEM)
+                    ->whereIn('ref_id', $transfer->items->pluck('id'))
+                    ->where('type', StockLog::TYPE_SHIP_OUT)
+                    ->pluck('unit_cost', 'ref_id');
                 foreach ($transfer->items as $item) {
                     $origin = $origins->get($item->stock_id);
                     $arrived = $service->arrive($origin, (float) $item->qty, $warehouse->id, $origin->project_id ? (int) $origin->project_id : null, [
@@ -360,7 +365,7 @@ class BranchTransferController extends Controller
                         'ref_type' => StockLog::REF_BRANCH_TRANSFER_ITEM,
                         'ref_id' => $item->id,
                         'note' => 'Terima dari '.$transfer->fromBranch?->name.' ('.$transfer->transfer_number.')',
-                    ]);
+                    ], isset($shipCosts[$item->id]) ? (float) $shipCosts[$item->id] : null);
                     $item->update(['received_stock_id' => $arrived->id]);
                 }
 

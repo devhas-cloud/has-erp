@@ -7,7 +7,7 @@
     $fmtQty = fn ($v) => \App\Support\StockCost::qty($v);
     $fmtMoney = fn ($v) => \App\Support\StockCost::format($v);
     $total = $production->totalCost();
-    $stock = $production->outputStock;
+    $stock = $outputStock ?? $production->outputStock;
 @endphp
 
 @section('content')
@@ -60,7 +60,7 @@
                     <tr><td>Total material</td><td class="text-end fw-semibold">{{ $fmtMoney($total) }}</td></tr>
                     <tr><td>Harga per unit</td><td class="text-end fw-semibold">{{ $fmtMoney($production->output_qty > 0 ? round($total / $production->output_qty, 2) : 0) }}</td></tr>
                     @if($stock && $production->isPosted())
-                    <tr><td>Stok tersisa</td><td class="text-end">{{ $fmtQty($stock->qty) }} {{ $stock->unit }}</td></tr>
+                    <tr><td>{{ $stock->isSerialized() ? 'Stok tersisa' : 'Saldo di gudang' }}</td><td class="text-end">{{ $fmtQty($stock->qty) }} {{ $stock->unit }}</td></tr>
                     @endif
                 </table>
                 @if($production->isPosted() && ! $canVoid)

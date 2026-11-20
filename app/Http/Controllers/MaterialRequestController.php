@@ -132,7 +132,7 @@ class MaterialRequestController extends Controller
 
         // Material di Produksi project + branch ini (gabungan semua MR).
         $pool = MaterialHandoverItem::pool($mr->project_id, $mr->branch_id)
-            ->with(['stock.masterProduct', 'materialHandover'])
+            ->with(['stock.masterProduct', 'materialHandover', 'outLog'])
             ->orderBy('id')
             ->get()
             ->filter(fn (MaterialHandoverItem $item) => $item->remainingQty() > 0)

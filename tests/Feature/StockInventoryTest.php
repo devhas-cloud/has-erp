@@ -149,9 +149,9 @@ class StockInventoryTest extends TestCase
         $this->assertEquals(6, $this->stockBalance($this->stockWarehouse->id, $product->id));
         $this->assertEquals(4, $this->stockBalance($this->transitWarehouse->id, $product->id, $project->id));
         $this->assertEquals(0, $this->stockBalance($this->transitWarehouse->id, $product->id));
-        // Sebagian -> baris dipecah; item transfer menunjuk baris tujuan; pindah kepemilikan = alokasi.
+        // Material -> saldo project di gudang tujuan; item transfer menunjuk saldo tujuan; pindah kepemilikan = alokasi.
         $child = Stock::where('project_id', $project->id)->firstOrFail();
-        $this->assertSame($row->id, $child->parent_id);
+        $this->assertNull($child->parent_id);
         $this->assertSame($child->id, $transfer->items()->value('stock_id'));
         $this->assertSame(2, StockLog::where('type', StockLog::TYPE_ALLOCATE)->count());
 

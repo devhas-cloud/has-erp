@@ -146,11 +146,12 @@ class SupplierReturnController extends Controller
             'purchase_order_item_id' => 'required|integer|exists:purchase_order_items,id',
             'warehouse_id' => 'nullable|integer|exists:warehouses,id',
         ]);
-        $item = PurchaseOrderItem::with('goodsReceiptItems.goodsReceipt')->findOrFail($validated['purchase_order_item_id']);
+        $item = PurchaseOrderItem::with(['goodsReceiptItems.goodsReceipt', 'masterProduct'])->findOrFail($validated['purchase_order_item_id']);
 
         return response()->json(['success' => true, 'data' => StockPicker::options([
             'warehouse_id' => $validated['warehouse_id'] ?? null,
             'source_ids' => $this->receiptItemIds($item),
+            'material_product_id' => $item->masterProduct?->isMaterial() ? $item->master_product_id : null,
             'limit' => 300,
         ])]);
     }
@@ -204,7 +205,8 @@ class SupplierReturnController extends Controller
             if ($direct > $this->receivedDirect($item)) {
                 $fail($label.': qty langsung pakai melebihi yang diterima langsung pakai ('.$this->receivedDirect($item).').');
             }
-            $rows[] = ['item' => $item, 'picks' => $picks, 'direct' => $direct, 'source_ids' => $this->receiptItemIds($item)];
+            $sourceIds = $this->receiptItemIds($item);
+            $rows[] = ['item' => $item, 'picks' => $picks, 'direct' => $direct, 'source_ids' => $sourceIds, 'receipt_cost' => $this->receiptCost($sourceIds)];
         }
         if (! $rows) {
             $fail('Isi qty minimal satu barang yang diretur.');
@@ -233,7 +235,11 @@ class SupplierReturnController extends Controller
                     $item = $row['item'];
                     foreach ($row['picks'] as $pick) {
                         $stock = $stocks->get((int) $pick['stock_id']);
-                        if (! $stock || $stock->source_type !== Stock::SOURCE_GOODS_RECEIPT_ITEM || ! in_array((int) $stock->source_id, $row['source_ids'], true)) {
+                        // Material = saldo gabungan produk yang sama (qty dibatasi barang PO ini yang masuk gudang);
+                        // barang ber-SN = unit dari penerimaan PO ini.
+                        $fromReceipt = $stock && $stock->source_type === Stock::SOURCE_GOODS_RECEIPT_ITEM && in_array((int) $stock->source_id, $row['source_ids'], true);
+                        $materialBalance = $stock && ! $stock->isSerialized() && (int) $stock->master_product_id === (int) $item->master_product_id;
+                        if (! $fromReceipt && ! $materialBalance) {
                             throw new StockException(($item->part_number ?: 'Barang').': baris stok yang dipilih bukan dari penerimaan PO ini.');
                         }
                         if ($warehouseId) {
@@ -250,12 +256,14 @@ class SupplierReturnController extends Controller
                             'destination' => GoodsReceiptItem::DESTINATION_WAREHOUSE,
                             'sort_order' => ++$sort,
                         ]);
+                        // Material: keluar dengan harga penerimaan PO ini (bukan harga rata-rata saldo),
+                        // agar nilai retur sama dengan nilai yang dulu masuk / ditagih.
                         $service->take($stock, $line->qty, StockLog::TYPE_RETURN_SUPPLIER, [
                             'date' => $validated['return_date'],
                             'ref_type' => StockLog::REF_SUPPLIER_RETURN_ITEM,
                             'ref_id' => $line->id,
                             'note' => 'Retur ke supplier '.$return->return_number,
-                        ]);
+                        ], true, $stock->isSerialized() ? null : $row['receipt_cost']);
                     }
 
                     if ($row['direct'] > 0) {
@@ -324,6 +332,27 @@ class SupplierReturnController extends Controller
      *
      * @return array<int, int>
      */
+    /**
+     * Harga modal (mata uang dasar) barang PO ini saat masuk gudang: rata-rata
+     * tertimbang log masuk dari penerimaannya. Null bila belum ada log.
+     */
+    private function receiptCost(array $receiptItemIds): ?float
+    {
+        if (! $receiptItemIds) {
+            return null;
+        }
+        $in = StockLog::where('ref_type', StockLog::REF_GOODS_RECEIPT_ITEM)
+            ->whereIn('ref_id', $receiptItemIds)
+            ->where('type', StockLog::TYPE_IN)
+            ->where('qty', '>', 0)
+            // Alias bukan 'value' / 'qty': bentrok dengan accessor & cast StockLog.
+            ->selectRaw('COALESCE(SUM(qty), 0) AS in_qty, COALESCE(SUM(qty * unit_cost), 0) AS in_value')
+            ->toBase()
+            ->first();
+
+        return (float) $in->in_qty > Stock::EPSILON ? round((float) $in->in_value / (float) $in->in_qty, 4) : null;
+    }
+
     private function receiptItemIds(PurchaseOrderItem $item): array
     {
         return $item->goodsReceiptItems

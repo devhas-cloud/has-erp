@@ -169,7 +169,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('opportunity-management/{opportunity}/negotiation', [OpportunityManagementController::class, 'requestNegotiation'])->name('opportunity-management.negotiation');
     Route::post('opportunity-management/{opportunity}/negotiation/approve', [OpportunityManagementController::class, 'approveNegotiation'])->name('opportunity-management.negotiation.approve');
     Route::post('opportunity-management/{opportunity}/close-loss', [OpportunityManagementController::class, 'requestCloseLoss'])->name('opportunity-management.close-loss');
-    Route::post('opportunity-management/{opportunity}/next-step', [OpportunityManagementController::class, 'updateNextStep'])->name('opportunity-management.next-step');
+    Route::put('opportunity-management/{opportunity}/next-step', [OpportunityManagementController::class, 'updateNextStep'])->name('opportunity-management.next-step');
     Route::post('opportunity-management/{opportunity}/approve', [OpportunityManagementController::class, 'approveCloseLoss'])->name('opportunity-management.approve');
     Route::resource('opportunity-management', OpportunityManagementController::class)->except(['edit'])->parameters(['opportunity-management' => 'opportunity']);
 

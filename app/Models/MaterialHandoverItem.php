@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Satu baris stok yang diserahkan ke produksi = satu baris "Material di
@@ -80,9 +81,23 @@ class MaterialHandoverItem extends Model
         return max(0.0, round($this->qty - $this->usedQty(), 4));
     }
 
+    /** Log stok saat diserahkan (keluar ke produksi) — menyimpan harga saat itu. */
+    public function outLog(): HasOne
+    {
+        return $this->hasOne(StockLog::class, 'ref_id')
+            ->where('ref_type', StockLog::REF_MATERIAL_HANDOVER_ITEM)
+            ->where('type', StockLog::TYPE_OUT);
+    }
+
+    /**
+     * Harga per unit saat diserahkan. Saldo material memakai harga rata-rata yang
+     * berubah setiap ada barang masuk, jadi harga diambil dari log serah terima.
+     */
     public function unitCost(): float
     {
-        return (float) ($this->stock?->unit_cost ?? 0);
+        $log = $this->relationLoaded('outLog') ? $this->outLog : $this->outLog()->first();
+
+        return (float) ($log?->unit_cost ?? $this->stock?->unit_cost ?? 0);
     }
 
     public function value(): float

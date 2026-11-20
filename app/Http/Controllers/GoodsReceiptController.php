@@ -57,7 +57,7 @@ class GoodsReceiptController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = GoodsReceipt::withCount('items')->with(['purchaseOrder', 'directPurchase', 'warehouse.branch', 'items:id,goods_receipt_id']);
+        $query = GoodsReceipt::withCount('items')->with(['purchaseOrder', 'directPurchase', 'warehouse.branch', 'creator', 'items:id,goods_receipt_id,master_product_id,qty,unit,destination', 'items.masterProduct:id,is_material']);
 
         $recordsTotal = (clone $query)->count();
 
@@ -84,6 +84,10 @@ class GoodsReceiptController extends Controller
             ->when($request->input('date_from'), fn ($q, $from) => $q->whereDate('received_date', '>=', $from))
             ->when($request->input('date_to'), fn ($q, $to) => $q->whereDate('received_date', '<=', $to))
             ->when($request->boolean('missing_sn'), fn ($q) => $q->whereHas('items.stocks', fn ($s) => $s->missingSerial()))
+            // Jenis barang yang masuk gudang: material (menambah saldo) / barang ber-SN (per unit).
+            ->when(in_array($request->input('kind'), ['material', 'serial'], true), fn ($q) => $q->whereHas('items', fn ($i) => $i
+                ->where('destination', GoodsReceiptItem::DESTINATION_WAREHOUSE)
+                ->whereHas('masterProduct', fn ($p) => $p->where('is_material', $request->input('kind') === 'material'))))
             ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', Auth::id()));
 
         $recordsFiltered = (clone $query)->count();
@@ -106,6 +110,14 @@ class GoodsReceiptController extends Controller
             ->pluck('source_id')
             ->countBy(fn ($itemId) => $itemToReceipt[$itemId]);
 
+        // Nilai masuk gudang = log masuk (harga modal saat diterima, mata uang dasar).
+        $values = $itemToReceipt->isEmpty() ? collect() : StockLog::where('ref_type', StockLog::REF_GOODS_RECEIPT_ITEM)
+            ->whereIn('ref_id', $itemToReceipt->keys())
+            ->where('type', StockLog::TYPE_IN)
+            ->get(['ref_id', 'qty', 'unit_cost'])
+            ->groupBy(fn ($log) => $itemToReceipt[$log->ref_id])
+            ->map(fn ($logs) => round($logs->sum(fn ($log) => $log->qty * $log->unit_cost), 2));
+
         $data = $receipts->map(fn (GoodsReceipt $receipt, $i) => [
             'DT_RowIndex' => $start + $i + 1,
             'id' => $receipt->id,
@@ -117,6 +129,12 @@ class GoodsReceiptController extends Controller
             'warehouse_branch' => $receipt->warehouse?->branch?->name,
             'received_date' => $receipt->received_date?->format('d/m/Y') ?? '—',
             'item_count' => $receipt->items_count,
+            'material_lines' => $receipt->items->filter(fn ($i) => $i->destination === GoodsReceiptItem::DESTINATION_WAREHOUSE && $i->masterProduct?->isMaterial())->count(),
+            'serial_units' => (int) $receipt->items->filter(fn ($i) => $i->destination === GoodsReceiptItem::DESTINATION_WAREHOUSE && $i->masterProduct && ! $i->masterProduct->isMaterial())->sum('qty'),
+            'direct_lines' => $receipt->items->where('destination', GoodsReceiptItem::DESTINATION_DIRECT)->count(),
+            'stock_value' => (float) ($values[$receipt->id] ?? 0),
+            'creator' => $receipt->creator?->display_name,
+            'source_url' => $receipt->purchase_order_id ? route('purchase-order.show', $receipt->purchase_order_id) : ($receipt->direct_purchase_id ? route('direct-purchase.show', $receipt->direct_purchase_id) : null),
             'missing_serial' => (int) ($missing[$receipt->id] ?? 0),
             'status' => $receipt->status,
             'status_label' => $receipt->status_label,
@@ -224,13 +242,15 @@ class GoodsReceiptController extends Controller
                     'message' => 'Baris '.($i + 1).' ('.($line['part_number'] ?: 'item').') belum terhubung master produk, jadi tidak bisa masuk gudang. Pilih Langsung Pakai atau petakan produknya dulu.',
                 ], 422);
             }
+            // Material masuk ke satu saldo: batch / kedaluwarsa / garansi tidak dipakai (sementara disembunyikan).
+            $tracked = $toStock && $line['serialized'];
             $rows[] = array_merge($line, [
                 'qty' => (int) $row['qty'],
                 'destination' => $row['destination'],
                 'serial_numbers' => $toStock ? StockService::parseSerials($row['serial_numbers'] ?? null) : [],
-                'batch_number' => $toStock ? ($row['batch_number'] ?? null) : null,
-                'expiry_date' => $toStock ? ($row['expiry_date'] ?? null) : null,
-                'warranty_until' => $toStock ? ($row['warranty_until'] ?? null) : null,
+                'batch_number' => $tracked ? ($row['batch_number'] ?? null) : null,
+                'expiry_date' => $tracked ? ($row['expiry_date'] ?? null) : null,
+                'warranty_until' => $tracked ? ($row['warranty_until'] ?? null) : null,
                 'note' => $row['note'] ?? null,
             ]);
         }
@@ -301,8 +321,17 @@ class GoodsReceiptController extends Controller
             'postedBy',
         ])->findOrFail($id);
 
+        // Log masuk per baris: harga modal saat diterima & saldo material sesudahnya.
+        $inLogs = StockLog::where('ref_type', StockLog::REF_GOODS_RECEIPT_ITEM)
+            ->whereIn('ref_id', $receipt->items->pluck('id')->all() ?: [0])
+            ->where('type', StockLog::TYPE_IN)
+            ->orderBy('id')
+            ->get()
+            ->groupBy('ref_id');
+
         return view('goods-receipt.show', [
             'receipt' => $receipt,
+            'inLogs' => $inLogs,
             'documents' => $this->documentList($receipt),
         ]);
     }

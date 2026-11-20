@@ -5,13 +5,23 @@
 
 @section('styles')
 @include('partials.list-toolbar')
+<style>
+    #gr-table th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); white-space: nowrap; }
+    .gr-mix { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+    .gr-chip { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+    .gr-chip-material { background: #e0f2fe; color: #075985; }
+    .gr-chip-serial { background: #fef3c7; color: #92400e; }
+    .gr-chip-direct { background: #ede9fe; color: #5b21b6; }
+    .gr-chip-missing { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; }
+    .gr-sub { font-size: 11.5px; color: var(--text-muted); }
+</style>
 @endsection
 
 @section('content')
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Penerimaan Barang</h1>
-        <p class="page-header-sub">Barang datang dari Purchase Order dan Direct Purchase</p>
+        <p class="page-header-sub">Barang datang dari Purchase Order dan Direct Purchase. <strong>Material</strong> menambah saldo gudang (harga rata-rata); <strong>barang ber-SN</strong> tercatat per unit, SN boleh menyusul.</p>
     </div>
     @if($canCreate)
     <div class="page-header-actions">
@@ -59,6 +69,11 @@
                 <span>–</span>
                 <input type="date" class="form-control" data-filter="date_to" aria-label="Sampai tanggal">
             </div>
+            <select class="form-select" data-filter="kind" aria-label="Jenis barang">
+                <option value="">Semua Jenis Barang</option>
+                <option value="material">Berisi Material</option>
+                <option value="serial">Berisi Barang ber-SN</option>
+            </select>
             <select class="form-select" data-filter="missing_sn" aria-label="Kelengkapan SN">
                 <option value="">Semua SN</option>
                 <option value="1">SN belum lengkap</option>
@@ -79,7 +94,8 @@
                         <th>Supplier</th>
                         <th>Gudang</th>
                         <th>Tanggal</th>
-                        <th class="text-center">Barang</th>
+                        <th class="text-center">Isi Penerimaan</th>
+                        <th class="text-end">Nilai Masuk Gudang</th>
                         <th>Status</th>
                         <th class="text-center" style="width:90px">Aksi</th>
                     </tr>
@@ -97,6 +113,7 @@ let grToolbar = null;
 
 const grShowUrl = '{{ route("goods-receipt.show", "__ID__") }}';
 const grDeleteUrl = '{{ route("goods-receipt.destroy", "__ID__") }}';
+const grStockDetailUrl = '{{ route("stock-detail.index") }}';
 
 function grEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
 
@@ -116,11 +133,15 @@ function initGrTable() {
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
             { data: 'receipt_number', orderable: false, searchable: true,
-                render: function(data) { return '<strong style="color:var(--text-primary);font-variant-numeric:tabular-nums">' + grEsc(data) + '</strong>'; }
+                render: function(data, type, row) {
+                    return '<a href="' + grShowUrl.replace('__ID__', row.id) + '" style="font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums">' + grEsc(data) + '</a>'
+                        + (row.creator ? '<div class="gr-sub">' + grEsc(row.creator) + '</div>' : '');
+                }
             },
             { data: 'source', orderable: false, searchable: true,
                 render: function(data, type, row) {
-                    return '<span class="badge me-1" style="background:#f1f5f9;color:var(--text-secondary);font-size:10px">' + grEsc(row.source_kind) + '</span>' + grEsc(data);
+                    var label = '<span class="badge me-1" style="background:#f1f5f9;color:var(--text-secondary);font-size:10px">' + grEsc(row.source_kind) + '</span>';
+                    return label + (row.source_url ? '<a href="' + row.source_url + '" target="_blank">' + grEsc(data) + '</a>' : grEsc(data));
                 }
             },
             { data: 'supplier_name', orderable: false, searchable: true,
@@ -135,9 +156,20 @@ function initGrTable() {
             { data: 'received_date', orderable: false, searchable: false },
             { data: 'item_count', orderable: false, searchable: false, className: 'text-center',
                 render: function(data, type, row) {
-                    return data + (row.missing_serial > 0
-                        ? '<div><span class="badge" style="background:var(--warning-soft);color:#b45309;font-size:10px" title="Unit barang ber-SN yang SN-nya belum diisi">' + row.missing_serial + ' SN kosong</span></div>'
-                        : '');
+                    var chips = '';
+                    if (row.material_lines) chips += '<span class="gr-chip gr-chip-material" title="Menambah saldo material di gudang">' + row.material_lines + ' material</span>';
+                    if (row.serial_units) chips += '<span class="gr-chip gr-chip-serial" title="Unit barang ber-SN (1 baris stok per unit)">' + row.serial_units + ' unit SN</span>';
+                    if (row.direct_lines) chips += '<span class="gr-chip gr-chip-direct" title="Tidak masuk stok">' + row.direct_lines + ' langsung pakai</span>';
+                    if (row.missing_serial > 0) {
+                        chips += '<a class="gr-chip gr-chip-missing" href="' + grShowUrl.replace('__ID__', row.id) + '" title="Unit barang ber-SN yang SN-nya belum diisi"><i class="fa fa-triangle-exclamation me-1"></i>' + row.missing_serial + ' SN kosong</a>';
+                    }
+                    return '<div class="fw-semibold">' + data + ' baris</div><div class="gr-mix">' + chips + '</div>';
+                }
+            },
+            { data: 'stock_value', orderable: false, searchable: false, className: 'text-end',
+                render: function(data, type, row) {
+                    if (!row.material_lines && !row.serial_units) return '<span class="gr-sub">—</span>';
+                    return '<span style="font-variant-numeric:tabular-nums;font-weight:600">' + Num.format(data, 2) + '</span>';
                 }
             },
             { data: 'status_badge', orderable: false, searchable: false },

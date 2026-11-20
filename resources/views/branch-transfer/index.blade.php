@@ -50,20 +50,20 @@
                     <option value="{{ $key }}">{{ $label }}</option>
                 @endforeach
             </select>
-            @if($userBranchId)
+            {{-- @if($userBranchId)
             <select class="form-select" data-filter="direction" aria-label="Arah">
                 <option value="">Masuk &amp; Keluar</option>
                 <option value="out">Keluar (dikirim branch saya)</option>
                 <option value="in">Masuk (menuju branch saya)</option>
             </select>
-            @endif
+            @endif --}}
             @if($branches->count() > 1)
-            <select class="form-select" data-filter="from_branch" aria-label="Branch asal">
+            {{-- <select class="form-select" data-filter="from_branch" aria-label="Branch asal">
                 <option value="">Semua Branch Asal</option>
                 @foreach($branches as $b)
                     <option value="{{ $b->id }}">Dari: {{ $b->name }}</option>
                 @endforeach
-            </select>
+            </select> --}}
             <select class="form-select" data-filter="to_branch" aria-label="Branch tujuan">
                 <option value="">Semua Branch Tujuan</option>
                 @foreach($branches as $b)

@@ -992,13 +992,25 @@ function fxRecalcAll() {
 function fxCommit($input) {
     var val = $input.val().trim();
     var $wrap = $input.closest('.qt-fx-wrap');
-    if (val.indexOf('=') === 0) {
+    var hadFormula = !!$input.data('fx-formula');
+    var seed = $input.attr('data-fx-seed') || '';
+    var cancelled = val === '' || val === '=' || (!hadFormula && val === seed);
+    if (cancelled) {
+        // Tidak jadi pakai rumus → kembalikan nilai sebelum ƒx diklik.
+        // Kalau sebelumnya ada rumus lalu dikosongkan, rumus dihapus dan
+        // hasil terakhirnya dipertahankan sebagai angka biasa.
+        $input.data('fx-formula', null);
+        $wrap.removeClass('has-fx fx-error').removeAttr('title');
+        $input.val($input.attr('data-orig') || '');
+    } else if (val.indexOf('=') === 0) {
         $input.data('fx-formula', val);
         $wrap.addClass('has-fx').removeClass('fx-error');
     } else {
         $input.data('fx-formula', null);
-        $wrap.removeClass('has-fx').removeAttr('title');
+        $wrap.removeClass('has-fx fx-error').removeAttr('title');
+        $input.val(qtFormatInput(val));
     }
+    $input.removeAttr('data-fx-seed');
     $input.removeClass('fx-editing');
     fxSetReadonly($input);
     fxRecalcAll();
@@ -1012,10 +1024,14 @@ $(document).on('click', '.qt-fx-btn', function (e) {
         fxCommit($input);
         return;
     }
+    // Tanpa rumus: tampilkan nilai saat ini sebagai rumus (=30000, tanpa
+    // pemisah ribuan karena tokenizer tidak mengenal koma).
+    var seed = $input.data('fx-formula') || ('=' + qtToRaw($input.val()).trim());
     $input.attr('data-orig', $input.val())
+        .attr('data-fx-seed', seed)
         .prop('readonly', false)
         .addClass('fx-editing')
-        .val($input.data('fx-formula') || '=');
+        .val(seed);
     $input.focus();
     try { $input[0].setSelectionRange($input.val().length, $input.val().length); } catch (err) {}
 });
@@ -1026,7 +1042,7 @@ $(document).on('keydown', '.qt-fx-wrap input.fx-editing', function (e) {
     if (e.key === 'Escape') {
         e.preventDefault();
         var $wrap = $input.closest('.qt-fx-wrap');
-        $input.val($input.attr('data-orig') || '').removeClass('fx-editing');
+        $input.val($input.attr('data-orig') || '').removeClass('fx-editing').removeAttr('data-fx-seed');
         fxSetReadonly($input);
         fxRecalcAll();
     }

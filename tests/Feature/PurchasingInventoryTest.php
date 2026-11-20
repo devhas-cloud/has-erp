@@ -304,7 +304,7 @@ class PurchasingInventoryTest extends TestCase
         $row = $this->seedStock($this->stockWarehouse->id, $product, 4)->first();
         $requestItem = $this->approvedRequest(4, $project, $product);
 
-        // Tanpa gudang tujuan = tetap di gudang asal, hanya pindah kepemilikan (baris utuh, tidak dipecah).
+        // Tanpa gudang tujuan = tetap di gudang asal, hanya pindah kepemilikan: saldo bebas -> saldo project.
         $this->actingAs($this->warehouseUser)->postJson(route('stock-out.store'), [
             'goods_request_item_id' => $requestItem->id,
             'warehouse_id' => $this->stockWarehouse->id,
@@ -312,7 +312,8 @@ class PurchasingInventoryTest extends TestCase
         ])->assertOk();
 
         $this->assertEquals(4, $this->stockBalance($this->stockWarehouse->id, $product->id, $project->id));
-        $this->assertSame(1, Stock::count());
+        $this->assertEquals(0, $this->stockBalance($this->stockWarehouse->id, $product->id));
+        $this->assertSame(2, Stock::count());
         $this->assertSame([-4.0, 4.0], StockLog::where('type', StockLog::TYPE_ALLOCATE)->orderBy('id')->pluck('qty')->all());
         $this->assertSame(4, GoodsRequestItem::findOrFail($requestItem->id)->stockQty());
     }
@@ -329,8 +330,8 @@ class PurchasingInventoryTest extends TestCase
 
         $this->assertEquals(3, $this->stockBalance($this->stockWarehouse->id, $product->id));
         $this->assertEquals(2, $this->stockBalance($this->transitWarehouse->id, $product->id, $project->id));
-        // Baris asal dipecah: pecahan milik project menyimpan asal (parent_id).
-        $this->assertSame($row->id, Stock::where('project_id', $project->id)->value('parent_id'));
+        // Material: saldo project di gudang transit (satu baris, tanpa pecahan).
+        $this->assertSame(1, Stock::where('project_id', $project->id)->count());
         $this->assertSame(0, GoodsRequestItem::findOrFail($requestItem->id)->remainingQty());
     }
 

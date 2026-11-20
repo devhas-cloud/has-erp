@@ -237,7 +237,7 @@ class MaterialHandoverController extends Controller
     public function show($id)
     {
         $handover = MaterialHandover::visibleTo(Auth::user())
-            ->with(['materialRequest.project', 'materialRequest.branch', 'creator', 'items.stock.masterProduct', 'items.stock.warehouse', 'items.productionItems.production'])
+            ->with(['materialRequest.project', 'materialRequest.branch', 'creator', 'items.stock.masterProduct', 'items.stock.warehouse', 'items.productionItems.production', 'items.outLog'])
             ->findOrFail($id);
 
         return view('material-handover.show', compact('handover'));

@@ -80,7 +80,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">{{ $isEdit ? 'Edit '.$transfer->transfer_number : 'Buat Pengiriman Antar Branch' }}</h1>
-        <p class="page-header-sub">Tentukan rute, pilih barang, lalu simpan sebagai draft. Stok baru keluar saat dokumen <strong>Dikirim</strong> dari halaman detail.</p>
+        <p class="page-header-sub">Tentukan rute, pilih barang, lalu simpan sebagai draft. Stok baru keluar saat dokumen <strong>Dikirim</strong> dari halaman detail; material yang diterima menambah saldo gudang tujuan.</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ $isEdit ? route('branch-transfer.show', $transfer->id) : route('branch-transfer.index') }}" class="btn btn-secondary btn-sm bt-leave">
@@ -190,7 +190,7 @@
                         <th>Nama Barang</th>
                         <th style="width:200px">Posisi</th>
                         <th style="width:140px">Masuk / Kedaluwarsa</th>
-                        <th style="width:120px" class="text-end">Stok</th>
+                        <th style="width:120px" class="text-end">Tersedia</th>
                         <th style="width:170px" class="text-end">Ambil</th>
                     </tr>
                 </thead>
@@ -198,7 +198,9 @@
             </table>
         </div>
         <div class="bt-pick-foot">
-            <span><i class="fa fa-circle-info me-1"></i>Klik baris untuk memilih · Shift+klik untuk rentang · Enter di qty pindah ke baris berikutnya · Material boleh sebagian, barang ber-SN per unit</span>
+            <span><i class="fa fa-circle-info me-1"></i>Klik baris untuk memilih · Shift+klik untuk rentang · Enter di qty pindah ke baris berikutnya<br>
+                <span class="bt-kind bt-kind-material">Material</span> = 1 saldo per gudang &amp; kepemilikan, boleh dikirim sebagian (isi qty) ·
+                <span class="bt-kind bt-kind-serial">Ber-SN</span> = per unit, dikirim utuh</span>
             <span id="bt-pick-info"></span>
         </div>
     </div>
@@ -211,7 +213,7 @@
         <div class="bt-ab-path" id="bt-ab-route">—</div>
     </div>
     <div class="bt-ab-stats" title="Klik untuk melihat barang dipilih">
-        <div class="bt-ab-stat" data-goto="picked"><div class="n" id="bt-sum-lines">0</div><div class="l">Baris stok</div></div>
+        <div class="bt-ab-stat" data-goto="picked"><div class="n" id="bt-sum-lines">0</div><div class="l">Baris dipilih</div></div>
         <div class="bt-ab-stat" data-goto="picked"><div class="n" id="bt-sum-products">0</div><div class="l">Jenis barang</div></div>
         <div class="bt-ab-stat" data-goto="picked"><div class="n" id="bt-sum-serial">0</div><div class="l">Unit ber-SN</div></div>
     </div>
@@ -322,8 +324,11 @@ function btRowHtml(r, idx) {
             ? '<span class="bt-own bt-own-project">Project</span><div class="bt-sub">' + btEsc(r.project) + '</div>'
             : '<span class="bt-own bt-own-free">Stok bebas</span>')
             + '<div class="bt-sub">' + btEsc(r.warehouse || '') + '</div></td>'
-        + '<td>' + btEsc(r.received_date || '—') + (r.expiry_date ? '<div class="bt-sub">exp ' + btEsc(r.expiry_date) + '</div>' : '') + '</td>'
-        + '<td class="text-end"><strong>' + btEsc(r.qty_label) + '</strong> <span class="bt-sub">' + btEsc(r.unit || '') + '</span></td>'
+        + '<td>' + (r.serialized
+            ? btEsc(r.received_date || '—') + (r.expiry_date ? '<div class="bt-sub">exp ' + btEsc(r.expiry_date) + '</div>' : '')
+            : '<span class="bt-sub" title="Material: semua penerimaan digabung dalam satu saldo">Saldo gabungan</span>') + '</td>'
+        + '<td class="text-end"><strong>' + btEsc(r.qty_label) + '</strong> <span class="bt-sub">' + btEsc(r.unit || '') + '</span>'
+            + '<div class="bt-sub">' + (r.serialized ? '1 unit' : 'saldo') + '</div></td>'
         + '<td class="text-end">' + take + '</td>'
         + '</tr>';
 }

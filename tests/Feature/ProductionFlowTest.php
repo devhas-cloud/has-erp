@@ -278,6 +278,23 @@ class ProductionFlowTest extends TestCase
         $this->actingAs($this->requester)->get(route('production.show', $second->id))->assertOk()->assertSee('salah rakit');
     }
 
+    public function test_handover_cost_is_frozen_when_material_balance_cost_changes(): void
+    {
+        $cableRow = $this->seedStock($this->jktMain->id, $this->cable, 10, ['unit_cost' => 5000, 'unit' => 'Meter'])->first();
+        $mr = $this->approvedMr([['master_product_id' => $this->cable->id, 'qty' => 4]]);
+        $this->handover($mr, [['material_request_item_id' => $this->itemId($mr, $this->cable), 'stock_id' => $cableRow->id, 'qty' => 4]])->assertOk();
+
+        // Barang masuk dengan harga lain mengubah harga rata-rata saldo bebas & saldo project.
+        $this->seedStock($this->jktMain->id, $this->cable, 10, ['unit_cost' => 11000])->first();
+        $this->seedStock($this->jktMain->id, $this->cable, 2, ['unit_cost' => 20000, 'project_id' => $this->project->id]);
+        $this->assertEquals(round((6 * 5000 + 10 * 11000) / 16, 4), $cableRow->fresh()->unit_cost);
+
+        // Harga material di produksi tetap harga saat diserahkan.
+        $item = \App\Models\MaterialHandoverItem::firstOrFail();
+        $this->assertEquals(5000, $item->unitCost());
+        $this->assertEquals(20000, $item->value());
+    }
+
     public function test_material_request_rules_reject_resubmit_close_and_branch_visibility(): void
     {
         // Project tidak aktif & qty pecahan untuk barang ber-SN ditolak.

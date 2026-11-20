@@ -156,10 +156,14 @@ class BranchTransferTest extends TestCase
         $this->assertTrue($transfer->isReceived());
         $this->assertEquals(40, $this->stockBalance($this->bdgWarehouse->id, $this->cable->id));
         $arrived = Stock::where('warehouse_id', $this->bdgWarehouse->id)->where('master_product_id', $this->cable->id)->firstOrFail();
-        $this->assertSame([$roll->id, 'LOT-A', 5000.0], [$arrived->parent_id, $arrived->batch_number, $arrived->unit_cost]);
+        // Material menjadi saldo gudang tujuan (bukan pecahan baris), harga = harga saat dikirim.
+        $this->assertSame([null, 5000.0], [$arrived->parent_id, $arrived->unit_cost]);
         // Barang ber-SN kembali ke barisnya sendiri di gudang tujuan.
         $this->assertSame([$this->bdgWarehouse->id, 1.0], [$unit->fresh()->warehouse_id, $unit->fresh()->qty]);
         $this->assertSame(2, StockLog::where('type', StockLog::TYPE_SHIP_IN)->count());
+        // Detail: material masuk saldo gudang tujuan (link kartu stok), barang ber-SN per unit.
+        $this->actingAs($this->receiver)->get(route('branch-transfer.show', $transfer->id))->assertOk()
+            ->assertSee('Masuk saldo '.$this->bdgWarehouse->code)->assertSee('kartu stok')->assertSee('1 material')->assertSee('1 unit SN');
 
         // Dokumen terkunci.
         $this->actingAs($this->receiver)->postJson(route('branch-transfer.receive', $id))->assertStatus(422);
