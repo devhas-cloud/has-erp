@@ -162,9 +162,9 @@
                 @break
 
             @case('project')
-                <p class="pr-muted mb-2">Nilai sebelum pajak. Komitmen = PO & Direct Purchase untuk project; Terbayar = porsi tagihan yang sudah dibayar / dipotong uang muka / PPh. Alokasi stok = stok bebas yang dialokasikan ke project (harga rata-rata). Pembelian untuk stok belum dihitung sampai dialokasikan.</p>
+                <p class="pr-muted mb-2">Nilai sebelum pajak. Komitmen = PO & Direct Purchase untuk project; Terbayar = porsi tagihan yang sudah dibayar / dipotong uang muka / PPh. Alokasi stok = stok bebas yang dialokasikan ke project (harga rata-rata). Diterima = nilai stok (kurs penerimaan, setelah diskon PO); sisa PO yang belum diterima memakai kurs PO. Selisih kurs = terima → tagihan + tagihan → bayar (positif = rugi), masuk Total Biaya sebagai Rupiah riil; nilai stok tidak diubah. Pembelian untuk stok belum dihitung sampai dialokasikan.</p>
                 <table class="table table-custom align-middle mb-0 pr-table">
-                    <thead><tr><th>Project</th><th class="pr-num">Komitmen</th><th class="pr-num">Diterima</th><th class="pr-num">Ditagih</th><th class="pr-num">Terbayar</th><th class="pr-num">Alokasi Stok</th><th class="pr-num">Total Biaya</th><th class="pr-num">Estimasi (PL)</th><th class="pr-num">Selisih</th></tr></thead>
+                    <thead><tr><th>Project</th><th class="pr-num">Komitmen</th><th class="pr-num">Diterima</th><th class="pr-num">Ditagih</th><th class="pr-num">Terbayar</th><th class="pr-num">Alokasi Stok</th><th class="pr-num">Selisih Kurs</th><th class="pr-num">Total Biaya</th><th class="pr-num">Estimasi (PL)</th><th class="pr-num">Selisih</th></tr></thead>
                     <tbody>
                         @forelse($rows as $r)
                             <tr>
@@ -174,12 +174,13 @@
                                 <td class="pr-num">{{ $money($r['billed']) }}</td>
                                 <td class="pr-num">{{ $money($r['paid']) }}</td>
                                 <td class="pr-num">{{ $r['stock_allocated'] ? $money($r['stock_allocated']) : '—' }}</td>
+                                <td class="pr-num {{ $r['fx'] > 0 ? 'text-danger' : ($r['fx'] < 0 ? 'text-success' : '') }}" title="Terima → tagihan {{ $money($r['fx_receipt']) }} · tagihan → bayar {{ $money($r['fx_payment']) }}">{{ abs($r['fx']) >= 0.01 ? $money($r['fx']) : '—' }}</td>
                                 <td class="pr-num fw-semibold">{{ $money($r['actual']) }}</td>
                                 <td class="pr-num">{{ $r['estimate'] !== null ? $money($r['estimate']) : '—' }}</td>
                                 <td class="pr-num {{ $r['variance'] !== null && $r['variance'] < 0 ? 'text-danger fw-semibold' : '' }}">{{ $r['variance'] !== null ? $money($r['variance']) : '—' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="9" class="text-center py-4 pr-muted">Belum ada pembelian untuk project.</td></tr>
+                            <tr><td colspan="10" class="text-center py-4 pr-muted">Belum ada pembelian untuk project.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -75,14 +75,25 @@
     .dp-pp-search input { padding-left: 30px; }
     .dp-pp-table-wrap { border: 1px solid var(--card-border); border-radius: var(--radius-sm); overflow: auto; max-height: 52vh; }
     .dp-pp-table-wrap thead th { position: sticky; top: 0; z-index: 1; background: var(--card); }
-    #dp-product-body tr { cursor: pointer; }
-    #dp-product-body tr.is-selected { background: var(--accent-subtle); }
-    #dp-product-body tr.is-added, #dp-product-body tr.is-locked { opacity: .55; cursor: default; }
+    /* Baris pemilih (skin sama dengan picker PO / Permintaan Barang): klik di mana saja untuk memilih */
+    #dp-product-body tr[data-idx], #dp-mr-body tr[data-idx] { cursor: pointer; user-select: none; }
+    #dp-product-body tr[data-idx] td, #dp-mr-body tr[data-idx] td { transition: background-color .12s ease; }
+    #dp-product-body tr.is-selected td, #dp-mr-body tr.is-selected td { background-color: #ecfdf5 !important; }
+    #dp-product-body tr[data-idx]:not(.is-added):not(.is-locked):hover td,
+    #dp-mr-body tr[data-idx]:not(.is-added):hover td { background-color: #d1fae5 !important; color: #065f46; }
+    #dp-product-body tr[data-idx]:not(.is-added):not(.is-locked):hover .dp-pp-desc,
+    #dp-mr-body tr[data-idx]:not(.is-added):hover .dp-pp-desc { color: #065f46; }
+    #dp-product-body tr.is-added, #dp-product-body tr.is-locked, #dp-mr-body tr.is-added { cursor: not-allowed; }
+    #dp-product-body tr.is-added td, #dp-product-body tr.is-locked td, #dp-mr-body tr.is-added td { opacity: .55; }
+    .dp-product-check, .dp-mr-check, #dp-product-check-all, #dp-mr-check-all { width: 16px; height: 16px; cursor: pointer; vertical-align: middle; }
+    #dp-mr-body .dp-mr-qty { cursor: text; user-select: text; }
     .dp-pp-name { font-weight: 600; font-size: 13px; }
     .dp-pp-desc { font-size: 12px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .dp-pp-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
     .dp-pp-footer-info { font-size: 12.5px; color: var(--text-muted); }
     .dp-pp-pager .page-link { font-size: 12.5px; padding: 3px 9px; }
+    .dp-pick-tag { font-size: 10.5px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+    .dp-pick-tag.muted { color: var(--text-muted); }
 </style>
 @endsection
 
@@ -95,7 +106,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ $directPurchase ? route('direct-purchase.show', $directPurchase->id) : route('direct-purchase.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Back
+            Back
         </a>
     </div>
 </div>
@@ -105,11 +116,11 @@
         {{-- 1. Supplier & tujuan --}}
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Purchase Information</span>
+                <span>Purchase Information</span>
             </div>
             <div class="card-body-custom">
                 <div class="row g-3">
-                    <div class="col-lg-5">
+                    <div class="col-lg-4">
                         <label class="form-label">Supplier <span class="text-danger">*</span></label>
                         <select id="dp-supplier-select" class="form-select" style="width:100%">
                             @if($directPurchase && $directPurchase->supplier_id)
@@ -120,7 +131,7 @@
                         <input type="hidden" id="dp-supplier-name" value="{{ $directPurchase?->supplier_name }}">
                         <small class="dp-hint">From Supplier master. None yet? Add via the Supplier menu.</small>
                     </div>
-                    <div class="col-lg-3 col-sm-4">
+                    <div class="col-lg-2 col-sm-4">
                         <label class="form-label">Supplier Phone</label>
                         <input type="text" class="form-control" id="dp-supplier-phone" maxlength="50" value="{{ $directPurchase?->supplier_phone }}" placeholder="Auto from supplier">
                     </div>
@@ -136,23 +147,28 @@
                         </div>
                         <small class="dp-hint">0 = cash.</small>
                     </div>
+                    <div class="col-lg-2 col-sm-6" id="dp-rate-wrap">
+                        <label class="form-label" for="dp-exchange-rate">Exchange Rate <span class="text-danger dp-rate-required">*</span></label>
+                        <input type="text" class="form-control text-end" id="dp-exchange-rate" data-number="rate" value="{{ $directPurchase?->exchange_rate ? \App\Support\Number::rate($directPurchase->exchange_rate) : '' }}">
+                        <small class="dp-hint" id="dp-rate-hint">Used to value the goods when they are received.</small>
+                    </div>
 
                     <div class="col-12">
                         <label class="form-label">Goods Purpose <span class="text-danger">*</span></label>
                         <div class="dp-purpose">
                             @foreach([
-                                'stock' => ['fa-warehouse', 'For Stock', 'Received into warehouse as free stock.'],
-                                'project' => ['fa-diagram-project', 'For Project', 'Received into warehouse (usually transit) & allocated to a project.'],
-                                'direct' => ['fa-hand-holding', 'Use Directly', 'Just confirm receipt, not into stock.'],
-                            ] as $purposeKey => [$purposeIcon, $purposeLabel, $purposeHint])
+                                'stock' => ['For Stock', 'Received into warehouse as free stock.'],
+                                'project' => ['For Project', 'Received into warehouse (usually transit) & allocated to a project.'],
+                                // 'direct' => ['Use Directly', 'Just confirm receipt, not into stock.'],
+                            ] as $purposeKey => [$purposeLabel, $purposeHint])
                                 <div>
                                     <input type="radio" name="dp-purpose" id="dp-purpose-{{ $purposeKey }}" value="{{ $purposeKey }}" @checked($dpPurpose === $purposeKey)>
-                                    <label for="dp-purpose-{{ $purposeKey }}"><strong><i class="fa-solid {{ $purposeIcon }} me-1"></i>{{ $purposeLabel }}</strong>{{ $purposeHint }}</label>
+                                    <label for="dp-purpose-{{ $purposeKey }}"><strong>{{ $purposeLabel }}</strong>{{ $purposeHint }}</label>
                                 </div>
                             @endforeach
                         </div>
                     </div>
-                    <div class="col-lg-8" id="dp-project-wrap" style="{{ $dpPurpose === 'project' ? '' : 'display:none' }}">
+                    <div class="col-lg-12" id="dp-project-wrap" style="{{ $dpPurpose === 'project' ? '' : 'display:none' }}">
                         <label class="form-label">Project <span class="text-danger">*</span></label>
                         <select id="dp-project" class="form-select" style="width:100%">
                             <option value="">Select project...</option>
@@ -173,16 +189,16 @@
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>
-                    <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item List
+                    Item List
                     <span class="dp-chip ms-1" id="dp-items-count">0 items</span>
                     <span class="dp-chip muted ms-1" id="dp-doc-currency" style="display:none" title="One document one currency, following the product"></span>
                 </span>
                 <div class="d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-outline-primary btn-sm dp-mr-btn" onclick="dpOpenMrPicker()">
-                        <i class="fa fa-clipboard-list me-1"></i> Add from Material Request
+                        Add from Material Request
                     </button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="dpOpenProductPicker()">
-                        <i class="fa fa-magnifying-glass me-1"></i> Add from Catalog
+                        Add from Catalog
                     </button>
                 </div>
             </div>
@@ -205,18 +221,18 @@
                     </table>
                 </div>
                 <div class="config-card-empty" id="dp-items-empty">
-                    <i class="fa-solid fa-inbox"></i> No items yet.
+                    No items yet.
                     <div class="dp-empty-actions">
                         <button type="button" class="btn btn-outline-primary btn-sm dp-mr-btn" onclick="dpOpenMrPicker()">
-                            <i class="fa fa-clipboard-list me-1"></i> Material Request
+                            Material Request
                         </button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="dpOpenProductPicker()">
-                            <i class="fa fa-magnifying-glass me-1"></i> Search Catalog
+                            Search Catalog
                         </button>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between flex-wrap gap-2 px-2 pt-2" id="dp-items-footer" style="display:none !important">
-                    <small class="dp-hint"><i class="fa fa-circle-info me-1"></i>Items must come from the product catalog (for stock records). Price filled from master purchase price — adjust to the note.</small>
+                    <small class="dp-hint">Items must come from the product catalog (for stock records). Price filled from master purchase price — adjust to the note.</small>
                     <small class="dp-hint">Description can be formatted: <b>Ctrl+B</b> bold, <i>Ctrl+I</i> italic.</small>
                 </div>
             </div>
@@ -225,7 +241,7 @@
         {{-- 3. Penanda tangan (opsional, dilipat) --}}
         <details class="card-custom fade-in dp-sign" @if($directPurchase?->request_by_name || $directPurchase?->finance_name || $directPurchase?->accounting_name) open @endif>
             <summary class="card-header-custom d-flex justify-content-between align-items-center">
-                <span><i class="fa-solid fa-signature me-2" style="color:var(--accent)"></i>Signatories <span class="dp-section-sub">optional, printed on PDF</span></span>
+                <span>Signatories <span class="dp-section-sub">optional, printed on PDF</span></span>
                 <i class="fa fa-chevron-down chev" style="color:var(--text-muted);font-size:12px"></i>
             </summary>
             <div class="card-body-custom">
@@ -251,7 +267,7 @@
     <div class="col-xl-3">
         <div class="card-custom fade-in dp-summary-sticky">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Summary</span>
+                <span>Summary</span>
             </div>
             <div class="card-body-custom">
                 <div class="dp-summary-number">
@@ -265,19 +281,20 @@
                 <div class="dp-summary-row">
                     <span class="lbl d-flex align-items-center gap-1">VAT
                         <span class="input-group input-group-sm" style="width:auto">
-                            <input type="number" class="form-control dp-ppn-input" id="dp-ppn-percent" min="0" max="100" step="any" placeholder="0" value="{{ $directPurchase ? $directPurchase->ppn_percent : \App\Models\DirectPurchase::DEFAULT_PPN_PERCENT }}">
+                            <input type="number" class="form-control dp-ppn-input" id="dp-ppn-percent" min="0" max="100" step="any" placeholder="0" value="{{ $directPurchase ? $directPurchase->ppn_percent : 0 }}">
                             <span class="input-group-text">%</span>
                         </span>
                     </span>
                     <span class="val" id="dp-sum-ppn">0</span>
                 </div>
                 <div class="dp-summary-total"><span>Total</span><span class="val" id="dp-sum-total">0</span></div>
+                <div class="dp-summary-row" id="dp-sum-base-row" style="display:none"><span class="lbl">≈ <span class="dp-rate-base">IDR</span> <span class="dp-hint" id="dp-sum-rate"></span></span><span class="val" id="dp-sum-base">0</span></div>
 
                 <button type="button" class="btn btn-primary w-100 mt-3" id="dp-save-btn" onclick="dpSave()">
-                    <i class="fa fa-save me-1"></i> Save {{ $directPurchase ? 'Changes' : 'Draft' }}
+                    Save {{ $directPurchase ? 'Changes' : 'Draft' }}
                 </button>
                 <div class="dp-summary-note">
-                    <i class="fa-solid fa-circle-info me-1"></i>
+
                     Saved as <strong>Draft</strong>. Submit for approval from the detail page once prices are complete.
                 </div>
             </div>
@@ -296,7 +313,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-clipboard-list me-2" style="color:var(--accent)"></i>Add from Material Request</h6>
+                <h6 class="modal-title">Add from Material Request</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -305,13 +322,13 @@
                         <label class="dp-hint mb-0" for="dp-mr-branch">Branch</label>
                         <select id="dp-mr-branch" class="form-select form-select-sm" style="width:auto;min-width:180px"></select>
                     </div>
-                    <span class="dp-hint"><i class="fa fa-circle-info me-1"></i>Reference only — approved Material Requests, same product merged. Suggested = remaining − available stock − on order.</span>
+                    <span class="dp-hint">Approved Material Requests, same product merged. Click a row to select, Shift+click for a range. Suggested qty = remaining − stock − on order.</span>
                 </div>
                 <div class="dp-pp-table-wrap">
                     <table class="table table-custom align-middle mb-0">
                         <thead>
                             <tr>
-                                <th style="width:36px" class="text-center"></th>
+                                <th style="width:36px" class="text-center"><input type="checkbox" id="dp-mr-check-all" title="Select all" aria-label="Select all"></th>
                                 <th>Product</th>
                                 <th>Material Request</th>
                                 <th class="text-end" style="width:100px">Remaining</th>
@@ -329,8 +346,9 @@
             <div class="modal-footer justify-content-between">
                 <small class="dp-hint">In Stock = free stock + stock of those projects in this branch's warehouses. On Order = Stock-purpose direct purchases not yet received.</small>
                 <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="dp-mr-pdf" onclick="dpPrintMr()" disabled title="Print the needed materials of this branch as the purchase reference">Print PDF</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="dp-mr-apply" onclick="dpApplyMrPicked()" disabled><i class="fa fa-plus me-1"></i> Add 0 Items</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="dp-mr-apply" onclick="dpApplyMrPicked()" disabled>Add Selected</button>
                 </div>
             </div>
         </div>
@@ -341,7 +359,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="dp-picker-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Add from Product Catalog</h6>
+                <h6 class="modal-title" id="dp-picker-title">Add from Product Catalog</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -395,7 +413,7 @@
                 </div>
             </div>
             <div class="modal-footer justify-content-between">
-                <small class="dp-hint" id="dp-picker-hint"><i class="fa fa-circle-info me-1"></i>Item not in catalog yet? Add it in Product Master first.</small>
+                <small class="dp-hint" id="dp-picker-hint">Item not in catalog yet? Add it in Product Master first.</small>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary btn-sm" id="dp-product-apply" onclick="dpApplyProductPicked()" disabled></button>
@@ -417,7 +435,7 @@ const dpSearchProductsUrl = '{{ route("direct-purchase.search-products") }}';
 const dpCurrencies = @json($currencies ?? []);
 const dpInitialItems = @json($items ?? []);
 const dpCurrentNumber = @json($directPurchase?->dp_number);
-const dpSaveLabel = '<i class="fa fa-save me-1"></i> Save {{ $directPurchase ? 'Changes' : 'Draft' }}';
+const dpSaveLabel = 'Save {{ $directPurchase ? 'Changes' : 'Draft' }}';
 
 function dpEsc(str) {
     return String(str == null ? '' : str)
@@ -461,7 +479,7 @@ function dpExistingProductIds() {
 function dpProductCell(item) {
     return '<div class="dp-product-cell"><div style="font-weight:600;font-size:13px">' + dpEsc(item.part_number || '—') + '</div>'
         + '<div class="dp-hint">' + dpEsc(item.product_name || '') + '</div>'
-        + '<a href="javascript:void(0)" class="dp-product-link" onclick="dpPickProductForRow(this)"><i class="fa fa-arrows-rotate me-1"></i>Replace product</a></div>';
+        + '<a href="javascript:void(0)" class="dp-product-link" onclick="dpPickProductForRow(this)">Replace product</a></div>';
 }
 
 function dpRowHtml(item) {
@@ -525,13 +543,41 @@ function dpRecalc() {
     $('#dp-sum-items').text(n);
 
     var code = dpDocCurrency() || dpBaseCurrency();
-    $('#dp-doc-currency').toggle(n > 0).html('<i class="fa fa-lock" style="font-size:9px"></i> ' + dpEsc(code));
+    $('#dp-doc-currency').toggle(n > 0).text('Currency ' + code);
 
     var ppnPct = parseFloat($('#dp-ppn-percent').val()) || 0;
     var ppn = Math.round(subtotal * ppnPct) / 100;
     $('#dp-sum-subtotal').text(code + ' ' + dpFmt(subtotal));
     $('#dp-sum-ppn').text(code + ' ' + dpFmt(ppn));
     $('#dp-sum-total').text(code + ' ' + dpFmt(subtotal + ppn));
+    dpSyncRate(n ? code : null, subtotal + ppn);
+}
+
+// Kurs DP selalu tampil (sama seperti PO). Valas: bisa diisi (default kurs master);
+// mata uang dasar / belum ada item: terkunci 1.
+let dpRateForeign = $('#dp-exchange-rate').val() || '';
+function dpSyncRate(code, total) {
+    var base = dpBaseCurrency();
+    var foreign = !!code && code !== base;
+    var master = (dpCurrencies.filter(function(c) { return c.name === code; })[0] || {}).rate;
+    var $input = $('#dp-exchange-rate');
+    $('.dp-rate-cur').text(code || base);
+    $('.dp-rate-base').text(base);
+    $('.dp-rate-required').toggle(foreign);
+    if (foreign) {
+        if ($input.prop('readonly')) $input.prop('readonly', false).css('background', '').val(dpRateForeign);
+        if (!$input.val() && master) $input.val(Num.format(master, 2));
+        dpRateForeign = $input.val();
+    } else {
+        $input.prop('readonly', true).css('background', 'var(--bg-soft, #f3f4f6)').val('1').removeClass('is-invalid');
+    }
+    $('#dp-rate-hint').text(foreign
+        ? 'Used to value the goods when they are received.'
+        : (code ? base + ' purchase — no conversion needed.' : 'Follows the item currency;'));
+    var rate = Num.val($input);
+    $('#dp-sum-base-row').toggle(foreign);
+    $('#dp-sum-rate').text(foreign ? '@ ' + Num.format(rate, 2) : '');
+    if (foreign) $('#dp-sum-base').text(base + ' ' + dpFmt(Math.round(total * rate * 100) / 100));
 }
 
 function dpCollectItems() {
@@ -569,8 +615,8 @@ function dpPickProductForRow(el) {
 function dpOpenProductPicker($row) {
     dpPickerTargetRow = $row || null;
     $('#dp-picker-title').html(dpPickerTargetRow
-        ? '<i class="fa-solid fa-arrows-rotate me-2" style="color:var(--accent)"></i>Replace Product Row'
-        : '<i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Add from Product Catalog');
+        ? 'Replace Product Row'
+        : 'Add from Product Catalog');
 
     if (!dpPickerInstance) {
         dpPickerInstance = new bootstrap.Modal(document.getElementById('dpProductPickerModal'));
@@ -604,7 +650,7 @@ function dpLoadProducts() {
         })
         .fail(function(xhr, status) {
             if (status === 'abort') return;
-            $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load products.</td></tr>');
+            $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty">Failed to load products.</td></tr>');
         });
 }
 
@@ -623,7 +669,7 @@ function dpRenderProductPool(meta) {
     var docCurrency = dpDocCurrency(dpPickerTargetRow);
 
     if (dpProductPool.length === 0) {
-        $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty"><i class="fa-solid fa-inbox"></i>Product not found. Try another keyword or filter.</td></tr>');
+        $('#dp-product-body').html('<tr><td colspan="5" class="config-card-empty">Product not found. Try another keyword or filter.</td></tr>');
     } else {
         var html = '';
         dpProductPool.forEach(function(p, idx) {
@@ -635,8 +681,8 @@ function dpRenderProductPool(meta) {
 
             html += '<tr data-idx="' + idx + '" class="' + (isAdded ? 'is-added' : (isLocked ? 'is-locked' : (isSelected ? 'is-selected' : ''))) + '">';
             html += '<td class="text-center">';
-            if (isAdded) html += '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>';
-            else if (isLocked) html += '<i class="fa fa-lock" style="color:var(--text-muted)" title="Currency differs from document"></i>';
+            if (isAdded) html += '<span class="dp-pick-tag" title="Already in the list">Added</span>';
+            else if (isLocked) html += '<span class="dp-pick-tag muted" title="Currency differs from document">Other currency</span>';
             else html += '<input type="' + (dpPickerTargetRow ? 'radio' : 'checkbox') + '" name="dp-product-pick" class="dp-product-check" data-idx="' + idx + '"' + (isSelected ? ' checked' : '') + '>';
             html += '</td>';
             html += '<td style="font-size:12.5px">' + dpEsc(p.code || '—') + '</td>';
@@ -644,13 +690,14 @@ function dpRenderProductPool(meta) {
                 + (isAdded ? ' <span class="dp-chip muted">Already added</span>' : '')
                 + (isLocked ? ' <span class="dp-chip warn">Currency ' + dpEsc(p.currency) + ' — different from document (' + dpEsc(docCurrency) + ')</span>' : '') + '</div>';
             if (desc && desc !== p.name) html += '<div class="dp-pp-desc">' + dpEsc(desc) + '</div>';
-            if (meta) html += '<div class="dp-pp-meta"><i class="fa fa-tag me-1"></i>' + dpEsc(meta) + '</div>';
+            if (meta) html += '<div class="dp-pp-meta">' + dpEsc(meta) + '</div>';
             html += '</td>';
             html += '<td style="font-size:12.5px">' + dpEsc(p.division_name || '—') + '</td>';
             html += '<td class="text-end" style="font-size:12.5px;white-space:nowrap">' + (p.price ? dpEsc(p.currency) + ' ' + dpFmt(p.price) : '<span class="dp-hint">' + dpEsc(p.currency) + ' —</span>') + '</td>';
             html += '</tr>';
         });
         $('#dp-product-body').html(html);
+        dpProductLastIdx = null;
     }
 
     $('#dp-product-info').text(meta && meta.total
@@ -686,10 +733,13 @@ function dpSyncProductSelection() {
     $('#dp-product-selected').text(n + ' selected');
     $('#dp-product-clear').toggle(n > 0);
     $('#dp-product-apply').prop('disabled', n === 0).html(dpPickerTargetRow
-        ? '<i class="fa fa-check me-1"></i> Use Selected Product'
-        : '<i class="fa fa-plus me-1"></i> Add ' + n + ' Items');
+        ? 'Use Selected Product'
+        : (n ? 'Add ' + n + (n === 1 ? ' Item' : ' Items') : 'Add Selected'));
     var $checks = $('#dp-product-body .dp-product-check');
-    $('#dp-product-check-all').prop('checked', $checks.length > 0 && $checks.filter(':checked').length === $checks.length);
+    var on = $checks.filter(':checked').length;
+    $('#dp-product-check-all').prop('disabled', $checks.length === 0)
+        .prop('checked', $checks.length > 0 && on === $checks.length)
+        .prop('indeterminate', on > 0 && on < $checks.length);
 }
 
 function dpToggleProduct(idx, checked) {
@@ -759,13 +809,21 @@ function dpLoadMr(branchId) {
         dpMrRows = res.data || [];
         dpRenderMr();
     }).fail(function() {
-        $('#dp-mr-body').html('<tr><td colspan="7" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load Material Requests.</td></tr>');
+        $('#dp-mr-body').html('<tr><td colspan="7" class="config-card-empty">Failed to load Material Requests.</td></tr>');
     });
 }
 
+// PDF acuan pembelian untuk branch yang sedang dipilih (data sama dengan pop-up).
+const dpMrPdfUrl = '{{ route("direct-purchase.material-requests.pdf") }}';
+function dpPrintMr() {
+    var branchId = $('#dp-mr-branch').val();
+    window.open(dpMrPdfUrl + (branchId ? '?branch_id=' + encodeURIComponent(branchId) : ''), '_blank');
+}
+
 function dpRenderMr() {
+    $('#dp-mr-pdf').prop('disabled', !dpMrRows.length);
     if (!dpMrRows.length) {
-        $('#dp-mr-body').html('<tr><td colspan="7" class="config-card-empty"><i class="fa-solid fa-inbox"></i>No approved Material Request waiting in this branch.</td></tr>');
+        $('#dp-mr-body').html('<tr><td colspan="7" class="config-card-empty">No approved Material Request waiting in this branch.</td></tr>');
         dpSyncMrSelection();
         return;
     }
@@ -774,10 +832,10 @@ function dpRenderMr() {
     dpMrRows.forEach(function(r, idx) {
         var isAdded = !!added[r.id];
         var qty = r.suggested > 0 ? r.suggested : Math.max(1, Math.ceil(r.need - 0.00005));
-        html += '<tr data-idx="' + idx + '" class="' + (isAdded ? 'is-added' : '') + '">';
+        html += '<tr data-idx="' + idx + '" class="' + (isAdded ? 'is-added' : (r.suggested > 0 ? 'is-selected' : '')) + '">';
         html += '<td class="text-center">' + (isAdded
-            ? '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>'
-            : '<input type="checkbox" class="dp-mr-check"' + (r.suggested > 0 ? ' checked' : '') + '>') + '</td>';
+            ? '<span class="dp-pick-tag" title="Already in the list">Added</span>'
+            : '<input type="checkbox" class="dp-mr-check" aria-label="Select ' + dpEsc(r.code) + '"' + (r.suggested > 0 ? ' checked' : '') + '>') + '</td>';
         html += '<td><div class="dp-pp-name">' + dpEsc(r.code) + (isAdded ? ' <span class="dp-chip muted">Already added</span>' : '') + '</div><div class="dp-pp-desc">' + dpEsc(r.name || '') + '</div></td>';
         html += '<td style="font-size:12px">' + r.requests.map(dpEsc).join(', ') + '</td>';
         html += '<td class="text-end">' + Num.format(r.need, 4) + ' <span class="dp-hint">' + dpEsc(r.unit || '') + '</span></td>';
@@ -792,9 +850,47 @@ function dpRenderMr() {
 }
 
 function dpSyncMrSelection() {
-    var n = $('#dp-mr-body .dp-mr-check:checked').length;
-    $('#dp-mr-apply').prop('disabled', n === 0).html('<i class="fa fa-plus me-1"></i> Add ' + n + ' Items');
+    var $checks = $('#dp-mr-body .dp-mr-check');
+    var n = $checks.filter(':checked').length;
+    $checks.each(function() { $(this).closest('tr').toggleClass('is-selected', this.checked); });
+    $('#dp-mr-check-all').prop('disabled', $checks.length === 0)
+        .prop('checked', $checks.length > 0 && n === $checks.length)
+        .prop('indeterminate', n > 0 && n < $checks.length);
+    $('#dp-mr-apply').prop('disabled', n === 0).text(n ? 'Add ' + n + (n === 1 ? ' Item' : ' Items') : 'Add Selected');
 }
+
+// Klik baris = centang / batal; Shift+klik = rentang. Kolom qty tetap bisa diketik.
+let dpMrLastIdx = null;
+$(document).on('click', '#dp-mr-body tr[data-idx]', function(e) {
+    if ($(e.target).is('.dp-mr-qty')) return;
+    var $check = $(this).find('.dp-mr-check');
+    if (!$check.length) return;
+    var onBox = $(e.target).is('.dp-mr-check');
+    var checked = onBox ? $check.prop('checked') : !$check.prop('checked');
+    var $rows = $('#dp-mr-body tr[data-idx]');
+    var idx = $rows.index(this);
+    if (e.shiftKey && dpMrLastIdx !== null && dpMrLastIdx !== idx) {
+        $rows.slice(Math.min(dpMrLastIdx, idx), Math.max(dpMrLastIdx, idx) + 1).find('.dp-mr-check').prop('checked', checked);
+        window.getSelection && window.getSelection().removeAllRanges();
+    } else {
+        $check.prop('checked', checked);
+    }
+    dpMrLastIdx = idx;
+    dpSyncMrSelection();
+});
+$(document).on('change', '#dp-mr-check-all', function() {
+    $('#dp-mr-body .dp-mr-check').prop('checked', this.checked);
+    dpMrLastIdx = null;
+    dpSyncMrSelection();
+});
+// Enter di qty: pindah ke qty berikutnya.
+$(document).on('keydown', '#dp-mr-body .dp-mr-qty', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var $q = $('#dp-mr-body .dp-mr-qty');
+    var $next = $q.eq($q.index(this) + 1);
+    if ($next.length) $next.focus().select();
+});
 
 function dpApplyMrPicked() {
     var picked = [];
@@ -821,7 +917,6 @@ function dpApplyMrPicked() {
     dpMrInstance.hide();
 }
 
-$(document).on('change', '#dp-mr-body .dp-mr-check', dpSyncMrSelection);
 $(document).on('input', '#dp-mr-body .dp-mr-qty', function() {
     this.value = this.value.replace(/\D/g, '');
     $(this).closest('tr').find('.dp-mr-check').prop('checked', (parseInt(this.value, 10) || 0) > 0);
@@ -867,6 +962,9 @@ function dpValidate() {
     }
     var ppnPct = parseFloat($('#dp-ppn-percent').val()) || 0;
     if (ppnPct < 0 || ppnPct > 100) return dpFail('VAT must be 0 to 100%.', $('#dp-ppn-percent'));
+    if (!$('#dp-exchange-rate').prop('readonly') && !(Num.val($('#dp-exchange-rate')) > 0)) {
+        return dpFail('Enter the exchange rate for ' + (dpDocCurrency() || '') + '.', $('#dp-exchange-rate'));
+    }
 
     var $rows = $('#dp-items-body tr');
     if ($rows.length === 0) return dpFail('Add at least one item from the catalog.');
@@ -895,6 +993,7 @@ function dpSave() {
         date: $('#dp-date').val(),
         payment_term_days: $('#dp-payment-term-days').val(),
         ppn_percent: $('#dp-ppn-percent').val(),
+        exchange_rate: $('#dp-exchange-rate').prop('readonly') ? '' : Num.val($('#dp-exchange-rate')),
         purpose: dpPurpose(),
         project_id: dpPurpose() === 'project' ? $('#dp-project').val() : '',
         notes: $('#dp-notes').val(),
@@ -942,15 +1041,37 @@ $(document).on('blur', '.dp-price', function() {
 });
 $(document).on('input', '.dp-desc', function() { $(this).removeClass('is-invalid'); });
 $(document).on('input', '#dp-ppn-percent', dpRecalc);
+$(document).on('input', '#dp-exchange-rate', function() {
+    $(this).removeClass('is-invalid');
+    dpRateForeign = $(this).val();
+    dpRecalc();
+});
 
 $(document).on('change', '#dp-product-body .dp-product-check', function() {
     dpToggleProduct($(this).data('idx'), $(this).is(':checked'));
     dpSyncProductSelection();
 });
+// Klik baris = pilih / batal; Shift+klik = rentang (mode tambah banyak).
+let dpProductLastIdx = null;
 $(document).on('click', '#dp-product-body tr[data-idx]', function(e) {
     if ($(e.target).is('input')) return;
     var $check = $(this).find('.dp-product-check');
-    if ($check.length) $check.prop('checked', dpPickerTargetRow ? true : !$check.is(':checked')).trigger('change');
+    if (!$check.length) return;
+    if (dpPickerTargetRow) { $check.prop('checked', true).trigger('change'); return; }
+    var checked = !$check.is(':checked');
+    var $rows = $('#dp-product-body tr[data-idx]');
+    var idx = $rows.index(this);
+    if (e.shiftKey && dpProductLastIdx !== null && dpProductLastIdx !== idx) {
+        $rows.slice(Math.min(dpProductLastIdx, idx), Math.max(dpProductLastIdx, idx) + 1).find('.dp-product-check').each(function() {
+            $(this).prop('checked', checked);
+            dpToggleProduct($(this).data('idx'), checked);
+        });
+        window.getSelection && window.getSelection().removeAllRanges();
+        dpSyncProductSelection();
+    } else {
+        $check.prop('checked', checked).trigger('change');
+    }
+    dpProductLastIdx = idx;
 });
 $(document).on('click', '#dp-product-pager a[data-page]', function(e) {
     e.preventDefault();

@@ -34,6 +34,7 @@ class GoodsReceiptItem extends Model
         'unit',
         'currency',
         'price',
+        'exchange_rate',
         'destination',
         'project_id',
         'batch_number',
@@ -49,6 +50,7 @@ class GoodsReceiptItem extends Model
         return [
             'qty' => 'integer',
             'price' => 'float',
+            'exchange_rate' => 'float',
             'expiry_date' => 'date',
             'warranty_until' => 'date',
             'serial_numbers' => 'array',

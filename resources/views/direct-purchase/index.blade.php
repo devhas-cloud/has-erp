@@ -16,7 +16,6 @@
     @if($canCreate ?? false)
     <div class="page-header-actions">
         <a href="{{ route('direct-purchase.create') }}" class="btn-accent">
-            <i class="fa fa-plus"></i>
             <span>Create Direct Purchase</span>
         </a>
     </div>
@@ -25,7 +24,7 @@
 
 <div class="card-custom fade-in">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span><i class="fa-solid fa-basket-shopping me-2" style="color:var(--accent)"></i>Direct Purchase List</span>
+        <span>Direct Purchase List</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="list-toolbar" id="dp-toolbar">
@@ -63,7 +62,7 @@
                 <option value="">All Creators</option>
                 <option value="1">Created by Me</option>
             </select>
-            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
         </div>
         <div class="table-responsive">
             <table id="dp-table" class="table table-custom align-middle mb-0" style="width:100%">

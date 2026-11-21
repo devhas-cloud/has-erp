@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Detail Penerimaan Barang')
-@section('page-title', 'Detail Penerimaan Barang')
+@section('title', 'Goods Receipt Details')
+@section('page-title', 'Goods Receipt Details')
 
 @php
     $fmtQty = fn ($v) => \App\Support\StockCost::qty($v);
@@ -32,12 +32,12 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">{{ $receipt->receipt_number ?: 'Penerimaan #'.$receipt->id }}</h1>
+        <h1 class="page-header-title">{{ $receipt->receipt_number ?: 'Receipt #'.$receipt->id }}</h1>
         <p class="page-header-sub">{{ $receipt->supplierName() ?? '—' }} &middot; {{ $receipt->received_date?->format('d M Y') ?? '—' }}</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ route('goods-receipt.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Kembali
+            Back
         </a>
     </div>
 </div>
@@ -46,40 +46,40 @@
     <div class="col-lg-8">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom d-flex justify-content-between align-items-center">
-                <span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Informasi</span>
+                <span>Information</span>
                 {!! $receipt->statusBadgeHtml() !!}
             </div>
             <div class="card-body-custom">
                 <table class="info-table" style="width:100%">
                     <tr>
-                        <td>Dokumen</td>
+                        <td>Document</td>
                         <td>
                             @if($sourceUrl)<a href="{{ $sourceUrl }}" class="fw-semibold">{{ $receipt->sourceNumber() }}</a>@else{{ $receipt->sourceNumber() }}@endif
                             <span style="color:var(--text-muted)">&middot; {{ $receipt->supplierName() ?? '—' }}</span>
                         </td>
                     </tr>
                     <tr>
-                        <td>Gudang</td>
+                        <td>Warehouse</td>
                         <td>
                             @if($receipt->warehouse)
                                 {{ $receipt->warehouse->code }} — {{ $receipt->warehouse->name }}
                                 <span style="color:var(--text-muted)">&middot; {{ $receipt->warehouse->branch_label }}</span>
                             @else
-                                <span style="color:var(--text-muted)">Semua langsung pakai</span>
+                                <span style="color:var(--text-muted)">All for direct use</span>
                             @endif
                         </td>
                     </tr>
                     <tr>
-                        <td>Tanggal Terima</td>
+                        <td>Received Date</td>
                         <td>{{ $receipt->received_date?->format('d/m/Y') ?? '—' }}</td>
                     </tr>
                     <tr>
-                        <td>Dicatat</td>
+                        <td>Recorded By</td>
                         <td>{{ $receipt->creator?->display_name ?? '—' }} <span style="color:var(--text-muted)">&middot; {{ $receipt->created_at?->format('d/m/Y H:i') }}</span></td>
                     </tr>
                     @if($receipt->note)
                     <tr>
-                        <td>Catatan</td>
+                        <td>Note</td>
                         <td>{{ $receipt->note }}</td>
                     </tr>
                     @endif
@@ -90,43 +90,43 @@
     <div class="col-lg-4">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-chart-simple me-2" style="color:var(--accent)"></i>Ringkasan</span>
+                <span>Summary</span>
             </div>
             <div class="card-body-custom">
                 <div class="row g-2">
                     <div class="col-6">
                         <div class="gr-stat">
-                            <div class="label">Masuk Gudang</div>
+                            <div class="label">To Warehouse</div>
                             <div class="value">{{ $toStock->count() }}</div>
                             <div class="label">
                                 {{ $toStock->filter(fn ($i) => $i->masterProduct?->isMaterial())->count() }} material ·
-                                {{ (int) $toStock->filter(fn ($i) => $i->masterProduct && ! $i->masterProduct->isMaterial())->sum('qty') }} unit SN
+                                {{ (int) $toStock->filter(fn ($i) => $i->masterProduct && ! $i->masterProduct->isMaterial())->sum('qty') }} SN units
                             </div>
                         </div>
                     </div>
                     <div class="col-6">
                         <div class="gr-stat info">
-                            <div class="label">Langsung Pakai</div>
+                            <div class="label">Direct Use</div>
                             <div class="value">{{ $direct->count() }}</div>
-                            <div class="label">barang</div>
+                            <div class="label">items</div>
                         </div>
                     </div>
                 </div>
                 @if($stockValue > 0)
                     <div class="d-flex justify-content-between mt-3 px-1" style="font-size:13px">
-                        <span style="color:var(--text-muted)">Nilai masuk gudang</span>
+                        <span style="color:var(--text-muted)">Value received into stock</span>
                         <span class="fw-semibold" style="font-variant-numeric:tabular-nums">{{ \App\Models\Currency::baseName() }} {{ \App\Support\StockCost::format($stockValue) }}</span>
                     </div>
                 @endif
                 @if($missingTotal > 0)
                     <a href="{{ route('stock-detail.index', ['goods_receipt_id' => $receipt->id]) }}" class="d-flex justify-content-between align-items-center mt-3 px-3 py-2 text-decoration-none"
                        style="border-radius:var(--radius-sm);background:var(--warning-soft);color:#92400e;font-size:13px">
-                        <span><i class="fa fa-barcode me-1"></i>{{ $missingTotal }} unit SN belum diisi</span>
-                        <span class="fw-semibold">Lengkapi <i class="fa fa-arrow-right ms-1"></i></span>
+                        <span>{{ $missingTotal }} SN {{ \Illuminate\Support\Str::plural('unit', $missingTotal) }} not filled in</span>
+                        <span class="fw-semibold">Complete now</span>
                     </a>
                 @else
                     <div class="mt-3 px-3 py-2" style="border-radius:var(--radius-sm);background:#f8fafc;color:var(--text-muted);font-size:12.5px">
-                        <i class="fa fa-circle-check me-1" style="color:var(--accent)"></i>Data barang sudah lengkap
+                        Item data is complete
                     </div>
                 @endif
             </div>
@@ -136,7 +136,7 @@
 
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Barang Diterima</span>
+        <span>Received Items</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -144,11 +144,11 @@
                 <thead>
                     <tr>
                         <th style="width:45px" class="text-center">#</th>
-                        <th>Barang</th>
-                        <th>Untuk</th>
+                        <th>Item</th>
+                        <th>For</th>
                         <th class="text-end" style="width:110px">Qty</th>
-                        <th class="text-end" style="width:130px">Harga Modal</th>
-                        <th style="width:220px">Tujuan</th>
+                        <th class="text-end" style="width:130px">Unit Cost</th>
+                        <th style="width:220px">Destination</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -167,31 +167,37 @@
                             <td>
                                 <div class="fw-semibold" style="color:var(--text-primary)">{{ $item->masterProduct?->name ?: '—' }}</div>
                                 <div style="font-size:11.5px;color:var(--text-muted)">{{ $item->masterProduct?->code ?: '—' }}
-                                    @if($item->masterProduct)<span class="gr-kind {{ $isMaterial ? 'gr-kind-material' : 'gr-kind-serial' }} ms-1">{{ $isMaterial ? 'Material' : 'Ber-SN' }}</span>@endif
+                                    @if($item->masterProduct)<span class="gr-kind {{ $isMaterial ? 'gr-kind-material' : 'gr-kind-serial' }} ms-1">{{ $isMaterial ? 'Material' : 'Serial' }}</span>@endif
                                 </div>
                             </td>
                             <td>
                                 @if($item->project)
                                     <span class="badge" style="background:#fef3c7;color:#92400e;white-space:normal">{{ $item->project->project_number }} — {{ $item->project->project_name }}</span>
                                 @else
-                                    <span style="color:var(--text-muted)">Stok bebas</span>
+                                    <span style="color:var(--text-muted)">Free stock</span>
                                 @endif
                             </td>
                             <td class="text-end"><strong>{{ $fmtQty($item->qty) }}</strong> <span style="color:var(--text-muted);font-size:12px">{{ $item->unit }}</span></td>
-                            <td class="text-end" style="font-variant-numeric:tabular-nums">{{ $cost !== null ? \App\Support\StockCost::format($cost) : '—' }}</td>
+                            <td class="text-end" style="font-variant-numeric:tabular-nums">{{ $cost !== null ? \App\Support\StockCost::format($cost) : '—' }}
+                                @if($item->price !== null && ! \App\Models\Currency::isBaseCode($item->currency))
+                                    <div style="font-size:11px;color:var(--text-muted);white-space:nowrap" title="Document price × exchange rate used at receipt">
+                                        {{ strtoupper($item->currency) }} {{ \App\Support\Number::format($item->price, 2) }}{{ $item->exchange_rate ? ' × '.\App\Support\Number::format($item->exchange_rate, 2) : ' · rate not recorded' }}
+                                    </div>
+                                @endif
+                            </td>
                             <td>
                                 @if($isStock)
-                                    <span class="badge" style="background:var(--accent-soft);color:var(--accent-hover)"><i class="fa fa-warehouse me-1"></i>Masuk Gudang</span>
+                                    <span class="badge" style="background:var(--accent-soft);color:var(--accent-hover)">To Warehouse</span>
                                     @if($isMaterial && $logs->isNotEmpty())
-                                        <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">Menambah saldo → {{ $fmtQty($logs->last()->qty_after) }} {{ $item->unit }} saat itu</div>
+                                        <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">Added to balance → {{ $fmtQty($logs->last()->qty_after) }} {{ $item->unit }} at that time</div>
                                     @elseif(! $isMaterial && $isStock)
-                                        <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">{{ $item->stocks->count() }} baris stok (per unit)</div>
+                                        <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">{{ $item->stocks->count() }} stock rows (one per unit)</div>
                                     @endif
                                     @if($item->master_product_id && $receipt->warehouse_id)
-                                        <a href="{{ $cardUrl($item) }}" style="font-size:11.5px"><i class="fa fa-clock-rotate-left me-1"></i>Kartu stok</a>
+                                        <a href="{{ $cardUrl($item) }}" style="font-size:11.5px">Stock card</a>
                                     @endif
                                 @else
-                                    <span class="badge" style="background:var(--info-soft);color:#4338ca"><i class="fa fa-hand-holding me-1"></i>Langsung Pakai</span>
+                                    <span class="badge" style="background:var(--info-soft);color:#4338ca">Direct Use</span>
                                 @endif
                             </td>
                         </tr>
@@ -201,20 +207,20 @@
                                 <td colspan="5" style="font-size:12px;color:var(--text-secondary)">
                                     @if($item->batch_number)<span class="me-3"><span style="color:var(--text-muted)">Batch</span> {{ $item->batch_number }}</span>@endif
                                     @if($item->expiry_date)<span class="me-3"><span style="color:var(--text-muted)">Exp</span> {{ $item->expiry_date->format('d/m/Y') }}</span>@endif
-                                    @if($item->warranty_until)<span class="me-3"><span style="color:var(--text-muted)">Garansi</span> {{ $item->warranty_until->format('d/m/Y') }}</span>@endif
-                                    @if($item->note)<span class="me-3"><i class="fa-regular fa-note-sticky me-1" style="color:var(--text-muted)"></i>{{ $item->note }}</span>@endif
+                                    @if($item->warranty_until)<span class="me-3"><span style="color:var(--text-muted)">Warranty</span> {{ $item->warranty_until->format('d/m/Y') }}</span>@endif
+                                    @if($item->note)<span class="me-3">Note: {{ $item->note }}</span>@endif
                                     @if($serials->isNotEmpty())
                                         <div>@foreach($serials as $sn)<span class="gr-sn">{{ $sn }}</span>@endforeach</div>
                                     @endif
                                     @if($missing > 0)
-                                        <div class="mt-1" style="color:#b45309"><i class="fa fa-triangle-exclamation me-1"></i>{{ $missing }} unit SN belum diisi</div>
+                                        <div class="mt-1" style="color:#b45309">{{ $missing }} SN {{ \Illuminate\Support\Str::plural('unit', $missing) }} not filled in</div>
                                     @endif
                                 </td>
                             </tr>
                         @endif
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center py-4" style="color:var(--text-muted)">Belum ada barang.</td>
+                            <td colspan="6" class="text-center py-4" style="color:var(--text-muted)">No items yet.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -228,6 +234,6 @@
     'types' => $receipt->documentTypes(),
     'uploadUrl' => route('goods-receipt.documents.store', $receipt->id),
     'canUpload' => $canCreate,
-    'hint' => 'Opsional — surat jalan / nota supplier.',
+    'hint' => 'Optional — supplier delivery note / invoice.',
 ])
 @endsection

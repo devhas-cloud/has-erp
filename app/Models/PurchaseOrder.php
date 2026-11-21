@@ -82,6 +82,7 @@ class PurchaseOrder extends Model
         'your_ref',
         'discount_percent',
         'ppn_percent',
+        'exchange_rate',
         'status',
         'notes',
         'request_by_name',
@@ -104,6 +105,7 @@ class PurchaseOrder extends Model
             'payment_term_days' => 'integer',
             'discount_percent' => 'float',
             'ppn_percent' => 'float',
+            'exchange_rate' => 'float',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
             'cancelled_at' => 'datetime',
@@ -295,7 +297,7 @@ class PurchaseOrder extends Model
 
         return $total > 0
             ? round($advances->sum(fn (SupplierBill $bill) => $bill->total * $bill->exchange_rate) / $total, 6)
-            : Currency::rateOf($this->currencyCode());
+            : $this->exchangeRate();
     }
 
     /** Uang muka yang sudah benar-benar dibayar (pembayaran Posted). */
@@ -438,6 +440,19 @@ class PurchaseOrder extends Model
     public function grandTotal(): float
     {
         return (float) $this->items->sum(fn (PurchaseOrderItem $item) => $item->amount());
+    }
+
+    /**
+     * Kurs PO ke mata uang dasar: base = 1; valas = kurs yang ditetapkan di PO
+     * (PO lama tanpa kurs -> kurs master saat ini).
+     */
+    public function exchangeRate(): float
+    {
+        if ($this->currencyCode() === Currency::baseName()) {
+            return 1.0;
+        }
+
+        return (float) ($this->exchange_rate ?: Currency::rateOf($this->currencyCode()));
     }
 
     /**

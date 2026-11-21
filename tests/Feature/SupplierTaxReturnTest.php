@@ -140,8 +140,8 @@ class SupplierTaxReturnTest extends TestCase
         $this->actingAs($this->admin)->getJson(route('goods-receipt.data', ['draw' => 1, 'kind' => 'serial']))->assertOk()->assertJsonPath('recordsFiltered', 0);
         $this->actingAs($this->admin)->getJson(route('goods-receipt.data', ['draw' => 1, 'kind' => 'material']))->assertOk()->assertJsonPath('recordsFiltered', 1);
         $receiptId = GoodsReceipt::value('id');
-        $this->actingAs($this->admin)->get(route('goods-receipt.show', $receiptId))->assertOk()->assertSee('Menambah saldo')->assertSee('Kartu stok');
-        $this->actingAs($this->admin)->get(route('goods-receipt.index'))->assertOk()->assertSee('Berisi Material');
+        $this->actingAs($this->admin)->get(route('goods-receipt.show', $receiptId))->assertOk()->assertSee('Added to balance')->assertSee('Stock card');
+        $this->actingAs($this->admin)->get(route('goods-receipt.index'))->assertOk()->assertSee('Contains Materials');
 
         // Stok lain produk sama (harga 4.000) melebur ke saldo yang sama -> rata-rata 2.500.
         $row = $this->seedStock($this->warehouse->id, $this->product, 10, ['unit_cost' => 4000])->first();

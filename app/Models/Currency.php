@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Cache;
 
 class Currency extends Model
 {
+    /** Kurs master dianggap usang bila tidak diperbarui lebih dari sekian hari. */
+    public const STALE_DAYS = 7;
+
     protected $fillable = [
         'name',
         'symbol',
@@ -61,6 +64,34 @@ class Currency extends Model
         }
 
         return (float) $currency->rate;
+    }
+
+    /**
+     * Master mata uang berdasarkan kode (currencies.name, tanpa beda huruf besar/kecil).
+     */
+    public static function findByCode(?string $name): ?self
+    {
+        $code = strtoupper(trim((string) $name));
+
+        return $code === '' ? null : static::whereRaw('UPPER(name) = ?', [$code])->first();
+    }
+
+    /**
+     * Kode kosong atau sama dengan mata uang base.
+     */
+    public static function isBaseCode(?string $name): bool
+    {
+        $code = strtoupper(trim((string) $name));
+
+        return $code === '' || $code === static::baseName();
+    }
+
+    /**
+     * Kurs master sudah lama tidak diperbarui (lihat STALE_DAYS).
+     */
+    public function isStale(): bool
+    {
+        return ! $this->is_base && (! $this->updated_at || $this->updated_at->lt(now()->subDays(self::STALE_DAYS)));
     }
 
     /**

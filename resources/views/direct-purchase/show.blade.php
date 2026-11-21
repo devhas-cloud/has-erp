@@ -29,6 +29,16 @@
 @endsection
 
 @section('content')
+@php
+    $dpCurrency = $directPurchase->currencyCode();
+    $dpBase = \App\Models\Currency::baseName();
+    $dpForeign = $dpCurrency !== $dpBase;
+    $dpRate = $directPurchase->exchangeRate();
+    // Kurs yang benar-benar dipakai tiap penerimaan (per baris penerimaan).
+    $receiptRates = $directPurchase->items->flatMap->goodsReceiptItems
+        ->groupBy('goods_receipt_id')
+        ->map(fn ($rows) => $rows->pluck('exchange_rate')->filter()->unique()->values());
+@endphp
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Direct Purchase #{{ $directPurchase->id }}</h1>
@@ -38,10 +48,10 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ route('direct-purchase.pdf', $directPurchase->id) }}" target="_blank" class="btn btn-secondary btn-sm">
-            <i class="fa fa-print me-1"></i> Print PDF
+            Print PDF
         </a>
         <a href="{{ route('direct-purchase.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Back
+            Back
         </a>
     </div>
 </div>
@@ -51,30 +61,29 @@
     <div class="spacer"></div>
     @if($directPurchase->status === 'draft' && (auth()->id() === $directPurchase->created_by || auth()->user()->role === 'Admin'))
         <a href="{{ route('direct-purchase.edit', $directPurchase->id) }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-pen me-1"></i> Edit
+            Edit
         </a>
         <button type="button" class="btn btn-primary btn-sm" onclick="dpSubmit()">
-            <i class="fa fa-paper-plane me-1"></i> Submit Approval
+            Submit Approval
         </button>
     @endif
     @if($directPurchase->status === 'waiting_approval' && $canApprove)
         <button type="button" class="btn btn-success btn-sm" onclick="dpApprove()">
-            <i class="fa fa-check me-1"></i> Approve
+            Approve
         </button>
         <button type="button" class="btn btn-danger btn-sm" onclick="dpOpenReject()">
-            <i class="fa fa-xmark me-1"></i> Reject
+            Reject
         </button>
     @endif
     @if($directPurchase->isReceivable())
         <a href="{{ route('goods-receipt.create', ['source_type' => 'dp', 'source_id' => $directPurchase->id]) }}" class="btn btn-primary btn-sm">
-            <i class="fa fa-truck-ramp-box me-1"></i> Receive Goods
+            Receive Goods
         </a>
     @endif
 </div>
 
 @if($directPurchase->status === 'rejected' && $directPurchase->approval_note)
 <div class="qt-action-bar" style="border-color:#fecaca;background:#fef2f2;">
-    <i class="fa fa-circle-exclamation" style="color:#b91c1c"></i>
     <div>
         <div style="font-weight:600;font-size:13px;color:#7f1d1d">Rejection Reason</div>
         <div style="font-size:13px;color:#7f1d1d">{{ $directPurchase->approval_note }}</div>
@@ -84,7 +93,7 @@
 
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Direct Purchase Information</span>
+        <span>Direct Purchase Information</span>
     </div>
     <div class="card-body-custom">
         <table class="info-table" style="width:100%">
@@ -107,6 +116,14 @@
             <tr>
                 <td>Payment Terms</td>
                 <td>{{ \App\Models\Supplier::termLabel($directPurchase->payment_term_days) }}</td>
+            </tr>
+            @endif
+            @if($dpForeign)
+            <tr>
+                <td>Exchange Rate</td>
+                <td>1 {{ $dpCurrency }} = {{ $dpBase }} {{ \App\Support\Number::rate($dpRate) }}
+                    <div style="font-size:12px;color:var(--text-muted)">{{ $directPurchase->exchange_rate ? 'Set on this direct purchase — used to value goods on receipt' : 'Not set — current master rate is used' }}</div>
+                </td>
             </tr>
             @endif
             <tr>
@@ -142,7 +159,7 @@
 
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item List</span>
+        <span>Item List</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -156,7 +173,7 @@
                         <th>Unit</th>
                         <th class="text-center">Received</th>
                         <th class="text-end">Unit Price</th>
-                        <th class="text-end">Subtotal ({{ $directPurchase->currencyCode() }})</th>
+                        <th class="text-end">Subtotal ({{ $dpCurrency }})</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -196,9 +213,15 @@
                     </tr>
                     @endif
                     <tr>
-                        <td colspan="7" class="text-end fw-bold">Grand Total ({{ $directPurchase->currencyCode() }})</td>
+                        <td colspan="7" class="text-end fw-bold">Grand Total ({{ $dpCurrency }})</td>
                         <td class="text-end fw-bold">{{ \App\Support\Number::money($dpTotals['total']) }}</td>
                     </tr>
+                    @if($dpForeign)
+                    <tr>
+                        <td colspan="7" class="text-end" style="color:var(--text-muted)">≈ {{ $dpBase }} <span style="font-size:12px">@ {{ \App\Support\Number::rate($dpRate) }}</span></td>
+                        <td class="text-end fw-semibold">{{ \App\Support\Number::money($dpTotals['total'] * $dpRate) }}</td>
+                    </tr>
+                    @endif
                 </tfoot>
             </table>
         </div>
@@ -208,7 +231,7 @@
 @if($directPurchase->status === 'approved')
 <div class="card-custom fade-in mb-3">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-truck-ramp-box me-2" style="color:var(--accent)"></i>Goods Receiving</span>
+        <span>Goods Receiving</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -218,6 +241,7 @@
                         <th>No. Receipt</th>
                         <th>Date</th>
                         <th>Warehouse</th>
+                        @if($dpForeign)<th class="text-end">Exchange Rate</th>@endif
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -227,11 +251,14 @@
                             <td><a href="{{ route('goods-receipt.show', $receipt->id) }}">{{ $receipt->receipt_number }}</a></td>
                             <td>{{ $receipt->received_date?->format('d/m/Y') }}</td>
                             <td>{{ $receipt->warehouse?->name ?? 'Use directly' }}</td>
+                            @if($dpForeign)
+                                <td class="text-end">{{ ($receiptRates[$receipt->id] ?? collect())->map(fn ($r) => \App\Support\Number::rate($r))->implode(', ') ?: '—' }}</td>
+                            @endif
                             <td>{!! $receipt->statusBadgeHtml() !!}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="text-center" style="color:var(--text-muted)">No receiving yet.</td>
+                            <td colspan="{{ $dpForeign ? 5 : 4 }}" class="text-center" style="color:var(--text-muted)">No receiving yet.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -243,7 +270,7 @@
 
 @if($directPurchase->supplierBills->isNotEmpty())
 <div class="card-custom fade-in mb-3">
-    <div class="card-header-custom"><span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Bills &amp; Payments</span></div>
+    <div class="card-header-custom"><span>Bills &amp; Payments</span></div>
     <div class="card-body-custom p-2">
         <table class="table table-custom align-middle mb-0">
             <tbody>
@@ -251,7 +278,7 @@
                     <tr @if($bill->isVoid()) style="opacity:.55" @endif>
                         <td><a href="{{ route('supplier-bill.show', $bill->id) }}" class="fw-semibold">{{ $bill->bill_number }}</a></td>
                         <td>Due {{ $bill->due_date?->format('d/m/Y') }}</td>
-                        <td class="text-end" style="white-space:nowrap">{{ $bill->currency }} {{ \App\Models\SupplierBill::formatMoney($bill->total) }}<div style="font-size:12px;color:var(--text-muted)">Balance {{ \App\Models\SupplierBill::formatMoney($bill->outstanding()) }}</div></td>
+                        <td class="text-end" style="white-space:nowrap">{{ $bill->currency }} {{ \App\Models\SupplierBill::formatMoney($bill->total) }}<div style="font-size:12px;color:var(--text-muted)">Balance {{ \App\Models\SupplierBill::formatMoney($bill->outstanding()) }}</div>@if($bill->isForeign())<div style="font-size:12px;color:var(--text-muted)">@ {{ \App\Support\Number::rate($bill->exchange_rate) }}@if($bill->rate_estimated) <span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px" title="Rate filled from the master rate">estimated rate</span>@endif</div>@endif</td>
                         <td class="text-end">{!! $bill->statusBadgeHtml() !!}</td>
                     </tr>
                 @endforeach
@@ -287,7 +314,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger btn-sm" id="dp-btn-reject">
-                    <i class="fa fa-xmark me-1"></i> Reject
+                    Reject
                 </button>
             </div>
         </div>

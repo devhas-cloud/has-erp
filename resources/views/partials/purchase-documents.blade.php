@@ -6,7 +6,7 @@
 --}}
 <div class="card-custom fade-in mb-3" id="pdoc-card">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span><i class="fa-solid fa-folder-open me-2" style="color:var(--accent)"></i>Purchase Documents <span style="color:var(--text-muted);font-size:12px" id="pdoc-count">({{ count($documents) }})</span></span>
+        <span>Purchase Documents <span style="color:var(--text-muted);font-size:12px" id="pdoc-count">({{ count($documents) }})</span></span>
         @if($canUpload)
             <button type="button" class="btn btn-soft btn-sm" onclick="$('#pdoc-form').slideToggle(150)"><i class="fa fa-upload me-1"></i> Upload Document</button>
         @endif

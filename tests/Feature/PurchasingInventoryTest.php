@@ -7,6 +7,7 @@ use App\Models\Currency;
 use App\Models\DirectPurchase;
 use App\Models\Division;
 use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptItem;
 use App\Models\GoodsRequest;
 use App\Models\GoodsRequestItem;
 use App\Models\MasterProduct;
@@ -198,6 +199,81 @@ class PurchasingInventoryTest extends TestCase
         $this->assertEquals(1350000, StockLog::where('type', StockLog::TYPE_IN)->value('unit_cost'));
     }
 
+    public function test_receipt_uses_entered_exchange_rate_and_records_it(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        $usd = Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 15000, 'is_base' => false, 'status' => 'Active']);
+        Currency::whereKey($usd->id)->update(['updated_at' => now()->subDays(10)]);
+
+        $po = $this->approvedPo($this->approvedRequest(2));
+        $po->items()->update(['price' => 100, 'currency' => 'USD']);
+        $line = $po->items->first();
+
+        // Form menerima kurs master sebagai default, ditandai usang.
+        $this->actingAs($this->warehouseUser)
+            ->getJson(route('goods-receipt.fetch-source-items', ['source_type' => 'po', 'source_id' => $po->id]))
+            ->assertOk()
+            ->assertJsonPath('currencies.0.code', 'USD')
+            ->assertJsonPath('currencies.0.known', true)
+            ->assertJsonPath('currencies.0.stale', true);
+
+        $this->actingAs($this->warehouseUser)->postJson(route('goods-receipt.store'), [
+            'source_type' => 'po',
+            'source_id' => $po->id,
+            'warehouse_id' => $this->stockWarehouse->id,
+            'received_date' => '2026-11-02',
+            'items' => [['source_line_id' => $line->id, 'qty' => 2, 'destination' => 'warehouse']],
+            'rates' => ['USD' => 16250],
+        ])->assertOk();
+
+        $this->assertEquals(16250, GoodsReceiptItem::value('exchange_rate'));
+        $this->assertEquals(1625000, Stock::value('unit_cost'));
+        // Kurs master tidak berubah oleh penerimaan.
+        $this->assertEquals(15000, (float) $usd->fresh()->rate);
+    }
+
+    public function test_receipt_uses_rate_set_on_po(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 15000, 'is_base' => false, 'status' => 'Active']);
+
+        $po = $this->approvedPo($this->approvedRequest(2));
+        $po->items()->update(['price' => 100, 'currency' => 'USD']);
+        $po->update(['exchange_rate' => 17000]);
+
+        $this->actingAs($this->warehouseUser)
+            ->getJson(route('goods-receipt.fetch-source-items', ['source_type' => 'po', 'source_id' => $po->id]))
+            ->assertJsonPath('currencies.0.locked', true)
+            ->assertJsonPath('currencies.0.rate', 17000);
+
+        // Kurs yang dikirim form diabaikan: kurs PO yang berlaku.
+        $this->actingAs($this->warehouseUser)->postJson(route('goods-receipt.store'), [
+            'source_type' => 'po', 'source_id' => $po->id, 'warehouse_id' => $this->stockWarehouse->id, 'received_date' => '2026-11-02',
+            'items' => [['source_line_id' => $po->items->first()->id, 'qty' => 2, 'destination' => 'warehouse']],
+            'rates' => ['USD' => 16250],
+        ])->assertOk();
+
+        $this->assertEquals(17000, GoodsReceiptItem::value('exchange_rate'));
+        $this->assertEquals(1700000, Stock::value('unit_cost'));
+    }
+
+    public function test_receipt_rejects_currency_missing_from_master(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+
+        $po = $this->approvedPo($this->approvedRequest(2));
+        $po->items()->update(['price' => 100, 'currency' => 'SGD']);
+
+        $this->actingAs($this->warehouseUser)
+            ->getJson(route('goods-receipt.fetch-source-items', ['source_type' => 'po', 'source_id' => $po->id]))
+            ->assertJsonPath('currencies.0.known', false);
+
+        $this->receive('po', $po->id, [['source_line_id' => $po->items->first()->id, 'qty' => 2, 'destination' => 'warehouse']], $this->stockWarehouse->id)
+            ->assertStatus(422)
+            ->assertJsonFragment(['success' => false]);
+        $this->assertSame(0, Stock::count());
+    }
+
     public function test_receipt_rejects_over_receipt_and_requires_warehouse_for_stock_lines(): void
     {
         $po = $this->approvedPo($this->approvedRequest(3));
@@ -267,6 +343,58 @@ class PurchasingInventoryTest extends TestCase
 
         $this->assertEquals(10, $this->stockBalance($this->stockWarehouse->id, $product->id));
         $this->assertFalse($dp->fresh('items.goodsReceiptItems.goodsReceipt')->isReceivable());
+    }
+
+    public function test_direct_purchase_sets_exchange_rate_used_by_bill_and_receipt(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 15000, 'is_base' => false, 'status' => 'Active']);
+        $product = $this->product('DP-FX');
+        $supplier = \App\Models\Supplier::create(['name' => 'Supplier Luar']);
+        $payload = fn (string $currency, ?float $rate) => [
+            'supplier_name' => 'Supplier Luar', 'supplier_id' => $supplier->id, 'purpose' => 'stock', 'exchange_rate' => $rate,
+            'items' => [['master_product_id' => $product->id, 'description' => 'Sensor', 'qty' => 2, 'unit' => 'Unit', 'price' => 100, 'currency' => $currency]],
+        ];
+
+        // Valas: kurs isian disimpan; kosong -> kurs master. Mata uang dasar -> tanpa kurs.
+        $id = $this->actingAs($this->admin)->postJson(route('direct-purchase.store'), $payload('USD', 16500))->assertOk()->json('id');
+        $this->assertEquals(16500, DirectPurchase::find($id)->exchange_rate);
+        $other = $this->actingAs($this->admin)->postJson(route('direct-purchase.store'), $payload('USD', null))->json('id');
+        $this->assertEquals(15000, DirectPurchase::find($other)->exchange_rate);
+        $local = $this->actingAs($this->admin)->postJson(route('direct-purchase.store'), $payload('IDR', 16500))->json('id');
+        $this->assertNull(DirectPurchase::find($local)->exchange_rate);
+        $this->actingAs($this->admin)->postJson(route('direct-purchase.store'), $payload('USD', -1))->assertStatus(422);
+
+        // Diubah saat Draft.
+        $this->actingAs($this->admin)->putJson(route('direct-purchase.update', $id), $payload('USD', 16800))->assertOk();
+        $dp = DirectPurchase::with('items')->findOrFail($id);
+        $this->assertEquals(16800, $dp->exchange_rate);
+        $this->actingAs($this->admin)->get(route('direct-purchase.show', $id))->assertOk()->assertSee('Set on this direct purchase');
+        $this->actingAs($this->admin)->get(route('direct-purchase.edit', $id))->assertOk()->assertSee('dp-exchange-rate', false);
+
+        // Tagihan otomatis memakai kurs DP (bukan perkiraan).
+        $dp->update(['status' => DirectPurchase::STATUS_WAITING_APPROVAL]);
+        $this->actingAs($this->admin)->postJson(route('direct-purchase.approve', $id))->assertOk();
+        $bill = \App\Models\SupplierBill::where('direct_purchase_id', $id)->firstOrFail();
+        $this->assertEquals(16800, $bill->exchange_rate);
+        $this->assertFalse($bill->rate_estimated);
+
+        // Penerimaan: kurs DP terkunci, isian form diabaikan.
+        $this->actingAs($this->warehouseUser)
+            ->getJson(route('goods-receipt.fetch-source-items', ['source_type' => 'dp', 'source_id' => $id]))
+            ->assertJsonPath('currencies.0.locked', true)
+            ->assertJsonPath('currencies.0.rate', 16800);
+        $this->actingAs($this->warehouseUser)->postJson(route('goods-receipt.store'), [
+            'source_type' => 'dp', 'source_id' => $id, 'warehouse_id' => $this->stockWarehouse->id, 'received_date' => '2026-11-02',
+            'items' => [['source_line_id' => $dp->items->first()->id, 'qty' => 2, 'destination' => 'warehouse']],
+            'rates' => ['USD' => 15000],
+        ])->assertOk();
+        $this->assertEquals(16800, GoodsReceiptItem::value('exchange_rate'));
+        $this->assertEquals(1680000, Stock::value('unit_cost'));
+
+        // Detail DP: total setara IDR, kurs penerimaan & kurs tagihan.
+        $this->actingAs($this->admin)->get(route('direct-purchase.show', $id))->assertOk()
+            ->assertSee('≈ IDR')->assertSee('3,360,000')->assertSee('@ 16,800');
     }
 
     public function test_internal_request_is_issued_from_free_stock(): void

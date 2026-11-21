@@ -32,28 +32,40 @@
         cursor: pointer; transition: all .15s; background: var(--card);
     }
     .po-type-card:hover { border-color: var(--accent); }
-    .po-type-card .icon {
-        width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
-        display: inline-flex; align-items: center; justify-content: center;
-        background: var(--accent-subtle); color: var(--text-muted);
-    }
     .po-type-card .name { font-weight: 600; font-size: 13.5px; color: var(--text-primary); }
     .po-type-card .name .sfx { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-left: 4px; }
     .po-type-card .desc { font-size: 11.5px; color: var(--text-muted); line-height: 1.35; }
     .btn-check:checked + .po-type-card { border-color: var(--accent); background: var(--accent-subtle); box-shadow: 0 0 0 1px var(--accent) inset; }
-    .btn-check:checked + .po-type-card .icon { background: var(--accent); color: #fff; }
 
-    .po-supplier-box {
-        background: var(--accent-subtle); border: 1px dashed var(--card-border);
-        border-radius: var(--radius-sm); padding: 12px;
-    }
+    /* Supplier: kontak ringkas */
+    .po-contact { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--accent-subtle); border: 1px solid var(--card-border); }
+    .po-contact-view { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 12.5px; min-width: 0; }
+    .po-contact-line { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+    .po-contact-line b { color: var(--text-muted); font-weight: 500; font-size: 11.5px; }
+    .po-contact-line span { white-space: pre-line; }
+    .po-contact-line.is-empty span { color: var(--text-muted); font-style: italic; }
+    .po-contact-edit { font-size: 12px; white-space: nowrap; }
 
+    /* Item list */
+    .po-chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #f3f4f6; color: #374151; white-space: nowrap; }
+    .po-chip-accent { background: var(--accent-soft); color: var(--accent); }
+    .po-chip-warn { background: #fef3c7; color: #92400e; }
+    #po-items-table th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); white-space: nowrap; }
     #po-items-body td { vertical-align: top; }
     #po-items-body .po-row-num { padding-top: 14px; color: var(--text-muted); font-weight: 600; }
-    #po-items-body tr.po-group td { background: var(--accent-subtle); font-weight: 600; font-size: 12.5px; }
+    #po-items-body tr.po-group td { background: var(--accent-subtle); font-size: 12.5px; padding-top: 7px; padding-bottom: 7px; }
+    #po-items-body tr.po-group .po-group-total { font-weight: 600; font-variant-numeric: tabular-nums; }
     #po-items-body .po-amount { padding-top: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    #po-items-body .po-source { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); display: inline-block; margin-top: 3px; white-space: normal; }
+    #po-items-body .po-qty-unit { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 2px; white-space: nowrap; }
+    #po-items-body .po-price.po-price-missing { border-color: #f59e0b; background: #fffbeb; }
     #po-items-table tfoot td { border-top: 2px solid var(--card-border); font-size: 14px; }
-    .po-empty-actions { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+    .po-items-empty { text-align: center; padding: 34px 12px; color: var(--text-muted); font-size: 13px; }
+    .po-items-empty .po-empty-icon { font-size: 28px; color: var(--accent); opacity: .6; display: block; margin-bottom: 8px; }
+
+    /* Signatories */
+    [data-bs-target="#po-sign-body"][aria-expanded="true"] .po-sign-caret { transform: rotate(180deg); }
+    .po-sign-caret { transition: transform .15s ease; }
 
     .po-summary-sticky { position: sticky; top: 84px; }
     .po-summary-number {
@@ -75,6 +87,15 @@
     }
     .po-summary-total .val { font-size: 17px; color: var(--accent); font-variant-numeric: tabular-nums; }
     .po-summary-note { margin-top: 10px; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+    .po-sum-block { padding: 4px 0; border-bottom: 1px dashed var(--card-border); margin-bottom: 4px; }
+    .po-sum-block .po-summary-row + .po-summary-row { border-top: 0; }
+    .po-checklist { list-style: none; padding: 0; margin: 12px 0 0; font-size: 12.5px; }
+    .po-checklist li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 3px 0; color: var(--text-muted); }
+    .po-check-state { font-size: 11px; font-weight: 600; white-space: nowrap; color: #94a3b8; }
+    .po-checklist li.is-ok { color: var(--text-primary); }
+    .po-checklist li.is-ok .po-check-state { color: #065f46; }
+    .po-checklist li.is-warn .po-check-state { color: #b45309; }
+    .po-dirty { color: #b45309; display: none; }
 
     .po-picker-toolbar { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
     @media (max-width: 767.98px) { .po-picker-toolbar { grid-template-columns: 1fr; } }
@@ -113,7 +134,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ $purchaseOrder ? route('purchase-order.show', $purchaseOrder->id) : route('purchase-order.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Back
+            Back
         </a>
     </div>
 </div>
@@ -122,7 +143,7 @@
     <div class="col-xl-9">
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Type &amp; PO Details</span>
+                <span>Type &amp; PO Details</span>
             </div>
             <div class="card-body-custom">
                 <label class="form-label">PO Type <span class="text-danger">*</span></label>
@@ -130,7 +151,6 @@
                     @foreach(\App\Models\PurchaseOrder::TYPE_LABELS as $typeKey => $typeLabel)
                         <input type="radio" class="btn-check" name="po-type" id="po-type-{{ $typeKey }}" value="{{ $typeKey }}" autocomplete="off" @checked($poType === $typeKey)>
                         <label class="po-type-card" for="po-type-{{ $typeKey }}">
-                            <span class="icon"><i class="fa-solid {{ $typeMeta[$typeKey][0] ?? 'fa-file' }}"></i></span>
                             <span>
                                 <span class="name">{{ $typeLabel }}@if(\App\Models\PurchaseOrder::TYPE_SUFFIXES[$typeKey])<span class="sfx">{{ \App\Models\PurchaseOrder::TYPE_SUFFIXES[$typeKey] }}</span>@endif</span>
                                 <span class="desc d-block">{{ $typeMeta[$typeKey][1] ?? '' }}</span>
@@ -141,11 +161,11 @@
                 <div class="po-hint mb-3" id="po-number-preview"></div>
 
                 <div class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">PO Date</label>
                         <input type="date" class="form-control" id="po-date" value="{{ $purchaseOrder ? $purchaseOrder->date?->format('Y-m-d') : now()->toDateString() }}">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Terms</label>
                         <input type="text" class="form-control" id="po-terms" list="po-terms-options" placeholder="Example: TT" value="{{ $purchaseOrder?->terms }}">
                         <datalist id="po-terms-options">
@@ -153,36 +173,44 @@
                             <option value="Net 14 Days"><option value="Net 30 Days"><option value="DP 50%">
                         </datalist>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Payment Terms <span class="po-section-sub">basis for bill due date</span></label>
+                    <div class="col-md-3">
+                        <label class="form-label">Payment Terms</label>
                         <div class="input-group">
                             <input type="number" class="form-control" id="po-payment-term-days" min="0" max="365" step="1" placeholder="Follow supplier" value="{{ $purchaseOrder?->payment_term_days }}">
                             <span class="input-group-text">days</span>
                         </div>
-                        <small class="po-hint">Filled from supplier master. 0 = cash / advance payment.</small>
+                        <small class="po-hint">0 = cash / advance payment.</small>
                     </div>
-                    <div class="col-md-4">
+
+                    <div class="col-md-3" id="po-rate-wrap">
+                        <label class="form-label" for="po-exchange-rate">Exchange Rate <span class="po-section-sub">1 <span class="po-rate-cur">—</span> = <span class="po-rate-base">IDR</span></span> <span class="text-danger po-rate-required">*</span></label>
+                        <input type="text" class="form-control text-end" id="po-exchange-rate" data-number="rate" value="{{ $purchaseOrder?->exchange_rate ? \App\Support\Number::rate($purchaseOrder->exchange_rate) : '' }}">
+                        <small class="po-hint" id="po-rate-hint">Used to value the goods when they are received.</small>
+                    </div>
+
+                    <div class="col-md-3">
                         <label class="form-label">Delivery <span class="po-section-sub">optional</span></label>
                         <input type="text" class="form-control" id="po-delivery" maxlength="150" placeholder="Example: Franco Jakarta" value="{{ $purchaseOrder?->delivery }}">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Your Ref <span class="po-section-sub">supplier quote no.</span></label>
                         <input type="text" class="form-control" id="po-your-ref" maxlength="100" placeholder="Example: 1055/TSC/10/2026" value="{{ $purchaseOrder?->your_ref }}">
                     </div>
-                    <div class="col-md-2 col-6">
+                    <div class="col-md-3 col-6">
                         <label class="form-label">Discount</label>
                         <div class="input-group">
                             <input type="number" class="form-control po-percent-input" id="po-discount-percent" min="0" max="100" step="any" placeholder="0" value="{{ $purchaseOrder?->discount_percent }}">
                             <span class="input-group-text">%</span>
                         </div>
                     </div>
-                    <div class="col-md-2 col-6">
+                    <div class="col-md-3 col-6">
                         <label class="form-label">VAT</label>
                         <div class="input-group">
                             <input type="number" class="form-control po-percent-input" id="po-ppn-percent" min="0" max="100" step="any" placeholder="0" value="{{ $purchaseOrder ? $purchaseOrder->ppn_percent : \App\Models\PurchaseOrder::DEFAULT_PPN_PERCENT }}">
                             <span class="input-group-text">%</span>
                         </div>
                     </div>
+
                     <div class="col-12">
                         <label class="form-label">Notes <span class="po-section-sub">optional, printed below items</span></label>
                         <textarea id="po-notes" class="form-control" rows="2" placeholder="Example: Freight to Jakarta using FedEx account ...">{{ $purchaseOrder?->notes }}</textarea>
@@ -192,13 +220,14 @@
         </div>
 
         <div class="card-custom fade-in mb-3">
-            <div class="card-header-custom">
-                <span><i class="fa-solid fa-truck-field me-2" style="color:var(--accent)"></i>Supplier</span>
+            <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span>Supplier</span>
+                <span class="po-hint">Contact details are printed on the PO</span>
             </div>
             <div class="card-body-custom">
                 <div class="row g-3">
-                    <div class="col-lg-5">
-                        <label class="form-label">Supplier <span class="text-danger">*</span></label>
+                    <div class="col-lg-8">
+                        <label class="form-label" for="po-supplier-select">Supplier <span class="text-danger">*</span></label>
                         <select id="po-supplier-select" class="form-select" style="width:100%">
                             @if($purchaseOrder && $purchaseOrder->supplier_id)
                                 <option value="{{ $purchaseOrder->supplier_id }}" selected>{{ $purchaseOrder->supplier_name }}</option>
@@ -207,29 +236,43 @@
                         <input type="hidden" id="po-supplier-id" value="{{ $purchaseOrder?->supplier_id }}">
                         <input type="hidden" id="po-supplier-name" value="{{ $purchaseOrder?->supplier_name }}">
                         @if($purchaseOrder && ! $purchaseOrder->supplier_id)
-                            <small class="po-hint">This PO was created before the Supplier module existed ("{{ $purchaseOrder->supplier_name }}") — re-select from master to link.</small>
+                            <small class="po-hint" style="color:#b45309">Created before the Supplier module ("{{ $purchaseOrder->supplier_name }}") — re-select from master to link.</small>
                         @else
-                            <small class="po-hint">Contact auto-filled from Supplier master. None yet? Add via the Supplier menu.</small>
+                            <small class="po-hint">Not listed? Add it via the Supplier menu.</small>
                         @endif
                     </div>
-                    <div class="col-lg-7">
-                        <div class="po-supplier-box">
-                            <div class="row g-2">
-                                <div class="col-12">
-                                    <label class="form-label mb-1" style="font-size:12px">Address</label>
-                                    <textarea id="po-supplier-address" class="form-control form-control-sm" rows="2" placeholder="Auto-filled when selecting a supplier, can be adjusted">{{ $purchaseOrder?->supplier_address }}</textarea>
+                    <div class="col-lg-4">
+                        <label class="form-label" for="po-supplier-attn">Attn</label>
+                        <input type="text" class="form-control" id="po-supplier-attn" placeholder="Contact person" value="{{ $purchaseOrder?->supplier_attn }}">
+                    </div>
+                </div>
+
+                {{-- Kontak yang dicetak: ringkas, ubah bila perlu --}}
+                <div class="po-contact" id="po-contact">
+                    <div class="po-contact-view">
+                        <div class="po-contact-line"><b>Address</b><span id="po-contact-address">—</span></div>
+                        <div class="po-contact-line"><b>Phone</b><span id="po-contact-phone">—</span></div>
+                        <div class="po-contact-line"><b>Fax</b><span id="po-contact-fax">—</span></div>
+                    </div>
+                    <button type="button" class="btn btn-link btn-sm p-0 po-contact-edit" data-bs-toggle="collapse" data-bs-target="#po-contact-form" aria-expanded="false">
+                        Edit contact
+                    </button>
+                </div>
+                <div class="collapse" id="po-contact-form">
+                    <div class="row g-3 pt-3">
+                        <div class="col-lg-8">
+                            <label class="form-label" for="po-supplier-address">Address</label>
+                            <textarea id="po-supplier-address" class="form-control" rows="3" placeholder="Filled when a supplier is selected">{{ $purchaseOrder?->supplier_address }}</textarea>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="row g-3">
+                                <div class="col-lg-12 col-sm-6">
+                                    <label class="form-label" for="po-supplier-phone">Phone</label>
+                                    <input type="text" class="form-control" id="po-supplier-phone" value="{{ $purchaseOrder?->supplier_phone }}">
                                 </div>
-                                <div class="col-sm-4">
-                                    <label class="form-label mb-1" style="font-size:12px">Phone</label>
-                                    <input type="text" class="form-control form-control-sm" id="po-supplier-phone" value="{{ $purchaseOrder?->supplier_phone }}">
-                                </div>
-                                <div class="col-sm-4">
-                                    <label class="form-label mb-1" style="font-size:12px">Fax</label>
-                                    <input type="text" class="form-control form-control-sm" id="po-supplier-fax" value="{{ $purchaseOrder?->supplier_fax }}">
-                                </div>
-                                <div class="col-sm-4">
-                                    <label class="form-label mb-1" style="font-size:12px">Attn</label>
-                                    <input type="text" class="form-control form-control-sm" id="po-supplier-attn" value="{{ $purchaseOrder?->supplier_attn }}">
+                                <div class="col-lg-12 col-sm-6">
+                                    <label class="form-label" for="po-supplier-fax">Fax</label>
+                                    <input type="text" class="form-control" id="po-supplier-fax" value="{{ $purchaseOrder?->supplier_fax }}">
                                 </div>
                             </div>
                         </div>
@@ -240,75 +283,76 @@
 
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span>
-                    <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item List
-                    <span class="badge ms-1" style="background:var(--accent-soft);color:var(--accent);font-size:11px" id="po-items-count">0 item</span>
+                <span class="d-flex align-items-center flex-wrap gap-2">
+                    <span>Item List</span>
+                    <span class="po-chip po-chip-accent" id="po-items-count">0 items</span>
+                    <span class="po-chip" id="po-items-currency" style="display:none"></span>
+                    <span class="po-chip po-chip-warn" id="po-items-noprice" style="display:none"></span>
                 </span>
-                <div class="d-flex gap-2 flex-wrap">
-                    <button type="button" class="btn btn-soft btn-sm" onclick="poLoadPicker()">
-                        <i class="fa fa-dolly me-1"></i> Take from Goods Request
-                    </button>
-                </div>
+                <button type="button" class="btn btn-soft btn-sm" onclick="poLoadPicker()">
+                    Take from Goods Request
+                </button>
             </div>
             <div class="card-body-custom p-2">
                 <div class="table-responsive">
                     <table class="table table-custom mb-0" id="po-items-table">
                         <thead>
                             <tr>
-                                <th style="width:40px" class="text-center">#</th>
-                                <th style="width:11%">Source</th>
-                                <th style="width:15%">Part Number</th>
-                                <th>Item Name / Description</th>
-                                <th style="width:7%">Qty</th>
-                                <th style="width:7%">Unit</th>
-                                <th style="width:9%">Currency</th>
-                                <th style="width:11%" class="text-end">Unit Price</th>
-                                <th style="width:12%" class="text-end">Subtotal</th>
-                                <th class="text-center" style="width:70px"></th>
+                                <th style="width:38px" class="text-center">#</th>
+                                <th style="width:22%">Item</th>
+                                <th>Description <span class="po-section-sub">printed for supplier</span></th>
+                                <th class="text-center" style="width:120px">Qty</th>
+                                <th class="text-end" style="width:170px">Unit Price</th>
+                                <th class="text-end" style="width:130px">Subtotal</th>
+                                <th style="width:40px"></th>
                             </tr>
                         </thead>
                         <tbody id="po-items-body"></tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="8" class="text-end fw-bold">Grand Total <span class="po-currency-code"></span></td>
+                                <td colspan="5" class="text-end fw-bold">Subtotal <span class="po-currency-code"></span></td>
                                 <td class="text-end fw-bold" id="po-grand-total">0</td>
                                 <td></td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
-                <div class="config-card-empty" id="po-items-empty">
-                    <i class="fa-solid fa-inbox"></i> No items yet.
-                    <div class="po-empty-actions">
-                        <button type="button" class="btn btn-soft btn-sm" onclick="poLoadPicker()">
-                            <i class="fa fa-dolly me-1"></i> Take from Goods Request
-                        </button>
-                    </div>
+                <div class="po-items-empty" id="po-items-empty">
+                    <div class="fw-semibold" style="color:var(--text-primary)">No items yet</div>
+                    <div class="po-hint mb-2">Take items from Approved Goods Requests — one PO can combine several projects.</div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="poLoadPicker()">
+                        Take from Goods Request
+                    </button>
                 </div>
                 <div class="px-2 pt-2 po-hint">
-                    <i class="fa fa-circle-info me-1"></i>
-                    PO items come only from Approved Goods Requests, grouped per project. Qty may be smaller than remaining need (PO split). For purchases without a request, use Direct Purchase.
+                    Qty may be lower than the remaining need (split PO). Enter in qty / price moves to the next field. For purchases without a request, use Direct Purchase.
                 </div>
             </div>
         </div>
 
         <div class="card-custom fade-in">
-            <div class="card-header-custom">
-                <span><i class="fa-solid fa-signature me-2" style="color:var(--accent)"></i>Signatories <span class="po-section-sub">printed on PDF</span></span>
+            <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2" role="button" data-bs-toggle="collapse" data-bs-target="#po-sign-body" aria-expanded="false" style="cursor:pointer">
+                <span>Signatories <span class="po-section-sub">printed on PDF · optional</span></span>
+                <span class="d-flex align-items-center gap-2">
+                    <span class="po-hint" id="po-sign-summary">Not filled</span>
+                    <i class="fa fa-chevron-down po-sign-caret" style="font-size:11px;color:var(--text-muted)"></i>
+                </span>
             </div>
-            <div class="card-body-custom">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Request By</label>
-                        <input type="text" class="form-control" id="po-request-by" placeholder="Requester name" value="{{ $purchaseOrder?->request_by_name }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Finance Dept</label>
-                        <input type="text" class="form-control" id="po-finance-name" placeholder="Finance responsible person" value="{{ $purchaseOrder?->finance_name }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Accounting Dept</label>
-                        <input type="text" class="form-control" id="po-accounting-name" placeholder="Accounting responsible person" value="{{ $purchaseOrder?->accounting_name }}">
+            <div class="collapse" id="po-sign-body">
+                <div class="card-body-custom">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="po-request-by">Request By</label>
+                            <input type="text" class="form-control po-sign" id="po-request-by" placeholder="Requester name" value="{{ $purchaseOrder?->request_by_name }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="po-finance-name">Finance Dept</label>
+                            <input type="text" class="form-control po-sign" id="po-finance-name" placeholder="Finance person in charge" value="{{ $purchaseOrder?->finance_name }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="po-accounting-name">Accounting Dept</label>
+                            <input type="text" class="form-control po-sign" id="po-accounting-name" placeholder="Accounting person in charge" value="{{ $purchaseOrder?->accounting_name }}">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -318,28 +362,40 @@
     <div class="col-xl-3">
         <div class="card-custom fade-in po-summary-sticky">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Summary</span>
+                <span>Summary</span>
             </div>
             <div class="card-body-custom">
                 <div class="po-summary-number">
-                    <div class="lbl">No. PO</div>
+                    <div class="lbl">PO No.</div>
                     <div class="val" id="po-sum-number">—</div>
+                    <div class="po-hint" id="po-sum-type">—</div>
                 </div>
-                <div class="po-summary-row"><span class="lbl">Type</span><span class="val" id="po-sum-type">—</span></div>
-                <div class="po-summary-row"><span class="lbl">Supplier</span><span class="val" id="po-sum-supplier" title="">—</span></div>
-                <div class="po-summary-row"><span class="lbl">Currency</span><span class="val" id="po-sum-currency">—</span></div>
-                <div class="po-summary-row"><span class="lbl">Jumlah Item</span><span class="val" id="po-sum-items">0</span></div>
-                <div class="po-summary-row"><span class="lbl">Project</span><span class="val" id="po-sum-projects">0</span></div>
-                <div class="po-summary-row"><span class="lbl">Subtotal</span><span class="val" id="po-sum-subtotal">Rp 0</span></div>
-                <div class="po-summary-row" id="po-sum-discount-row"><span class="lbl" id="po-sum-discount-label">Discount</span><span class="val text-danger" id="po-sum-discount">- Rp 0</span></div>
-                <div class="po-summary-row" id="po-sum-ppn-row"><span class="lbl" id="po-sum-ppn-label">VAT</span><span class="val" id="po-sum-ppn">Rp 0</span></div>
-                <div class="po-summary-total"><span>Total</span><span class="val" id="po-sum-total">0</span></div>
 
-                <button type="button" class="btn btn-primary w-100 mt-3" id="po-save-btn" onclick="poSave()">
-                    <i class="fa fa-save me-1"></i> Save {{ $purchaseOrder ? 'Changes' : 'Draft' }}
+                <div class="po-sum-block">
+                    <div class="po-summary-row"><span class="lbl">Supplier</span><span class="val" id="po-sum-supplier" title="">—</span></div>
+                    <div class="po-summary-row"><span class="lbl">Items</span><span class="val"><span id="po-sum-items">0</span> · <span id="po-sum-projects">0</span> <span class="fw-normal po-hint">group(s)</span></span></div>
+                    <div class="po-summary-row"><span class="lbl">Currency</span><span class="val" id="po-sum-currency">—</span></div>
+                </div>
+
+                <div class="po-sum-block">
+                    <div class="po-summary-row"><span class="lbl">Subtotal</span><span class="val" id="po-sum-subtotal">0</span></div>
+                    <div class="po-summary-row" id="po-sum-discount-row"><span class="lbl" id="po-sum-discount-label">Discount</span><span class="val text-danger" id="po-sum-discount">0</span></div>
+                    <div class="po-summary-row" id="po-sum-ppn-row"><span class="lbl" id="po-sum-ppn-label">VAT</span><span class="val" id="po-sum-ppn">0</span></div>
+                </div>
+                <div class="po-summary-total"><span>Total</span><span class="val" id="po-sum-total">0</span></div>
+                <div class="po-summary-row" id="po-sum-base-row" style="display:none"><span class="lbl">≈ <span class="po-rate-base">IDR</span> <span class="po-hint" id="po-sum-rate"></span></span><span class="val" id="po-sum-base">0</span></div>
+
+                <ul class="po-checklist" id="po-checklist">
+                    <li data-check="supplier"><span class="po-check-text">Supplier selected</span><span class="po-check-state">Pending</span></li>
+                    <li data-check="items"><span class="po-check-text">At least one item</span><span class="po-check-state">Pending</span></li>
+                    <li data-check="prices"><span class="po-check-text">All prices filled <span class="po-hint">(needed to submit)</span></span><span class="po-check-state">Pending</span></li>
+                </ul>
+
+                <button type="button" class="btn btn-primary w-100 mt-2" id="po-save-btn" onclick="poSave()" title="Ctrl+S">
+                    Save {{ $purchaseOrder ? 'Changes' : 'Draft' }}
                 </button>
                 <div class="po-summary-note">
-                    <i class="fa-solid fa-circle-info me-1"></i>
+                    <span class="po-dirty" id="po-dirty">Unsaved changes · </span>
                     Saved as <strong>Draft</strong>. Submit for approval from the detail page once prices are complete.
                 </div>
             </div>
@@ -353,7 +409,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-dolly me-2" style="color:var(--accent)"></i>Take Items from Goods Request</h6>
+                <h6 class="modal-title">Take Items from Goods Request</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -370,7 +426,7 @@
                     <span class="po-picker-selcount" id="po-picker-selcount">No items selected</span>
                     <button type="button" class="btn btn-link btn-sm p-0" id="po-picker-clear" style="display:none">Clear selection</button>
                 </div>
-                <small class="d-block mb-2" style="color:var(--text-muted)"><i class="fa fa-hand-pointer me-1"></i>Click a row to select it, Shift+click to select a range. Only Approved items with remaining need; free stock is informational only — still purchasable.</small>
+                <small class="d-block mb-2" style="color:var(--text-muted)">Click a row to select it, Shift+click to select a range. Only Approved items with remaining need; free stock is informational only — still purchasable.</small>
                 <div id="po-picker-body">
                     <div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>
                 </div>
@@ -378,7 +434,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="po-picker-apply" onclick="poApplyPicked()" disabled>
-                    <i class="fa fa-plus me-1"></i> <span id="po-picker-apply-label">Add Selected</span>
+                    <span id="po-picker-apply-label">Add Selected</span>
                 </button>
             </div>
         </div>
@@ -402,7 +458,7 @@ const poInitialItems = @json($items ?? []);
 const poCurrentNumber = @json($purchaseOrder?->po_number);
 const poTypeSuffixes = @json(\App\Models\PurchaseOrder::TYPE_SUFFIXES);
 const poTypeLabels = @json(\App\Models\PurchaseOrder::TYPE_LABELS);
-const poSaveLabel = '<i class="fa fa-save me-1"></i> Save {{ $purchaseOrder ? 'Changes' : 'Draft' }}';
+const poSaveLabel = 'Save {{ $purchaseOrder ? 'Changes' : 'Draft' }}';
 let poPickerProjectsLoaded = false;
 
 
@@ -464,7 +520,8 @@ function poGroupKey(label) {
 function poEnsureGroup(label) {
     var key = poGroupKey(label);
     if (!$('#po-items-body tr.po-group[data-group="' + key + '"]').length) {
-        $('#po-items-body').append('<tr class="po-group" data-group="' + key + '"><td colspan="10"><i class="fa-solid fa-diagram-project me-1"></i>' + poEsc(label) + '</td></tr>');
+        $('#po-items-body').append('<tr class="po-group" data-group="' + key + '"><td colspan="5"><strong>' + poEsc(label) + '</strong>'
+            + ' <span class="po-hint ms-1 po-group-count"></span></td><td class="text-end po-group-total"></td><td></td></tr>');
     }
     return key;
 }
@@ -474,18 +531,16 @@ function poRowHtml(item, groupKey) {
     var html = '<tr class="po-line" data-group="' + groupKey + '" data-goods-request-item-id="' + item.goods_request_item_id + '"';
     html += ' data-currency="' + poEsc(item.currency || poBaseCurrency()) + '" data-max="' + max + '">';
     html += '<td class="text-center po-row-num"></td>';
-    html += '<td><span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px;white-space:normal">' + poEsc(item.source_label || ('Request ' + (item.request_number || ''))) + '</span></td>';
-    html += '<td style="font-size:12.5px"><div class="fw-semibold">' + poEsc(item.part_number || '—') + '</div>';
+    html += '<td style="font-size:12.5px"><div class="fw-semibold" style="color:var(--text-primary)">' + poEsc(item.part_number || '—') + '</div>';
     if (item.product_name) html += '<div class="po-hint">' + poEsc(item.product_name) + '</div>';
-    html += '</td>';
+    html += '<span class="po-source">' + poEsc(item.source_label || ('Request ' + (item.request_number || ''))) + '</span></td>';
     html += '<td><div class="form-control form-control-sm po-desc" contenteditable="true" data-placeholder="Description for supplier">' + (item.description || '') + '</div></td>';
-    html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm po-qty text-center" value="' + (item.qty != null ? item.qty : max) + '">';
-    html += '<div class="po-hint text-center">max ' + max + '</div></td>';
-    html += '<td style="font-size:12.5px;padding-top:12px">' + poEsc(item.unit || '—') + '</td>';
-    html += '<td style="padding-top:10px"><span class="badge" style="background:#f3f4f6;color:#374151" title="Follows Goods Request currency"><i class="fa fa-lock me-1" style="font-size:9px"></i>' + poEsc(item.currency || poBaseCurrency()) + '</span></td>';
-    html += '<td><input type="text" inputmode="decimal" class="form-control form-control-sm text-end po-price" placeholder="0" value="' + (item.price != null && item.price !== '' ? poFmtInput(item.price) : '') + '"></td>';
+    html += '<td><input type="text" inputmode="numeric" class="form-control form-control-sm po-qty text-center" value="' + (item.qty != null ? item.qty : max) + '" aria-label="Qty">';
+    html += '<div class="po-qty-unit">' + poEsc(item.unit || '') + ' · max ' + max + '</div></td>';
+    html += '<td><div class="input-group input-group-sm"><span class="input-group-text" style="font-size:11px" title="Follows the Goods Request currency">' + poEsc(item.currency || poBaseCurrency()) + '</span>'
+        + '<input type="text" inputmode="decimal" class="form-control text-end po-price" placeholder="0" aria-label="Unit price" value="' + (item.price != null && item.price !== '' ? poFmtInput(item.price) : '') + '"></div></td>';
     html += '<td class="text-end po-amount">0</td>';
-    html += '<td class="text-center"><button type="button" class="btn-icon text-danger" title="Delete" onclick="poRemoveRow(this)"><i class="fa fa-trash"></i></button></td>';
+    html += '<td class="text-center" style="padding-top:12px"><button type="button" class="btn-icon text-danger" title="Remove" aria-label="Remove item" onclick="poRemoveRow(this)"><i class="fa fa-xmark"></i></button></td>';
     html += '</tr>';
     return html;
 }
@@ -505,6 +560,7 @@ function poAddRow(item) {
 }
 
 function poRemoveRow(btn) {
+    poMarkDirty();
     var $row = $(btn).closest('tr');
     var groupKey = $row.attr('data-group');
     $row.remove();
@@ -521,28 +577,41 @@ function poRenumber() {
 }
 
 function poRecalc() {
-    var grand = 0;
+    var grand = 0, groups = {}, counts = {}, noPrice = 0;
     $('#po-items-body tr.po-line').each(function() {
         var $row = $(this);
         var qty = parseFloat(poToRaw($row.find('.po-qty').val())) || 0;
-        var price = parseFloat(poToRaw($row.find('.po-price').val())) || 0;
+        var rawPrice = poToRaw($row.find('.po-price').val()).trim();
+        var price = parseFloat(rawPrice) || 0;
         var amount = qty * price;
+        var g = $row.attr('data-group');
         grand += amount;
-        $row.find('.po-amount').text(poFmt(amount));
+        groups[g] = (groups[g] || 0) + amount;
+        counts[g] = (counts[g] || 0) + 1;
+        if (rawPrice === '') noPrice++;
+        $row.find('.po-price').toggleClass('po-price-missing', rawPrice === '');
+        $row.find('.po-amount').text(rawPrice === '' ? '—' : poFmt(amount));
+    });
+    $('#po-items-body tr.po-group').each(function() {
+        var g = $(this).attr('data-group');
+        $(this).find('.po-group-count').text((counts[g] || 0) + (counts[g] === 1 ? ' item' : ' items'));
+        $(this).find('.po-group-total').text(poFmt(groups[g] || 0));
     });
     $('#po-grand-total').text(poFmt(grand));
-    poUpdateSummary(grand);
+    $('#po-items-noprice').toggle(noPrice > 0).text(noPrice + ' without price');
+    poUpdateSummary(grand, noPrice);
 }
 
-function poUpdateSummary(grand) {
+function poUpdateSummary(grand, noPrice) {
     var $items = $('#po-items-body tr.po-line');
     var groups = $('#po-items-body tr.po-group').length;
 
-    $('#po-items-count').text($items.length + ' item');
+    $('#po-items-count').text($items.length + ($items.length === 1 ? ' item' : ' items'));
     $('#po-sum-items').text($items.length);
     $('#po-sum-projects').text(groups);
     var currencies = poItemCurrencies();
     $('#po-sum-currency').text(currencies.length ? currencies.join(', ') : '—').toggleClass('text-danger', currencies.length > 1);
+    $('#po-items-currency').toggle(currencies.length > 0).text('Currency ' + currencies.join(', '));
 
     // Sama dengan PurchaseOrder::totalsFrom(): Diskon -> Sub Total 1 -> PPN -> Total.
     var discPct = parseFloat($('#po-discount-percent').val()) || 0;
@@ -559,12 +628,76 @@ function poUpdateSummary(grand) {
     $('#po-sum-ppn-label').text('VAT ' + poFmt(ppnPct) + '%');
     $('#po-sum-ppn').text(code + ' ' + poFmt(ppn));
     $('#po-sum-total').text(code + ' ' + poFmt(grand - discount + ppn));
+    poSyncRate(currencies.length === 1 ? currencies[0] : null, grand - discount + ppn);
+    poChecklist({ items: $items.length > 0, prices: $items.length > 0 && !noPrice, noPrice: noPrice || 0 });
+}
+
+// Checklist kesiapan di ringkasan (harga lengkap baru wajib saat diajukan).
+function poChecklist(state) {
+    state = state || {};
+    var supplier = !!$('#po-supplier-name').val();
+    var set = function(key, ok, warn, text) {
+        var $li = $('#po-checklist li[data-check="' + key + '"]');
+        $li.toggleClass('is-ok', ok).toggleClass('is-warn', !ok && !!warn);
+        $li.find('.po-check-state').text(ok ? 'Done' : (warn ? 'Incomplete' : 'Pending'));
+        if (text) $li.find('.po-check-text').contents().filter(function() { return this.nodeType === 3; }).first().replaceWith(text);
+    };
+    set('supplier', supplier);
+    if (state.items !== undefined) {
+        set('items', state.items);
+        set('prices', state.prices, state.noPrice > 0, state.noPrice > 0 ? state.noPrice + ' item(s) without price ' : 'All prices filled ');
+    }
+}
+
+// Kurs PO selalu tampil. Valas: bisa diisi (default kurs master); mata uang dasar / belum ada item: terkunci 1.
+let poRateForeign = $('#po-exchange-rate').val() || '';
+function poSyncRate(code, total) {
+    var base = poBaseCurrency();
+    var foreign = !!code && code !== base;
+    var master = (poCurrencies.filter(function(c) { return c.name === code; })[0] || {}).rate;
+    var $input = $('#po-exchange-rate');
+    $('.po-rate-cur').text(code || base);
+    $('.po-rate-base').text(base);
+    $('.po-rate-required').toggle(foreign);
+    if (foreign) {
+        if ($input.prop('readonly')) $input.prop('readonly', false).css('background', '').val(poRateForeign);
+        if (!$input.val() && master) $input.val(Num.format(master, 2));
+        poRateForeign = $input.val();
+    } else {
+        $input.prop('readonly', true).css('background', 'var(--bg-soft, #f3f4f6)').val('1').removeClass('is-invalid');
+    }
+    $('#po-rate-hint').text(foreign
+        ? 'Used to value the goods when they are received.'
+        : (code ? base + ' PO — no conversion needed.' : 'Follows the item currency; add items first.'));
+    var rate = Num.val($('#po-exchange-rate'));
+    $('#po-sum-base-row').toggle(foreign);
+    $('#po-sum-rate').text(foreign ? '@ ' + Num.format(rate, 2) : '');
+    if (foreign) $('#po-sum-base').text(base + ' ' + poFmt(Math.round(total * rate * 100) / 100));
 }
 
 function poUpdateSupplierSummary() {
     var name = $('#po-supplier-name').val();
     $('#po-sum-supplier').text(name || '—').attr('title', name || '');
+    poRenderContact();
+    poChecklist();
 }
+
+// Ringkasan kontak yang dicetak di PO (diubah lewat "Edit contact").
+function poRenderContact() {
+    [['address', 'No address'], ['phone', 'No phone'], ['fax', 'No fax']].forEach(function(f) {
+        var v = $.trim($('#po-supplier-' + f[0]).val());
+        $('#po-contact-' + f[0]).text(v || f[1]).parent().toggleClass('is-empty', !v);
+    });
+}
+
+function poSignSummary() {
+    var names = $('.po-sign').map(function() { return $.trim(this.value); }).get().filter(Boolean);
+    $('#po-sign-summary').text(names.length ? names.length + '/3 filled · ' + names.join(', ') : 'Not filled');
+}
+
+let poDirty = false;
+let poSaving = false;
+function poMarkDirty() { poDirty = true; $('#po-dirty').show(); }
 
 function poCollectItems() {
     return $('#po-items-body tr.po-line').map(function() {
@@ -769,16 +902,16 @@ function poFetchPickerItems() {
             }
             var groups = res.data || [];
             if (groups.length === 0) {
-                $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>No Approved Goods Request items with remaining need.</div>');
+                $('#po-picker-body').html('<div class="config-card-empty">No Approved Goods Request items with remaining need.</div>');
                 poPickerSync();
                 return;
             }
             $('#po-picker-body').html(poBuildPickerGroupsHtml(groups)
-                + '<div class="config-card-empty" id="po-picker-noresult" style="display:none"><i class="fa-solid fa-magnifying-glass"></i>No items match the search.</div>');
+                + '<div class="config-card-empty" id="po-picker-noresult" style="display:none">No items match the search.</div>');
             poPickerSync();
         })
         .fail(function() {
-            $('#po-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load items.</div>');
+            $('#po-picker-body').html('<div class="config-card-empty">Failed to load items.</div>');
         });
 }
 
@@ -807,6 +940,7 @@ function poApplyPicked() {
         toastr.error('Select at least one item.');
         return;
     }
+    poMarkDirty();
     toastr.success(picked + ' items added. Qty filled from remaining need — adjust if PO is split.');
     if (poPickerInstance) poPickerInstance.hide();
 }
@@ -861,6 +995,9 @@ function poValidate() {
     if (currencies.length > 1) {
         return poFail('All items in a PO must use the same currency (found ' + currencies.join(', ') + ').');
     }
+    if (!$('#po-exchange-rate').prop('readonly') && !(Num.val($('#po-exchange-rate')) > 0)) {
+        return poFail('Enter the exchange rate for ' + currencies[0] + '.', $('#po-exchange-rate'));
+    }
 
     var ok = true;
     var n = 0;
@@ -889,7 +1026,7 @@ function poSetSaving(saving) {
 }
 
 function poSave() {
-    if (!poValidate()) return;
+    if (poSaving || !poValidate()) return;
     var supplierName = $('#po-supplier-name').val();
 
     var payload = {
@@ -907,6 +1044,7 @@ function poSave() {
         your_ref: $('#po-your-ref').val(),
         discount_percent: $('#po-discount-percent').val(),
         ppn_percent: $('#po-ppn-percent').val(),
+        exchange_rate: $('#po-exchange-rate').prop('readonly') ? '' : Num.val($('#po-exchange-rate')),
         notes: $('#po-notes').val(),
         request_by_name: $('#po-request-by').val(),
         finance_name: $('#po-finance-name').val(),
@@ -918,15 +1056,18 @@ function poSave() {
     var url = poUpdateUrl || poStoreUrl;
     var method = poUpdateUrl ? 'PUT' : 'POST';
 
+    poSaving = true;
     poSetSaving(true);
     $.ajax({ url: url, method: method, data: payload })
         .done(function(res) {
+            poDirty = false;
             toastr.success(res.message || 'Saved.');
             setTimeout(function() {
                 window.location.href = poUpdateUrl ? poShowUrl : '{{ route("purchase-order.index") }}';
             }, 800);
         })
         .fail(function(xhr) {
+            poSaving = false;
             poSetSaving(false);
             toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to save.');
         });
@@ -936,6 +1077,32 @@ $(document).ready(function() {
     (poInitialItems || []).forEach(function(it) { poAddRow(it); });
     poSyncEmpty();
     poRecalc();
+    poRenderContact();
+    poSignSummary();
+    if ($('.po-sign').filter(function() { return $.trim(this.value) !== ''; }).length) {
+        $('#po-sign-body').addClass('show');
+        $('[data-bs-target="#po-sign-body"]').attr('aria-expanded', 'true');
+    }
+
+    // Kontak & penandatangan: ringkasan ikut berubah.
+    $(document).on('input', '#po-supplier-address, #po-supplier-phone, #po-supplier-fax', poRenderContact);
+    $(document).on('input', '.po-sign', poSignSummary);
+    // Perubahan belum disimpan.
+    $(document).on('input change', '.card-body-custom input, .card-body-custom textarea, .po-desc, input[name="po-type"]', poMarkDirty);
+    // Enter di qty / harga: pindah ke field berikutnya (qty -> harga -> qty baris berikutnya).
+    $(document).on('keydown', '#po-items-body .po-qty, #po-items-body .po-price', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var $fields = $('#po-items-body .po-qty, #po-items-body .po-price');
+        var $next = $fields.eq($fields.index(this) + 1);
+        if ($next.length) $next.focus().select();
+    });
+    $(document).on('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's') { e.preventDefault(); poSave(); }
+    });
+    window.addEventListener('beforeunload', function(e) {
+        if (poDirty && !poSaving) { e.preventDefault(); e.returnValue = ''; }
+    });
 
     $('#po-picker-check-all').on('change', function() {
         if ($(this).is(':checked')) {
@@ -961,6 +1128,7 @@ $(document).ready(function() {
     });
 
     $(document).on('input', '.po-percent-input', function() { poRecalc(); });
+    $(document).on('input', '#po-exchange-rate', function() { $(this).removeClass('is-invalid'); poRecalc(); });
     $(document).on('input', '.po-desc, .po-qty', function() { $(this).removeClass('is-invalid'); });
     poUpdateSupplierSummary();
     $(document).on('change', 'input[name="po-type"]', poUpdateNumberPreview);
@@ -1001,10 +1169,12 @@ $(document).ready(function() {
         $('#po-supplier-fax').val(s.fax || '');
         $('#po-supplier-attn').val(s.attn_name || '');
         if (s.payment_term_days != null) $('#po-payment-term-days').val(s.payment_term_days);
+        poMarkDirty();
         poUpdateSupplierSummary();
     }).on('select2:clear', function() {
         $('#po-supplier-id').val('');
         $('#po-supplier-name').val('');
+        poMarkDirty();
         poUpdateSupplierSummary();
     });
 });

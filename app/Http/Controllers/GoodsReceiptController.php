@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManagesPurchaseDocuments;
+use App\Models\Currency;
 use App\Models\DirectPurchase;
 use App\Models\DirectPurchaseItem;
 use App\Models\GoodsReceipt;
@@ -167,6 +168,7 @@ class GoodsReceiptController extends Controller
 
         return view('goods-receipt.form', [
             'warehouses' => Warehouse::active()->orderBy('name')->get(),
+            'baseSymbol' => Currency::where('is_base', true)->value('symbol') ?: Currency::baseName(),
             'purchaseOrders' => $purchaseOrders,
             'directPurchases' => $directPurchases,
             'preselect' => [
@@ -187,12 +189,46 @@ class GoodsReceiptController extends Controller
         ]);
 
         [$header, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
+        $lines = $lines->filter(fn ($line) => $line['remaining'] > 0)->values();
 
         return response()->json([
             'success' => true,
             'source' => $header,
-            'items' => $lines->filter(fn ($line) => $line['remaining'] > 0)->values(),
+            'items' => $lines,
+            'base_currency' => Currency::baseName(),
+            'currencies' => $this->foreignCurrencies($lines, $header),
         ]);
+    }
+
+    /**
+     * Mata uang asing pada baris sumber beserta kurs yang dipakai:
+     * PO / Direct Purchase -> kurs yang ditetapkan di dokumen (locked); dokumen lama tanpa kurs ->
+     * kurs master (boleh diubah).
+     * known=false: kode tidak ada di master Currency -> penerimaan ditolak.
+     */
+    private function foreignCurrencies(Collection $lines, array $header): array
+    {
+        $poRate = $header['exchange_rate'] ?? null;
+
+        return $lines->pluck('currency')
+            ->map(fn ($c) => strtoupper(trim((string) $c)))
+            ->reject(fn ($c) => Currency::isBaseCode($c))
+            ->unique()
+            ->values()
+            ->map(function (string $code) use ($poRate) {
+                $currency = Currency::findByCode($code);
+
+                return [
+                    'code' => $code,
+                    'symbol' => $currency?->symbol ?: $code,
+                    'known' => (bool) $currency,
+                    'locked' => $poRate !== null,
+                    'rate' => $poRate ?? ($currency ? (float) $currency->rate : null),
+                    'updated_at' => $currency?->updated_at?->format('d/m/Y'),
+                    'stale' => $currency ? $currency->isStale() : false,
+                ];
+            })
+            ->all();
     }
 
     public function store(Request $request): JsonResponse
@@ -212,35 +248,41 @@ class GoodsReceiptController extends Controller
             'items.*.expiry_date' => 'nullable|date',
             'items.*.warranty_until' => 'nullable|date',
             'items.*.note' => 'nullable|string|max:255',
-        ], ['items.required' => 'Pilih minimal satu baris yang diterima.']);
+            'rates' => 'nullable|array',
+            'rates.*' => 'nullable|numeric|gt:0',
+        ], ['items.required' => 'Pilih minimal satu baris yang diterima.', 'rates.*.gt' => 'Exchange rate must be greater than 0.']);
 
-        [, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
+        [$header, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
         $lines = $lines->keyBy('source_line_id');
 
         $toWarehouse = collect($validated['items'])->contains('destination', GoodsReceiptItem::DESTINATION_WAREHOUSE);
         $warehouse = $toWarehouse ? Warehouse::active()->find($validated['warehouse_id'] ?? 0) : null;
         if ($toWarehouse && ! $warehouse) {
-            return response()->json(['success' => false, 'message' => 'Pilih gudang tujuan (aktif) untuk barang yang masuk gudang.'], 422);
+            return response()->json(['success' => false, 'message' => 'Select an active destination warehouse for goods going into stock.'], 422);
         }
 
         $rows = [];
         foreach (array_values($validated['items']) as $i => $row) {
             $line = $lines->get((int) $row['source_line_id']);
             if (! $line) {
-                return response()->json(['success' => false, 'message' => 'Baris '.($i + 1).' tidak valid untuk sumber ini.'], 422);
+                return response()->json(['success' => false, 'message' => 'Line '.($i + 1).' is not valid for this source.'], 422);
             }
             if ((int) $row['qty'] > $line['remaining']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Qty baris '.($i + 1).' ('.($line['part_number'] ?: 'item').') melebihi sisa yang belum diterima ('.$line['remaining'].').',
+                    'message' => 'Qty on line '.($i + 1).' ('.($line['part_number'] ?: 'item').') exceeds the outstanding qty ('.$line['remaining'].').',
                 ], 422);
             }
             $toStock = $row['destination'] === GoodsReceiptItem::DESTINATION_WAREHOUSE;
             if ($toStock && ! $line['master_product_id']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Baris '.($i + 1).' ('.($line['part_number'] ?: 'item').') belum terhubung master produk, jadi tidak bisa masuk gudang. Pilih Langsung Pakai atau petakan produknya dulu.',
+                    'message' => 'Line '.($i + 1).' ('.($line['part_number'] ?: 'item').') is not linked to a master product, so it cannot go into stock. Map the product first.',
                 ], 422);
+            }
+            $rate = $this->receiptRate($line['currency'], $validated['rates'] ?? [], $header['exchange_rate'] ?? null);
+            if (is_string($rate)) {
+                return response()->json(['success' => false, 'message' => 'Line '.($i + 1).' ('.($line['part_number'] ?: 'item').'): '.$rate], 422);
             }
             // Material masuk ke satu saldo: batch / kedaluwarsa / garansi tidak dipakai (sementara disembunyikan).
             $tracked = $toStock && $line['serialized'];
@@ -252,6 +294,7 @@ class GoodsReceiptController extends Controller
                 'expiry_date' => $tracked ? ($row['expiry_date'] ?? null) : null,
                 'warranty_until' => $tracked ? ($row['warranty_until'] ?? null) : null,
                 'note' => $row['note'] ?? null,
+                'exchange_rate' => $rate,
             ]);
         }
 
@@ -263,9 +306,31 @@ class GoodsReceiptController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Penerimaan '.$receipt->receipt_number.' diposting.'.($warehouse ? ' Stok '.$warehouse->name.' bertambah.' : ''),
+            'message' => 'Receipt '.$receipt->receipt_number.' posted.'.($warehouse ? ' Stock in '.$warehouse->name.' increased.' : ''),
             'id' => $receipt->id,
         ]);
+    }
+
+    /**
+     * Kurs penerimaan untuk satu mata uang: base = 1; PO = kurs yang ditetapkan di PO
+     * (isian form diabaikan); Direct Purchase = isian form, default kurs master.
+     * Mengembalikan pesan error (string) bila mata uang tidak dikenal / kurs tidak valid.
+     */
+    private function receiptRate(?string $currency, array $rates, ?float $poRate = null): float|string
+    {
+        if (Currency::isBaseCode($currency)) {
+            return 1.0;
+        }
+
+        $code = strtoupper(trim((string) $currency));
+        $master = Currency::findByCode($code);
+        if (! $master) {
+            return 'currency '.$code.' is not registered in the Currency master. Add it (with its rate) first.';
+        }
+
+        $rate = (float) ($poRate ?? $rates[$code] ?? $master->rate);
+
+        return $rate > 0 ? $rate : 'enter a valid exchange rate for '.$code.'.';
     }
 
     private function persist(array $validated, ?Warehouse $warehouse, array $rows): GoodsReceipt
@@ -291,6 +356,7 @@ class GoodsReceiptController extends Controller
                     'unit' => $row['unit'],
                     'currency' => $row['currency'],
                     'price' => $row['price'],
+                    'exchange_rate' => $row['exchange_rate'],
                     'destination' => $row['destination'],
                     'project_id' => $row['project_id'],
                     'batch_number' => $row['batch_number'],
@@ -344,12 +410,12 @@ class GoodsReceiptController extends Controller
         $receipt = GoodsReceipt::findOrFail($id);
 
         if ($receipt->status !== GoodsReceipt::STATUS_DRAFT) {
-            return response()->json(['success' => false, 'message' => 'Penerimaan yang sudah diposting tidak bisa dihapus.'], 422);
+            return response()->json(['success' => false, 'message' => 'A posted receipt cannot be deleted.'], 422);
         }
 
         $receipt->delete();
 
-        return response()->json(['success' => true, 'message' => 'Penerimaan dihapus.']);
+        return response()->json(['success' => true, 'message' => 'Receipt deleted.']);
     }
 
     /**
@@ -377,7 +443,7 @@ class GoodsReceiptController extends Controller
                 'warranty_until' => $item->warranty_until,
                 'unit' => $item->unit,
                 'unit_cost' => $item->price !== null
-                    ? StockCost::toBase((float) $item->price, $item->currency, (float) ($receipt->purchaseOrder?->discount_percent ?? 0))
+                    ? StockCost::toBase((float) $item->price, $item->currency, (float) ($receipt->purchaseOrder?->discount_percent ?? 0), $item->exchange_rate)
                     : StockCost::standardCost((int) $item->master_product_id),
                 'source_type' => Stock::SOURCE_GOODS_RECEIPT_ITEM,
                 'source_id' => $item->id,
@@ -418,7 +484,7 @@ class GoodsReceiptController extends Controller
         if ($type === self::SOURCE_PO) {
             $po = PurchaseOrder::with(['items.masterProduct', 'items.goodsReceiptItems.goodsReceipt', 'items.goodsRequestItem.goodsRequest.project'])->findOrFail($id);
             if (! $po->isReceivable()) {
-                $fail('Purchase order harus berstatus Approved / Diterima Sebagian untuk diterima.');
+                $fail('The purchase order must be Approved / Partially Received to receive goods.');
             }
 
             $lines = $po->items->map(fn (PurchaseOrderItem $item) => $this->line(
@@ -431,12 +497,15 @@ class GoodsReceiptController extends Controller
                 'id' => $po->id,
                 'number' => $po->po_number,
                 'supplier_name' => $po->supplier_name,
+                'discount_percent' => (float) ($po->discount_percent ?? 0),
+                // Kurs ditetapkan di PO (terkunci saat terima); PO valas lama tanpa kurs -> isian form, default kurs master.
+                'exchange_rate' => $po->currencyCode() !== Currency::baseName() && $po->exchange_rate ? (float) $po->exchange_rate : null,
             ], $lines];
         }
 
         $dp = DirectPurchase::with(['items.masterProduct', 'items.goodsReceiptItems.goodsReceipt', 'project'])->findOrFail($id);
         if ($dp->status !== DirectPurchase::STATUS_APPROVED) {
-            $fail('Direct purchase harus berstatus Approved untuk diterima.');
+            $fail('The direct purchase must be Approved to receive goods.');
         }
 
         $lines = $dp->items->map(fn (DirectPurchaseItem $item) => $this->line(
@@ -449,7 +518,9 @@ class GoodsReceiptController extends Controller
             'id' => $dp->id,
             'number' => $dp->dp_number,
             'supplier_name' => $dp->supplier_name,
-            'purpose' => $dp->purpose,
+            'purpose' => $dp->purpose_label,
+            // Kurs ditetapkan di DP (terkunci saat terima); DP valas lama tanpa kurs -> isian form, default kurs master.
+            'exchange_rate' => $dp->currencyCode() !== Currency::baseName() && $dp->exchange_rate ? (float) $dp->exchange_rate : null,
         ], $lines];
     }
 

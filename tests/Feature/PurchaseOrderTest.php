@@ -188,6 +188,29 @@ class PurchaseOrderTest extends TestCase
         $po->refreshReceiptStatus();
     }
 
+    public function test_foreign_po_stores_exchange_rate_default_master(): void
+    {
+        Currency::create(['name' => 'IDR', 'symbol' => 'Rp', 'rate' => 1, 'is_base' => true, 'status' => 'Active']);
+        Currency::create(['name' => 'USD', 'symbol' => '$', 'rate' => 16000, 'is_base' => false, 'status' => 'Active']);
+
+        $usd = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-US', 'description' => 'Sensor', 'qty' => 2, 'unit' => 'Unit', 'currency' => 'USD']]);
+        $id = $this->storePo([$this->line($usd->items->first())], ['exchange_rate' => 16250])->assertOk()->json('id');
+        $po = PurchaseOrder::findOrFail($id);
+        $this->assertEquals(16250, $po->exchange_rate);
+        $this->assertEquals(16250, $po->exchangeRate());
+        $this->actingAs($this->creator)->get(route('purchase-order.show', $id))->assertOk()->assertSee('1 USD = IDR 16,250');
+
+        // Tanpa isian -> kurs master saat PO dibuat.
+        $usd2 = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-US2', 'description' => 'Sensor', 'qty' => 2, 'unit' => 'Unit', 'currency' => 'USD']]);
+        $id = $this->storePo([$this->line($usd2->items->first())])->assertOk()->json('id');
+        $this->assertEquals(16000, PurchaseOrder::findOrFail($id)->exchange_rate);
+
+        // PO Rupiah tidak menyimpan kurs.
+        $idr = $this->makeApprovedGoodsRequest($this->division, [['part_number' => 'PN-ID', 'description' => 'Sensor', 'qty' => 2, 'unit' => 'Unit', 'currency' => 'IDR']]);
+        $id = $this->storePo([$this->line($idr->items->first())], ['exchange_rate' => 16250])->assertOk()->json('id');
+        $this->assertNull(PurchaseOrder::findOrFail($id)->exchange_rate);
+    }
+
     public function test_store_rejected_for_user_without_module_access(): void
     {
         $this->actingAs($this->userWithoutAccess)->postJson(route('purchase-order.store'), [

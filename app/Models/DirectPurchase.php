@@ -60,6 +60,7 @@ class DirectPurchase extends Model
         'purpose',
         'project_id',
         'ppn_percent',
+        'exchange_rate',
         'status',
         'notes',
         'request_by_name',
@@ -78,6 +79,7 @@ class DirectPurchase extends Model
             'date' => 'date',
             'payment_term_days' => 'integer',
             'ppn_percent' => 'float',
+            'exchange_rate' => 'float',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
         ];
@@ -206,6 +208,19 @@ class DirectPurchase extends Model
     public function currencyCode(): string
     {
         return $this->items->pluck('currency')->filter()->unique()->first() ?? Currency::baseName();
+    }
+
+    /**
+     * Kurs DP ke mata uang dasar: base = 1; valas = kurs yang ditetapkan di DP
+     * (DP lama tanpa kurs -> kurs master saat ini).
+     */
+    public function exchangeRate(): float
+    {
+        if ($this->currencyCode() === Currency::baseName()) {
+            return 1.0;
+        }
+
+        return (float) ($this->exchange_rate ?: Currency::rateOf($this->currencyCode()));
     }
 
     /**

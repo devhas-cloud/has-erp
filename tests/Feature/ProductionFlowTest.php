@@ -462,6 +462,17 @@ class ProductionFlowTest extends TestCase
 
         // Form DP menampilkan tombol acuan Material Request.
         $this->actingAs($this->requester)->get(route('direct-purchase.create'))->assertOk()
-            ->assertSee('Add from Material Request')->assertSee(route('direct-purchase.material-requests'), false);
+            ->assertSee('Add from Material Request')->assertSee(route('direct-purchase.material-requests'), false)
+            ->assertSee(route('direct-purchase.material-requests.pdf'), false);
+
+        // PDF acuan pembelian: data sama dengan pop-up (branch default user).
+        $this->actingAs($this->requester)->get(route('direct-purchase.material-requests.pdf'))->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $html = view('direct-purchase.material-request-pdf', [
+            'branch' => $this->jakarta, 'rows' => collect($res->json('data')), 'requestNumbers' => collect(['MR-26110001']), 'printedBy' => 'tester',
+        ])->render();
+        $this->assertStringContainsString('CBL-1', $html);
+        $this->assertStringContainsString('80.5', $html);
+        $this->assertStringContainsString('HQ Jakarta', $html);
     }
 }

@@ -91,7 +91,7 @@ class SupplierReturnController extends Controller
                 'purchase_order_id' => $return->purchase_order_id,
                 'po_number' => $return->purchaseOrder?->po_number ?? '—',
                 'supplier_name' => $return->supplier?->name ?? '—',
-                'warehouse_name' => $return->warehouse?->name ?? 'Langsung pakai',
+                'warehouse_name' => $return->warehouse?->name ?? 'Direct use',
                 'qty' => (int) $return->items_sum_qty,
                 'reason' => Str::limit((string) $return->reason, 90),
                 'creator_name' => $return->creator?->display_name ?? '—',
@@ -170,8 +170,8 @@ class SupplierReturnController extends Controller
             'items.*.picks.*.stock_id' => 'required|integer',
             'items.*.picks.*.qty' => 'required|numeric|gt:0',
         ], [
-            'reason.required' => 'Alasan retur wajib diisi.',
-            'items.required' => 'Pilih minimal satu barang yang diretur.',
+            'reason.required' => 'Return reason is required.',
+            'items.required' => 'Select at least one item to return.',
         ]);
 
         $po = $this->loadPurchaseOrder((int) $validated['purchase_order_id']);
@@ -182,9 +182,9 @@ class SupplierReturnController extends Controller
         foreach (array_values($validated['items']) as $i => $row) {
             $item = $poItems->get((int) $row['purchase_order_item_id']);
             if (! $item) {
-                $fail('Baris '.($i + 1).' bukan bagian dari PO ini.');
+                $fail('Line '.($i + 1).' is not part of this PO.');
             }
-            $label = $item->part_number ?: 'baris '.($i + 1);
+            $label = $item->part_number ?: 'line '.($i + 1);
             $picks = $row['picks'] ?? [];
             $fromStock = StockService::round(collect($picks)->sum(fn ($p) => (float) $p['qty']));
             $direct = (int) ($row['direct_qty'] ?? 0);
@@ -194,22 +194,22 @@ class SupplierReturnController extends Controller
                 continue;
             }
             if (abs($fromStock - round($fromStock)) >= Stock::EPSILON) {
-                $fail($label.': total qty retur dari stok harus bilangan bulat sesuai satuan PO (dipilih '.$fromStock.').');
+                $fail($label.': total return qty from stock must be a whole number in the PO unit (selected '.$fromStock.').');
             }
             if ($qty > $this->returnableQty($item)) {
-                $fail($label.': qty retur melebihi yang diterima dan belum ditagih ('.$this->returnableQty($item).'). Barang yang sudah ditagih: void tagihannya dulu.');
+                $fail($label.': return qty exceeds the received and unbilled qty ('.$this->returnableQty($item).'). For billed goods, void the bill first.');
             }
             if ($fromStock > $this->receivedToWarehouse($item)) {
-                $fail($label.': qty dari stok melebihi barang yang dulu masuk gudang ('.$this->receivedToWarehouse($item).').');
+                $fail($label.': qty from stock exceeds what was received into the warehouse ('.$this->receivedToWarehouse($item).').');
             }
             if ($direct > $this->receivedDirect($item)) {
-                $fail($label.': qty langsung pakai melebihi yang diterima langsung pakai ('.$this->receivedDirect($item).').');
+                $fail($label.': direct-use qty exceeds what was received for direct use ('.$this->receivedDirect($item).').');
             }
             $sourceIds = $this->receiptItemIds($item);
             $rows[] = ['item' => $item, 'picks' => $picks, 'direct' => $direct, 'source_ids' => $sourceIds, 'receipt_cost' => $this->receiptCost($sourceIds)];
         }
         if (! $rows) {
-            $fail('Isi qty minimal satu barang yang diretur.');
+            $fail('Enter a return qty for at least one item.');
         }
 
         $service = app(StockService::class);
@@ -240,7 +240,7 @@ class SupplierReturnController extends Controller
                         $fromReceipt = $stock && $stock->source_type === Stock::SOURCE_GOODS_RECEIPT_ITEM && in_array((int) $stock->source_id, $row['source_ids'], true);
                         $materialBalance = $stock && ! $stock->isSerialized() && (int) $stock->master_product_id === (int) $item->master_product_id;
                         if (! $fromReceipt && ! $materialBalance) {
-                            throw new StockException(($item->part_number ?: 'Barang').': baris stok yang dipilih bukan dari penerimaan PO ini.');
+                            throw new StockException(($item->part_number ?: 'Item').': the selected stock row was not received from this PO.');
                         }
                         if ($warehouseId) {
                             $service->assertPosition($stock, (int) $warehouseId, false);
@@ -289,7 +289,7 @@ class SupplierReturnController extends Controller
 
         Log::record('supplier_return', 'Retur ke supplier '.$return->return_number.' (PO '.$po->po_number.') diposting oleh '.Auth::user()->display_name, 'MOD_SUPPLIER_RETURN', $return);
 
-        return response()->json(['success' => true, 'message' => 'Retur '.$return->return_number.' diposting. Barang retur tidak bisa ditagih dan PO kembali menunggu pengganti.', 'id' => $return->id]);
+        return response()->json(['success' => true, 'message' => 'Return '.$return->return_number.' posted. Returned goods cannot be billed and the PO waits for replacements again.', 'id' => $return->id]);
     }
 
     public function show($id)
@@ -364,7 +364,7 @@ class SupplierReturnController extends Controller
     {
         $po = PurchaseOrder::with(['supplier', 'items.goodsReceiptItems.goodsReceipt', 'items.billItems.bill', 'items.returnItems', 'items.goodsRequestItem.goodsRequest'])->findOrFail($id);
         if (! in_array($po->status, self::RETURNABLE_STATUSES, true) || ! $po->supplier_id) {
-            abort(response()->json(['success' => false, 'message' => 'PO belum punya barang diterima atau belum tertaut master supplier.'], 422));
+            abort(response()->json(['success' => false, 'message' => 'This PO has no received goods yet or is not linked to a supplier master.'], 422));
         }
 
         return $po;

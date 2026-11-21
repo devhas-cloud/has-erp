@@ -64,6 +64,7 @@ class SupplierBill extends Model
         'currency',
         'exchange_rate',
         'rate_estimated',
+        'receipt_rate',
         'subtotal',
         'discount_percent',
         'discount_amount',
@@ -107,6 +108,7 @@ class SupplierBill extends Model
             'advance_deduction' => 'float',
             'exchange_rate' => 'float',
             'rate_estimated' => 'boolean',
+            'receipt_rate' => 'float',
             'verified_at' => 'datetime',
             'voided_at' => 'datetime',
         ];
@@ -207,6 +209,19 @@ class SupplierBill extends Model
     public function toBook(float $amount): float
     {
         return round($amount * (float) ($this->exchange_rate ?: 1), 2);
+    }
+
+    /**
+     * Selisih kurs terima vs tagihan atas nilai barang (subtotal − diskon), dalam base.
+     * Positif = rugi (hutang lebih besar dari nilai stok). Info saja; nilai stok tidak diubah.
+     */
+    public function receiptFxDifference(): ?float
+    {
+        if (! $this->isForeign() || ! $this->receipt_rate) {
+            return null;
+        }
+
+        return round(((float) $this->subtotal - (float) $this->discount_amount) * ((float) $this->exchange_rate - (float) $this->receipt_rate), 2);
     }
 
     /** Sisa hutang menurut kurs tagihan (nilai buku). */
@@ -325,9 +340,9 @@ class SupplierBill extends Model
             'bill_date' => $billDate,
             'due_date' => Carbon::parse($billDate)->addDays($term)->toDateString(),
             'currency' => $dp->currencyCode(),
-            // Kurs master saat DP disetujui (perkiraan; Finance dapat melihatnya di detail tagihan).
-            'exchange_rate' => Currency::rateOf($dp->currencyCode()),
-            'rate_estimated' => strtoupper($dp->currencyCode()) !== Currency::baseName(),
+            // Kurs yang ditetapkan di DP; DP lama tanpa kurs -> kurs master saat disetujui (perkiraan).
+            'exchange_rate' => $dp->exchangeRate(),
+            'rate_estimated' => strtoupper($dp->currencyCode()) !== Currency::baseName() && ! $dp->exchange_rate,
             'discount_percent' => 0,
             'ppn_percent' => (float) $dp->ppn_percent,
             'status' => self::STATUS_VERIFIED,

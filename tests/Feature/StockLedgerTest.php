@@ -94,7 +94,7 @@ class StockLedgerTest extends TestCase
         $this->assertSame($po->supplier_id, $rows->first()->supplier_id);
         $this->assertSame(1, Stock::missingSerial()->count());
 
-        $this->actingAs($this->user)->get(route('goods-receipt.show', $id))->assertOk()->assertSee('1 unit SN belum diisi');
+        $this->actingAs($this->user)->get(route('goods-receipt.show', $id))->assertOk()->assertSee('1 SN unit not filled in');
 
         // Daftar: kolom SN kosong + filter toolbar.
         $data = fn (array $filters) => $this->actingAs($this->user)->getJson(route('goods-receipt.data', $filters))->assertOk();
@@ -104,7 +104,7 @@ class StockLedgerTest extends TestCase
         $data(['warehouse' => 'direct'])->assertJsonPath('recordsFiltered', 0);
         $data(['warehouse' => $this->warehouse->id, 'date_from' => '2026-11-16', 'date_to' => '2026-11-16', 'supplier' => 'PT Supplier'])->assertJsonPath('recordsFiltered', 1);
         $data(['date_from' => '2026-11-17'])->assertJsonPath('recordsFiltered', 0);
-        $this->actingAs($this->user)->get(route('goods-receipt.index'))->assertOk()->assertSee('SN belum lengkap');
+        $this->actingAs($this->user)->get(route('goods-receipt.index'))->assertOk()->assertSee('SN incomplete');
 
         // SN yang sudah terdaftar ditolak di penerimaan berikutnya.
         $po2 = $this->approvedPo($this->inverter, 1);

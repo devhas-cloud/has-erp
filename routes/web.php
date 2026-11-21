@@ -399,6 +399,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('direct-purchase/data', [DirectPurchaseController::class, 'data'])->name('direct-purchase.data');
     Route::get('direct-purchase/search-products', [DirectPurchaseController::class, 'searchProducts'])->name('direct-purchase.search-products');
     Route::get('direct-purchase/material-requests', [DirectPurchaseController::class, 'materialRequests'])->name('direct-purchase.material-requests');
+    Route::get('direct-purchase/material-requests/pdf', [DirectPurchaseController::class, 'materialRequestsPdf'])->name('direct-purchase.material-requests.pdf');
     Route::post('direct-purchase/{id}/submit', [DirectPurchaseController::class, 'submit'])->name('direct-purchase.submit');
     Route::post('direct-purchase/{id}/approve', [DirectPurchaseController::class, 'approve'])->name('direct-purchase.approve');
     Route::post('direct-purchase/{id}/reject', [DirectPurchaseController::class, 'reject'])->name('direct-purchase.reject');
@@ -467,6 +468,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('stock-entry/data', [StockEntryController::class, 'data'])->name('stock-entry.data');
     Route::get('stock-entry/search-products', [StockEntryController::class, 'searchProducts'])->name('stock-entry.search-products');
+    Route::get('stock-entry/balances', [StockEntryController::class, 'balances'])->name('stock-entry.balances');
     Route::resource('stock-entry', StockEntryController::class)->only(['index', 'create', 'store', 'show']);
 
     Route::get('stock-detail', [StockDetailController::class, 'index'])->name('stock-detail.index');

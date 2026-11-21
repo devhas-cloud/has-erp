@@ -131,10 +131,10 @@ class PayableReportController extends Controller
                 ])->all(),
             ],
             'project' => [
-                ['No. Project', 'Project', 'Komitmen Pembelian', 'Diterima', 'Ditagih', 'Terbayar', 'Sisa Tagihan', 'Alokasi Stok', 'Total Biaya', 'Estimasi Biaya (PL)', 'Selisih'],
+                ['No. Project', 'Project', 'Komitmen Pembelian', 'Diterima', 'Ditagih', 'Terbayar', 'Sisa Tagihan', 'Alokasi Stok', 'Selisih Kurs', 'Total Biaya', 'Estimasi Biaya (PL)', 'Selisih'],
                 $rows->map(fn ($r) => [
                     $r['project']->project_number, $r['project']->project_name, $r['commitment'], $r['received'], $r['billed'], $r['paid'],
-                    $r['outstanding'], $r['stock_allocated'], $r['actual'], $r['estimate'], $r['variance'],
+                    $r['outstanding'], $r['stock_allocated'], $r['fx'], $r['actual'], $r['estimate'], $r['variance'],
                 ])->all(),
             ],
             default => [

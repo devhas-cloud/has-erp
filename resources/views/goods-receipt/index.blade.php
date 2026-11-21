@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Penerimaan Barang')
-@section('page-title', 'Penerimaan Barang')
+@section('title', 'Goods Receipts')
+@section('page-title', 'Goods Receipts')
 
 @section('styles')
 @include('partials.list-toolbar')
@@ -20,14 +20,13 @@
 @section('content')
 <div class="page-header">
     <div>
-        <h1 class="page-header-title">Penerimaan Barang</h1>
-        <p class="page-header-sub">Barang datang dari Purchase Order dan Direct Purchase. <strong>Material</strong> menambah saldo gudang (harga rata-rata); <strong>barang ber-SN</strong> tercatat per unit, SN boleh menyusul.</p>
+        <h1 class="page-header-title">Goods Receipts</h1>
+        <p class="page-header-sub">Goods arriving from Purchase Orders and Direct Purchases. <strong>Materials</strong> are added to the warehouse balance (weighted average cost); <strong>serial-numbered items</strong> are recorded per unit, and SNs can be filled in later.</p>
     </div>
     @if($canCreate)
     <div class="page-header-actions">
         <a href="{{ route('goods-receipt.create') }}" class="btn-accent">
-            <i class="fa fa-plus"></i>
-            <span>Terima Barang</span>
+            <span>Receive Goods</span>
         </a>
     </div>
     @endif
@@ -35,69 +34,69 @@
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-boxes-stacked me-2" style="color:var(--accent)"></i>Daftar Penerimaan Barang</span>
+        <span>Goods Receipt List</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="list-toolbar" id="gr-toolbar">
             <div class="lt-search">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="search" class="form-control" data-search placeholder="Cari no. penerimaan, PO, supplier, gudang…" autocomplete="off">
-                <button type="button" class="lt-clear" title="Hapus pencarian"><i class="fa fa-xmark"></i></button>
+                <input type="search" class="form-control" data-search placeholder="Search receipt no., PO, supplier, warehouse…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
             </div>
-            <select class="form-select" data-filter="source_type" aria-label="Jenis dokumen">
-                <option value="">Semua Dokumen</option>
+            <select class="form-select" data-filter="source_type" aria-label="Document type">
+                <option value="">All Documents</option>
                 <option value="po">Purchase Order</option>
                 <option value="dp">Direct Purchase</option>
             </select>
-            <select class="form-select" data-filter="warehouse" aria-label="Gudang">
-                <option value="">Semua Gudang</option>
+            <select class="form-select" data-filter="warehouse" aria-label="Warehouse">
+                <option value="">All Warehouses</option>
                 @foreach($warehouses as $w)
                     <option value="{{ $w->id }}">{{ $w->code }} — {{ $w->name }}</option>
                 @endforeach
-                <option value="direct">Langsung pakai</option>
+                <option value="direct">Direct use</option>
             </select>
             @if($suppliers->count() > 1)
             <select class="form-select" data-filter="supplier" data-searchable aria-label="Supplier">
-                <option value="">Semua Supplier</option>
+                <option value="">All Suppliers</option>
                 @foreach($suppliers as $supplier)
                     <option value="{{ $supplier }}">{{ $supplier }}</option>
                 @endforeach
             </select>
             @endif
-            <div class="lt-date" title="Tanggal terima">
-                <input type="date" class="form-control" data-filter="date_from" aria-label="Dari tanggal">
+            <div class="lt-date" title="Received date">
+                <input type="date" class="form-control" data-filter="date_from" aria-label="From date">
                 <span>–</span>
-                <input type="date" class="form-control" data-filter="date_to" aria-label="Sampai tanggal">
+                <input type="date" class="form-control" data-filter="date_to" aria-label="To date">
             </div>
-            <select class="form-select" data-filter="kind" aria-label="Jenis barang">
-                <option value="">Semua Jenis Barang</option>
-                <option value="material">Berisi Material</option>
-                <option value="serial">Berisi Barang ber-SN</option>
+            <select class="form-select" data-filter="kind" aria-label="Item type">
+                <option value="">All Item Types</option>
+                <option value="material">Contains Materials</option>
+                <option value="serial">Contains Serial Items</option>
             </select>
-            <select class="form-select" data-filter="missing_sn" aria-label="Kelengkapan SN">
-                <option value="">Semua SN</option>
-                <option value="1">SN belum lengkap</option>
+            <select class="form-select" data-filter="missing_sn" aria-label="SN completeness">
+                <option value="">All SN</option>
+                <option value="1">SN incomplete</option>
             </select>
-            <select class="form-select" data-filter="mine" aria-label="Pencatat">
-                <option value="">Semua Pencatat</option>
-                <option value="1">Dicatat oleh Saya</option>
+            <select class="form-select" data-filter="mine" aria-label="Recorded by">
+                <option value="">All Recorders</option>
+                <option value="1">Recorded by Me</option>
             </select>
-            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
         </div>
         <div class="table-responsive">
             <table id="gr-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
                     <tr>
                         <th style="width:50px">#</th>
-                        <th>No. Penerimaan</th>
-                        <th>Dokumen</th>
+                        <th>Receipt No.</th>
+                        <th>Document</th>
                         <th>Supplier</th>
-                        <th>Gudang</th>
-                        <th>Tanggal</th>
-                        <th class="text-center">Isi Penerimaan</th>
-                        <th class="text-end">Nilai Masuk Gudang</th>
+                        <th>Warehouse</th>
+                        <th>Date</th>
+                        <th class="text-center">Contents</th>
+                        <th class="text-end">Value Into Stock</th>
                         <th>Status</th>
-                        <th class="text-center" style="width:90px">Aksi</th>
+                        <th class="text-center" style="width:90px">Actions</th>
                     </tr>
                 </thead>
             </table>
@@ -123,8 +122,8 @@ function initGrTable() {
     grTable = $('#gr-table').DataTable({
         layout: ListToolbar.layout,
         language: {
-            zeroRecords: '<span style="color:var(--text-muted)"><i class="fa-solid fa-filter-circle-xmark me-1"></i>Tidak ada penerimaan yang cocok dengan pencarian / filter.</span>',
-            emptyTable: '<span style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i>Belum ada penerimaan barang.</span>'
+            zeroRecords: '<span style="color:var(--text-muted)">No receipts match the search / filters.</span>',
+            emptyTable: '<span style="color:var(--text-muted)">No goods receipts yet.</span>'
         },
         processing: true,
         serverSide: true,
@@ -149,7 +148,7 @@ function initGrTable() {
             },
             { data: 'warehouse_name', orderable: false, searchable: true,
                 render: function(data, type, row) {
-                    if (!data) return '<span class="badge" style="background:var(--info-soft);color:#4338ca">Langsung pakai</span>';
+                    if (!data) return '<span class="badge" style="background:var(--info-soft);color:#4338ca">Direct use</span>';
                     return grEsc(data) + (row.warehouse_branch ? '<div style="font-size:11.5px;color:var(--text-muted)">' + grEsc(row.warehouse_branch) + '</div>' : '');
                 }
             },
@@ -157,13 +156,13 @@ function initGrTable() {
             { data: 'item_count', orderable: false, searchable: false, className: 'text-center',
                 render: function(data, type, row) {
                     var chips = '';
-                    if (row.material_lines) chips += '<span class="gr-chip gr-chip-material" title="Menambah saldo material di gudang">' + row.material_lines + ' material</span>';
-                    if (row.serial_units) chips += '<span class="gr-chip gr-chip-serial" title="Unit barang ber-SN (1 baris stok per unit)">' + row.serial_units + ' unit SN</span>';
-                    if (row.direct_lines) chips += '<span class="gr-chip gr-chip-direct" title="Tidak masuk stok">' + row.direct_lines + ' langsung pakai</span>';
+                    if (row.material_lines) chips += '<span class="gr-chip gr-chip-material" title="Added to the material balance in the warehouse">' + row.material_lines + ' material</span>';
+                    if (row.serial_units) chips += '<span class="gr-chip gr-chip-serial" title="Serial-numbered units (one stock row per unit)">' + row.serial_units + ' SN units</span>';
+                    if (row.direct_lines) chips += '<span class="gr-chip gr-chip-direct" title="Not added to stock">' + row.direct_lines + ' direct use</span>';
                     if (row.missing_serial > 0) {
-                        chips += '<a class="gr-chip gr-chip-missing" href="' + grShowUrl.replace('__ID__', row.id) + '" title="Unit barang ber-SN yang SN-nya belum diisi"><i class="fa fa-triangle-exclamation me-1"></i>' + row.missing_serial + ' SN kosong</a>';
+                        chips += '<a class="gr-chip gr-chip-missing" href="' + grShowUrl.replace('__ID__', row.id) + '" title="Serial-numbered units whose SN has not been filled in">' + row.missing_serial + ' SN missing</a>';
                     }
-                    return '<div class="fw-semibold">' + data + ' baris</div><div class="gr-mix">' + chips + '</div>';
+                    return '<div class="fw-semibold">' + data + ' lines</div><div class="gr-mix">' + chips + '</div>';
                 }
             },
             { data: 'stock_value', orderable: false, searchable: false, className: 'text-end',
@@ -177,10 +176,10 @@ function initGrTable() {
                 data: 'id', orderable: false, searchable: false, className: 'text-center',
                 render: function(data, type, row) {
                     var btn = '<div class="d-flex justify-content-center gap-1">';
-                    btn += '<a href="' + grShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
+                    btn += '<a href="' + grShowUrl.replace('__ID__', data) + '" class="btn-icon" title="Details"><i class="fa fa-eye"></i></a>';
                     @if($canDelete)
                     if (row.status === 'draft') {
-                        btn += '<button class="btn-icon danger" title="Hapus" onclick="deleteReceipt(' + data + ')"><i class="fa fa-trash"></i></button>';
+                        btn += '<button class="btn-icon danger" title="Delete" onclick="deleteReceipt(' + data + ')"><i class="fa fa-trash"></i></button>';
                     }
                     @endif
                     btn += '</div>';
@@ -193,11 +192,11 @@ function initGrTable() {
 
 function deleteReceipt(id) {
     Swal.fire({
-        title: 'Hapus Penerimaan?',
+        title: 'Delete this receipt?',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        cancelButtonText: 'Batal'
+        confirmButtonText: 'Yes, delete',
+        cancelButtonText: 'Cancel'
     }).then(function(result) {
         if (!result.isConfirmed) return;
         $.ajax({
@@ -205,10 +204,10 @@ function deleteReceipt(id) {
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
         }).done(function(res) {
-            toastr.success(res.message || 'Dihapus.');
+            toastr.success(res.message || 'Deleted.');
             grTable.ajax.reload();
         }).fail(function(xhr) {
-            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal menghapus.');
+            toastr.error(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to delete.');
         });
     });
 }
