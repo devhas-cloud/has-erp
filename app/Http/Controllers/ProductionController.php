@@ -7,6 +7,7 @@ use App\Models\Currency;
 use App\Models\Log;
 use App\Models\MasterProduct;
 use App\Models\MaterialHandoverItem;
+use App\Models\MaterialRequest;
 use App\Models\Production;
 use App\Models\Project;
 use App\Models\Stock;
@@ -15,6 +16,7 @@ use App\Models\Warehouse;
 use App\Services\StockException;
 use App\Services\StockService;
 use App\Support\StockCost;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -96,38 +98,40 @@ class ProductionController extends Controller
 
     public function create()
     {
-        // Pasangan project + branch yang masih punya Material di Produksi.
+        // Branch yang masih punya Material di Produksi.
         $groups = $this->openPool()
-            ->groupBy(fn (MaterialHandoverItem $item) => $item->materialHandover->materialRequest->project_id.'-'.$item->materialHandover->materialRequest->branch_id)
+            ->groupBy(fn (MaterialHandoverItem $item) => $item->materialHandover->materialRequest->branch_id)
             ->map(function (Collection $items) {
-                $mr = $items->first()->materialHandover->materialRequest;
+                $branch = $items->first()->materialHandover->materialRequest->branch;
 
                 return [
-                    'project_id' => $mr->project_id,
-                    'branch_id' => $mr->branch_id,
-                    'label' => $mr->project?->project_number.' — '.$mr->project?->project_name.' · '.$mr->branch?->name,
+                    'branch_id' => $branch->id,
+                    'label' => $branch->name,
                     'lines' => $items->count(),
                 ];
             })
             ->sortBy('label')
             ->values();
 
-        return view('production.form', ['groups' => $groups, 'units' => MasterProduct::unitOptions()]);
+        return view('production.form', [
+            'groups' => $groups,
+            'units' => MasterProduct::unitOptions(),
+        ]);
     }
 
     /**
-     * Material di Produksi (sisa) satu project + branch, plus gudang hasil.
+     * Material di Produksi (sisa) satu branch (semua project), plus gudang hasil.
      */
     public function pool(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'project_id' => 'required|integer|exists:projects,id',
             'branch_id' => 'required|integer|exists:branches,id',
         ]);
         abort_unless(Auth::user()->canAccessBranch((int) $validated['branch_id']), 403, 'Branch bukan milik Anda.');
 
-        $rows = MaterialHandoverItem::pool((int) $validated['project_id'], (int) $validated['branch_id'])
-            ->with(['stock.masterProduct', 'materialHandover', 'outLog'])
+        $rows = MaterialHandoverItem::withUsedQty()
+            ->whereHas('materialHandover.materialRequest', fn (Builder $q) => $q->where('branch_id', (int) $validated['branch_id']))
+            ->with(['stock.masterProduct', 'materialHandover.materialRequest.project:id,project_number,project_name', 'outLog'])
             ->orderBy('id')
             ->get()
             ->filter(fn (MaterialHandoverItem $item) => $item->remainingQty() > 0)
@@ -142,6 +146,10 @@ class ProductionController extends Controller
                 'unit' => $item->stock?->unit,
                 'unit_cost' => $item->unitCost(),
                 'handover_number' => $item->materialHandover?->handover_number,
+                'project_id' => $item->materialHandover?->materialRequest?->project_id,
+                'project_label' => $item->materialHandover?->materialRequest?->project
+                    ? $item->materialHandover->materialRequest->project->project_number.' — '.$item->materialHandover->materialRequest->project->project_name
+                    : '—',
             ])
             ->values();
 
@@ -149,7 +157,19 @@ class ProductionController extends Controller
             'success' => true,
             'data' => $rows,
             'warehouses' => Warehouse::active()->where('branch_id', $validated['branch_id'])->orderBy('name')->get(['id', 'code', 'name']),
+            // Project barang jadi: hanya project yang mengajukan Material Request di branch ini.
+            'projects' => Project::whereIn('id', $this->requestingProjects((int) $validated['branch_id']))
+                ->orderBy('project_number')->get(['id', 'project_number', 'project_name'])
+                ->map(fn (Project $p) => ['id' => $p->id, 'label' => $p->project_number.' — '.$p->project_name]),
         ]);
+    }
+
+    /** id project yang punya Material Request Disetujui / Selesai di branch ini. */
+    private function requestingProjects(int $branchId)
+    {
+        return MaterialRequest::where('branch_id', $branchId)
+            ->whereIn('status', [MaterialRequest::STATUS_APPROVED, MaterialRequest::STATUS_COMPLETED])
+            ->distinct()->pluck('project_id')->map(fn ($id) => (int) $id);
     }
 
     public function searchProducts(Request $request): JsonResponse
@@ -197,6 +217,9 @@ class ProductionController extends Controller
         $projectId = (int) $validated['project_id'];
         $branchId = (int) $validated['branch_id'];
 
+        if (! $this->requestingProjects($branchId)->contains($projectId)) {
+            return $fail('Project barang jadi harus project yang mengajukan Material Request di branch ini.');
+        }
         if (! Auth::user()->canAccessBranch($branchId)) {
             return response()->json(['success' => false, 'message' => 'Branch bukan milik Anda.'], 403);
         }
@@ -214,19 +237,21 @@ class ProductionController extends Controller
         $service = app(StockService::class);
         $date = $validated['production_date'];
         $outputQty = StockService::round((float) $validated['output_qty']);
+        $targetLabel = Project::whereKey($projectId)->value('project_number') ?? '#'.$projectId;
 
         try {
-            $production = DB::transaction(function () use ($validated, $projectId, $branchId, $warehouse, $service, $date, $outputQty) {
+            $production = DB::transaction(function () use ($validated, $projectId, $branchId, $warehouse, $service, $date, $outputQty, $targetLabel) {
                 $ids = collect($validated['items'])->pluck('material_handover_item_id')->map(fn ($id) => (int) $id)->sort()->values();
-                $sources = MaterialHandoverItem::with(['stock.masterProduct', 'materialHandover.materialRequest'])
+                $sources = MaterialHandoverItem::with(['stock.masterProduct', 'materialHandover.materialRequest.project'])
                     ->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
 
                 $total = 0.0;
+                $transfers = collect();
                 foreach ($validated['items'] as $row) {
                     $source = $sources->get((int) $row['material_handover_item_id']);
                     $mr = $source?->materialHandover?->materialRequest;
-                    if (! $source || (int) $mr->project_id !== $projectId || (int) $mr->branch_id !== $branchId) {
-                        throw new StockException('Material yang dipilih bukan Material di Produksi project dan branch ini.');
+                    if (! $source || (int) $mr->branch_id !== $branchId) {
+                        throw new StockException('Material yang dipilih bukan Material di Produksi branch ini.');
                     }
                     $qty = StockService::round((float) $row['qty']);
                     $remaining = $source->remainingQty();
@@ -238,6 +263,18 @@ class ProductionController extends Controller
                         throw new StockException($label.' adalah barang ber-SN dan dipakai utuh.');
                     }
                     $total += $qty * $source->unitCost();
+                    if ((int) $mr->project_id !== $projectId) {
+                        $transfers->push([
+                            'stock_id' => (int) $source->stock_id,
+                            'master_product_id' => (int) $source->stock?->master_product_id,
+                            'warehouse_id' => (int) $source->stock?->warehouse_id,
+                            'is_material' => (bool) ($source->stock?->is_material ?? true),
+                            'source_project_id' => (int) $mr->project_id,
+                            'source_label' => $mr->project?->project_number ?? '#'.(int) $mr->project_id,
+                            'qty' => $qty,
+                            'unit_cost' => $source->unitCost(),
+                        ]);
+                    }
                 }
 
                 $product = ! empty($validated['output_product_id'])
@@ -269,6 +306,27 @@ class ProductionController extends Controller
                     ]);
                 }
 
+                // Material lintas-project: pindahkan biayanya dari project asal ke project barang jadi.
+                foreach ($transfers as $t) {
+                    $note = 'Alih biaya material '.$t['source_label'].' → '.$targetLabel.' ('.$production->production_number.')';
+                    $base = [
+                        'stock_id' => $t['stock_id'],
+                        'master_product_id' => $t['master_product_id'],
+                        'warehouse_id' => $t['warehouse_id'],
+                        'is_material' => $t['is_material'],
+                        'log_date' => $date,
+                        'type' => StockLog::TYPE_ALLOCATE,
+                        'qty_after' => 0,
+                        'unit_cost' => $t['unit_cost'],
+                        'ref_type' => StockLog::REF_PRODUCTION,
+                        'ref_id' => $production->id,
+                        'note' => $note,
+                        'created_by' => Auth::id(),
+                    ];
+                    StockLog::create($base + ['project_id' => $t['source_project_id'], 'qty' => StockService::round(-$t['qty'])]);
+                    StockLog::create($base + ['project_id' => $projectId, 'qty' => $t['qty']]);
+                }
+
                 $service->receive($product, $outputQty, [
                     'warehouse_id' => $warehouse->id,
                     'project_id' => $projectId,
@@ -298,7 +356,7 @@ class ProductionController extends Controller
     public function show($id)
     {
         $production = Production::visibleTo(Auth::user())
-            ->with(['project', 'outputProduct', 'outputWarehouse.branch', 'outputStock.warehouse', 'creator', 'canceller', 'items.handoverItem.stock.masterProduct', 'items.handoverItem.materialHandover', 'items.handoverItem.outLog'])
+            ->with(['project', 'outputProduct', 'outputWarehouse.branch', 'outputStock.warehouse', 'creator', 'canceller', 'items.handoverItem.stock.masterProduct', 'items.handoverItem.materialHandover.materialRequest.project', 'items.handoverItem.outLog'])
             ->findOrFail($id);
 
         return view('production.show', [
@@ -333,6 +391,31 @@ class ProductionController extends Controller
                     'ref_id' => $production->id,
                     'note' => 'Batal produksi '.$production->production_number.': '.$validated['reason'],
                 ], false);
+
+                // Kembalikan alih biaya material lintas-project ke project asal.
+                StockLog::where('ref_type', StockLog::REF_PRODUCTION)
+                    ->where('ref_id', $production->id)
+                    ->where('type', StockLog::TYPE_ALLOCATE)
+                    ->orderBy('id')
+                    ->get()
+                    ->each(function (StockLog $log) use ($production) {
+                        StockLog::create([
+                            'stock_id' => $log->stock_id,
+                            'master_product_id' => $log->master_product_id,
+                            'warehouse_id' => $log->warehouse_id,
+                            'project_id' => $log->project_id,
+                            'is_material' => $log->is_material,
+                            'log_date' => now()->toDateString(),
+                            'type' => StockLog::TYPE_ALLOCATE,
+                            'qty' => StockService::round(-(float) $log->qty),
+                            'qty_after' => 0,
+                            'unit_cost' => (float) $log->unit_cost,
+                            'ref_type' => StockLog::REF_PRODUCTION,
+                            'ref_id' => $production->id,
+                            'note' => 'Batal produksi '.$production->production_number.': kembalikan alih biaya material',
+                            'created_by' => Auth::id(),
+                        ]);
+                    });
 
                 $production->update([
                     'status' => Production::STATUS_CANCELLED,

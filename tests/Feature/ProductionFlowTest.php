@@ -168,6 +168,11 @@ class ProductionFlowTest extends TestCase
         return (float) ((new PayableReport)->projectCosts($this->project->id)->first()['stock_allocated'] ?? 0);
     }
 
+    private function stockAllocated(Project $project): float
+    {
+        return (float) ((new PayableReport)->projectCosts($project->id)->first()['stock_allocated'] ?? 0);
+    }
+
     public function test_full_flow_request_handover_two_productions_and_cancel(): void
     {
         $cableRow = $this->seedStock($this->jktMain->id, $this->cable, 100, ['unit_cost' => 1000, 'unit' => 'Meter'])->first();
@@ -399,8 +404,7 @@ class ProductionFlowTest extends TestCase
             ->assertStatus(422)->assertJsonFragment(['success' => false]);
         // Gudang hasil di branch lain ditolak.
         $this->produce([['material_handover_item_id' => $pool, 'qty' => 5]], ['output_product_id' => $fg->id, 'output_warehouse_id' => $this->bdgWarehouse->id])->assertStatus(422);
-        // Material project ini tidak bisa dipakai project lain / branch lain.
-        $this->produce([['material_handover_item_id' => $pool, 'qty' => 5]], ['output_product_id' => $fg->id, 'project_id' => $this->otherProject->id])->assertStatus(422);
+        // Material project ini tidak bisa dipakai di branch lain.
         $this->produce([['material_handover_item_id' => $pool, 'qty' => 5]], ['output_product_id' => $fg->id, 'branch_id' => $this->bandung->id, 'output_warehouse_id' => $this->bdgWarehouse->id], $this->approver)->assertStatus(422);
         // Kode produk baru yang sudah ada ditolak.
         $this->produce([['material_handover_item_id' => $pool, 'qty' => 5]], ['new_product' => ['code' => 'FG-1', 'name' => 'Lain']])->assertStatus(422);
@@ -421,6 +425,46 @@ class ProductionFlowTest extends TestCase
         app(StockService::class)->move($production->outputStock, 1, $this->jktMain->id, $this->project->id, StockLog::TYPE_TRANSFER_OUT, ['note' => 'pindah']);
         $this->actingAs($this->approver)->postJson(route('production.void', $production->id), ['reason' => 'x'])->assertStatus(422);
         $this->assertTrue(Production::first()->isPosted());
+    }
+
+    public function test_cross_project_production_moves_material_cost(): void
+    {
+        $cable = $this->seedStock($this->jktMain->id, $this->cable, 10, ['unit_cost' => 1000])->first();
+        $mr = $this->approvedMr([['master_product_id' => $this->cable->id, 'qty' => 10]]);
+        $this->handover($mr, [['material_request_item_id' => $this->itemId($mr, $this->cable), 'stock_id' => $cable->id, 'qty' => 10]])->assertOk();
+        $pool = $this->poolId($this->cable);
+        $fg = MasterProduct::create(['code' => 'FG-X', 'name' => 'Rakitan X', 'status' => 'Active', 'is_material' => true]);
+
+        // Biaya 10 unit dibebankan ke project A saat serah terima.
+        $this->assertEqualsWithDelta(10000, $this->stockAllocated($this->project), 0.01);
+
+        // Project tujuan harus project yang mengajukan Material Request di branch ini.
+        $this->produce([['material_handover_item_id' => $pool, 'qty' => 5]], ['output_product_id' => $fg->id, 'project_id' => $this->otherProject->id])
+            ->assertStatus(422)->assertJsonFragment(['success' => false]);
+        $otherMr = $this->createMr([['master_product_id' => $this->cap->id, 'qty' => 1]], ['project_id' => $this->otherProject->id])->assertOk()->json('id');
+        $this->actingAs($this->approver)->postJson(route('material-request.approve', $otherMr))->assertOk();
+        $projects = $this->actingAs($this->requester)->getJson(route('production.pool', ['branch_id' => $this->jakarta->id]))->json('projects');
+        $this->assertEqualsCanonicalizing([$this->project->id, $this->otherProject->id], array_column($projects, 'id'));
+
+        // Material project A dipakai untuk project prioritas B.
+        $this->produce([['material_handover_item_id' => $pool, 'qty' => 5]], ['output_product_id' => $fg->id, 'project_id' => $this->otherProject->id])->assertOk();
+
+        $production = Production::firstOrFail();
+        $this->assertSame($this->otherProject->id, $production->project_id);
+        $this->assertSame($this->otherProject->id, $production->outputStock->project_id);
+
+        // Biaya 5 unit pindah dari A ke B.
+        $this->assertEqualsWithDelta(5000, $this->stockAllocated($this->project), 0.01);
+        $this->assertEqualsWithDelta(5000, $this->stockAllocated($this->otherProject), 0.01);
+
+        $transfers = StockLog::where('ref_type', StockLog::REF_PRODUCTION)->where('ref_id', $production->id)->where('type', StockLog::TYPE_ALLOCATE)->get();
+        $this->assertCount(2, $transfers);
+        $this->assertEqualsWithDelta(0, $transfers->sum(fn (StockLog $l) => $l->qty * $l->unit_cost), 0.01);
+
+        // Batal produksi -> biaya kembali ke project A.
+        $this->actingAs($this->approver)->postJson(route('production.void', $production->id), ['reason' => 'salah project'])->assertOk();
+        $this->assertEqualsWithDelta(10000, $this->stockAllocated($this->project), 0.01);
+        $this->assertEqualsWithDelta(0, $this->stockAllocated($this->otherProject), 0.01);
     }
 
     public function test_direct_purchase_reference_merges_material_requests_per_branch(): void
