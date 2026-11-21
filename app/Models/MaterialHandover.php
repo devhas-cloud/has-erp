@@ -19,6 +19,7 @@ class MaterialHandover extends Model
         'handover_number',
         'material_request_id',
         'handover_date',
+        'received_by_name',
         'note',
         'created_by',
     ];

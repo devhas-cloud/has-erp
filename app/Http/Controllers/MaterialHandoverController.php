@@ -15,6 +15,7 @@ use App\Services\StockException;
 use App\Services\StockService;
 use App\Support\StockCost;
 use App\Support\StockPicker;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -103,34 +104,8 @@ class MaterialHandoverController extends Controller
         return view('material-handover.form', [
             'requests' => $requests,
             'mr' => $mr,
-            'warehouses' => $mr ? Warehouse::active()->where('branch_id', $mr->branch_id)->orderBy('name')->get() : collect(),
+            'lines' => $mr ? $this->handoverLines($mr) : collect(),
         ]);
-    }
-
-    /**
-     * Baris stok untuk satu item MR di satu gudang branch MR: stok bebas atau
-     * milik project MR.
-     */
-    public function stockOptions(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'material_request_item_id' => 'required|integer|exists:material_request_items,id',
-            'warehouse_id' => 'required|integer|exists:warehouses,id',
-            'q' => 'nullable|string|max:100',
-        ]);
-        $item = MaterialRequestItem::with('materialRequest')->findOrFail($validated['material_request_item_id']);
-        $mr = $item->materialRequest;
-        abort_unless(Auth::user()->canAccessBranch($mr->branch_id), 404);
-        $warehouse = Warehouse::findOrFail($validated['warehouse_id']);
-        abort_unless((int) $warehouse->branch_id === (int) $mr->branch_id, 422, 'Gudang bukan milik branch Material Request.');
-
-        return response()->json(['success' => true, 'data' => StockPicker::options([
-            'warehouse_id' => $warehouse->id,
-            'product_id' => $item->master_product_id,
-            'free_or_project' => $mr->project_id,
-            'q' => $validated['q'] ?? null,
-            'limit' => 300,
-        ])]);
     }
 
     public function store(Request $request): JsonResponse
@@ -138,13 +113,15 @@ class MaterialHandoverController extends Controller
         $validated = $request->validate([
             'material_request_id' => 'required|integer|exists:material_requests,id',
             'handover_date' => 'required|date',
+            'received_by_name' => 'required|string|max:150',
             'note' => 'nullable|string|max:2000',
             'items' => 'required|array|min:1',
             'items.*.material_request_item_id' => 'required|integer',
             'items.*.stock_id' => 'required|integer|distinct',
             'items.*.qty' => 'required|numeric|gt:0',
         ], [
-            'items.required' => 'Pilih minimal satu baris stok yang diserahkan.',
+            'items.required' => 'Isi qty minimal satu material yang diserahkan.',
+            'received_by_name.required' => 'Isi nama penerima barang.',
             'items.*.stock_id.distinct' => 'Baris stok yang sama tidak boleh dipilih dua kali.',
         ]);
 
@@ -177,6 +154,7 @@ class MaterialHandoverController extends Controller
                     'handover_number' => MaterialHandover::generateNumber($date),
                     'material_request_id' => $mr->id,
                     'handover_date' => $date,
+                    'received_by_name' => trim($validated['received_by_name']),
                     'note' => $validated['note'] ?? null,
                     'created_by' => Auth::id(),
                 ]);
@@ -237,10 +215,78 @@ class MaterialHandoverController extends Controller
     public function show($id)
     {
         $handover = MaterialHandover::visibleTo(Auth::user())
-            ->with(['materialRequest.project', 'materialRequest.branch', 'creator', 'items.stock.masterProduct', 'items.stock.warehouse', 'items.productionItems.production', 'items.outLog'])
+            ->with([
+                'materialRequest.project', 'materialRequest.branch', 'materialRequest.creator',
+                'materialRequest.items.masterProduct', 'materialRequest.items.handoverItems',
+                'creator', 'items.stock.masterProduct', 'items.stock.warehouse', 'items.productionItems.production', 'items.outLog',
+            ])
+            ->findOrFail($id);
+        $mr = $handover->materialRequest;
+
+        return view('material-handover.show', [
+            'handover' => $handover,
+            // Serah terima lanjutan: MR masih Disetujui & bersisa, user boleh membuat serah terima.
+            'canContinue' => $mr && $mr->isApproved() && $mr->remainingQty() > 0
+                && \App\Support\ModuleAccess::for(Auth::user())->module('MOD_MATERIAL_HANDOVER')->canCreate(),
+        ]);
+    }
+
+    /** Bukti serah terima untuk ditandatangani gudang & penerima. */
+    public function pdf($id)
+    {
+        $handover = MaterialHandover::visibleTo(Auth::user())
+            ->with(['materialRequest.project', 'materialRequest.branch', 'materialRequest.creator', 'creator', 'items.stock.masterProduct', 'items.stock.warehouse', 'items.requestItem', 'items.outLog'])
             ->findOrFail($id);
 
-        return view('material-handover.show', compact('handover'));
+        return Pdf::loadView('material-handover.pdf', compact('handover'))
+            ->setPaper('a4', 'portrait')
+            ->stream('SerahTerima-'.$handover->handover_number.'.pdf');
+    }
+
+    /**
+     * Kebutuhan per item MR (diminta / sudah diserahkan / sisa) beserta baris stok
+     * yang bisa diserahkan dari gudang branch MR (stok bebas atau milik project MR).
+     * Urutan stok = urutan ambil otomatis: milik project dulu (tanpa biaya baru),
+     * lalu yang paling lama masuk (FIFO). Unit ber-SN tanpa SN tidak ikut.
+     */
+    private function handoverLines(MaterialRequest $mr)
+    {
+        $warehouseIds = Warehouse::active()->where('branch_id', $mr->branch_id)->pluck('id')->all();
+
+        return $mr->items->map(function (MaterialRequestItem $item) use ($mr, $warehouseIds) {
+            $remaining = $item->remainingQty();
+            $rows = $remaining > 0
+                ? StockPicker::query(['product_id' => $item->master_product_id, 'free_or_project' => $mr->project_id])
+                    ->whereIn('warehouse_id', $warehouseIds ?: [0])
+                    ->reorder()
+                    ->orderByRaw('CASE WHEN stocks.project_id IS NULL THEN 1 ELSE 0 END')
+                    ->orderBy('received_date')
+                    ->orderBy('stocks.id')
+                    ->get()
+                : collect();
+            $usable = $rows->filter(fn (Stock $s) => $s->canLeave());
+
+            return [
+                'id' => $item->id,
+                'code' => $item->masterProduct?->code,
+                'name' => $item->masterProduct?->name,
+                'unit' => $item->unit,
+                'serialized' => $item->masterProduct ? ! $item->masterProduct->isMaterial() : false,
+                'requested' => (float) $item->qty,
+                'handed' => $item->handedQty(),
+                'remaining' => $remaining,
+                'note' => $item->note,
+                'missing_sn' => $rows->count() - $usable->count(),
+                'stocks' => $usable->values()->map(fn (Stock $s) => [
+                    'id' => $s->id,
+                    'qty' => round((float) ($s->available ?? $s->qty), 4),
+                    'warehouse' => $s->warehouse?->code,
+                    'serial' => $s->serial_number,
+                    'batch' => $s->batch_number,
+                    'own' => (bool) $s->project_id,
+                ]),
+            ];
+        })->values();
     }
 
     /** MR Disetujui yang masih punya sisa, sesuai branch user. */
@@ -248,7 +294,7 @@ class MaterialHandoverController extends Controller
     {
         return MaterialRequest::visibleTo(Auth::user())
             ->where('status', MaterialRequest::STATUS_APPROVED)
-            ->with(['project:id,project_number,project_name', 'branch:id,name', 'items.masterProduct', 'items.handoverItems'])
+            ->with(['project:id,project_number,project_name', 'branch:id,name', 'creator', 'items.masterProduct', 'items.handoverItems'])
             ->orderBy('id')
             ->get()
             ->filter(fn (MaterialRequest $mr) => $mr->remainingQty() > 0)

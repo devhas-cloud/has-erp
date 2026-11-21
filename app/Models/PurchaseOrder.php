@@ -59,10 +59,10 @@ class PurchaseOrder extends Model
         self::STATUS_DRAFT => 'Draft',
         self::STATUS_WAITING_APPROVAL => 'Waiting Approval',
         self::STATUS_APPROVED => 'Approved',
-        self::STATUS_PARTIALLY_RECEIVED => 'Diterima Sebagian',
-        self::STATUS_RECEIVED => 'Diterima',
+        self::STATUS_PARTIALLY_RECEIVED => 'Partially Received',
+        self::STATUS_RECEIVED => 'Received',
         self::STATUS_REJECTED => 'Rejected',
-        self::STATUS_CANCELLED => 'Dibatalkan',
+        self::STATUS_CANCELLED => 'Cancelled',
     ];
 
     protected $fillable = [
@@ -426,10 +426,10 @@ class PurchaseOrder extends Model
             self::STATUS_DRAFT => '<span class="status-badge" style="background:var(--info-soft);color:#1e40af;">Draft</span>',
             self::STATUS_WAITING_APPROVAL => '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Waiting Approval</span>',
             self::STATUS_APPROVED => '<span class="status-badge status-active">Approved</span>',
-            self::STATUS_PARTIALLY_RECEIVED => '<span class="status-badge" style="background:#ede9fe;color:#5b21b6;">Diterima Sebagian</span>',
-            self::STATUS_RECEIVED => '<span class="status-badge" style="background:#dcfce7;color:#166534;">Diterima</span>',
+            self::STATUS_PARTIALLY_RECEIVED => '<span class="status-badge" style="background:#ede9fe;color:#5b21b6;">Partially Received</span>',
+            self::STATUS_RECEIVED => '<span class="status-badge" style="background:#dcfce7;color:#166534;">Received</span>',
             self::STATUS_REJECTED => '<span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d;">Rejected</span>',
-            self::STATUS_CANCELLED => '<span class="status-badge" style="background:#f3f4f6;color:#4b5563;">Dibatalkan</span>',
+            self::STATUS_CANCELLED => '<span class="status-badge" style="background:#f3f4f6;color:#4b5563;">Cancelled</span>',
             default => '<span class="status-badge">'.ucfirst($this->status).'</span>',
         };
     }

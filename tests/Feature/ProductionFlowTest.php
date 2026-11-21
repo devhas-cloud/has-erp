@@ -139,6 +139,7 @@ class ProductionFlowTest extends TestCase
         return $this->actingAs($user ?? $this->requester)->postJson(route('material-handover.store'), [
             'material_request_id' => $mr->id,
             'handover_date' => '2026-11-17',
+            'received_by_name' => 'Budi Produksi',
             'items' => $items,
         ]);
     }
@@ -195,11 +196,14 @@ class ProductionFlowTest extends TestCase
         $this->assertTrue($mr->isApproved());
 
         // Serah terima: sebagian dulu.
-        $this->handover($mr, [
+        $firstId = $this->handover($mr, [
             ['material_request_item_id' => $this->itemId($mr, $this->cable), 'stock_id' => $cableRow->id, 'qty' => 50],
             ['material_request_item_id' => $this->itemId($mr, $this->panel), 'stock_id' => $panelRow->id, 'qty' => 1],
-        ])->assertOk();
+        ])->assertOk()->json('id');
         $this->assertSame(MaterialRequest::STATUS_APPROVED, $mr->fresh()->status);
+        // Masih ada sisa -> detail menawarkan serah terima lanjutan & menampilkan sisanya.
+        $this->actingAs($this->requester)->get(route('material-handover.show', $firstId))->assertOk()
+            ->assertSee('Serah Terima Lagi')->assertSee('Sisa Permintaan')->assertSee('LMP-1');
         $this->assertEquals(50, $this->stockBalance($this->jktMain->id, $this->cable->id));
         $this->assertEquals(0, $this->stockBalance($this->jktMain->id, $this->cable->id, $this->project->id));
         $this->assertEquals(0, $this->stockBalance($this->jktMain->id, $this->panel->id));
@@ -273,7 +277,9 @@ class ProductionFlowTest extends TestCase
             $this->actingAs($this->requester)->get(route($module.'.create'))->assertOk();
         }
         $this->actingAs($this->requester)->get(route('material-request.show', $mr->id))->assertOk()->assertSee('MH-26110002');
-        $this->actingAs($this->requester)->get(route('material-handover.show', $id))->assertOk()->assertSee('SN-L2');
+        $this->actingAs($this->requester)->get(route('material-handover.show', $id))->assertOk()->assertSee('SN-L2')
+            ->assertSee('Budi Produksi')->assertSee('Cetak Bukti Serah Terima');
+        $this->actingAs($this->requester)->get(route('material-handover.pdf', $id))->assertOk()->assertHeader('content-type', 'application/pdf');
         $this->actingAs($this->requester)->get(route('production.show', $first->id))->assertOk()->assertSee('SN-L1');
         $this->actingAs($this->requester)->get(route('production.show', $second->id))->assertOk()->assertSee('salah rakit');
     }
@@ -362,12 +368,20 @@ class ProductionFlowTest extends TestCase
         $this->assertSame(0, MaterialHandover::count());
         $this->assertEquals(50, $this->stockBalance($this->jktMain->id, $this->cable->id));
 
-        // Pemilih stok: hanya stok bebas / milik project MR di gudang branch MR.
-        $options = $this->actingAs($this->requester)->getJson(route('material-handover.stock-options', ['material_request_item_id' => $cableItem, 'warehouse_id' => $this->jktMain->id]))
-            ->assertOk()->json('data');
-        $this->assertSame([$freeCable->id], array_column($options, 'id'));
-        $this->actingAs($this->requester)->getJson(route('material-handover.stock-options', ['material_request_item_id' => $cableItem, 'warehouse_id' => $this->bdgWarehouse->id]))
-            ->assertStatus(422);
+        // Penerima wajib diisi.
+        $this->actingAs($this->requester)->postJson(route('material-handover.store'), [
+            'material_request_id' => $mr->id, 'handover_date' => '2026-11-17',
+            'items' => [['material_request_item_id' => $cableItem, 'stock_id' => $freeCable->id, 'qty' => 5]],
+        ])->assertStatus(422)->assertJsonValidationErrors('received_by_name');
+
+        // Form: kebutuhan per item + stok yang bisa diserahkan (hanya stok bebas / milik
+        // project MR di gudang branch MR; unit tanpa SN tidak ikut, dihitung terpisah).
+        $lines = $this->actingAs($this->requester)->get(route('material-handover.create', ['material_request_id' => $mr->id]))
+            ->assertOk()->assertSee('Isi semua sesuai sisa')->viewData('lines')->keyBy('id');
+        $this->assertSame([$freeCable->id], collect($lines[$cableItem]['stocks'])->pluck('id')->all());
+        $this->assertEquals(10, $lines[$cableItem]['remaining']);
+        $this->assertSame([], collect($lines[$lampItem]['stocks'])->all());
+        $this->assertSame(1, $lines[$lampItem]['missing_sn']);
     }
 
     public function test_production_rules(): void

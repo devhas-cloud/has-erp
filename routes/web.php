@@ -457,7 +457,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::resource('material-request', MaterialRequestController::class);
 
     Route::get('material-handover/data', [MaterialHandoverController::class, 'data'])->name('material-handover.data');
-    Route::get('material-handover/stock-options', [MaterialHandoverController::class, 'stockOptions'])->name('material-handover.stock-options');
+    Route::get('material-handover/{id}/pdf', [MaterialHandoverController::class, 'pdf'])->whereNumber('id')->name('material-handover.pdf');
     Route::resource('material-handover', MaterialHandoverController::class)->only(['index', 'create', 'store', 'show']);
 
     Route::get('production/data', [ProductionController::class, 'data'])->name('production.data');

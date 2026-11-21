@@ -28,8 +28,8 @@ class BranchTransfer extends Model
 
     public const STATUS_LABELS = [
         self::STATUS_DRAFT => 'Draft',
-        self::STATUS_IN_TRANSIT => 'Dalam Pengiriman',
-        self::STATUS_RECEIVED => 'Diterima',
+        self::STATUS_IN_TRANSIT => 'In Transit',
+        self::STATUS_RECEIVED => 'Received',
     ];
 
     protected $fillable = [
