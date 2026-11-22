@@ -73,6 +73,8 @@ class StockLog extends Model
 
     public const REF_MATERIAL_HANDOVER_ITEM = 'material_handover_item';
 
+    public const REF_MATERIAL_RETURN_ITEM = 'material_return_item';
+
     /** Barang jadi masuk / batal produksi (ref_id = productions.id). */
     public const REF_PRODUCTION = 'production';
 
@@ -88,6 +90,7 @@ class StockLog extends Model
         self::REF_GOODS_REQUEST_ITEM => [GoodsRequestItem::class, 'goodsRequest', 'goods-request.show'],
         self::REF_BRANCH_TRANSFER_ITEM => [BranchTransferItem::class, 'branchTransfer', 'branch-transfer.show'],
         self::REF_MATERIAL_HANDOVER_ITEM => [MaterialHandoverItem::class, 'materialHandover', 'material-handover.show'],
+        self::REF_MATERIAL_RETURN_ITEM => [MaterialReturnItem::class, 'materialReturn', 'material-return.show'],
         self::REF_PRODUCTION => [Production::class, null, 'production.show'],
     ];
 

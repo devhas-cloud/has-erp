@@ -82,6 +82,7 @@ class ProductionFlowTest extends TestCase
             'material-request' => 'MOD_MATERIAL_REQUEST',
             'material-handover' => 'MOD_MATERIAL_HANDOVER',
             'production' => 'MOD_PRODUCTION',
+            'material-return' => 'MOD_MATERIAL_RETURN',
             'direct-purchase' => 'MOD_DIRECT_PURCHASE',
         ];
         foreach ($modules as $route => $code) {
@@ -159,6 +160,15 @@ class ProductionFlowTest extends TestCase
             'production_date' => '2026-11-18',
             'output_qty' => 1,
             'output_warehouse_id' => $this->jktFg->id,
+            'items' => $items,
+        ], $extra));
+    }
+
+    private function returnMaterial(array $items, array $extra = [], ?User $user = null)
+    {
+        return $this->actingAs($user ?? $this->requester)->postJson(route('material-return.store'), array_merge([
+            'branch_id' => $this->jakarta->id,
+            'return_date' => '2026-11-19',
             'items' => $items,
         ], $extra));
     }
@@ -425,6 +435,91 @@ class ProductionFlowTest extends TestCase
         app(StockService::class)->move($production->outputStock, 1, $this->jktMain->id, $this->project->id, StockLog::TYPE_TRANSFER_OUT, ['note' => 'pindah']);
         $this->actingAs($this->approver)->postJson(route('production.void', $production->id), ['reason' => 'x'])->assertStatus(422);
         $this->assertTrue(Production::first()->isPosted());
+    }
+
+    public function test_material_return_restores_free_stock_and_releases_allocation(): void
+    {
+        $cable = $this->seedStock($this->jktMain->id, $this->cable, 10, ['unit_cost' => 1000, 'unit' => 'Meter'])->first();
+        $capRow = $this->seedStock($this->jktMain->id, $this->cap, 1, ['unit_cost' => 10000, 'project_id' => $this->project->id, 'unit' => 'Pcs'])->first();
+        $lamp = $this->seedStock($this->jktMain->id, $this->lamp, 1, ['unit_cost' => 50000], ['SN-R1'])->first();
+
+        $mr = $this->approvedMr([
+            ['master_product_id' => $this->cable->id, 'qty' => 10],
+            ['master_product_id' => $this->cap->id, 'qty' => 1],
+            ['master_product_id' => $this->lamp->id, 'qty' => 1],
+        ]);
+        $this->handover($mr, [
+            ['material_request_item_id' => $this->itemId($mr, $this->cable), 'stock_id' => $cable->id, 'qty' => 10],
+            ['material_request_item_id' => $this->itemId($mr, $this->cap), 'stock_id' => $capRow->id, 'qty' => 1],
+            ['material_request_item_id' => $this->itemId($mr, $this->lamp), 'stock_id' => $lamp->id, 'qty' => 1],
+        ])->assertOk();
+
+        // Biaya project: kabel + lampu bebas dialokasikan (cap sudah milik project).
+        $this->assertEqualsWithDelta(60000, $this->stockAllocated($this->project), 0.01);
+
+        $cablePool = $this->poolId($this->cable);
+        $capPool = $this->poolId($this->cap);
+        $lampPool = $this->poolId($this->lamp, 'SN-R1');
+
+        // Retur melebihi sisa & retur sebagian barang ber-SN ditolak.
+        $this->returnMaterial([['material_handover_item_id' => $cablePool, 'qty' => 11]])->assertStatus(422);
+        $this->returnMaterial([['material_handover_item_id' => $lampPool, 'qty' => 0.5]])->assertStatus(422);
+        $this->assertSame(0, \App\Models\MaterialReturn::count());
+
+        // Retur sebagian kabel bebas: disimpan = menunggu approval, stok belum bergerak.
+        $cableReturn = $this->returnMaterial([['material_handover_item_id' => $cablePool, 'qty' => 4]])->assertOk()->json('id');
+        $this->assertSame(\App\Models\MaterialReturn::STATUS_WAITING_APPROVAL, \App\Models\MaterialReturn::find($cableReturn)->status);
+        $this->assertEquals(0, $this->stockBalance($this->jktMain->id, $this->cable->id));
+        $this->assertEqualsWithDelta(60000, $this->stockAllocated($this->project), 0.01);
+        $this->assertEqualsWithDelta(10, \App\Models\MaterialHandoverItem::find($cablePool)->remainingQty(), 0.0001);
+
+        // Non-approver tidak bisa menyetujui; approver menyetujui -> stok bebas kembali, alokasi dilepas sebagian.
+        $this->actingAs($this->requester)->postJson(route('material-return.approve', $cableReturn))->assertForbidden();
+        $this->actingAs($this->approver)->postJson(route('material-return.approve', $cableReturn))->assertOk();
+        $this->assertEquals(4, $this->stockBalance($this->jktMain->id, $this->cable->id));
+        $this->assertEqualsWithDelta(56000, $this->stockAllocated($this->project), 0.01);
+        $this->assertEqualsWithDelta(6, \App\Models\MaterialHandoverItem::find($cablePool)->remainingQty(), 0.0001);
+
+        // Retur bisa ditolak: stok tidak bergerak, sisa tidak berkurang.
+        $rejectReturn = $this->returnMaterial([['material_handover_item_id' => $cablePool, 'qty' => 2]])->assertOk()->json('id');
+        $this->actingAs($this->requester)->postJson(route('material-return.reject', $rejectReturn), ['reason' => 'salah qty'])->assertForbidden();
+        $this->actingAs($this->approver)->postJson(route('material-return.reject', $rejectReturn), ['reason' => 'salah qty'])->assertOk();
+        $this->assertSame(\App\Models\MaterialReturn::STATUS_REJECTED, \App\Models\MaterialReturn::find($rejectReturn)->status);
+        $this->assertEquals(4, $this->stockBalance($this->jktMain->id, $this->cable->id));
+        $this->assertEqualsWithDelta(6, \App\Models\MaterialHandoverItem::find($cablePool)->remainingQty(), 0.0001);
+
+        // Retur barang ber-SN utuh: baris SN kembali aktif sebagai stok bebas, alokasi dilepas.
+        $lampReturn = $this->returnMaterial([['material_handover_item_id' => $lampPool, 'qty' => 1]])->assertOk()->json('id');
+        $this->actingAs($this->approver)->postJson(route('material-return.approve', $lampReturn))->assertOk();
+        $this->assertEquals(1, $this->stockBalance($this->jktMain->id, $this->lamp->id));
+        $this->assertEquals(0, $this->stockBalance($this->jktMain->id, $this->lamp->id, $this->project->id));
+        $this->assertEqualsWithDelta(6000, $this->stockAllocated($this->project), 0.01);
+
+        // Retur material milik project (cap): kembali jadi stok bebas, alokasi tidak dilepas (tidak ada allocate).
+        $capReturn = $this->returnMaterial([['material_handover_item_id' => $capPool, 'qty' => 1]])->assertOk()->json('id');
+        $this->actingAs($this->approver)->postJson(route('material-return.approve', $capReturn))->assertOk();
+        $this->assertEquals(1, $this->stockBalance($this->jktMain->id, $this->cap->id));
+        $this->assertEquals(0, $this->stockBalance($this->jktMain->id, $this->cap->id, $this->project->id));
+        $this->assertEqualsWithDelta(6000, $this->stockAllocated($this->project), 0.01);
+
+        // Log lepas alokasi: kabel (bebas) + lampu (bebas), bukan cap (milik project).
+        $release = StockLog::where('type', StockLog::TYPE_ALLOCATE)->where('ref_type', StockLog::REF_MATERIAL_RETURN_ITEM)->get();
+        $this->assertCount(2, $release);
+        $this->assertEqualsWithDelta(-5, $release->sum('qty'), 0.0001);
+
+        // Material yang sudah diretur tidak bisa dipakai produksi lagi (sisa = qty − used − retur).
+        $fg = MasterProduct::create(['code' => 'FG-R', 'name' => 'Rakitan R', 'status' => 'Active', 'is_material' => true]);
+        $this->produce([['material_handover_item_id' => $cablePool, 'qty' => 6]], ['output_product_id' => $fg->id])->assertOk();
+        $this->produce([['material_handover_item_id' => $cablePool, 'qty' => 1]], ['output_product_id' => $fg->id])->assertStatus(422);
+
+        // Halaman.
+        $return = \App\Models\MaterialReturn::findOrFail($cableReturn);
+        $this->assertSame('RMP-26110001', $return->return_number);
+        $this->actingAs($this->requester)->get(route('material-return.index'))->assertOk();
+        $this->actingAs($this->requester)->getJson(route('material-return.data'))->assertOk();
+        $this->actingAs($this->requester)->get(route('material-return.create'))->assertOk();
+        $this->actingAs($this->requester)->get(route('material-return.show', $return->id))->assertOk()->assertSee('CBL-1');
+        $this->actingAs($this->bandungUser)->get(route('material-return.show', $return->id))->assertNotFound();
     }
 
     public function test_cross_project_production_moves_material_cost(): void

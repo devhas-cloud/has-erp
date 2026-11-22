@@ -130,6 +130,7 @@ class ProductionController extends Controller
         abort_unless(Auth::user()->canAccessBranch((int) $validated['branch_id']), 403, 'Branch bukan milik Anda.');
 
         $rows = MaterialHandoverItem::withUsedQty()
+            ->withReturnedQty()
             ->whereHas('materialHandover.materialRequest', fn (Builder $q) => $q->where('branch_id', (int) $validated['branch_id']))
             ->with(['stock.masterProduct', 'materialHandover.materialRequest.project:id,project_number,project_name', 'outLog'])
             ->orderBy('id')
@@ -242,7 +243,9 @@ class ProductionController extends Controller
         try {
             $production = DB::transaction(function () use ($validated, $projectId, $branchId, $warehouse, $service, $date, $outputQty, $targetLabel) {
                 $ids = collect($validated['items'])->pluck('material_handover_item_id')->map(fn ($id) => (int) $id)->sort()->values();
-                $sources = MaterialHandoverItem::with(['stock.masterProduct', 'materialHandover.materialRequest.project'])
+                $sources = MaterialHandoverItem::withUsedQty()
+                    ->withReturnedQty()
+                    ->with(['stock.masterProduct', 'materialHandover.materialRequest.project'])
                     ->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
 
                 $total = 0.0;
@@ -471,6 +474,7 @@ class ProductionController extends Controller
         $user = Auth::user();
 
         return MaterialHandoverItem::withUsedQty()
+            ->withReturnedQty()
             ->with(['materialHandover.materialRequest.project:id,project_number,project_name', 'materialHandover.materialRequest.branch:id,name'])
             ->when($user->branch_id, fn ($q) => $q->whereHas('materialHandover.materialRequest', fn ($m) => $m->where('branch_id', $user->branch_id)))
             ->get()

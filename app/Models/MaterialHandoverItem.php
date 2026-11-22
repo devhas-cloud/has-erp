@@ -48,6 +48,11 @@ class MaterialHandoverItem extends Model
         return $this->hasMany(ProductionItem::class);
     }
 
+    public function returnItems(): HasMany
+    {
+        return $this->hasMany(MaterialReturnItem::class, 'material_handover_item_id');
+    }
+
     /**
      * Material di Produksi milik project + branch, dengan kolom used_qty
      * (pemakaian produksi posted). Sisa dihitung di remainingQty().
@@ -56,13 +61,20 @@ class MaterialHandoverItem extends Model
     {
         return $query
             ->whereHas('materialHandover.materialRequest', fn (Builder $q) => $q->where('project_id', $projectId)->where('branch_id', $branchId))
-            ->withUsedQty();
+            ->withUsedQty()
+            ->withReturnedQty();
     }
 
     public function scopeWithUsedQty(Builder $query): Builder
     {
         return $query->withSum(['productionItems as used_qty' => fn (Builder $q) => $q
             ->whereHas('production', fn (Builder $p) => $p->where('status', Production::STATUS_POSTED))], 'qty');
+    }
+
+    public function scopeWithReturnedQty(Builder $query): Builder
+    {
+        return $query->withSum(['returnItems as returned_qty' => fn (Builder $q) => $q
+            ->whereHas('materialReturn', fn (Builder $r) => $r->where('status', MaterialReturn::STATUS_APPROVED))], 'qty');
     }
 
     public function usedQty(): float
@@ -76,9 +88,20 @@ class MaterialHandoverItem extends Model
             ->sum('qty'), 4);
     }
 
+    public function returnedQty(): float
+    {
+        if (array_key_exists('returned_qty', $this->attributes)) {
+            return round((float) $this->attributes['returned_qty'], 4);
+        }
+
+        return round((float) $this->returnItems()
+            ->whereHas('materialReturn', fn (Builder $r) => $r->where('status', MaterialReturn::STATUS_APPROVED))
+            ->sum('qty'), 4);
+    }
+
     public function remainingQty(): float
     {
-        return max(0.0, round($this->qty - $this->usedQty(), 4));
+        return max(0.0, round($this->qty - $this->usedQty() - $this->returnedQty(), 4));
     }
 
     /** Log stok saat diserahkan (keluar ke produksi) — menyimpan harga saat itu. */
@@ -87,6 +110,18 @@ class MaterialHandoverItem extends Model
         return $this->hasOne(StockLog::class, 'ref_id')
             ->where('ref_type', StockLog::REF_MATERIAL_HANDOVER_ITEM)
             ->where('type', StockLog::TYPE_OUT);
+    }
+
+    /**
+     * Log alokasi stok bebas ke project saat diserahkan. Ada = material berasal
+     * dari stok bebas (biaya dibebankan lewat allocate); tidak ada = material
+     * sudah milik project (biaya pembelian sudah tercatat, tidak dialokasikan).
+     */
+    public function allocateLog(): HasOne
+    {
+        return $this->hasOne(StockLog::class, 'ref_id')
+            ->where('ref_type', StockLog::REF_MATERIAL_HANDOVER_ITEM)
+            ->where('type', StockLog::TYPE_ALLOCATE);
     }
 
     /**

@@ -124,6 +124,7 @@ class ProjectTracker
             ->get()->groupBy('project_id');
 
         $poolLeft = MaterialHandoverItem::withUsedQty()
+            ->withReturnedQty()
             ->with('materialHandover.materialRequest:id,project_id')
             ->whereHas('materialHandover.materialRequest', fn ($q) => $q->whereIn('project_id', $ids))
             ->get()

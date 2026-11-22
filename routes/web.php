@@ -7,6 +7,7 @@ use App\Http\Controllers\BranchTransferController;
 use App\Http\Controllers\MaterialHandoverController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\MaterialRequestTemplateController;
+use App\Http\Controllers\MaterialReturnController;
 use App\Http\Controllers\PackingListController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProjectTrackingController;
@@ -465,6 +466,12 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('production/search-products', [ProductionController::class, 'searchProducts'])->name('production.search-products');
     Route::post('production/{id}/void', [ProductionController::class, 'void'])->whereNumber('id')->name('production.void');
     Route::resource('production', ProductionController::class)->only(['index', 'create', 'store', 'show']);
+
+    Route::get('material-return/data', [MaterialReturnController::class, 'data'])->name('material-return.data');
+    Route::get('material-return/pool', [MaterialReturnController::class, 'pool'])->name('material-return.pool');
+    Route::post('material-return/{id}/approve', [MaterialReturnController::class, 'approve'])->whereNumber('id')->name('material-return.approve');
+    Route::post('material-return/{id}/reject', [MaterialReturnController::class, 'reject'])->whereNumber('id')->name('material-return.reject');
+    Route::resource('material-return', MaterialReturnController::class)->only(['index', 'create', 'store', 'show']);
 
     Route::get('stock-entry/data', [StockEntryController::class, 'data'])->name('stock-entry.data');
     Route::get('stock-entry/search-products', [StockEntryController::class, 'searchProducts'])->name('stock-entry.search-products');

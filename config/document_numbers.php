@@ -36,6 +36,7 @@ return [
     'material_requests' => 'MR',   // Material Request (kebutuhan material project)
     'material_handovers' => 'MH',  // Material Handover (serah terima ke produksi)
     'productions' => 'MO',         // Manufacturing Order (produksi barang jadi)
+    'material_returns' => 'RMP',   // Return Material Produksi (retur material ke gudang)
 
     // Finance
     'invoices' => 'INV',           // Sales Invoice
