@@ -6,6 +6,7 @@ use App\Models\AccountCompany;
 use App\Models\Division;
 use App\Models\Module;
 use App\Models\Opportunity;
+use App\Models\Pos;
 use App\Models\ProfitEstimate;
 use App\Models\Project;
 use App\Models\Quotation;
@@ -29,6 +30,8 @@ class ProjectTest extends TestCase
     private User $viewer;
 
     private AccountCompany $company;
+
+    private static int $posSeq = 0;
 
     protected function setUp(): void
     {
@@ -124,6 +127,20 @@ class ProjectTest extends TestCase
                 'created_by' => $this->admin->id,
             ]);
         }
+
+        // Quotation ber-POS: syarat project bisa dipilih dari quotation ini.
+        self::$posSeq++;
+        Pos::create([
+            'pos_number' => 'POS-2610'.str_pad((string) self::$posSeq, 4, '0', STR_PAD_LEFT),
+            'quotation_id' => $quotation->id,
+            'company_id' => $this->company->id,
+            'date' => '2026-10-01',
+            'requires_dp' => false,
+            'subtotal' => $grandTotal,
+            'grand_total' => $grandTotal,
+            'status' => Pos::STATUS_APPROVED,
+            'created_by' => $this->admin->id,
+        ]);
 
         return $quotation;
     }

@@ -47,6 +47,7 @@ class Invoice extends Model
 
     protected $fillable = [
         'project_id',
+        'pos_id',
         'billing_term_id',
         'invoice_number',
         'invoice_date',
@@ -107,6 +108,11 @@ class Invoice extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function pos(): BelongsTo
+    {
+        return $this->belongsTo(Pos::class);
     }
 
     public function billingTerm(): BelongsTo

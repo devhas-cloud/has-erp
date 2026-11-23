@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryOrderItem;
+use App\Models\Pos;
+use App\Models\PosItem;
 use App\Models\Project;
 use App\Models\QuotationItem;
 use App\Models\Stock;
@@ -17,8 +19,8 @@ use Illuminate\Support\Collection;
  * gudang dokumen; unit ber-SN wajib ber-SN dan utuh; total per baris stok
  * tidak melebihi sisa yang belum dipesan Packing List Siap Kirim lain.
  *
- * Plus daftar item Quotation project (sumber deskripsi) dengan qty yang sudah
- * dikirim (baris DO terposting).
+ * Plus daftar item Quotation/POS project (sumber deskripsi) dengan qty yang
+ * sudah dikirim (baris DO terposting).
  */
 class ShipmentLines
 {
@@ -96,6 +98,49 @@ class ShipmentLines
             'unit' => $item->unit,
             'delivered' => round((float) ($delivered[$item->id] ?? 0), 4),
         ])->values();
+    }
+
+    /** POS project (dokumen penjualan sumber item customer), bila ada. */
+    public static function pos(Project $project): ?Pos
+    {
+        return Pos::with('items')->where('project_id', $project->id)->latest('id')->first();
+    }
+
+    /**
+     * Item POS project dengan bentuk sama seperti quotationItems(): nomor item,
+     * part number & hierarki diambil dari item Quotation yang ditautkan, qty &
+     * satuan dari POS. Bedanya hanya deskripsi: penamaan customer di POS.
+     * Item POS tanpa quotation_item_id tetap dipakai (nomor/part number kosong).
+     */
+    public static function posItems(?Pos $pos): Collection
+    {
+        if (! $pos) {
+            return collect();
+        }
+
+        $items = $pos->items->filter(fn (PosItem $item) => (float) $item->qty > 0 && trim((string) $item->description) !== '');
+        $quotationItems = QuotationItem::whereIn('id', $items->pluck('quotation_item_id')->filter()->unique()->all() ?: [0])
+            ->get()->keyBy('id');
+        $delivered = DeliveryOrderItem::whereIn('quotation_item_id', $quotationItems->keys()->all() ?: [0])
+            ->whereHas('deliveryOrder', fn ($q) => $q->where('status', DeliveryOrder::STATUS_POSTED))
+            ->groupBy('quotation_item_id')
+            ->selectRaw('quotation_item_id, SUM(qty) AS total')
+            ->pluck('total', 'quotation_item_id');
+
+        return $items->map(function (PosItem $item) use ($quotationItems, $delivered) {
+            $quotationItem = $item->quotation_item_id ? $quotationItems->get($item->quotation_item_id) : null;
+
+            return [
+                'id' => $item->quotation_item_id,
+                'item_no' => $quotationItem?->item_no,
+                'is_child' => (bool) $quotationItem?->parent_id,
+                'part_number' => $quotationItem?->part_number,
+                'description' => self::text($item->description),
+                'qty' => (float) $item->qty,
+                'unit' => $item->unit,
+                'delivered' => round((float) ($delivered[$item->quotation_item_id] ?? 0), 4),
+            ];
+        })->values();
     }
 
     /** Deskripsi HTML Quotation -> teks biasa (baris baru dipertahankan). */

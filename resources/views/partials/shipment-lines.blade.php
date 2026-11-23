@@ -1,6 +1,6 @@
 {{--
     Editor baris dokumen pengiriman (koli Packing List / baris DO Langsung).
-    Tiap baris: deskripsi (dari item Quotation atau bebas), qty, satuan, dan isi
+    Tiap baris: deskripsi (dari item POS atau bebas), qty, satuan, dan isi
     baris stok (pemilih stok bersama — wajib minimal satu).
     Butuh partials.stock-pick dimuat lebih dulu.
 
@@ -9,7 +9,7 @@
         params: function() { return { project_id: .., warehouse_id: .. }; },
         onChange: function() {}
     });
-    editor.setQuotationItems(items); editor.addLine(data); editor.openQuotation();
+    editor.setPosItems(items); editor.addLine(data); editor.openPos();
     editor.reloadStocks(); editor.lines() -> payload; editor.count()
 --}}
 <style>
@@ -21,15 +21,15 @@
     .sl-qref { font-size: 11.5px; color: var(--text-muted); }
     .sl-stock-toggle { font-size: 12.5px; cursor: pointer; user-select: none; }
     .sl-stock-count.empty { color: var(--danger, #b42318); }
-    #slQuotationModal .sl-q-row { cursor: pointer; }
-    #slQuotationModal .sl-q-row.is-child td:nth-child(3) { padding-left: 24px; }
-    #slQuotationModal .sl-q-desc { white-space: pre-line; font-size: 12px; color: var(--text-muted); max-height: 3.6em; overflow: hidden; }
+    #slPosModal .sl-pos-row { cursor: pointer; }
+    #slPosModal .sl-pos-row.is-child td:nth-child(3) { padding-left: 24px; }
+    #slPosModal .sl-pos-desc { white-space: pre-line; font-size: 12px; color: var(--text-muted); max-height: 3.6em; overflow: hidden; }
 </style>
 <script>
 window.ShipmentLines = function(opts) {
     var $root = $(opts.el);
     var seq = 0;
-    var quotationItems = [];
+    var posItems = [];
 
     function esc(s) { return $('<div>').text(s == null ? '' : s).html(); }
     function num(v) { var n = Num.parseOrNull(v); return n == null ? '' : n; }
@@ -70,10 +70,10 @@ window.ShipmentLines = function(opts) {
         });
     }
 
-    function quotationRef(id) {
-        var item = quotationItems.find(function(q) { return q.id === id; });
+    function posRef(id) {
+        var item = posItems.find(function(q) { return q.id === id; });
         if (!item) return '';
-        return 'Quotation ' + (item.item_no || '') + ' · terkirim ' + Num.format(item.delivered, 4) + (item.qty != null ? ' dari ' + Num.format(item.qty, 4) : '') + ' ' + (item.unit || '');
+        return 'Terkirim ' + Num.format(item.delivered, 4) + (item.qty != null ? ' dari ' + Num.format(item.qty, 4) : '') + ' ' + (item.unit || '');
     }
 
     function addLine(data) {
@@ -109,7 +109,7 @@ window.ShipmentLines = function(opts) {
         var selected = {};
         (data.stocks || []).forEach(function(s) { selected[s.stock_id] = s.qty; });
         $line.data('selected', selected);
-        $line.find('.sl-qref').text(data.quotation_item_id ? quotationRef(data.quotation_item_id) : '');
+        $line.find('.sl-qref').text(data.quotation_item_id ? posRef(data.quotation_item_id) : '');
         $root.append($line);
         stockCount($line);
         loadStocks($line);
@@ -135,25 +135,25 @@ window.ShipmentLines = function(opts) {
         if (opts.onChange) opts.onChange();
     });
 
-    // ── Pop-up item Quotation ──
+    // ── Pop-up item POS ──
     var modal = null;
     function ensureModal() {
         if (modal) return;
-        $('body').append('<div class="modal fade" id="slQuotationModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">'
-            + '<div class="modal-header"><h6 class="modal-title"><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Ambil dari Item Quotation</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>'
+        $('body').append('<div class="modal fade" id="slPosModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">'
+            + '<div class="modal-header"><h6 class="modal-title"><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Ambil dari Item POS</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>'
             + '<div class="modal-body"><div class="table-responsive"><table class="table table-custom align-middle mb-0"><thead><tr>'
-            + '<th style="width:36px"></th><th style="width:70px">No</th><th>Item</th><th class="text-end" style="width:110px">Qty</th><th class="text-end" style="width:120px">Terkirim</th></tr></thead><tbody id="sl-q-body"></tbody></table></div></div>'
+            + '<th style="width:36px"></th><th style="width:70px">No</th><th>Item</th><th class="text-end" style="width:110px">Qty</th><th class="text-end" style="width:120px">Terkirim</th></tr></thead><tbody id="sl-pos-body"></tbody></table></div></div>'
             + '<div class="modal-footer justify-content-between"><small style="color:var(--text-muted)">Setiap item terpilih menjadi satu ' + (opts.boxMode ? 'koli' : 'baris') + '; deskripsi & qty bisa diubah. Terkirim = DO terposting (info saja).</small>'
-            + '<div class="d-flex gap-2"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-primary btn-sm" id="sl-q-apply"><i class="fa fa-plus me-1"></i> Tambahkan</button></div></div>'
+            + '<div class="d-flex gap-2"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-primary btn-sm" id="sl-pos-apply"><i class="fa fa-plus me-1"></i> Tambahkan</button></div></div>'
             + '</div></div></div>');
-        modal = new bootstrap.Modal(document.getElementById('slQuotationModal'));
-        $(document).on('click', '#slQuotationModal .sl-q-row', function(e) {
+        modal = new bootstrap.Modal(document.getElementById('slPosModal'));
+        $(document).on('click', '#slPosModal .sl-pos-row', function(e) {
             if ($(e.target).is('input')) return;
             var $c = $(this).find('input'); $c.prop('checked', !$c.is(':checked'));
         });
-        $(document).on('click', '#sl-q-apply', function() {
+        $(document).on('click', '#sl-pos-apply', function() {
             var picked = [];
-            $('#sl-q-body input:checked').each(function() { picked.push(quotationItems[$(this).data('idx')]); });
+            $('#sl-pos-body input:checked').each(function() { picked.push(posItems[$(this).data('idx')]); });
             if (!picked.length) { toastr.error('Pilih minimal satu item.'); return; }
             picked.forEach(function(q) {
                 var remaining = q.qty != null ? Math.max(q.qty - q.delivered, 0) : null;
@@ -169,29 +169,29 @@ window.ShipmentLines = function(opts) {
         });
     }
 
-    function openQuotation() {
-        if (!quotationItems.length) { toastr.warning('Project ini tidak punya item Quotation. Isi deskripsi sendiri.'); return; }
+    function openPos() {
+        if (!posItems.length) { toastr.warning('Project ini belum punya POS. Isi deskripsi sendiri.'); return; }
         ensureModal();
         var html = '';
-        quotationItems.forEach(function(q, idx) {
+        posItems.forEach(function(q, idx) {
             var full = q.qty != null && q.delivered >= q.qty;
-            html += '<tr class="sl-q-row' + (q.is_child ? ' is-child' : '') + '">'
+            html += '<tr class="sl-pos-row' + (q.is_child ? ' is-child' : '') + '">'
                 + '<td><input type="checkbox" class="form-check-input" data-idx="' + idx + '"></td>'
                 + '<td>' + esc(q.item_no || '') + '</td>'
-                + '<td><div class="fw-semibold">' + esc(q.part_number || '') + '</div><div class="sl-q-desc">' + esc(q.description || '') + '</div></td>'
+                + '<td><div class="fw-semibold">' + esc(q.part_number || '') + '</div><div class="sl-pos-desc">' + esc(q.description || '') + '</div></td>'
                 + '<td class="text-end">' + (q.qty != null ? Num.format(q.qty, 4) : '—') + ' ' + esc(q.unit || '') + '</td>'
                 + '<td class="text-end">' + Num.format(q.delivered, 4) + (full ? ' <i class="fa fa-circle-check" style="color:var(--accent)" title="Sudah terkirim semua"></i>' : '') + '</td></tr>';
         });
-        $('#sl-q-body').html(html);
+        $('#sl-pos-body').html(html);
         modal.show();
     }
 
     return {
         addLine: addLine,
-        openQuotation: openQuotation,
-        setQuotationItems: function(items) {
-            quotationItems = items || [];
-            $root.find('.sl-line').each(function() { var qid = $(this).data('qid'); $(this).find('.sl-qref').text(qid ? quotationRef(qid) : ''); });
+        openPos: openPos,
+        setPosItems: function(items) {
+            posItems = items || [];
+            $root.find('.sl-line').each(function() { var qid = $(this).data('qid'); $(this).find('.sl-qref').text(qid ? posRef(qid) : ''); });
         },
         reloadStocks: function(reset) {
             $root.find('.sl-line').each(function() {

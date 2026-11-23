@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\Invoice;
 use App\Models\Log;
 use App\Models\MasterProduct;
+use App\Models\Pos;
 use App\Models\Project;
 use App\Models\ProjectBillingTerm;
 use App\Models\Quotation;
@@ -598,6 +599,7 @@ class InvoiceController extends Controller
         $currentInvoiceId = $request->integer('invoice_id') ?: null;
         $company = $project->company;
         $quotationTotals = $this->quotationTotals($project);
+        $pos = Pos::with('items')->where('project_id', $project->id)->latest('id')->first();
 
         return response()->json([
             'success' => true,
@@ -614,6 +616,8 @@ class InvoiceController extends Controller
                 'net_sale_amount' => (float) $project->net_sale_amount,
                 'quotation_number' => $project->quotation?->quotation_number,
                 'quotation_items' => $this->quotationItems($project),
+                'pos_number' => $pos?->pos_number,
+                'pos_items' => $this->posItems($pos),
                 'billing_terms' => $project->billingTerms->map(function (ProjectBillingTerm $term) use ($currentInvoiceId) {
                     $active = $term->activeInvoice();
 
@@ -964,6 +968,37 @@ class InvoiceController extends Controller
         );
 
         return $document;
+    }
+
+    /**
+     * Item POS project (penamaan customer) siap dipakai sebagai item invoice.
+     * POS tidak menyimpan product_id, jadi produk dikosongkan dan nama diisi
+     * dari deskripsi. Baris tanpa qty dilewati.
+     */
+    private function posItems(?Pos $pos): array
+    {
+        if (! $pos) {
+            return [];
+        }
+
+        return $pos->items
+            ->filter(fn ($item) => (float) $item->qty > 0)
+            ->map(function ($item) {
+                $plain = Str::squish(html_entity_decode(strip_tags(
+                    str_replace(['<br>', '<br/>', '<br />'], ' ', (string) $item->description)
+                ), ENT_QUOTES | ENT_HTML5));
+
+                return [
+                    'product_id' => null,
+                    'product_name' => Str::limit($plain !== '' ? $plain : 'Item', 255, ''),
+                    'description' => $plain !== '' ? nl2br(e($plain)) : '',
+                    'qty' => (float) $item->qty,
+                    'unit' => $item->unit,
+                    'unit_price' => (float) $item->unit_price,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

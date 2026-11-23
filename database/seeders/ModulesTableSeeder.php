@@ -42,6 +42,7 @@ class ModulesTableSeeder extends Seeder
         'Admin' => [
             'MOD_QUOTATION',
             'MOD_PROFIT_ESTIMATE',
+            'MOD_POS',
             'MOD_PROJECT',
             'MOD_PROJECT_TRACKING',
             'MOD_PO_SUPPLIER_APPROVAL',
@@ -286,6 +287,14 @@ class ModulesTableSeeder extends Seeder
                 'description' => 'Menu approval quotation status Finish (PO customer terupload) agar purchasing boleh melanjutkan PO barang ke supplier — memerlukan 2 approver berbeda',
                 'route_name' => 'po-supplier-approval',
                 'icon' => 'fa fa-truck-fast',
+                'group' => 'Admin',
+            ],
+            [
+                'module_code' => 'MOD_POS',
+                'module_name' => 'POS',
+                'description' => 'Point of Sale (Sales Order): dokumen penjualan datar dari quotation — item berpenamaan customer, 3 mode pembayaran (DP / tanpa DP / lunas), lalu Project dibuat setelah DP/termin terpenuhi',
+                'route_name' => 'pos',
+                'icon' => 'fa fa-cash-register',
                 'group' => 'Admin',
             ],
             [

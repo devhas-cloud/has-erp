@@ -38,6 +38,7 @@ use App\Http\Controllers\OvertimeRequestController;
 use App\Http\Controllers\PayableReportController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PoSupplierApprovalController;
+use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfitEstimateController;
@@ -472,6 +473,14 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('material-return/{id}/approve', [MaterialReturnController::class, 'approve'])->whereNumber('id')->name('material-return.approve');
     Route::post('material-return/{id}/reject', [MaterialReturnController::class, 'reject'])->whereNumber('id')->name('material-return.reject');
     Route::resource('material-return', MaterialReturnController::class)->only(['index', 'create', 'store', 'show']);
+
+    Route::get('pos/data', [PosController::class, 'data'])->name('pos.data');
+    Route::get('pos/quotation-items/{id}', [PosController::class, 'quotationItems'])->whereNumber('id')->name('pos.quotation-items');
+    Route::post('pos/{id}/submit', [PosController::class, 'submit'])->whereNumber('id')->name('pos.submit');
+    Route::post('pos/{id}/approve', [PosController::class, 'approve'])->whereNumber('id')->name('pos.approve');
+    Route::post('pos/{id}/reject', [PosController::class, 'reject'])->whereNumber('id')->name('pos.reject');
+    Route::resource('pos', PosController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
+
 
     Route::get('stock-entry/data', [StockEntryController::class, 'data'])->name('stock-entry.data');
     Route::get('stock-entry/search-products', [StockEntryController::class, 'searchProducts'])->name('stock-entry.search-products');

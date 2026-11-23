@@ -22,6 +22,7 @@
     }
     .inv-term-info i { color: var(--accent); margin-top: 3px; }
     .inv-base-warn { font-size: 12.5px; color: #92400e; background: #fef3c7; border-radius: var(--radius-sm); padding: 7px 10px; margin-top: 4px; }
+    .inv-pos-hint { font-size: 12.5px; color: #92400e; background: #fef3c7; border-radius: var(--radius-sm); padding: 7px 10px; margin: 0 0 8px; }
     .inv-locked { background: var(--accent-subtle) !important; }
     .inv-summary-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 14px; }
     .inv-summary-row + .inv-summary-row { border-top: 1px dashed var(--card-border); }
@@ -163,8 +164,8 @@
     <div class="card-header-custom d-flex justify-content-between align-items-center">
         <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item Invoice</span>
         <div class="d-flex gap-2">
-            <button type="button" class="btn btn-soft btn-sm" id="inv-load-quote" onclick="invOpenQuotePicker()" disabled>
-                <i class="fa fa-file-import me-1"></i> Ambil dari Quote
+            <button type="button" class="btn btn-soft btn-sm" id="inv-load-pos" onclick="invOpenPosPicker()" disabled title="Pilih project terlebih dahulu">
+                <i class="fa fa-file-import me-1"></i> Ambil dari POS
             </button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="invAddItem()">
                 <i class="fa fa-plus me-1"></i> Tambah Item
@@ -172,6 +173,7 @@
         </div>
     </div>
     <div class="card-body-custom p-2">
+        <div id="inv-pos-hint" class="inv-pos-hint" style="display:none"></div>
         <div class="table-responsive">
             <table class="table table-custom align-middle mb-0">
                 <thead>
@@ -204,8 +206,18 @@
                 <div class="row g-3">
                     <div class="col-md-12">
                         <label class="form-label">Keterangan Termin</label>
-                        <input type="text" id="inv-noted" class="form-control" maxlength="255" value="{{ $invoice?->noted }}" placeholder="Contoh: Termin 4, DP, Pelunasan">
-                        <small style="color:var(--text-muted)">Tampil di PDF sebagai label pembayaran, misal "Termin 4 (7%)".</small>
+                        <select id="inv-noted" class="form-control">
+                            <option value="">Pilih Catatan</option>
+                            <option value="Term 1" {{ $invoice?->noted == 'Term 1' ? 'selected' : '' }}>Term 1</option>
+                            <option value="Term 2" {{ $invoice?->noted == 'Term 2' ? 'selected' : '' }}>Term 2</option>
+                            <option value="Term 3" {{ $invoice?->noted == 'Term 3' ? 'selected' : '' }}>Term 3</option>
+                            <option value="Term 4" {{ $invoice?->noted == 'Term 4' ? 'selected' : '' }}>Term 4</option>
+                            <option value="DP" {{ $invoice?->noted == 'DP' ? 'selected' : '' }}>DP</option>
+                            <option value="Settlement" {{ $invoice?->noted == 'Settlement' ? 'selected' : '' }}>Settlement</option>
+                            <option value="Full Payment" {{ $invoice?->noted == 'Full Payment' ? 'selected' : '' }}>Full Payment</option>
+                            <option value="Retensi" {{ $invoice?->noted == 'Retensi' ? 'selected' : '' }}>Retensi</option>
+                        </select>
+                        <small style="color:var(--text-muted)">Tampil di PDF sebagai label pembayaran, misal "Term 4".</small>
                     </div>
                     <div class="col-md-12">
                         <label class="form-label">Diskon <span class="inv-section-sub">opsional</span></label>
@@ -265,12 +277,12 @@
 @endsection
 
 @push('modals')
-<div class="modal fade" id="invQuoteModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="invPosModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title">
-                    <i class="fa-solid fa-file-import me-2" style="color:var(--accent)"></i>Ambil Item dari Quote
+                    <i class="fa-solid fa-file-import me-2" style="color:var(--accent)"></i>Ambil Item dari POS
                 </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -280,7 +292,7 @@
                         <thead>
                             <tr>
                                 <th style="width:40px" class="text-center">
-                                    <input type="checkbox" id="inv-quote-all" title="Pilih semua">
+                                    <input type="checkbox" id="inv-pos-all" title="Pilih semua">
                                 </th>
                                 <th>Produk / Jasa</th>
                                 <th style="width:80px" class="text-center">Qty</th>
@@ -288,13 +300,13 @@
                                 <th style="width:150px" class="text-end">Harga Satuan</th>
                             </tr>
                         </thead>
-                        <tbody id="inv-quote-body"></tbody>
+                        <tbody id="inv-pos-body"></tbody>
                     </table>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="invApplyQuoteItems()">
+                <button type="button" class="btn btn-primary btn-sm" onclick="invApplyPosItems()">
                     <i class="fa fa-plus me-1"></i> Tambahkan Item Terpilih
                 </button>
             </div>
@@ -316,10 +328,10 @@ const invInitialItems = @json($items);
 const invInvoiceId = {{ $invoice?->id ?? 'null' }};
 let invInitialTermId = @json($selectedTermId ?? null);
 let invTerms = {};
-let invQuoteItems = [];
+let invPosItems = [];
 let invProjectBase = null; // nilai kontrak project sesudah diskon, sebelum PPN (acuan invoice termin)
 let invProjectQuote = null; // { subtotal, discount_percent, discount_amount } quotation project; null = project manual
-let invQuoteModalInstance = null;
+let invPosModalInstance = null;
 
 function invToRaw(value) {
     return String(value == null ? '' : value).replace(/,/g, '');
@@ -415,8 +427,9 @@ function invInitProject() {
         if (id) {
             invFetchProject(id, true);
         } else {
-            invQuoteItems = [];
-            $('#inv-load-quote').prop('disabled', true);
+            invPosItems = [];
+            $('#inv-load-pos').prop('disabled', true).attr('title', 'Pilih project terlebih dahulu');
+            $('#inv-pos-hint').hide().empty();
             $('#inv-project-info').text('Pilih project untuk melihat informasi.');
             invRenderTerms([], null);
         }
@@ -488,6 +501,7 @@ function invFetchProject(id, fillShipTo) {
             html += '<div>Nilai Kontrak (sebelum PPN): ' + invMoney(d.before_ppn) + '</div>';
         }
         html += '<div>Quote: ' + invEsc(d.quotation_number || '—') + ' (' + (d.quotation_items || []).length + ' item)</div>';
+        html += '<div>POS: ' + invEsc(d.pos_number || '—') + ' (' + (d.pos_items || []).length + ' item)</div>';
         $('#inv-project-info').html(html);
 
         if (fillShipTo || !$.trim($('#inv-ship-to').val())) {
@@ -499,12 +513,24 @@ function invFetchProject(id, fillShipTo) {
             invApplyQuoteDiscount(d);
         }
 
-        invQuoteItems = d.quotation_items || [];
+        invPosItems = d.pos_items || [];
         invProjectBase = d.before_ppn;
         invProjectQuote = d.quotation_subtotal != null
             ? { subtotal: d.quotation_subtotal, discount_percent: d.discount_percent, discount_amount: d.discount_amount, manual: !d.quotation_number }
             : null;
-        $('#inv-load-quote').prop('disabled', invQuoteItems.length === 0);
+        $('#inv-load-pos')
+            .prop('disabled', invPosItems.length === 0)
+            .attr('title', invPosItems.length ? '' : 'Project ini belum punya POS');
+
+        if (invPosItems.length === 0) {
+            $('#inv-pos-hint').html('<i class="fa fa-circle-info me-1"></i>'
+                + (d.pos_number
+                    ? 'POS ' + invEsc(d.pos_number) + ' tidak memiliki item — isi item invoice manual atau perbaiki POS.'
+                    : 'Project ini belum punya POS — isi item invoice manual atau buat POS terlebih dahulu.'))
+                .show();
+        } else {
+            $('#inv-pos-hint').hide().empty();
+        }
 
         // Termin awal hanya dipakai sekali (dari tombol "Buat Invoice" di timeline / data edit).
         var initialTerm = fillShipTo ? null : invInitialTermId;
@@ -600,18 +626,18 @@ function invHasFilledItems() {
     });
 }
 
-function invOpenQuotePicker() {
-    if (!invQuoteItems.length) {
-        toastr.warning('Quote project ini tidak memiliki item berharga.');
+function invOpenPosPicker() {
+    if (!invPosItems.length) {
+        toastr.warning('Project ini belum punya POS atau POS tidak memiliki item berharga.');
         return;
     }
 
     var html = '';
-    invQuoteItems.forEach(function(item, index) {
+    invPosItems.forEach(function(item, index) {
         var description = invPlainText(item.description || '') || item.product_name || '—';
 
         html += '<tr>';
-        html += '<td class="text-center"><input type="checkbox" class="inv-quote-check" value="' + index + '"></td>';
+        html += '<td class="text-center"><input type="checkbox" class="inv-pos-check" value="' + index + '"></td>';
         html += '<td><div style="font-weight:600">' + invEsc(item.product_name || '') + '</div>';
         html += '<div style="font-size:12px;color:var(--text-muted)">' + invEsc(description) + '</div></td>';
         html += '<td class="text-center">' + invNumber(item.qty) + '</td>';
@@ -620,36 +646,36 @@ function invOpenQuotePicker() {
         html += '</tr>';
     });
 
-    $('#inv-quote-body').html(html);
-    $('#inv-quote-all').prop('checked', false);
+    $('#inv-pos-body').html(html);
+    $('#inv-pos-all').prop('checked', false);
 
-    if (!invQuoteModalInstance) {
-        invQuoteModalInstance = new bootstrap.Modal(document.getElementById('invQuoteModal'));
+    if (!invPosModalInstance) {
+        invPosModalInstance = new bootstrap.Modal(document.getElementById('invPosModal'));
     }
-    invQuoteModalInstance.show();
+    invPosModalInstance.show();
 }
 
-function invApplyQuoteItems() {
-    var indexes = $('#inv-quote-body .inv-quote-check:checked').map(function() {
+function invApplyPosItems() {
+    var indexes = $('#inv-pos-body .inv-pos-check:checked').map(function() {
         return parseInt($(this).val(), 10);
     }).get();
 
     if (!indexes.length) {
-        toastr.error('Pilih minimal satu item quote.');
+        toastr.error('Pilih minimal satu item POS.');
         return;
     }
 
     var apply = function() {
         $('#inv-items-body').empty();
-        indexes.forEach(function(index) { invAddItem(invQuoteItems[index]); });
-        invQuoteModalInstance.hide();
-        toastr.success(indexes.length + ' item diambil dari quote. Silakan sesuaikan bila perlu.');
+        indexes.forEach(function(index) { invAddItem(invPosItems[index]); });
+        invPosModalInstance.hide();
+        toastr.success(indexes.length + ' item diambil dari POS. Silakan sesuaikan bila perlu.');
     };
 
     if (invHasFilledItems()) {
         Swal.fire({
             title: 'Ganti item invoice?',
-            text: 'Item yang sudah diisi akan diganti dengan item quote yang dipilih.',
+            text: 'Item yang sudah diisi akan diganti dengan item POS yang dipilih.',
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Ya, Ganti',
@@ -864,8 +890,8 @@ $(document).on('input', '.inv-number-input', function() {
 $(document).on('input', '#inv-noted', invRecalc);
 $(document).on('change', '#inv-term', function() { invApplyTerm(true); });
 $(document).on('input change', '#inv-date, #inv-terms', invUpdateDuePreview);
-$(document).on('change', '#inv-quote-all', function() {
-    $('#inv-quote-body .inv-quote-check').prop('checked', $(this).is(':checked'));
+$(document).on('change', '#inv-pos-all', function() {
+    $('#inv-pos-body .inv-pos-check').prop('checked', $(this).is(':checked'));
 });
 
 $(document).ready(function() {

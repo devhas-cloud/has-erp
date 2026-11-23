@@ -9,7 +9,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">{{ $isEdit ? 'Ubah '.$pl->packing_number : 'Buat Packing List' }}</h1>
-        <p class="page-header-sub">Satu baris = satu koli. Isi deskripsi (dari item Quotation atau sendiri), dimensi, berat, lalu pilih barang dari stok project yang masuk ke koli.</p>
+        <p class="page-header-sub">Satu baris = satu koli. Isi deskripsi (dari item POS atau sendiri), dimensi, berat, lalu pilih barang dari stok project yang masuk ke koli.</p>
     </div>
     <div class="page-header-actions">
         <a href="{{ $isEdit ? route('packing-list.show', $pl->id) : route('packing-list.index') }}" class="btn btn-secondary btn-sm">
@@ -98,11 +98,12 @@
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span><i class="fa-solid fa-boxes-stacked me-2" style="color:var(--accent)"></i>Koli</span>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="pklEditor.openQuotation()"><i class="fa fa-file-invoice me-1"></i> Dari Quotation</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="pkl-pos-btn" onclick="pklEditor.openPos()" disabled title="Pilih project terlebih dahulu"><i class="fa fa-file-invoice me-1"></i> Dari POS</button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="pklEditor.addLine({})"><i class="fa fa-plus me-1"></i> Koli Kosong</button>
                 </div>
             </div>
             <div class="card-body-custom p-2">
+                <div id="pkl-pos-hint" style="display:none;font-size:12.5px;color:#92400e;background:#fef3c7;border-radius:var(--radius-sm);padding:7px 10px;margin:0 0 8px"></div>
                 <div id="pkl-lines"></div>
                 <div class="px-1" style="font-size:12px;color:var(--text-muted)"><i class="fa fa-circle-info me-1"></i>Setiap koli wajib berisi minimal satu barang dari stok project. Unit ber-SN yang SN-nya belum diisi tidak bisa dipilih.</div>
             </div>
@@ -156,7 +157,13 @@ const pklEditor = ShipmentLines({
 function pklLoadProject() {
     var projectId = $('#pkl-project').val();
     $('#pkl-warehouse').html('<option value="">— Pilih project dulu —</option>');
-    if (!projectId) { pklEditor.setQuotationItems([]); pklEditor.reloadStocks(true); return; }
+    if (!projectId) {
+        pklEditor.setPosItems([]);
+        $('#pkl-pos-btn').prop('disabled', true).attr('title', 'Pilih project terlebih dahulu');
+        $('#pkl-pos-hint').hide().empty();
+        pklEditor.reloadStocks(true);
+        return;
+    }
 
     $.get(pklProjectUrl, { project_id: projectId }).done(function(res) {
         var opts = '<option value="">— Pilih Gudang —</option>';
@@ -166,7 +173,17 @@ function pklLoadProject() {
         if (wh) $('#pkl-warehouse').val(String(wh));
         pklInitialWarehouse = null;
 
-        pklEditor.setQuotationItems(res.quotation_items || []);
+        var posItems = res.pos_items || [];
+        pklEditor.setPosItems(posItems);
+        $('#pkl-pos-btn').prop('disabled', posItems.length === 0)
+            .attr('title', posItems.length ? '' : 'Project ini belum punya POS');
+        if (posItems.length) {
+            $('#pkl-pos-hint').hide().empty();
+        } else {
+            $('#pkl-pos-hint').html('<i class="fa fa-circle-info me-1"></i>' + (res.pos_number
+                ? 'POS ' + pklEsc(res.pos_number) + ' tidak memiliki item — isi deskripsi sendiri atau perbaiki POS.'
+                : 'Project ini belum punya POS — isi deskripsi sendiri atau buat POS terlebih dahulu.')).show();
+        }
         var d = res.defaults || {};
         if (!pklIsEdit) {
             $('#pkl-recipient').val(d.name || '');

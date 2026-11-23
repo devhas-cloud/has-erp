@@ -229,6 +229,11 @@ class Quotation extends Model
         return $this->hasOne(ProfitEstimate::class);
     }
 
+    public function pos(): HasMany
+    {
+        return $this->hasMany(Pos::class);
+    }
+
     public function groupVersions(): HasMany
     {
         return $this->hasMany(self::class, 'group_id', 'group_id')->orderBy('version');

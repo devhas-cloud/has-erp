@@ -16,6 +16,7 @@
 return [
     // Admin
     'projects' => 'PRJ',
+    'pos' => 'SO',                 // Point of Sale (Sales Order)
 
     // Purchasing
     'goods_requests' => 'PR',      // Purchase Requisition (Permintaan Barang)
