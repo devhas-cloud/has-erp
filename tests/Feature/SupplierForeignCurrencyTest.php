@@ -248,9 +248,10 @@ class SupplierForeignCurrencyTest extends TestCase
 
         // Kurs master naik ke 17.000: hutang tetap dinilai nilai buku, selisih 800.000 belum terealisasi.
         Currency::where('name', 'USD')->update(['rate' => 17000]);
-        $row = (new PayableReport)->supplierSummary()->first();
-        $this->assertEquals(16200000, $row['outstanding']);
-        $this->assertEquals(800000, $row['unrealized_fx']);
+        // supplierByCurrency kini sadar-mata-uang: sisa dalam USD (bukan nilai buku IDR).
+        $row = (new PayableReport)->supplierByCurrency()->first();
+        $this->assertSame('USD', $row['currency']);
+        $this->assertEquals(1000, $row['sisa']);
         $this->assertEquals(800000, (new PayableReport)->fx()['unrealized_total']);
 
         // Tagihan lama berkurs perkiraan (hasil migrasi) boleh dikoreksi sekali, walau sudah ada pembayaran Posted.

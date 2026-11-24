@@ -12,8 +12,8 @@ use Illuminate\Support\Collection;
  * Laporan Piutang Customer (Finance, piutang Tahap C) — semua angka diturunkan
  * dari dokumen (invoice, penerimaan, timeline termin project).
  *
- *  - Piutang = invoice Approved yang belum dibayar (nilai termasuk PPN).
- *    Umurnya dihitung dari jatuh tempo invoice.
+ *  - Piutang = invoice Approved yang belum dibayar (nilai termasuk PPN),
+ *    keterlambatan dihitung dari jatuh tempo invoice.
  *  - Termin yang belum menjadi piutang diukur terhadap PO due date project:
  *    perkiraan tanggal = target tanggal termin, bila kosong = PO due date;
  *    "terlambat ditagih" bila tanggal itu sudah lewat tetapi termin belum diinvoice.
@@ -21,8 +21,6 @@ use Illuminate\Support\Collection;
  */
 class ReceivableReport
 {
-    public const AGING_BUCKETS = PayableReport::AGING_BUCKETS;
-
     /** Posisi termin pada timeline penagihan project. */
     public const POSITIONS = [
         'unscheduled' => 'Belum dijadwalkan',
@@ -60,19 +58,6 @@ class ReceivableReport
     public function daysOverdue(Invoice $invoice): int
     {
         return $invoice->due_date && $invoice->due_date->lt($this->today) ? (int) $invoice->due_date->diffInDays($this->today) : 0;
-    }
-
-    public function agingBucket(Invoice $invoice): string
-    {
-        $days = $this->daysOverdue($invoice);
-
-        return match (true) {
-            $days <= 0 => 'current',
-            $days <= 30 => 'd1_30',
-            $days <= 60 => 'd31_60',
-            $days <= 90 => 'd61_90',
-            default => 'd90',
-        };
     }
 
     /** Project yang punya timeline termin atau invoice (selain project batal). */
@@ -168,23 +153,6 @@ class ReceivableReport
         })->filter(fn ($row) => $row['company'])
             ->sortBy(fn ($row) => [-$row['overdue'], -$row['outstanding']])
             ->values();
-    }
-
-    /** Umur piutang per customer: [company, buckets => [key => nilai], total]. */
-    public function aging(): Collection
-    {
-        return $this->openInvoices()->groupBy(fn (Invoice $i) => $i->project?->company_id)->map(function (Collection $invoices) {
-            $buckets = array_fill_keys(array_keys(self::AGING_BUCKETS), 0.0);
-            foreach ($invoices as $invoice) {
-                $buckets[$this->agingBucket($invoice)] += (float) $invoice->total_payment;
-            }
-
-            return [
-                'company' => $invoices->first()->project?->company,
-                'buckets' => array_map(fn ($v) => round($v, 2), $buckets),
-                'total' => round(array_sum($buckets), 2),
-            ];
-        })->sortByDesc('total')->values();
     }
 
     /**
@@ -302,33 +270,5 @@ class ReceivableReport
                 'due_days' => $dueDays,
             ];
         })->sortBy(fn ($row) => [-$row['late_billing'], -$row['positions']['receivable']])->values();
-    }
-
-    /** Angka utama di atas laporan. */
-    public function headline(): array
-    {
-        $open = $this->openInvoices();
-        $ready = 0.0;
-        $late = 0;
-        foreach ($this->projects() as $project) {
-            foreach ($project->billingTerms as $term) {
-                if ($this->termPosition($term) === 'ready') {
-                    $ready += $this->termAmount($project, $term);
-                }
-                if ($this->isLateBilling($project, $term)) {
-                    $late++;
-                }
-            }
-        }
-
-        return [
-            'outstanding' => round($open->sum('total_payment'), 2),
-            'open_count' => $open->count(),
-            'overdue' => round($open->filter(fn ($i) => $this->daysOverdue($i) > 0)->sum('total_payment'), 2),
-            'overdue_count' => $open->filter(fn ($i) => $this->daysOverdue($i) > 0)->count(),
-            'due_week' => round($open->filter(fn ($i) => $this->daysOverdue($i) === 0 && $i->due_date && $i->due_date->lte($this->today->copy()->endOfWeek()))->sum('total_payment'), 2),
-            'ready' => round($ready, 2),
-            'late_billing' => $late,
-        ];
     }
 }

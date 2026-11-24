@@ -9,7 +9,6 @@ use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\StockLog;
-use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Models\SupplierBillItem;
 use App\Models\SupplierPayment;
@@ -48,6 +47,14 @@ class PayableReport
     public function baseCurrency(): string
     {
         return Currency::baseName();
+    }
+
+    /** Daftar mata uang yang muncul pada tagihan (untuk opsi filter). */
+    public function currencies(): Collection
+    {
+        return SupplierBill::whereIn('status', [SupplierBill::STATUS_VERIFIED, SupplierBill::STATUS_PARTIALLY_PAID, SupplierBill::STATUS_PAID])
+            ->distinct()->pluck('currency')
+            ->map(fn ($c) => strtoupper((string) $c))->filter()->sort()->values();
     }
 
     public function toBase(float $amount, ?string $currency): float
@@ -106,44 +113,66 @@ class PayableReport
     }
 
     /**
-     * Ringkasan per supplier (dalam mata uang dasar): nilai PO aktif, kas keluar
-     * bersih (pembayaran - refund), uang muka belum terpakai, sisa hutang,
-     * terlambat, jatuh tempo terdekat.
+     * Ringkasan hutang per (supplier × mata uang), murni dari tagihan
+     * (verified / sebagian lunas / lunas). Total = amountDue, Bayar = paidAmount,
+     * Sisa = outstanding — semuanya dalam mata uang tagihan.
      */
-    public function supplierSummary(): Collection
+    public function supplierByCurrency(): Collection
     {
-        $openBills = $this->openBills()->groupBy('supplier_id');
+        return SupplierBill::with(['supplier', 'allocations.payment'])
+            ->whereIn('status', [SupplierBill::STATUS_VERIFIED, SupplierBill::STATUS_PARTIALLY_PAID, SupplierBill::STATUS_PAID])
+            ->get()
+            ->groupBy(fn (SupplierBill $b) => $b->supplier_id.'|'.strtoupper((string) $b->currency))
+            ->map(function (Collection $bills) {
+                $first = $bills->first();
+                $open = $bills->filter(fn (SupplierBill $b) => $b->outstanding() > 0);
+                $overdue = $open->filter(fn (SupplierBill $b) => $this->daysOverdue($b) > 0);
 
-        $pos = PurchaseOrder::with(['supplier', 'items', 'supplierBills.allocations.payment', 'supplierRefunds'])
-            ->whereNotNull('supplier_id')
-            ->whereIn('status', [PurchaseOrder::STATUS_APPROVED, PurchaseOrder::STATUS_PARTIALLY_RECEIVED, PurchaseOrder::STATUS_RECEIVED, PurchaseOrder::STATUS_CANCELLED])
-            ->get()->groupBy('supplier_id');
+                return [
+                    'supplier' => $first->supplier,
+                    'currency' => strtoupper((string) $first->currency),
+                    'total' => round($bills->sum(fn (SupplierBill $b) => $b->amountDue()), 2),
+                    'paid' => round($bills->sum(fn (SupplierBill $b) => $b->paidAmount()), 2),
+                    'sisa' => round($bills->sum(fn (SupplierBill $b) => $b->outstanding()), 2),
+                    'open_count' => $open->count(),
+                    'overdue' => round($overdue->sum(fn (SupplierBill $b) => $b->outstanding()), 2),
+                    'next_due' => $open->sortBy('due_date')->first()?->due_date,
+                ];
+            })
+            ->sortByDesc('sisa')->values();
+    }
 
-        $payments = SupplierPayment::where('status', SupplierPayment::STATUS_POSTED)->get()->groupBy('supplier_id');
-        $refunds = SupplierRefund::where('status', SupplierRefund::STATUS_POSTED)->get()->groupBy('supplier_id');
+    /**
+     * Daftar tagihan ber-project per (bill × project), dalam mata uang tagihan:
+     * total = Σ item.amount, bayar = porsi paidAmount, sisa = total − bayar.
+     * ponytail: advance deduction & PPh mengurangi amountDue, bukan bagian "Bayar".
+     */
+    public function projectBills(): Collection
+    {
+        return SupplierBillItem::with(['bill.supplier', 'bill.allocations.payment', 'project'])
+            ->whereNotNull('project_id')
+            ->whereHas('bill', fn ($q) => $q->whereIn('status', [SupplierBill::STATUS_VERIFIED, SupplierBill::STATUS_PARTIALLY_PAID, SupplierBill::STATUS_PAID]))
+            ->get()
+            ->groupBy(fn (SupplierBillItem $item) => $item->bill_id.'|'.$item->project_id)
+            ->map(function (Collection $items) {
+                $bill = $items->first()->bill;
+                $project = $items->first()->project;
+                $total = round($items->sum('amount'), 2);
+                $ratio = $bill->amountDue() > 0 ? min(1, $bill->paidAmount() / $bill->amountDue()) : 0;
+                $paid = round($total * $ratio, 2);
 
-        $supplierIds = collect([$openBills->keys(), $pos->keys(), $payments->keys()])->flatten()->unique();
-
-        return Supplier::whereIn('id', $supplierIds)->orderBy('name')->get()->map(function (Supplier $supplier) use ($openBills, $pos, $payments, $refunds) {
-            $bills = $openBills->get($supplier->id, collect());
-            $supplierPos = $pos->get($supplier->id, collect());
-            $outstanding = $bills->sum(fn (SupplierBill $b) => $b->outstandingBase());
-            $current = $bills->sum(fn (SupplierBill $b) => $this->toBase($b->outstanding(), $b->currency));
-            $overdueBills = $bills->filter(fn (SupplierBill $b) => $this->daysOverdue($b) > 0);
-
-            return [
-                'supplier' => $supplier,
-                'po_value' => round($supplierPos->where('status', '!=', PurchaseOrder::STATUS_CANCELLED)->sum(fn (PurchaseOrder $po) => round($po->netTotal() * $po->exchangeRate(), 2)), 2),
-                'paid' => round($payments->get($supplier->id, collect())->sum('amount_base') - $refunds->get($supplier->id, collect())->sum('amount_base'), 2),
-                'advance_balance' => round($supplierPos->sum(fn (PurchaseOrder $po) => $this->toBase($po->advanceBalance(), $po->currencyCode())), 2),
-                'outstanding' => round($outstanding, 2),
-                'unrealized_fx' => round($current - $outstanding, 2),
-                'overdue' => round($overdueBills->sum(fn (SupplierBill $b) => $b->outstandingBase()), 2),
-                'overdue_count' => $overdueBills->count(),
-                'open_count' => $bills->count(),
-                'next_due' => $bills->sortBy('due_date')->first()?->due_date,
-            ];
-        })->filter(fn ($row) => $row['po_value'] > 0 || $row['outstanding'] > 0 || $row['paid'] != 0 || $row['advance_balance'] > 0)->values();
+                return [
+                    'project' => $project,
+                    'bill' => $bill,
+                    'currency' => strtoupper((string) $bill->currency),
+                    'date' => $bill->bill_date,
+                    'total' => $total,
+                    'paid' => $paid,
+                    'sisa' => round($total - $paid, 2),
+                ];
+            })
+            ->sortBy(fn (array $r) => ($r['project']?->project_number ?? '').'|'.($r['date']?->format('Y-m-d') ?? ''))
+            ->values();
     }
 
     /** Umur hutang per supplier: [supplier, buckets => [key => nilai dasar], total]. */

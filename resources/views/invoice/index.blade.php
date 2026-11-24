@@ -20,8 +20,24 @@
 </div>
 
 <div class="card-custom fade-in">
-    <div class="card-header-custom">
+    <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="fa-solid fa-file-invoice-dollar me-2" style="color:var(--accent)"></i>Daftar Invoice</span>
+        @php
+            $invFilterChips = array_filter([
+                request()->filled('company_id') ? 'Customer terpilih' : null,
+                request()->filled('project_id') ? 'Project terpilih' : null,
+                request()->boolean('overdue') ? 'Hanya terlambat' : null,
+            ]);
+        @endphp
+        @if($invFilterChips)
+            <span class="d-flex align-items-center gap-2" style="font-size:12px;color:var(--text-muted)">
+                <i class="fa fa-filter"></i>
+                @foreach($invFilterChips as $chip)
+                    <span class="status-badge" style="background:#f1f5f9;color:#475569">{{ $chip }}</span>
+                @endforeach
+                <a href="{{ route('invoice.index') }}" class="btn btn-secondary btn-sm py-0"><i class="fa fa-rotate-left me-1"></i>Reset</a>
+            </span>
+        @endif
     </div>
     <div class="card-body-custom p-2">
         <div class="table-responsive">
@@ -58,6 +74,14 @@ const invDeleteUrl = '{{ route("invoice.destroy", "__ID__") }}';
 const invCanUpdate = {{ $canUpdate ? 'true' : 'false' }};
 const invCanDelete = {{ $canDelete ? 'true' : 'false' }};
 
+// Filter dari URL (mis. drill-down Laporan Piutang: company_id / project_id / overdue).
+const invQuery = new URLSearchParams(window.location.search);
+const invFilters = {
+    company_id: invQuery.get('company_id') || '',
+    project_id: invQuery.get('project_id') || '',
+    overdue: invQuery.get('overdue') || ''
+};
+
 function invNumber(value) {
     return Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
@@ -81,7 +105,14 @@ function initInvTable() {
     invTable = $('#inv-table').DataTable({
         processing: true,
         serverSide: true,
-        ajax: '{{ route("invoice.data") }}',
+        ajax: {
+            url: '{{ route("invoice.data") }}',
+            data: function(d) {
+                d.company_id = invFilters.company_id;
+                d.project_id = invFilters.project_id;
+                d.overdue = invFilters.overdue;
+            }
+        },
         order: [],
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },

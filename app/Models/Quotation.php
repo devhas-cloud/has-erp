@@ -41,6 +41,11 @@ class Quotation extends Model
         self::STATUS_FINISH => 'Finish',
     ];
 
+    /** Sales manager utk cetakan: divisi Sales (Internal) + task role "Manager Division". */
+    private const SALES_MANAGER_DIVISION_ID = 6;
+
+    private const SALES_MANAGER_TASK_ROLE_ID = 4;
+
     /**
      * Tarif PPN (11%) dihitung dari subtotal — mengikuti contoh dokumen
      * QUOTATION PT. HAS ENVIRONMENTAL (PPN = 11% x subtotal).
@@ -196,6 +201,44 @@ class Quotation extends Model
     public function salesNames(): string
     {
         $names = $this->salesUsers()
+            ->map(fn (User $user) => $user->display_name)
+            ->filter();
+
+        return $names->isNotEmpty()
+            ? $names->implode(', ')
+            : (string) ($this->from_name ?? '');
+    }
+
+    /**
+     * Sales untuk cetakan PDF. Bila ada sales ber-flag intern, urutannya:
+     * intern dulu, lalu sales manager (divisi Sales id 6 + task role
+     * "Manager Division" id 4), lalu sales lain. Tanpa intern = apa adanya.
+     */
+    public function printSalesUsers()
+    {
+        $users = $this->salesUsers();
+
+        if (! $users->contains(fn (User $user) => (bool) $user->intern)) {
+            return $users;
+        }
+
+        $interns = $users->filter(fn (User $user) => (bool) $user->intern)->values();
+
+        $managers = User::where('division_id', self::SALES_MANAGER_DIVISION_ID)
+            ->where('task_role_id', self::SALES_MANAGER_TASK_ROLE_ID)
+            ->orderBy('full_name')
+            ->get();
+
+        $others = $users
+            ->reject(fn (User $user) => (bool) $user->intern || $managers->contains('id', $user->id))
+            ->values();
+
+        return $interns->concat($managers)->concat($others)->unique('id')->values();
+    }
+
+    public function printSalesNames(): string
+    {
+        $names = $this->printSalesUsers()
             ->map(fn (User $user) => $user->display_name)
             ->filter();
 

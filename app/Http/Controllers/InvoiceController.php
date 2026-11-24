@@ -46,6 +46,21 @@ class InvoiceController extends Controller
             });
         }
 
+        if ($request->filled('company_id')) {
+            $query->whereHas('project', fn ($p) => $p->where('company_id', (int) $request->input('company_id')));
+        }
+
+        if ($request->filled('project_id')) {
+            $query->where('project_id', (int) $request->input('project_id'));
+        }
+
+        if ($request->boolean('overdue')) {
+            $query->where('approval_status', Invoice::APPROVAL_APPROVED)
+                ->where('status', Invoice::STATUS_UNPAID)
+                ->whereNotNull('due_date')
+                ->whereDate('due_date', '<', now()->toDateString());
+        }
+
         $recordsFiltered = $query->count();
 
         $start = (int) $request->input('start', 0);

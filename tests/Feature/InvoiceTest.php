@@ -467,6 +467,37 @@ class InvoiceTest extends TestCase
             ->assertJsonPath('data.0.status', Invoice::STATUS_UNPAID);
     }
 
+    public function test_data_filters_by_company_project_and_overdue(): void
+    {
+        $this->makeInvoice(['invoice_number' => 'INV-OLD', 'due_date' => now()->subDays(10)->toDateString()]);
+        $this->makeInvoice(['invoice_number' => 'INV-NEW', 'due_date' => now()->addDays(10)->toDateString()]);
+
+        $this->actingAs($this->viewer)->getJson(route('invoice.data', ['company_id' => $this->company->id, 'overdue' => 1]))
+            ->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.invoice_number', 'INV-OLD');
+
+        $this->actingAs($this->viewer)->getJson(route('invoice.data', ['project_id' => $this->project->id]))
+            ->assertOk()
+            ->assertJsonPath('recordsFiltered', 2);
+    }
+
+    private function makeInvoice(array $attributes = []): Invoice
+    {
+        return Invoice::create(array_merge([
+            'project_id' => $this->project->id,
+            'invoice_number' => 'INV-'.uniqid(),
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(10)->toDateString(),
+            'terms' => 30,
+            'subtotal' => 100000,
+            'ppn' => 11,
+            'status' => Invoice::STATUS_UNPAID,
+            'approval_status' => Invoice::APPROVAL_APPROVED,
+            'approved_at' => now(),
+        ], $attributes));
+    }
+
     public function test_reject_requires_note_and_resubmit_clears_approval_metadata(): void
     {
         $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload())->assertOk();

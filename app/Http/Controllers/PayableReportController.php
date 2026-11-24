@@ -7,6 +7,7 @@ use App\Services\PayableDueNotifier;
 use App\Support\ModuleAccess;
 use App\Support\PayableReport;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -37,12 +38,53 @@ class PayableReportController extends Controller
             'tabs' => self::TABS,
             'base' => $report->baseCurrency(),
             'report' => $report,
-            'rows' => $this->rows($report, $tab, $request),
+            // Tab supplier & project dimuat lewat ajax (DataTables server-side).
+            'rows' => in_array($tab, ['aging', 'schedule', 'fx'], true) ? $this->rows($report, $tab, $request) : collect(),
             'period' => $this->period($request),
-            'totals' => $this->headline($report),
+            'currencies' => $report->currencies(),
             'reminder' => PayableDueNotifier::settings(),
             'canManageNotification' => ModuleAccess::for()->module('MOD_FINANCE_NOTIFICATION')->canRead(),
         ]);
+    }
+
+    /** Data JSON untuk DataTables server-side (tab supplier & project). */
+    public function data(Request $request)
+    {
+        $tab = $request->input('tab') === 'project' ? 'project' : 'supplier';
+        $report = new PayableReport;
+        $rows = $this->rows($report, $tab, $request);
+        $total = $rows->count();
+
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 25);
+        $page = $rows->slice($start, $length)->values();
+
+        $view = $tab === 'project' ? 'payable-report.partials.project-row' : 'payable-report.partials.supplier-row';
+        $rowClass = fn (array $r) => $tab === 'supplier' && ($r['overdue'] ?? 0) > 0 ? 'pr-row-overdue' : '';
+        $data = $page->map(fn (array $r, $i) => [
+            'DT_RowClass' => $rowClass($r),
+            'html' => view($view, ['r' => $r, 'i' => $start + $i])->render(),
+        ]);
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $total,
+            'recordsFiltered' => $total,
+            'footer' => $this->footer($tab, $rows),
+            'data' => $data,
+        ]);
+    }
+
+    /** Baris total (tfoot); nominal tidak dijumlah lintas mata uang. */
+    private function footer(string $tab, $rows): array
+    {
+        $single = $rows->pluck('currency')->unique()->count() === 1;
+        $sum = fn (string $key) => $single ? \App\Support\Number::money($rows->sum($key)) : '—';
+        $label = $single ? 'Total' : 'Total (multi-currency)';
+
+        return $tab === 'project'
+            ? ['', $label, '', $sum('total'), $sum('paid'), $sum('sisa')]
+            : ['', $label, $sum('total'), $sum('paid'), $sum('sisa')];
     }
 
     public function export(Request $request)
@@ -54,7 +96,8 @@ class PayableReportController extends Controller
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle(substr(self::TABS[$tab], 0, 31));
-        $sheet->fromArray([self::TABS[$tab].' — per '.now()->format('d/m/Y').' (nilai '.$report->baseCurrency().', kurs master)'], null, 'A1');
+        $note = in_array($tab, ['supplier', 'project'], true) ? 'dalam mata uang tagihan' : 'nilai '.$report->baseCurrency().', kurs master';
+        $sheet->fromArray([self::TABS[$tab].' — per '.now()->format('d/m/Y').' ('.$note.')'], null, 'A1');
         $sheet->fromArray($headers, null, 'A3');
         $sheet->fromArray($data, null, 'A4');
         $sheet->getStyle('A3:'.$sheet->getHighestColumn().'3')->getFont()->setBold(true);
@@ -90,22 +133,39 @@ class PayableReportController extends Controller
             'fx' => $report->fx($period['from'], $period['to']),
             'aging' => $report->aging(),
             'schedule' => $report->schedule(),
-            'project' => $report->projectCosts(),
-            default => $report->supplierSummary(),
+            'project' => $this->filterRows($report->projectBills(), 'project', $request),
+            default => $this->filterRows($report->supplierByCurrency(), 'supplier', $request),
         };
     }
 
-    /** Angka utama di atas laporan. */
-    private function headline(PayableReport $report): array
+    /** Terapkan cari + filter mata uang (+ rentang tanggal untuk project). */
+    private function filterRows(Collection $rows, string $tab, Request $request): Collection
     {
-        $open = $report->openBills();
+        $q = mb_strtolower(trim((string) ($request->input('q') ?: $request->input('search.value', ''))));
+        if ($q !== '') {
+            $rows = $rows->filter(function (array $r) use ($q, $tab) {
+                $parts = $tab === 'project'
+                    ? [$r['project']?->project_number, $r['project']?->project_name, $r['bill']?->supplier?->name, $r['bill']?->bill_number, $r['bill']?->supplier_invoice_number]
+                    : [$r['supplier']?->name];
 
-        return [
-            'outstanding' => round($open->sum(fn (SupplierBill $b) => $b->outstandingBase()), 2),
-            'overdue' => round($open->filter(fn ($b) => $report->daysOverdue($b) > 0)->sum(fn (SupplierBill $b) => $b->outstandingBase()), 2),
-            'due_week' => round($open->filter(fn ($b) => $report->daysOverdue($b) === 0 && $b->due_date->lte(now()->endOfWeek()))->sum(fn (SupplierBill $b) => $b->outstandingBase()), 2),
-            'open_count' => $open->count(),
-        ];
+                return str_contains(mb_strtolower(implode(' ', array_filter($parts))), $q);
+            });
+        }
+
+        $currency = strtoupper((string) $request->input('currency', ''));
+        if ($currency !== '') {
+            $rows = $rows->filter(fn (array $r) => $r['currency'] === $currency);
+        }
+
+        if ($tab === 'project') {
+            $from = $request->date('from');
+            $to = $request->date('to')?->endOfDay();
+            $rows = $rows
+                ->when($from, fn ($c) => $c->filter(fn (array $r) => $r['date'] && $r['date']->gte($from)))
+                ->when($to, fn ($c) => $c->filter(fn (array $r) => $r['date'] && $r['date']->lte($to)));
+        }
+
+        return $rows->values();
     }
 
     /** @return array{0: array, 1: array} */
@@ -131,17 +191,16 @@ class PayableReportController extends Controller
                 ])->all(),
             ],
             'project' => [
-                ['No. Project', 'Project', 'Komitmen Pembelian', 'Diterima', 'Ditagih', 'Terbayar', 'Sisa Tagihan', 'Alokasi Stok', 'Selisih Kurs', 'Total Biaya', 'Estimasi Biaya (PL)', 'Selisih'],
+                ['No. Project', 'Project', 'Tanggal', 'Mata Uang', 'Total Biaya', 'Bayar', 'Sisa Biaya'],
                 $rows->map(fn ($r) => [
-                    $r['project']->project_number, $r['project']->project_name, $r['commitment'], $r['received'], $r['billed'], $r['paid'],
-                    $r['outstanding'], $r['stock_allocated'], $r['fx'], $r['actual'], $r['estimate'], $r['variance'],
+                    $r['project']?->project_number, $r['project']?->project_name, $r['date']?->format('d/m/Y'),
+                    $r['currency'], $r['total'], $r['paid'], $r['sisa'],
                 ])->all(),
             ],
             default => [
-                ['Supplier', 'Nilai PO Aktif', 'Kas Keluar Bersih', 'Uang Muka Belum Terpakai', 'Sisa Hutang (nilai buku)', 'Selisih Kurs Belum Terealisasi', 'Terlambat', 'Tagihan Terlambat', 'Tagihan Terbuka', 'Jatuh Tempo Terdekat'],
+                ['Supplier', 'Mata Uang', 'Total Hutang', 'Bayar', 'Sisa Hutang'],
                 $rows->map(fn ($r) => [
-                    $r['supplier']->name, $r['po_value'], $r['paid'], $r['advance_balance'], $r['outstanding'], $r['unrealized_fx'], $r['overdue'],
-                    $r['overdue_count'], $r['open_count'], $r['next_due']?->format('d/m/Y'),
+                    $r['supplier']?->name, $r['currency'], $r['total'], $r['paid'], $r['sisa'],
                 ])->all(),
             ],
         };

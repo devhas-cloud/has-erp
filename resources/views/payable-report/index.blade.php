@@ -8,25 +8,27 @@
 @endphp
 
 @section('styles')
+@include('partials.list-toolbar')
 <style>
-    .pr-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
-    @media (max-width: 991.98px) { .pr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    .pr-kpi { background: #fff; border: 1px solid var(--card-border); border-radius: var(--radius); padding: 14px 16px; }
-    .pr-kpi .lbl { font-size: 12px; color: var(--text-muted); }
-    .pr-kpi .val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
-    .pr-kpi.danger .val { color: #b91c1c; }
-    .pr-kpi.warn .val { color: #b45309; }
-    .pr-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--card-border); margin-bottom: 14px; }
-    .pr-tabs a { padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .pr-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--card-border); margin-bottom: 6px; }
+    .pr-tabs a { padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 6px; }
     .pr-tabs a.active { color: var(--accent); border-bottom-color: var(--accent); }
     .pr-tabs a:hover { color: var(--text-primary); }
+    .pr-toolbar { position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 5; background: #f8fafc; border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
     .pr-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pr-muted { font-size: 12px; color: var(--text-muted); }
     .pr-bar { display: flex; height: 6px; border-radius: 99px; overflow: hidden; background: #eef2f7; min-width: 120px; }
     .pr-bar span { display: block; height: 100%; }
     .pr-group-row td { background: var(--accent-subtle) !important; font-weight: 600; }
     .pr-group-row.overdue td { background: #fef2f2 !important; color: #7f1d1d; }
+    table.pr-table { width: 100%; }
+    table.pr-table thead th { font-weight: 700; white-space: nowrap; }
+    table.pr-table tbody tr td { transition: background .12s ease; }
+    table.pr-table tbody tr:hover td { background: #f8fafc; }
+    table.pr-table tbody tr.pr-row-overdue td { background: #fef2f2; }
+    table.pr-table tbody tr.pr-row-overdue td:first-child { box-shadow: inset 3px 0 0 #dc2626; }
     table.pr-table tfoot td { font-weight: 700; border-top: 2px solid var(--card-border); }
+    .pr-export { font-size: 12.5px; height: 32px; white-space: nowrap; }
 </style>
 @endsection
 
@@ -34,18 +36,8 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Laporan Hutang</h1>
-        <p class="page-header-sub">Posisi hutang supplier per {{ now()->format('d/m/Y') }}. Nilai dalam {{ $base }}; tagihan valas dinilai dengan kurs tanggal invoice supplier (nilai buku). Selisih terhadap kurs terbaru ada di tab Selisih Kurs.</p>
+        <p class="page-header-sub">Posisi hutang supplier per {{ now()->format('d/m/Y') }}. Nilai ditampilkan dalam mata uang masing-masing tagihan.</p>
     </div>
-    <div class="page-header-actions">
-        <a href="{{ route('payable-report.export', array_merge(['tab' => $tab], $tab === 'fx' ? $period : [])) }}" class="btn btn-secondary btn-sm"><i class="fa fa-file-excel me-1"></i> Export Excel</a>
-    </div>
-</div>
-
-<div class="pr-kpis">
-    <div class="pr-kpi"><div class="lbl">Sisa hutang</div><div class="val">{{ $money($totals['outstanding']) }}</div><div class="pr-muted">{{ $totals['open_count'] }} tagihan terbuka</div></div>
-    <div class="pr-kpi danger"><div class="lbl">Lewat jatuh tempo</div><div class="val">{{ $money($totals['overdue']) }}</div><div class="pr-muted"><a href="{{ route('supplier-bill.index', ['overdue' => 1]) }}">Lihat tagihan terlambat</a></div></div>
-    <div class="pr-kpi warn"><div class="lbl">Jatuh tempo minggu ini</div><div class="val">{{ $money($totals['due_week']) }}</div><div class="pr-muted">s/d {{ now()->endOfWeek()->format('d/m/Y') }}</div></div>
-    <div class="pr-kpi"><div class="lbl">Belum jatuh tempo</div><div class="val">{{ $money($totals['outstanding'] - $totals['overdue']) }}</div><div class="pr-muted">sisa hutang yang belum terlambat</div></div>
 </div>
 
 <div class="card-custom fade-in">
@@ -55,6 +47,44 @@
                 <a href="{{ route('payable-report.index', ['tab' => $key]) }}" class="{{ $tab === $key ? 'active' : '' }}" @if($tab === $key) aria-current="page" @endif>{{ $label }}</a>
             @endforeach
         </nav>
+
+        @if($tab === 'supplier' || $tab === 'project')
+            <div class="list-toolbar pr-toolbar" id="pr-toolbar">
+                <div class="lt-search">
+                    <i class="fa fa-magnifying-glass"></i>
+                    <input type="search" class="form-control" data-search autocomplete="off"
+                           placeholder="@if($tab === 'supplier')Cari supplier…@elseCari project, supplier, no. tagihan…@endif">
+                    <button type="button" class="lt-clear" title="Hapus pencarian"><i class="fa fa-xmark"></i></button>
+                </div>
+                @if($currencies->count() > 1)
+                <select class="form-select" data-filter="currency" aria-label="Mata uang">
+                    <option value="">Semua Mata Uang</option>
+                    @foreach($currencies as $c)<option value="{{ $c }}">{{ $c }}</option>@endforeach
+                </select>
+                @endif
+                @if($tab === 'project')
+                <div class="lt-date" title="Tanggal tagihan">
+                    <input type="date" class="form-control" data-filter="from" aria-label="Dari tanggal">
+                    <span>–</span>
+                    <input type="date" class="form-control" data-filter="to" aria-label="Sampai tanggal">
+                </div>
+                @endif
+                <a href="#" class="btn btn-sm btn-outline-secondary pr-export" title="Export tab ini ke Excel dengan filter aktif"><i class="fa fa-file-excel me-1"></i>Export</a>
+                <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            </div>
+        @else
+            <form class="list-toolbar pr-toolbar" id="pr-getform" method="GET" action="{{ route('payable-report.index') }}">
+                <input type="hidden" name="tab" value="{{ $tab }}">
+                @if($tab === 'fx')
+                    <div class="lt-date" title="Periode">
+                        <input type="date" class="form-control" name="from" value="{{ $period['from'] }}" aria-label="Dari tanggal">
+                        <span>–</span>
+                        <input type="date" class="form-control" name="to" value="{{ $period['to'] }}" aria-label="Sampai tanggal">
+                    </div>
+                @endif
+                <button type="submit" class="btn btn-sm btn-outline-secondary ms-auto pr-export" formaction="{{ route('payable-report.export') }}" title="Export tab ini ke Excel"><i class="fa fa-file-excel me-1"></i>Export</button>
+            </form>
+        @endif
 
         <div class="table-responsive">
         @switch($tab)
@@ -104,12 +134,6 @@
 
             @case('fx')
                 @php $fxMoney = fn ($v) => ($v > 0 ? '' : ($v < 0 ? '−' : '')).$money(abs($v)); @endphp
-                <form class="d-flex flex-wrap align-items-end gap-2 mb-3" method="GET" action="{{ route('payable-report.index') }}">
-                    <input type="hidden" name="tab" value="fx">
-                    <div><label class="form-label pr-muted mb-1" for="pr-fx-from">Dari</label><input type="date" id="pr-fx-from" name="from" class="form-control form-control-sm" value="{{ $period['from'] }}"></div>
-                    <div><label class="form-label pr-muted mb-1" for="pr-fx-to">Sampai</label><input type="date" id="pr-fx-to" name="to" class="form-control form-control-sm" value="{{ $period['to'] }}"></div>
-                    <button type="submit" class="btn btn-secondary btn-sm"><i class="fa fa-filter me-1"></i> Tampilkan</button>
-                </form>
                 <p class="pr-muted mb-2">
                     <strong>Terealisasi</strong> = pembayaran / refund valas yang sudah diposting: nilai aktual (kurs bank) dibanding nilai buku (kurs tagihan / kurs uang muka).
                     Angka positif = <span class="text-danger">rugi kurs</span>, negatif = <span style="color:#15803d">laba kurs</span>.
@@ -162,52 +186,18 @@
                 @break
 
             @case('project')
-                <p class="pr-muted mb-2">Nilai sebelum pajak. Komitmen = PO & Direct Purchase untuk project; Terbayar = porsi tagihan yang sudah dibayar / dipotong uang muka / PPh. Alokasi stok = stok bebas yang dialokasikan ke project (harga rata-rata). Diterima = nilai stok (kurs penerimaan, setelah diskon PO); sisa PO yang belum diterima memakai kurs PO. Selisih kurs = terima → tagihan + tagihan → bayar (positif = rugi), masuk Total Biaya sebagai Rupiah riil; nilai stok tidak diubah. Pembelian untuk stok belum dihitung sampai dialokasikan.</p>
-                <table class="table table-custom align-middle mb-0 pr-table">
-                    <thead><tr><th>Project</th><th class="pr-num">Komitmen</th><th class="pr-num">Diterima</th><th class="pr-num">Ditagih</th><th class="pr-num">Terbayar</th><th class="pr-num">Alokasi Stok</th><th class="pr-num">Selisih Kurs</th><th class="pr-num">Total Biaya</th><th class="pr-num">Estimasi (PL)</th><th class="pr-num">Selisih</th></tr></thead>
-                    <tbody>
-                        @forelse($rows as $r)
-                            <tr>
-                                <td><a href="{{ route('project.show', $r['project']->id) }}" class="fw-semibold">{{ $r['project']->project_number }}</a><div class="pr-muted">{{ $r['project']->project_name }}</div></td>
-                                <td class="pr-num">{{ $money($r['commitment']) }}</td>
-                                <td class="pr-num">{{ $money($r['received']) }}</td>
-                                <td class="pr-num">{{ $money($r['billed']) }}</td>
-                                <td class="pr-num">{{ $money($r['paid']) }}</td>
-                                <td class="pr-num">{{ $r['stock_allocated'] ? $money($r['stock_allocated']) : '—' }}</td>
-                                <td class="pr-num {{ $r['fx'] > 0 ? 'text-danger' : ($r['fx'] < 0 ? 'text-success' : '') }}" title="Terima → tagihan {{ $money($r['fx_receipt']) }} · tagihan → bayar {{ $money($r['fx_payment']) }}">{{ abs($r['fx']) >= 0.01 ? $money($r['fx']) : '—' }}</td>
-                                <td class="pr-num fw-semibold">{{ $money($r['actual']) }}</td>
-                                <td class="pr-num">{{ $r['estimate'] !== null ? $money($r['estimate']) : '—' }}</td>
-                                <td class="pr-num {{ $r['variance'] !== null && $r['variance'] < 0 ? 'text-danger fw-semibold' : '' }}">{{ $r['variance'] !== null ? $money($r['variance']) : '—' }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="10" class="text-center py-4 pr-muted">Belum ada pembelian untuk project.</td></tr>
-                        @endforelse
-                    </tbody>
+                <table id="pr-project" class="table table-custom align-middle mb-0 pr-table" style="width:100%">
+                    <thead><tr><th class="text-center" style="width:50px">No</th><th>Project</th><th>Tanggal</th><th class="pr-num">Total Biaya</th><th class="pr-num">Bayar</th><th class="pr-num">Sisa Biaya</th></tr></thead>
+                    <tbody></tbody>
+                    <tfoot><tr><td></td><td></td><td></td><td class="pr-num"></td><td class="pr-num"></td><td class="pr-num"></td></tr></tfoot>
                 </table>
                 @break
 
             @default
-                <table class="table table-custom align-middle mb-0 pr-table">
-                    <thead><tr><th>Supplier</th><th class="pr-num">Nilai PO Aktif</th><th class="pr-num">Kas Keluar Bersih</th><th class="pr-num">Uang Muka Belum Terpakai</th><th class="pr-num">Sisa Hutang</th><th class="pr-num" title="Selisih bila sisa hutang valas dibayar dengan kurs master saat ini (+ rugi / − laba)">Selisih Kurs*</th><th class="pr-num">Terlambat</th><th>Jatuh Tempo Terdekat</th></tr></thead>
-                    <tbody>
-                        @forelse($rows as $r)
-                            <tr>
-                                <td><a href="{{ route('supplier-bill.index', ['supplier_id' => $r['supplier']->id]) }}" class="fw-semibold">{{ $r['supplier']->name }}</a><div class="pr-muted">{{ $r['open_count'] }} tagihan terbuka</div></td>
-                                <td class="pr-num">{{ $money($r['po_value']) }}</td>
-                                <td class="pr-num">{{ $money($r['paid']) }}</td>
-                                <td class="pr-num">{{ $r['advance_balance'] > 0 ? $money($r['advance_balance']) : '—' }}</td>
-                                <td class="pr-num fw-semibold">{{ $r['outstanding'] > 0 ? $money($r['outstanding']) : '—' }}</td>
-                                <td class="pr-num {{ $r['unrealized_fx'] > 0 ? 'text-danger' : ($r['unrealized_fx'] < 0 ? 'text-success' : '') }}">{{ abs($r['unrealized_fx']) >= 0.01 ? ($r['unrealized_fx'] < 0 ? '−' : '').$money(abs($r['unrealized_fx'])) : '—' }}</td>
-                                <td class="pr-num {{ $r['overdue'] > 0 ? 'text-danger fw-semibold' : '' }}">{{ $r['overdue'] > 0 ? $money($r['overdue']).' ('.$r['overdue_count'].')' : '—' }}</td>
-                                <td>{{ $r['next_due']?->format('d/m/Y') ?? '—' }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="8" class="text-center py-4 pr-muted">Belum ada data supplier.</td></tr>
-                        @endforelse
-                    </tbody>
-                    @if($rows->isNotEmpty())
-                    <tfoot><tr><td>Total</td><td class="pr-num">{{ $money($rows->sum('po_value')) }}</td><td class="pr-num">{{ $money($rows->sum('paid')) }}</td><td class="pr-num">{{ $money($rows->sum('advance_balance')) }}</td><td class="pr-num">{{ $money($rows->sum('outstanding')) }}</td><td class="pr-num">{{ $money($rows->sum('unrealized_fx')) }}</td><td class="pr-num">{{ $money($rows->sum('overdue')) }}</td><td></td></tr></tfoot>
-                    @endif
+                <table id="pr-supplier" class="table table-custom align-middle mb-0 pr-table" style="width:100%">
+                    <thead><tr><th class="text-center" style="width:50px">No</th><th>Supplier</th><th class="pr-num">Total Hutang</th><th class="pr-num">Bayar</th><th class="pr-num">Sisa Hutang</th></tr></thead>
+                    <tbody></tbody>
+                    <tfoot><tr><td></td><td></td><td class="pr-num"></td><td class="pr-num"></td><td class="pr-num"></td></tr></tfoot>
                 </table>
         @endswitch
         </div>
@@ -222,4 +212,61 @@
     @if($reminder['last_sent_date'])<span>· terakhir terkirim {{ \Illuminate\Support\Carbon::parse($reminder['last_sent_date'])->format('d/m/Y') }}</span>@endif
     @if($canManageNotification)<a href="{{ route('finance-notification.index') }}" class="ms-1"><i class="fa fa-gear me-1"></i>Atur</a>@endif
 </div>
+@endsection
+
+@section('scripts')
+<script>
+const prDataUrl = '{{ route("payable-report.data") }}';
+const prExportBase = '{{ route("payable-report.export") }}';
+const prTab = '{{ $tab }}';
+const prLang = {
+    lengthMenu: 'Tampilkan _MENU_ baris',
+    info: 'Menampilkan _START_–_END_ dari _TOTAL_ baris',
+    infoEmpty: 'Tidak ada baris',
+    infoFiltered: '(difilter dari _MAX_)',
+    zeroRecords: '<span style="color:var(--text-muted)"><i class="fa-solid fa-filter-circle-xmark me-1"></i>Tidak ada data yang cocok.</span>',
+    emptyTable: '<span style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i>Belum ada data.</span>',
+    paginate: { first: '«', previous: '‹', next: '›', last: '»' }
+};
+let prToolbar = null;
+
+function prToolbarParams() {
+    var params = { tab: prTab };
+    $('#pr-toolbar [data-filter]').each(function() { var v = $(this).val(); if (v) params[$(this).data('filter')] = v; });
+    var q = $('#pr-toolbar [data-search]').val();
+    if (q) params.q = q;
+    return params;
+}
+function prSyncExport() { $('.pr-export').attr('href', prExportBase + '?' + $.param(prToolbarParams())); }
+
+$(document).ready(function() {
+    if (prTab === 'supplier' || prTab === 'project') {
+        $('#pr-toolbar').on('change input click', '[data-filter], [data-search], .lt-clear, [data-reset]', function() { setTimeout(prSyncExport, 60); });
+
+        var cols = prTab === 'project' ? 6 : 5;
+        prToolbar = ListToolbar('#pr-toolbar', function() { return prTable; });
+        var prTable = $('#pr-' + prTab).DataTable({
+            layout: ListToolbar.layout,
+            language: prLang,
+            processing: true,
+            serverSide: true,
+            ajax: { url: prDataUrl, data: function(d) { d.tab = prTab; return prToolbar.params(d); } },
+            order: [],
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            columns: Array.from({ length: cols }, function() { return { data: null, defaultContent: '', render: function() { return ''; } }; }),
+            columnDefs: [{ orderable: false, targets: '_all' }],
+            createdRow: function(row, data) { $(row).html(data.html); }
+        });
+        prTable.on('xhr.dt', function(e, s, json) {
+            if (json && json.footer) { json.footer.forEach(function(cell, idx) { $('#pr-' + prTab + ' tfoot td').eq(idx).html(cell); }); }
+            prSyncExport();
+        });
+        prSyncExport();
+    } else {
+        // Tab aging/schedule/fx: form GET, auto-submit saat periode berubah.
+        $('#pr-getform').on('change', 'input[name="from"], input[name="to"]', function() { this.form.submit(); });
+    }
+});
+</script>
 @endsection

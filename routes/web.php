@@ -364,6 +364,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     // Finance — Laporan Piutang
     Route::get('receivable-report', [ReceivableReportController::class, 'index'])->name('receivable-report.index');
+    Route::get('receivable-report/data', [ReceivableReportController::class, 'data'])->name('receivable-report.data');
+    Route::get('receivable-report/forecast', [ReceivableReportController::class, 'forecast'])->name('receivable-report.forecast');
     Route::get('receivable-report/export', [ReceivableReportController::class, 'export'])->name('receivable-report.export');
 
     // Master Data — Notifikasi Finance (pengingat WhatsApp hutang & piutang)
@@ -554,6 +556,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::patch('supplier-bill/{id}/exchange-rate', [SupplierBillController::class, 'updateExchangeRate'])->name('supplier-bill.exchange-rate');
 
     Route::get('payable-report', [PayableReportController::class, 'index'])->name('payable-report.index');
+    Route::get('payable-report/data', [PayableReportController::class, 'data'])->name('payable-report.data');
     Route::get('payable-report/export', [PayableReportController::class, 'export'])->name('payable-report.export');
 
     Route::post('supplier/{id}/advance-limit', [SupplierController::class, 'updateAdvanceLimit'])->name('supplier.advance.approve');

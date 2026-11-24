@@ -93,17 +93,20 @@ class PayableReportTest extends TestCase
         ]);
     }
 
-    public function test_supplier_summary_aging_and_schedule(): void
+    public function test_supplier_by_currency_aging_and_schedule(): void
     {
         $report = new PayableReport;
 
-        $summary = $report->supplierSummary()->keyBy(fn ($r) => $r['supplier']->name);
-        $this->assertEquals(5500, $summary['PT Alpha']['outstanding']);
-        $this->assertEquals(4000, $summary['PT Alpha']['overdue']);
-        $this->assertSame(1, $summary['PT Alpha']['overdue_count']);
+        // Hutang murni dari tagihan, per (supplier × mata uang): Total=amountDue,
+        // Bayar=paidAmount, Sisa=outstanding.
+        $summary = $report->supplierByCurrency()->keyBy(fn ($r) => $r['supplier']->name);
+        $this->assertSame('IDR', $summary['PT Alpha']['currency']);
+        $this->assertEquals(7500, $summary['PT Alpha']['total']);
         $this->assertEquals(2000, $summary['PT Alpha']['paid']);
-        $this->assertEquals(10000, $summary['PT Alpha']['po_value']);
-        $this->assertEquals(800, $summary['PT Beta']['outstanding']);
+        $this->assertEquals(5500, $summary['PT Alpha']['sisa']);
+        $this->assertEquals(4000, $summary['PT Alpha']['overdue']);
+        $this->assertSame(2, $summary['PT Alpha']['open_count']);
+        $this->assertEquals(800, $summary['PT Beta']['sisa']);
 
         $aging = $report->aging()->keyBy(fn ($r) => $r['supplier']->name);
         $this->assertEquals(4000, $aging['PT Alpha']['buckets']['d31_60']);
@@ -129,8 +132,17 @@ class PayableReportTest extends TestCase
         foreach (array_keys(PayableReportController::TABS) as $tab) {
             $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => $tab]))->assertOk()->assertSee('Laporan Hutang');
         }
+        // Tab server-rendered: aging menampilkan supplier + nominal langsung.
         $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'aging']))->assertSee('PT Alpha')->assertSee('4,000');
-        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'project']))->assertSee('SPARING Gresik')->assertSee('11,500');
+        // Tab ajax: supplier/project merender cangkang; data lewat endpoint.
+        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'project']))->assertSee('Total Biaya');
+
+        $supplierData = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'supplier', 'draw' => 1]))->assertOk()->json();
+        $this->assertSame(2, $supplierData['recordsTotal']);
+
+        $projectData = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'project', 'draw' => 1]))->assertOk()->json();
+        $this->assertSame(1, $projectData['recordsTotal']);
+        $this->assertStringContainsString('SPARING Gresik', $projectData['data'][0]['html']);
 
         $export = $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => 'schedule']));
         $export->assertOk();

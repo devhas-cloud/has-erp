@@ -101,19 +101,9 @@ class ReceivableReportTest extends TestCase
         ], $attributes));
     }
 
-    public function test_headline_and_customer_summary(): void
+    public function test_customer_summary(): void
     {
         $report = new ReceivableReport;
-
-        $this->assertSame([
-            'outstanding' => 333000.0,
-            'open_count' => 1,
-            'overdue' => 333000.0,
-            'overdue_count' => 1,
-            'due_week' => 0.0,
-            'ready' => 500000.0,
-            'late_billing' => 1,
-        ], $report->headline());
 
         $rows = $report->customerSummary()->keyBy(fn ($r) => $r['company']->account_name);
         $this->assertSame(333000.0, $rows['PT Alpha']['outstanding']);
@@ -124,13 +114,30 @@ class ReceivableReportTest extends TestCase
         $this->assertSame(2000000.0, $rows['PT Beta']['unbilled']);
     }
 
-    public function test_aging_uses_invoice_due_date(): void
+    public function test_filters_and_drill_down_links(): void
     {
-        $row = (new ReceivableReport)->aging()->first();
+        // Tab customer & project dimuat lewat ajax (server-side DataTables).
+        $this->actingAs($this->viewer)->getJson(route('receivable-report.data', ['tab' => 'customer', 'overdue' => 1]))
+            ->assertOk()->assertSee('PT Alpha')->assertDontSee('PT Beta');
 
-        $this->assertSame('PT Alpha', $row['company']->account_name);
-        $this->assertSame(333000.0, $row['buckets']['d1_30']);
-        $this->assertSame(333000.0, $row['total']);
+        $this->actingAs($this->viewer)->getJson(route('receivable-report.data', ['tab' => 'project', 'late_billing' => 1]))
+            ->assertOk()->assertSee('26110002')->assertDontSee('26110001');
+
+        // Drill-down link ikut terender di sel customer (& jadi &amp; setelah escape Blade).
+        $this->actingAs($this->viewer)->getJson(route('receivable-report.data', ['tab' => 'customer']))
+            ->assertOk()
+            ->assertSee('company_id='.$this->alpha->company_id.'&amp;overdue=1', false);
+
+        // Tab forecast: HTML kelompok dimuat lewat ajax.
+        $this->actingAs($this->viewer)->get(route('receivable-report.forecast', ['kind' => 'invoice']))
+            ->assertOk()->assertSee('INV-DP')->assertDontSee('Terlambat ditagih (lewat target / PO due date)');
+
+        $this->actingAs($this->viewer)->get(route('receivable-report.forecast', ['group_by' => 'customer']))
+            ->assertOk()->assertSee('PT Alpha');
+
+        // Halaman utama merender toolbar + header kolom.
+        $this->actingAs($this->viewer)->get(route('receivable-report.index', ['tab' => 'customer']))
+            ->assertOk()->assertSee('Total Piutang')->assertSee('Sisa Piutang');
     }
 
     public function test_project_summary_splits_contract_by_term_position(): void
@@ -176,10 +183,11 @@ class ReceivableReportTest extends TestCase
                 ->assertOk()->assertDownload('laporan-piutang-'.$tab.'-2026-11-18.xlsx');
         }
 
-        $this->actingAs($this->viewer)->get(route('receivable-report.index', ['tab' => 'project']))
-            ->assertSee('26110002')->assertSee('1 termin terlambat ditagih');
-        $this->actingAs($this->viewer)->get(route('receivable-report.index', ['tab' => 'forecast']))
-            ->assertSee('Terlambat ditagih (lewat target / PO due date)')->assertSee('INV-DP');
+        // Data per tab dimuat lewat ajax.
+        $this->actingAs($this->viewer)->getJson(route('receivable-report.data', ['tab' => 'project']))
+            ->assertOk()->assertSee('26110002')->assertSee('1 termin terlambat ditagih');
+        $this->actingAs($this->viewer)->get(route('receivable-report.forecast'))
+            ->assertOk()->assertSee('Terlambat ditagih (lewat target / PO due date)')->assertSee('INV-DP');
 
         // Laporan murni laporan: tanpa form pengaturan, tanpa tautan Atur bagi yang tak punya akses Notifikasi Finance.
         $this->actingAs($this->viewer)->get(route('receivable-report.index'))
