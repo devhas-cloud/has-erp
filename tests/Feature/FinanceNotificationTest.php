@@ -94,6 +94,16 @@ class FinanceNotificationTest extends TestCase
         $this->actingAs($this->manager)->patchJson(route('finance-notification.update', 'payable'), $this->payload(['whatsapp_group_id' => null]))
             ->assertStatus(422);
 
+        $inactiveDivision = Division::create(['division_name' => 'Finance Nonaktif', 'description' => 'Nonaktif', 'type' => 'Internal', 'status' => 'Inactive']);
+        $inactive = WhatsAppGroup::create([
+            'division_id' => $inactiveDivision->id,
+            'group_name' => 'Finance Nonaktif',
+            'group_id' => '1203-100@g.us',
+            'status' => 'Inactive',
+        ]);
+        $this->actingAs($this->manager)->patchJson(route('finance-notification.update', 'payable'), $this->payload(['whatsapp_group_id' => $inactive->id]))
+            ->assertStatus(422)->assertJsonValidationErrors('whatsapp_group_id');
+
         $this->actingAs($this->manager)->patchJson(route('finance-notification.update', 'payable'), $this->payload())
             ->assertOk()->assertJsonPath('success', true);
         $this->assertSame('09:30', PayableDueNotifier::settings()['send_time']);

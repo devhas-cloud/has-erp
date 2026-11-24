@@ -546,7 +546,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('supplier-refund/{id}/documents', [SupplierRefundController::class, 'uploadDocument'])->name('supplier-refund.documents.store');
     Route::get('supplier-refund/{id}/documents/{document}', [SupplierRefundController::class, 'viewDocument'])->name('supplier-refund.documents.show');
     Route::delete('supplier-refund/{id}/documents/{document}', [SupplierRefundController::class, 'deleteDocument'])->name('supplier-refund.documents.destroy');
-    Route::resource('supplier-refund', SupplierRefundController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
+    Route::resource('supplier-refund', SupplierRefundController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
 
     Route::get('supplier-return/data', [SupplierReturnController::class, 'data'])->name('supplier-return.data');
     Route::get('supplier-return/returnable-lines', [SupplierReturnController::class, 'returnableLines'])->name('supplier-return.returnable-lines');

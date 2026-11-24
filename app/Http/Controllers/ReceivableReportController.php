@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\ReceivableDueNotifier;
 use App\Support\ModuleAccess;
+use App\Support\Number;
 use App\Support\ReceivableReport;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -19,9 +20,9 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 class ReceivableReportController extends Controller
 {
     public const TABS = [
-        'customer' => 'Piutang per Customer',
-        'forecast' => 'Proyeksi Penerimaan',
-        'project' => 'Piutang per Project',
+        'customer' => 'By Customer',
+        'project' => 'By Project',
+        'forecast' => 'Collection Forecast',
     ];
 
     public function index(Request $request)
@@ -56,6 +57,7 @@ class ReceivableReportController extends Controller
             'to' => null,
             'late_billing' => $request->boolean('late_billing'),
             'receivable' => $request->boolean('receivable'),
+            'status' => in_array($request->input('status'), ['receivable', 'paid'], true) ? $request->input('status') : '',
             'group_by' => 'period',
         ];
 
@@ -101,22 +103,21 @@ class ReceivableReportController extends Controller
     private function footer(string $tab, $rows): array
     {
         if ($tab === 'project') {
+            // 10 kolom: No, Customer, Project, Tgl PO, Terima PO, Jatuh Tempo PO, Kirim, Kontrak, Dibayar, Sisa.
             return [
-                '', 'Total',
-                \App\Support\Number::money($rows->sum('contract')),
-                '',
-                \App\Support\Number::money($rows->sum(fn ($r) => $r['positions']['in_process'] + $r['positions']['receivable'] + $r['positions']['paid'])),
-                \App\Support\Number::money($rows->sum(fn ($r) => $r['positions']['paid'])),
-                \App\Support\Number::money($rows->sum(fn ($r) => $r['positions']['receivable'])),
-                '',
+                '', 'Total', '', '', '', '', '',
+                Number::money($rows->sum('contract')),
+                Number::money($rows->sum('paid')),
+                Number::money($rows->sum('remaining')),
             ];
         }
 
         return [
             '', 'Total',
-            \App\Support\Number::money($rows->sum('billed')),
-            \App\Support\Number::money($rows->sum('received')),
-            \App\Support\Number::money($rows->sum('outstanding')),
+            $rows->sum('project_count'),
+            Number::money($rows->sum('contract')),
+            Number::money($rows->sum('paid')),
+            Number::money($rows->sum('remaining')),
         ];
     }
 
@@ -129,7 +130,7 @@ class ReceivableReportController extends Controller
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle(substr(self::TABS[$tab], 0, 31));
-        $sheet->fromArray([self::TABS[$tab].' — per '.now()->format('d/m/Y').' ('.$note.')'], null, 'A1');
+        $sheet->fromArray(['Receivables '.self::TABS[$tab].' — as of '.now()->format('d/m/Y').' ('.$note.')'], null, 'A1');
         $sheet->fromArray($headers, null, 'A3');
         $sheet->fromArray($data, null, 'A4');
         $sheet->getStyle('A3:'.$sheet->getHighestColumn().'3')->getFont()->setBold(true);
@@ -159,6 +160,7 @@ class ReceivableReportController extends Controller
             'to' => $request->date('to')?->endOfDay(),
             'late_billing' => $request->boolean('late_billing'),
             'receivable' => $request->boolean('receivable'),
+            'status' => in_array($request->input('status'), ['receivable', 'paid'], true) ? $request->input('status') : '',
             'group_by' => in_array($request->input('group_by'), ['period', 'customer'], true) ? $request->input('group_by') : 'period',
         ];
     }
@@ -181,7 +183,13 @@ class ReceivableReportController extends Controller
                 if ($f['late_billing'] && $r['late_billing'] <= 0) {
                     return false;
                 }
-                if ($f['receivable'] && $r['positions']['receivable'] <= 0) {
+                if ($f['receivable'] && $r['remaining'] <= 0) {
+                    return false;
+                }
+                if ($f['status'] === 'receivable' && $r['remaining'] <= 0) {
+                    return false;
+                }
+                if ($f['status'] === 'paid' && $r['remaining'] > 0) {
                     return false;
                 }
 
@@ -194,6 +202,15 @@ class ReceivableReportController extends Controller
 
             default => $report->customerSummary()->filter(function (array $r) use ($f, $match) {
                 if ($f['overdue'] && $r['overdue'] <= 0) {
+                    return false;
+                }
+                if ($f['receivable'] && $r['remaining'] <= 0) {
+                    return false;
+                }
+                if ($f['status'] === 'receivable' && $r['remaining'] <= 0) {
+                    return false;
+                }
+                if ($f['status'] === 'paid' && $r['remaining'] > 0) {
                     return false;
                 }
 
@@ -238,7 +255,7 @@ class ReceivableReportController extends Controller
                 ->map(function ($rows) {
                     $first = $rows->first();
 
-                    return $this->groupForecast($rows, 'c_'.($first['project']?->company_id ?? 0), $first['project']?->company?->account_name ?? 'Tanpa customer');
+                    return $this->groupForecast($rows, 'c_'.($first['project']?->company_id ?? 0), $first['project']?->company?->account_name ?? 'No customer');
                 })
                 ->sortByDesc(fn (array $g) => $g['certain'] + $g['estimate'])
                 ->values();
@@ -275,36 +292,48 @@ class ReceivableReportController extends Controller
     {
         return match ($tab) {
             'forecast' => [
-                ['Kelompok', 'Jenis', 'Tanggal', 'Customer', 'Project', 'Termin', 'No. Invoice', 'Posisi', 'Nominal'],
+                ['Group', 'Type', 'Due Date / Estimate', 'Customer', 'Project', 'Term', 'Invoice No.', 'Position', 'Amount'],
                 $rows->flatMap(fn ($group) => $group['rows']->map(fn ($r) => [
                     $group['label'],
-                    $r['kind'] === 'invoice' ? 'Pasti (invoice)' : 'Estimasi',
+                    $r['kind'] === 'invoice' ? 'Confirmed (invoice)' : 'Estimate',
                     $r['date']?->format('d/m/Y'),
                     $r['project']?->company?->account_name,
                     $r['project'] ? $r['project']->project_number.' — '.$r['project']->project_name : null,
-                    $r['term']?->name ?? ($r['invoice']?->noted ?: 'Di luar timeline'),
+                    $r['term']?->name ?? ($r['invoice']?->noted ?: 'Outside billing timeline'),
                     $r['invoice']?->invoice_number,
-                    ReceivableReport::POSITIONS[$r['position']],
+                    ReceivableReport::POSITIONS_EN[$r['position']],
                     $r['amount'],
                 ]))->all(),
-                'invoice termasuk PPN; termin belum diinvoice sebelum PPN',
+                'invoices incl. VAT; uninvoiced terms before VAT',
             ],
             'project' => [
-                array_merge(['No. Project', 'Project', 'Customer', 'Nilai Kontrak', 'Terjadwal (%)'], array_values(ReceivableReport::POSITIONS), ['Di Luar Timeline', 'PO Due Date', 'Sisa Hari', 'Termin Terlambat Ditagih']),
-                $rows->map(fn ($r) => array_merge(
-                    [$r['project']->project_number, $r['project']->project_name, $r['project']->company?->account_name, $r['contract'], $r['scheduled_percent']],
-                    array_values($r['positions']),
-                    [$r['outside_timeline'], $r['po_due_date']?->format('d/m/Y'), $r['due_days'], $r['late_billing']]
-                ))->all(),
-                'nilai sebelum PPN',
+                ['No', 'Customer', 'Project No.', 'Project Name', 'PO Date', 'PO Received', 'PO Due Date', 'Delivery Date', 'Contract Value', 'Paid', 'Outstanding'],
+                $rows->values()->map(fn ($r, $i) => [
+                    $i + 1,
+                    $r['project']->company?->account_name,
+                    $r['project']->project_number,
+                    $r['project']->project_name,
+                    $r['po_date']?->format('d/m/Y'),
+                    $r['po_date_received']?->format('d/m/Y'),
+                    $r['po_due_date']?->format('d/m/Y'),
+                    $r['delivery_date']?->format('d/m/Y'),
+                    $r['contract'],
+                    $r['paid'],
+                    $r['remaining'],
+                ])->all(),
+                'tax base before VAT',
             ],
             default => [
-                ['Customer', 'Sudah Ditagih', 'Sudah Diterima', 'Sisa Piutang', 'Terlambat', 'Invoice Terlambat', 'Invoice Terbuka', 'Jatuh Tempo Terdekat', 'Belum Ditagih (sebelum PPN)'],
-                $rows->map(fn ($r) => [
-                    $r['company']?->account_name, $r['billed'], $r['received'], $r['outstanding'], $r['overdue'],
-                    $r['overdue_count'], $r['open_count'], $r['next_due']?->format('d/m/Y'), $r['unbilled'],
+                ['No', 'Customer', 'Projects', 'Contract Value', 'Paid', 'Outstanding'],
+                $rows->values()->map(fn ($r, $i) => [
+                    $i + 1,
+                    $r['company']?->account_name,
+                    $r['project_count'],
+                    $r['contract'],
+                    $r['paid'],
+                    $r['remaining'],
                 ])->all(),
-                'invoice termasuk PPN',
+                'tax base before VAT',
             ],
         };
     }

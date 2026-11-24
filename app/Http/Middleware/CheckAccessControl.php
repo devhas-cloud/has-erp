@@ -55,10 +55,16 @@ class CheckAccessControl
 
         $approveVerb = in_array($lastSegment, ['approve', 'reject', 'unlock', 'settle', 'pay', 'finalize', 'void'], true);
 
+        // Pembatalan invoice = aksi approval-tier. Tidak ditambahkan ke daftar
+        // global karena 'cancel' juga dipakai modul lain (leave-request,
+        // overtime-request, task-planner) yang bukan aksi approval Finance.
+        $isInvoiceCancel = $routeName === 'invoice.cancel';
+
         $permissionField = match (true) {
             // Revise = membuat draft revisi (bukan approval) -> butuh can_update.
             // Sender approve/tolak versi revisinya nanti yang butuh can_approve.
             $lastSegment === 'revise' => 'can_update',
+            $isInvoiceCancel => 'can_approve',
             $approveVerb => 'can_approve',
             $method === 'POST' => 'can_create',
             $method === 'PUT', $method === 'PATCH' => 'can_update',

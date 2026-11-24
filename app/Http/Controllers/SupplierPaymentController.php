@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * Pembayaran Supplier (grup Finance, Tahap 2). Satu pembayaran melunasi satu
@@ -114,7 +115,13 @@ class SupplierPaymentController extends Controller
     {
         $validated = $request->validate([
             'supplier_id' => 'required|integer|exists:suppliers,id',
-            'payment_id' => 'nullable|integer',
+            'payment_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('supplier_payments', 'id')
+                    ->where('supplier_id', $request->integer('supplier_id'))
+                    ->where('status', SupplierPayment::STATUS_DRAFT),
+            ],
         ]);
         $supplier = Supplier::findOrFail($validated['supplier_id']);
         $own = $this->ownAllocations($validated['payment_id'] ?? null);

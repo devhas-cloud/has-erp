@@ -51,6 +51,18 @@ class SupplierBill extends Model
      */
     public const PRICE_TOLERANCE_PERCENT = 1.0;
 
+    /**
+     * Penanda baris aktif untuk unique index (supplier_id,
+     * supplier_invoice_number, active_invoice): non-void = 1, void = null.
+     * Nomor invoice supplier hanya unik di antara tagihan non-void.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $bill): void {
+            $bill->active_invoice = $bill->status === self::STATUS_VOID ? null : 1;
+        });
+    }
+
     protected $fillable = [
         'bill_number',
         'bill_type',

@@ -23,6 +23,7 @@
     </span>
     <div class="d-flex gap-2 flex-wrap">
         @if($refund->isDraft())
+            @if($canUpdate)<a href="{{ route('supplier-refund.edit', $refund->id) }}" class="btn btn-outline-secondary btn-sm"><i class="fa fa-pen me-1"></i> Edit</a>@endif
             @if($canDelete)<button type="button" class="btn btn-outline-danger btn-sm" onclick="srDelete()"><i class="fa fa-trash me-1"></i> Hapus</button>@endif
             @if($canApprove)
                 <button type="button" class="btn btn-success btn-sm" id="sr-post-btn" onclick="srPost()"><i class="fa fa-check-double me-1"></i> Posting Refund</button>

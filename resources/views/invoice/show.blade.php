@@ -166,7 +166,7 @@
                         <i class="fa fa-xmark me-1"></i> Reject
                     </button>
                 @endif
-                @if(($canCreate ?? false) && $invoice->canBeCancelled())
+                @if(($canApprove ?? false) && $invoice->canBeCancelled())
                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="invOpenModal('invCancelModal')">
                         <i class="fa fa-ban me-1"></i> Batalkan Invoice
                     </button>

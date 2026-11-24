@@ -202,8 +202,13 @@ class SupplierForeignCurrencyTest extends TestCase
 
         $this->actingAs($this->approver)->get(route('supplier-payment.show', $first->id))->assertOk()
             ->assertSee('Rugi selisih kurs IDR 80,000')->assertSee('Biaya bank IDR 25,000');
-        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'fx']))->assertOk()
-            ->assertSee($first->payment_number)->assertSee('Total selisih kurs terealisasi (rugi)');
+        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'fx']))->assertOk()->assertSee('Exchange Differences');
+        $fxData = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'fx']))->assertOk()->json();
+        $this->assertSame(2, $fxData['recordsTotal']);
+        $this->assertStringContainsString($first->payment_number, collect($fxData['data'])->pluck('html')->implode(''));
+        $this->assertSame('Total (loss)', $fxData['footer'][1]);
+        // Tagihan sudah lunas: filter "masih punya sisa" mengosongkan daftar.
+        $this->assertSame(0, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'fx', 'outstanding' => 'yes']))->json('recordsTotal'));
         $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => 'fx']))->assertOk();
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\DeliveryOrder;
 use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\ProjectBillingTerm;
@@ -29,6 +30,16 @@ class ReceivableReport
         'in_process' => 'Dalam proses',
         'receivable' => 'Piutang',
         'paid' => 'Lunas',
+    ];
+
+    /** Label posisi termin untuk Laporan Piutang (UI bahasa Inggris); POSITIONS tetap dipakai Project Tracking. */
+    public const POSITIONS_EN = [
+        'unscheduled' => 'Not scheduled',
+        'locked' => 'Locked',
+        'ready' => 'Ready to bill',
+        'in_process' => 'In process',
+        'receivable' => 'Receivable',
+        'paid' => 'Paid',
     ];
 
     private Carbon $today;
@@ -60,10 +71,28 @@ class ReceivableReport
         return $invoice->due_date && $invoice->due_date->lt($this->today) ? (int) $invoice->due_date->diffInDays($this->today) : 0;
     }
 
+    /** Nilai kontrak project (DPP sebelum PPN). */
+    private function contractAmount(Project $project): float
+    {
+        return round((float) $project->billingBaseAmount(), 2);
+    }
+
+    /**
+     * Total pembayaran DPP: amount_payment invoice Approved yang sudah Paid.
+     * Invoice di luar timeline ikut dihitung agar pembayaran aktual tidak hilang.
+     */
+    private function paidInvoiceAmount(Project $project): float
+    {
+        return round((float) $project->invoices
+            ->where('approval_status', Invoice::APPROVAL_APPROVED)
+            ->where('status', Invoice::STATUS_PAID)
+            ->sum('amount_payment'), 2);
+    }
+
     /** Project yang punya timeline termin atau invoice (selain project batal). */
     public function projects(): Collection
     {
-        return $this->projects ??= Project::with(['company', 'quotation', 'billingTerms.invoices', 'invoices'])
+        return $this->projects ??= Project::with(['company', 'quotation', 'billingTerms.invoices', 'invoices', 'deliveryOrders'])
             ->where('status', '!=', Project::STATUS_CANCELLED)
             ->where(fn ($q) => $q->has('billingTerms')->orHas('invoices'))
             ->orderBy('project_number')
@@ -138,9 +167,16 @@ class ReceivableReport
             $mine = $open->filter(fn (Invoice $i) => (int) $i->project?->company_id === (int) $companyId);
             $overdue = $mine->filter(fn (Invoice $i) => $this->daysOverdue($i) > 0);
             $billedMine = $billed->filter(fn (Invoice $i) => (int) $i->project?->company_id === (int) $companyId);
+            $companyProjects = $this->projects()->where('company_id', $companyId);
+            $contract = round($companyProjects->sum(fn (Project $project) => $this->contractAmount($project)), 2);
+            $paid = round($companyProjects->sum(fn (Project $project) => $this->paidInvoiceAmount($project)), 2);
 
             return [
                 'company' => $companies->get($companyId),
+                'project_count' => $companyProjects->count(),
+                'contract' => $contract,
+                'paid' => $paid,
+                'remaining' => round($contract - $paid, 2),
                 'billed' => round($billedMine->sum('total_payment'), 2),
                 'received' => round($billedMine->where('status', Invoice::STATUS_PAID)->sum('total_payment'), 2),
                 'outstanding' => round($mine->sum('total_payment'), 2),
@@ -151,7 +187,7 @@ class ReceivableReport
                 'unbilled' => round($unbilled[$companyId] ?? 0, 2),
             ];
         })->filter(fn ($row) => $row['company'])
-            ->sortBy(fn ($row) => [-$row['overdue'], -$row['outstanding']])
+            ->sortBy(fn ($row) => [-$row['remaining'], -$row['contract']])
             ->values();
     }
 
@@ -210,15 +246,15 @@ class ReceivableReport
             return $weeks >= 8 ? '8_later' : '1_w'.$weeks;
         })->sortKeys()->map(function (Collection $rows, string $key) use ($weekStart) {
             $label = match (true) {
-                $key === '0_overdue' => 'Invoice lewat jatuh tempo',
-                $key === '0_late_billing' => 'Terlambat ditagih (lewat target / PO due date)',
-                $key === '8_later' => 'Lebih dari 8 minggu',
-                $key === '9_nodate' => 'Tanpa tanggal',
+                $key === '0_overdue' => 'Invoices past due',
+                $key === '0_late_billing' => 'Billed late (past target / PO due date)',
+                $key === '8_later' => 'More than 8 weeks',
+                $key === '9_nodate' => 'No date',
                 default => (function () use ($key, $weekStart) {
                     $w = (int) substr($key, 3);
                     $from = $weekStart->copy()->addWeeks($w);
 
-                    return ($w === 0 ? 'Minggu ini' : ($w === 1 ? 'Minggu depan' : 'Minggu +'.$w)).' ('.$from->format('d/m').'–'.$from->copy()->addDays(6)->format('d/m').')';
+                    return ($w === 0 ? 'This week' : ($w === 1 ? 'Next week' : 'Week +'.$w)).' ('.$from->format('d/m').'–'.$from->copy()->addDays(6)->format('d/m').')';
                 })(),
             };
             $rows = $rows->sortBy(fn ($r) => $r['date']?->timestamp ?? PHP_INT_MAX)->values();
@@ -255,12 +291,32 @@ class ReceivableReport
             $scheduledPercent = (float) $project->billingTerms->sum('percent');
             $positions['unscheduled'] = $scheduledPercent < 100 ? round($base * (100 - $scheduledPercent) / 100, 2) : 0.0;
 
-            $extra = $project->invoices->whereNull('billing_term_id')->where('status', '!=', Invoice::STATUS_CANCELLED);
+            // Hanya invoice Approved yang dianggap tagihan di luar timeline.
+            // Draft/Waiting/Rejected belum menjadi piutang dan tidak boleh
+            // menggelembungkan outside_timeline.
+            $extra = $project->invoices
+                ->whereNull('billing_term_id')
+                ->where('approval_status', Invoice::APPROVAL_APPROVED)
+                ->where('status', '!=', Invoice::STATUS_CANCELLED);
             $dueDays = $project->po_due_date ? (int) $this->today->diffInDays($project->po_due_date->copy()->startOfDay(), false) : null;
+
+            $contract = round((float) $base, 2);
+            $paid = $this->paidInvoiceAmount($project);
+            $deliveryDate = $project->deliveryOrders
+                ->where('status', DeliveryOrder::STATUS_POSTED)
+                ->pluck('delivery_date')
+                ->filter()
+                ->sort()
+                ->first();
 
             return [
                 'project' => $project,
-                'contract' => round($base, 2),
+                'contract' => $contract,
+                'paid' => $paid,
+                'remaining' => round($contract - $paid, 2),
+                'po_date' => $project->po_date,
+                'po_date_received' => $project->po_date_received,
+                'delivery_date' => $deliveryDate,
                 'scheduled_percent' => round($scheduledPercent, 2),
                 'positions' => array_map(fn ($v) => round($v, 2), $positions),
                 'outside_timeline' => round($extra->sum('amount_payment'), 2),
@@ -269,6 +325,6 @@ class ReceivableReport
                 'po_due_date' => $project->po_due_date,
                 'due_days' => $dueDays,
             ];
-        })->sortBy(fn ($row) => [-$row['late_billing'], -$row['positions']['receivable']])->values();
+        })->sortBy(fn ($row) => [-$row['remaining'], -$row['contract']])->values();
     }
 }

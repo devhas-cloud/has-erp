@@ -212,4 +212,48 @@ class SupplierAdvanceRefundTest extends TestCase
         $this->actingAs($this->approver)->postJson(route('supplier-refund.void', $refundId), ['void_reason' => 'Dana tidak masuk'])->assertOk();
         $this->assertEquals(2000, $this->freshPo()->refundDue());
     }
+
+    public function test_draft_refund_can_be_edited_and_respects_remaining_room(): void
+    {
+        $this->supplier->update(['max_advance_percent' => 100]);
+        $advanceId = $this->advance(10000)->assertOk()->json('id');
+        $this->verify($advanceId);
+        $this->payInFull($advanceId, 'TRF-100');
+
+        $this->receive(8);
+        $this->verify($this->regular(8, 'INV-8'));
+        $this->po->update(['status' => PurchaseOrder::STATUS_CANCELLED]);
+        $this->assertEquals(2000, $this->freshPo()->refundDue());
+
+        $payload = ['purchase_order_id' => $this->po->id, 'refund_date' => now()->toDateString(), 'method' => 'transfer', 'reference_number' => 'RF-1'];
+        $refundId = $this->actingAs($this->staff)->postJson(route('supplier-refund.store'), $payload + ['amount' => 2000])->assertOk()->json('id');
+
+        $this->actingAs($this->staff)->get(route('supplier-refund.edit', $refundId))->assertOk()->assertSee('Simpan Perubahan');
+
+        $this->actingAs($this->staff)->putJson(route('supplier-refund.update', $refundId), [
+            'refund_date' => now()->toDateString(),
+            'method' => 'transfer',
+            'reference_number' => 'RF-2',
+            'amount' => 1500,
+        ])->assertOk();
+
+        $refund = SupplierRefund::findOrFail($refundId);
+        $this->assertEquals(1500, $refund->amount);
+        $this->assertSame('RF-2', $refund->reference_number);
+
+        // Sisa room setelah edit = 500.
+        $this->actingAs($this->staff)->postJson(route('supplier-refund.store'), $payload + ['amount' => 600, 'reference_number' => 'RF-3'])
+            ->assertStatus(422);
+        $this->actingAs($this->staff)->postJson(route('supplier-refund.store'), $payload + ['amount' => 500, 'reference_number' => 'RF-3'])
+            ->assertOk();
+
+        // Posted tidak bisa diedit.
+        $this->actingAs($this->approver)->postJson(route('supplier-refund.approve', $refundId))->assertOk();
+        $this->actingAs($this->staff)->putJson(route('supplier-refund.update', $refundId), [
+            'refund_date' => now()->toDateString(),
+            'method' => 'transfer',
+            'reference_number' => 'RF-4',
+            'amount' => 100,
+        ])->assertStatus(422);
+    }
 }

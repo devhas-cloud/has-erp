@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * Tagihan Supplier (grup Finance, Tahap 1) — mengakui hutang dari PO dengan
@@ -142,7 +143,11 @@ class SupplierBillController extends Controller
     {
         $validated = $request->validate([
             'purchase_order_id' => 'required|integer|exists:purchase_orders,id',
-            'bill_id' => 'nullable|integer',
+            'bill_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('supplier_bills', 'id')->where('purchase_order_id', $request->integer('purchase_order_id')),
+            ],
         ]);
 
         $po = $this->loadPurchaseOrder((int) $validated['purchase_order_id']);

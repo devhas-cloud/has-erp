@@ -10,6 +10,7 @@ use App\Services\ReceivableDueNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 /**
  * Notifikasi Finance (grup Master Data): satu tempat mengatur pengingat
@@ -74,7 +75,11 @@ class FinanceNotificationController extends Controller
             'enabled' => 'required|boolean',
             'days_ahead' => 'required|integer|min:0|max:30',
             'send_time' => 'required|date_format:H:i',
-            'whatsapp_group_id' => 'nullable|integer|exists:whatsapp_groups,id',
+            'whatsapp_group_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('whatsapp_groups', 'id')->where('status', 'Active'),
+            ],
             $flag => 'required|boolean',
         ], [
             'send_time.date_format' => 'Jam kirim harus berformat JJ:MM, contoh 08:05.',

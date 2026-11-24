@@ -683,7 +683,7 @@ class InvoiceController extends Controller
         $validated = $request->validate([
             'project_id' => 'required|integer|exists:projects,id',
             'billing_term_id' => ['nullable', 'integer', Rule::exists('project_billing_terms', 'id')->where('project_id', $request->integer('project_id'))],
-            'invoice_date' => 'required|date',
+            'invoice_date' => 'required|date|before_or_equal:today',
             'ship_to' => 'nullable|string',
             'date_shipped' => 'nullable|date',
             'shipping_method' => 'nullable|string|max:100',

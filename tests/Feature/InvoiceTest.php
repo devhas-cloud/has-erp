@@ -388,25 +388,25 @@ class InvoiceTest extends TestCase
     public function test_invoice_number_sequence_resets_each_year(): void
     {
         $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload([
-            'invoice_date' => '2026-12-31',
-            'due_date' => '2027-01-14',
+            'invoice_date' => '2025-12-31',
+            'due_date' => '2026-01-14',
         ]))->assertOk();
 
         $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload([
-            'invoice_date' => '2027-01-01',
-            'due_date' => '2027-01-15',
+            'invoice_date' => '2026-01-01',
+            'due_date' => '2026-01-15',
         ]))->assertOk();
 
         $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload([
-            'invoice_date' => '2026-11-01',
-            'due_date' => '2026-11-15',
+            'invoice_date' => '2025-11-01',
+            'due_date' => '2025-11-15',
         ]))->assertOk();
 
         $numbers = Invoice::orderBy('id')->pluck('invoice_number')->all();
 
-        $this->assertSame('INV-26120001', $numbers[0]);
-        $this->assertSame('INV-27010001', $numbers[1]);
-        $this->assertSame('INV-26110002', $numbers[2]);
+        $this->assertSame('INV-25120001', $numbers[0]);
+        $this->assertSame('INV-26010001', $numbers[1]);
+        $this->assertSame('INV-25110002', $numbers[2]);
     }
 
     public function test_update_recalculates_items_and_keeps_status_under_backend_control(): void
@@ -568,7 +568,7 @@ class InvoiceTest extends TestCase
         $this->assertSame('010.000-26.00000002', $invoice->fresh()->tax_invoice_number);
         $this->actingAs($this->creator)->get(route('invoice.show', $invoice->id))->assertOk()->assertSee('010.000-26.00000002');
 
-        $this->actingAs($this->creator)->postJson(route('invoice.cancel', $invoice->id), ['cancel_reason' => 'Salah customer'])->assertOk();
+        $this->actingAs($this->approver)->postJson(route('invoice.cancel', $invoice->id), ['cancel_reason' => 'Salah customer'])->assertOk();
         $this->actingAs($this->creator)->patchJson(route('invoice.tax-invoice', $invoice->id), ['tax_invoice_number' => 'Y'])
             ->assertStatus(422);
     }
@@ -721,22 +721,34 @@ class InvoiceTest extends TestCase
         $this->assertSame(Invoice::STATUS_UNPAID, $invoice->fresh()->status);
     }
 
+    public function test_invoice_date_cannot_be_in_the_future(): void
+    {
+        $this->actingAs($this->creator)->postJson(route('invoice.store'), $this->payload([
+            'invoice_date' => now()->addDay()->toDateString(),
+        ]))->assertStatus(422)->assertJsonValidationErrors('invoice_date');
+    }
+
     public function test_cancel_requires_reason(): void
     {
         $invoice = $this->approvedInvoice();
 
-        $this->actingAs($this->creator)->postJson(route('invoice.cancel', $invoice->id), [])
+        // Cancel = aksi approval-tier; pembuat tanpa can_approve ditolak.
+        $this->actingAs($this->creator)->postJson(route('invoice.cancel', $invoice->id), [
+            'cancel_reason' => 'Customer membatalkan PO',
+        ])->assertForbidden();
+
+        $this->actingAs($this->approver)->postJson(route('invoice.cancel', $invoice->id), [])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['cancel_reason']);
 
-        $this->actingAs($this->creator)->postJson(route('invoice.cancel', $invoice->id), [
+        $this->actingAs($this->approver)->postJson(route('invoice.cancel', $invoice->id), [
             'cancel_reason' => 'Customer membatalkan PO',
         ])->assertOk();
 
         $invoice->refresh();
         $this->assertSame(Invoice::STATUS_CANCELLED, $invoice->status);
         $this->assertSame('Customer membatalkan PO', $invoice->cancel_reason);
-        $this->assertSame($this->creator->id, $invoice->cancelled_by);
+        $this->assertSame($this->approver->id, $invoice->cancelled_by);
         $this->assertNotNull($invoice->cancelled_at);
 
         $this->actingAs($this->creator)->get(route('invoice.show', $invoice->id))
