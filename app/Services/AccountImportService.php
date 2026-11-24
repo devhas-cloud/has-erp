@@ -85,7 +85,7 @@ class AccountImportService
                     $success++;
                 } else {
                     $failed++;
-                    $errors[] = "Baris {$rowNum}: {$result}";
+                    $errors[] = "Row {$rowNum}: {$result}";
                 }
             }
 
@@ -187,13 +187,13 @@ class AccountImportService
 
         foreach ($required as [$field, $value]) {
             if ($value === '') {
-                return "{$field} wajib diisi.";
+                return "{$field} is required.";
             }
         }
 
         // Check account_name uniqueness
         if (AccountCompany::where('account_name', $accountName)->exists()) {
-            return "account_name sudah digunakan: '{$accountName}'";
+            return "account_name already in use: '{$accountName}'";
         }
 
         // --- Resolve lookups ---
@@ -245,7 +245,7 @@ class AccountImportService
 
             return null; // success
         } catch (\Exception $e) {
-            return 'Gagal menyimpan: '.$e->getMessage();
+            return 'Failed to save: '.$e->getMessage();
         }
     }
 
@@ -296,7 +296,7 @@ class AccountImportService
         $id = $this->lookups[$key][$name] ?? null;
         if ($id === null) {
             $valid = implode(', ', array_keys($this->lookups[$key]));
-            $errors[] = "{$label} '{$name}' tidak ditemukan. Pilihan: {$valid}";
+            $errors[] = "{$label} '{$name}' not found. Options: {$valid}";
 
             return null;
         }

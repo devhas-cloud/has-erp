@@ -628,19 +628,19 @@
 
             @if ($backLeadId)
                 <a href="{{ route('leads-management.show', $backLeadId) }}" class="btn-ghost">
-                    <i class="fa fa-arrow-left"></i><span>Kembali ke Lead</span>
+                    <span>Back to Lead</span>
                 </a>
             @elseif ($backOpportunityId)
                 <a href="{{ route('opportunity-management.show', $backOpportunityId) }}" class="btn-ghost">
-                    <i class="fa fa-arrow-left"></i><span>Kembali ke Opportunity</span>
+                    <span>Back to Opportunity</span>
                 </a>
             @elseif ($backContactId)
                 <a href="{{ route('contact-management.show', $backContactId) }}#tab-activity" class="btn-ghost">
-                    <i class="fa fa-arrow-left"></i><span>Kembali ke Contact</span>
+                    <span>Back to Contact</span>
                 </a>
             @else
                 <a href="{{ route('task-planner.index') }}" class="btn-ghost">
-                    <i class="fa fa-arrow-left"></i><span>Kembali</span>
+                    <span>Back</span>
                 </a>
             @endif
 
@@ -681,26 +681,24 @@
                     </div>
                     <div
                         style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap;font-size:13px;color:var(--text-muted)">
-                        <span><i class="fa fa-folder me-1"></i>
-                            <span style="font-weight:600; font-weight: bold;">{{ $task->category?->name ?? '—' }}</span>
+                        <span>                            <span style="font-weight:600; font-weight: bold;">{{ $task->category?->name ?? '—' }}</span>
                         </span>
                         @if ($task->project)
-                            <span><i class="fa fa-diagram-project me-1"></i>
-                                @if ($projectUrl)
+                            <span>                                @if ($projectUrl)
                                     <a href="{{ $projectUrl }}" style="font-weight:600;color:var(--accent);text-decoration:none">{{ \App\Http\Controllers\TaskPlannerController::projectLabel($task->project) }}</a>
                                 @else
                                     <span style="font-weight:600">{{ \App\Http\Controllers\TaskPlannerController::projectLabel($task->project) }}</span>
                                 @endif
                             </span>
                         @endif
-                        <span><i class="fa fa-building me-1"></i> {{ $task->whatsappGroup?->group_name ?? '—' }}</span>
-                        <span><i class="fa fa-calendar-check me-1"></i> Due:
+                        <span>{{ $task->whatsappGroup?->group_name ?? '—' }}</span>
+                        <span>Due:
                             {{ $task->due_date->format('d M Y') }}</span>
                         @if ($task->time)
-                            <span><i class="fa fa-clock me-1"></i> {{ $task->time }}</span>
+                            <span>{{ $task->time }}</span>
                         @endif
                         @if ($task->requires_approval)
-                            <span><i class="fa fa-clipboard-check me-1"></i> Requires Approval</span>
+                            <span>Requires Approval</span>
                         @endif
                     </div>
                     @if ($task->description)
@@ -717,17 +715,17 @@
                 <div class="card-custom fade-in mt-4" style="border-left:4px solid #dc2626">
                     <div class="card-body-custom" style="padding:14px 18px;background:#fef2f2;color:#7f1d1d;border-radius:var(--radius-sm)">
                         <div style="font-weight:700;margin-bottom:4px">
-                            <i class="fa fa-ban me-1"></i> Task dibatalkan
+                            Task dibatalkan
                         </div>
                         <div style="font-size:13px">
-                            Dibatalkan oleh <strong>{{ $task->cancelledBy?->display_name ?? '—' }}</strong>
+                            Cancelled by <strong>{{ $task->cancelledBy?->display_name ?? '—' }}</strong>
                             @if ($task->cancelled_at)
                                 pada {{ $task->cancelled_at->format('d M Y H:i') }}
                             @endif
                         </div>
                         @if ($task->cancel_reason)
                             <div style="font-size:13px;margin-top:6px">
-                                Alasan: {{ $task->cancel_reason }}
+                                Reason: {{ $task->cancel_reason }}
                             </div>
                         @endif
                     </div>
@@ -740,12 +738,12 @@
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-activity"
                                 type="button">
-                                <i class="fa fa-chart-line me-1"></i> Activity
+                                Activity
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-log" type="button">
-                                <i class="fa fa-history me-1"></i> Log
+                                Log
                             </button>
                         </li>
                     </ul>
@@ -757,12 +755,12 @@
 
                                 <div id="activity-list"></div>
                                 <div id="activity-loading" style="text-align:center;padding:20px;color:var(--text-muted)">
-                                    <i class="fa fa-spinner fa-spin"></i> Loading...
+                                    <span class="spinner-border spinner-border-sm me-1"></span> Loading...
                                 </div>
 
 
                                 <div class="activity-form-card">
-                                    <textarea id="activity-input" placeholder="Tulis aktivitas..." rows="2"></textarea>
+                                    <textarea id="activity-input" placeholder="Write an activity..." rows="2"></textarea>
                                     <div class="mention-suggestions" id="mention-suggestions"></div>
                                     <div class="activity-form-actions">
                                         <div>
@@ -788,8 +786,7 @@
                             @endphp
                             @if ($taskLogs->isEmpty())
                                 <div class="empty-state">
-                                    <i class="fa fa-history"></i>
-                                    <p>Belum ada log perubahan.</p>
+                                    <p>No change logs yet.</p>
                                 </div>
                             @else
                                 <div class="activity-feed" style="padding:4px 0">
@@ -825,11 +822,11 @@
             <div class="card-custom fade-in stagger-1">
                 <div class="card-header-custom">
                     <span>
-                        <i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees
+                        Assignees
                         @if ($task->handlingGroup)
                             <br>
                             <span class="assignee-badge" style="background:var(--accent-soft);color:var(--accent);font-size:11px;padding:3px 8px">
-                                <i class="fa fa-building"></i> {{ $task->handlingGroup->name }}
+                                Group: {{ $task->handlingGroup->name }}
                             </span>
                         @endif
                     </span>
@@ -847,14 +844,14 @@
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
                                     data-id="{{ $task->id }}" data-status="in_progress"
                                     style="background:#2563eb;font-size:10px">
-                                    <i class="fa fa-play me-1"></i>Start Progress
+                                    Start Progress
                                 </button>
                             @endif
                             @if ($task->status === 'in_progress')
                                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                                     <button type="button" class="btn btn-sm btn-accent btn-complete-task"
                                         data-id="{{ $task->id }}" data-status="done" style="font-size:10px">
-                                        <i class="fa fa-check me-1"></i>Complete Task
+                                        Complete Task
                                     </button>
 
                                 </div>
@@ -868,14 +865,14 @@
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
                                     data-id="{{ $task->id }}" data-status="in_progress"
                                     style="background:#2563eb;font-size:10px">
-                                    <i class="fa fa-play me-1"></i>Start Progress
+                                    Start Progress
                                 </button>
                             @endif
                             @if ($task->status === 'in_progress')
                                 <button type="button" class="btn btn-sm btn-accent btn-transition"
                                     data-id="{{ $task->id }}" data-status="done"
                                     style="background:#f59e0b;font-size:10px">
-                                    <i class="fa fa-check me-1"></i>Mark as Done
+                                    Mark as Done
                                 </button>
                             @endif
                         </div>
@@ -888,19 +885,19 @@
                         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                             <button type="button" class="btn btn-sm btn-accent btn-approve-task"
                                 data-id="{{ $task->id }}" data-status="done" style="font-size:10px">
-                                <i class="fa fa-check me-1"></i>Approve
+                                Approve
                             </button>
                             <button type="button" class="btn btn-sm btn-accent btn-reject-task"
                                 data-id="{{ $task->id }}" data-status="in_progress"
                                 style="background:#f51f0b;font-size:10px">
-                                <i class="fa fa-times me-1"></i>Reject
+                                Reject
                             </button>
                         </div>
                     @elseif($task->status === 'waiting_approval' && $isCreator)
                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                             <button type="button" class="btn btn-sm btn-accent btn-complete-task"
                                 data-id="{{ $task->id }}" data-status="done" style="font-size:10px">
-                                <i class="fa fa-check me-1"></i>Complete Task
+                                Complete Task
                             </button>
 
                         </div>
@@ -912,7 +909,7 @@
                         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                             <button type="button" class="btn btn-sm btn-accent btn-open-task"
                                 data-id="{{ $task->id }}" data-status="in_progress" style="font-size:10px">
-                                <i class="fa fa-rotate-left me-1"></i>Open Task
+                                Open Task
                             </button>
                         </div>
                     @endif
@@ -943,7 +940,7 @@
             @if ($task->category?->visit)
             <div class="card-custom fade-in stagger-4 mt-4">
                 <div class="card-header-custom">
-                    <span><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Visit Location</span>
+                    <span>Visit Location</span>
                     @php
                         $isCreator = $task->creator_id === Auth::id();
                         $isAssignee = $task->assignees->contains('id', Auth::id());
@@ -952,12 +949,12 @@
                     @if ($canTransition && ! in_array($task->status, ['done', 'cancelled'], true))
                         <button type="button" class="btn btn-sm btn-accent" id="btn-record-visit"
                             style="font-size:11px">
-                            <i class="fa fa-location-dot"></i> Record
+                            Record Visit
                         </button>
                     @endif
                 </div>
                 <div class="card-body-custom" id="visit-list">
-                    <div class="visit-empty"><i class="fa fa-spinner fa-spin"></i> Loading...</div>
+                    <div class="visit-empty"><span class="spinner-border spinner-border-sm me-1"></span> Loading...</div>
                 </div>
             </div>
             @endif
@@ -966,17 +963,17 @@
             @if (strtolower($task->category->name) === 'proposal')
             <div class="card-custom fade-in stagger-3 mt-4">
                 <div class="card-header-custom">
-                    <span><i class="fa fa-file-pdf me-2" style="color:var(--accent)"></i>Proposal Files</span>
+                    <span>Proposal Files</span>
                     @if(! in_array($task->status, ['done', 'cancelled'], true) && ($isCreator || $isAssignee))
                     <button type="button" class="btn btn-sm btn-accent" id="btn-upload-proposal"
                         style="font-size:11px">
-                        <i class="fa fa-upload"></i> Upload Proposal
+                        Upload Proposal
                     </button>
                     @endif
                 </div>
                 <div class="card-body-custom" id="proposal-list">
                     <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
-                        <i class="fa fa-spinner fa-spin"></i> Loading...
+                        <span class="spinner-border spinner-border-sm me-1"></span> Loading...
                     </div>
                 </div>
             </div>
@@ -986,11 +983,11 @@
             @if (strtolower($task->category?->name) === 'quote')
             <div class="card-custom fade-in stagger-3 mt-4">
                 <div class="card-header-custom" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-                    <span><i class="fa fa-file-invoice-dollar me-2" style="color:var(--accent)"></i>Final Quotation</span>
+                    <span>Final Quotation</span>
                     @if ($finalQuotation)
                     <a href="{{ route('quotation.pdf', ['id' => $finalQuotation->id, 'back' => 'task-'.$task->id]) }}"
                         class="btn btn-sm btn-accent" target="_blank" style="font-size:11px">
-                        <i class="fa fa-file-pdf"></i> Download PDF
+                        Download PDF
                     </a>
                     @endif
                 </div>
@@ -1047,21 +1044,21 @@
                         <div class="mt-2">
                             <a href="{{ route('quotation.show', ['quotation' => $finalQuotation->id, 'back' => 'task-'.$task->id]) }}"
                                 class="btn btn-sm btn-outline-secondary" style="font-size:11px">
-                                <i class="fa fa-eye me-1"></i> View Quotation
+                                View Quotation
                             </a>
                         </div>
                         @endif
                     @elseif ($task->isCancelled())
                         <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
-                            <i class="fa fa-ban me-1"></i> Task dibatalkan.
+                            Task dibatalkan.
                         </div>
                     @elseif ($task->status !== 'done')
                         <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
-                            <i class="fa fa-info-circle me-1"></i> Final quotation akan tampil setelah task di-complete.
+                            Final quotation akan tampil setelah task di-complete.
                         </div>
                     @else
                         <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">
-                            Belum ada final quotation.
+                            No final quotation yet.
                         </div>
                     @endif
                 </div>
@@ -1073,7 +1070,7 @@
             @if (strtolower($task->category?->name) === 'quote')
             <div class="card-custom fade-in stagger-3 mt-4">
                 <div class="card-header-custom" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-                    <span><i class="fa fa-clipboard-check me-2" style="color:var(--accent)"></i>Quote &amp; Configuration</span>
+                    <span>Quote &amp; Configuration</span>
                     @php
                         // Syarat tombol Add: task belum done, viewer creator/assignee, dan quotation belum dibuat.
                         $showAddConfigBtn = ! in_array($task->status, ['done', 'cancelled'], true) && ($isCreator || $isAssignee) && $quotations->isEmpty();
@@ -1083,7 +1080,7 @@
                     @if ($showAddConfigBtn)
                     <div class="dropdown">
                         <button class="btn btn-sm btn-accent dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size:11px">
-                            <i class="fa fa-plus"></i> Add
+                            Add
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" style="font-size:12px">
                             @if(strtolower(auth()->user()->division->division_name ?? '') === 'water')
@@ -1107,7 +1104,7 @@
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="{{ route('quotation.create') }}">
-                                    <i class="fa fa-file-invoice-dollar me-1"></i> Create Quotation
+                                    Create Quotation
                                 </a>
                             </li>
                             @endif
@@ -1117,7 +1114,7 @@
                 </div>
                 <div class="card-body-custom">
                     @if ($quoteConfigurations->isEmpty() && $quotations->isEmpty())
-                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">Belum ada configuration / quotation.</div>
+                        <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">No configuration / quotation yet.</div>
                     @else
                         <table class="table table-sm align-middle mb-0" style="font-size:12.5px">
                             <thead>
@@ -1193,7 +1190,7 @@
             <!-- Non aktifkan sementara karena fitur alert belum digunakan -->
             {{-- <div class="card-custom fade-in stagger-2 mt-4">
                 <div class="card-header-custom">
-                    <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Configuration</span>
+                    <span>Alert Configuration</span>
                 </div>
                 <div class="card-body-custom">
                     <table class="table table-sm table-borderless mb-0 info-table">
@@ -1228,8 +1225,8 @@
                         <tr>
                             <td>Sent</td>
                             <td>{!! $task->is_alert_sent
-                                ? '<span style="color:var(--success)"><i class="fa fa-check"></i> Yes</span>'
-                                : '<span style="color:var(--text-muted)"><i class="fa fa-times"></i> No</span>' !!}</td>
+                                ? '<span style="color:var(--success);font-weight:600">Yes</span>'
+                                : '<span style="color:var(--text-muted)">No</span>' !!}</td>
                         </tr>
                     </table>
                 </div>
@@ -1237,7 +1234,7 @@
 
             <div class="card-custom fade-in stagger-3 mt-4">
                 <div class="card-header-custom">
-                    <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Task Details</span>
+                    <span>Task Details</span>
                 </div>
                 <div class="card-body-custom">
                     <table class="table table-sm table-borderless mb-0 info-table">
@@ -1258,7 +1255,7 @@
                                 <td>Penanganan</td>
                                 <td>
                                     <span class="assignee-badge" style="background:var(--accent-soft);color:var(--accent)">
-                                        <i class="fa fa-building"></i> {{ $task->handlingGroup->name }}
+                                        Group: {{ $task->handlingGroup->name }}
                                     </span>
                                 </td>
                             </tr>
@@ -1311,7 +1308,7 @@
                 reverseButtons: true,
             }).then(function(result) {
                 if (!result.isConfirmed) return;
-                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Approving...');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Approving...');
                 $.ajax({
                     url: '{{ route('task-planner.index') }}/' + id + '/approve',
                     method: 'POST',
@@ -1324,8 +1321,8 @@
                     },
                     error: function(xhr) {
                         $btn.prop('disabled', false).html(
-                            '<i class="fa fa-check"></i><span>Approve</span>');
-                        toastr.error(xhr.responseJSON?.message || 'Gagal approve.');
+                            '<span>Approve</span>');
+                        toastr.error(xhr.responseJSON?.message || 'Failed to approve.');
                     }
                 });
             });
@@ -1340,14 +1337,14 @@
                 text: 'Status task akan berubah menjadi Done.',
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Ya, Complete Task',
-                cancelButtonText: 'Batal',
+                confirmButtonText: 'Yes, complete task',
+                cancelButtonText: 'Cancel',
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#64748b',
                 reverseButtons: true,
             }).then(function(result) {
                 if (!result.isConfirmed) return;
-                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Completing...');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Completing...');
                 $.ajax({
                     url: '{{ route('task-planner.index') }}/' + id + '/approve',
                     method: 'POST',
@@ -1360,8 +1357,8 @@
                     },
                     error: function(xhr) {
                         $btn.prop('disabled', false).html(
-                            '<i class="fa fa-check"></i><span>Complete Task</span>');
-                        toastr.error(xhr.responseJSON?.message || 'Gagal complete task.');
+                            '<span>Complete Task</span>');
+                        toastr.error(xhr.responseJSON?.message || 'Failed to complete the task.');
                     }
                 });
             });
@@ -1383,7 +1380,7 @@
                 reverseButtons: true,
             }).then(function(result) {
                 if (!result.isConfirmed) return;
-                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Rejecting...');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Rejecting...');
                 $.ajax({
                     url: '{{ route('task-planner.index') }}/' + id + '/reject',
                     method: 'POST',
@@ -1396,8 +1393,8 @@
                     },
                     error: function(xhr) {
                         $btn.prop('disabled', false).html(
-                            '<i class="fa fa-times"></i><span>Reject</span>');
-                        toastr.error(xhr.responseJSON?.message || 'Gagal reject.');
+                            '<span>Reject</span>');
+                        toastr.error(xhr.responseJSON?.message || 'Failed to reject.');
                     }
                 });
             });
@@ -1413,14 +1410,14 @@
                 text: 'Status task akan berubah.',
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Ya',
-                cancelButtonText: 'Batal',
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'Cancel',
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#64748b',
                 reverseButtons: true,
             }).then(function(result) {
                 if (!result.isConfirmed) return;
-                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
                 $.ajax({
                     url: '{{ route('task-planner.index') }}/' + id + '/transition',
                     method: 'POST',
@@ -1433,8 +1430,8 @@
                         location.reload();
                     },
                     error: function(xhr) {
-                        $btn.prop('disabled', false).html('<i class="fa fa-check me-1"></i>Mark as Done');
-                        toastr.error(xhr.responseJSON?.message || 'Gagal.');
+                        $btn.prop('disabled', false).html('Mark as Done');
+                        toastr.error(xhr.responseJSON?.message || 'Failed.');
                     }
                 });
             });
@@ -1445,22 +1442,22 @@
             var $btn = $(this);
             Swal.fire({
                 title: 'Open Task?',
-                text: 'Task akan kembali ke In Progress. Tulis alasan pembukaan kembali.',
+                text: 'The task will go back to In Progress. Write the reason for reopening it.',
                 icon: 'question',
                 input: 'textarea',
-                inputPlaceholder: 'Alasan membuka task kembali...',
+                inputPlaceholder: 'Reason for reopening the task...',
                 inputValidator: function(v) {
-                    if (!v || !v.trim()) return 'Alasan wajib diisi.';
+                    if (!v || !v.trim()) return 'A reason is required.';
                 },
                 showCancelButton: true,
-                confirmButtonText: 'Ya, Open Task',
-                cancelButtonText: 'Batal',
+                confirmButtonText: 'Yes, reopen task',
+                cancelButtonText: 'Cancel',
                 confirmButtonColor: '#2563eb',
                 cancelButtonColor: '#64748b',
                 reverseButtons: true,
             }).then(function(result) {
                 if (!result.isConfirmed) return;
-                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Opening...');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Opening...');
                 $.ajax({
                     url: '{{ route('task-planner.index') }}/' + id + '/open',
                     method: 'POST',
@@ -1474,8 +1471,8 @@
                     },
                     error: function(xhr) {
                         $btn.prop('disabled', false).html(
-                            '<i class="fa fa-rotate-left me-1"></i>Open Task');
-                        toastr.error(xhr.responseJSON?.message || 'Gagal membuka task.');
+                            'Open Task');
+                        toastr.error(xhr.responseJSON?.message || 'Failed to reopen the task.');
                     }
                 });
             });
@@ -1496,7 +1493,7 @@
                             '<div>' +
                             '<div style="font-weight:600;font-size:13px">v' + p.version + ': ' + escapeHtml(p.original_name) + '</div>' +
                             '<div style="font-size:11px;color:var(--text-muted)">' +
-                            'oleh ' + escapeHtml(p.uploader_name) + ' · ' + p.file_size +
+                            'by ' + escapeHtml(p.uploader_name) + ' · ' + p.file_size +
                             (p.notes ? ' · ' + escapeHtml(p.notes) : '') +
                             ' · ' + p.time +
                             '</div></div></div>';
@@ -1504,14 +1501,14 @@
                         if (p.exists) {
                             actionBlock = '<button onclick="openFilePreview(\'' + p.file_url + '\',\'' + escapeHtml(p.original_name) + '\')" class="btn btn-sm btn-outline-secondary" style="font-size:11px;cursor:pointer"><i class="fa fa-eye"></i></button>';
                         } else {
-                            actionBlock = '<span class="badge" style="background:#fee2e2;color:#b91c1c;font-size:10px"><i class="fa fa-triangle-exclamation"></i> File tidak ditemukan</span>';
+                            actionBlock = '<span class="badge" style="background:#fee2e2;color:#b91c1c;font-size:10px">File not found</span>';
                         }
                         html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--card-border)">' +
                             fileBlock + actionBlock +
                             '</div>';
                     });
                 } else {
-                    html = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px"><i class="fa fa-file-pdf me-2"></i>Belum ada proposal.</div>';
+                    html = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">No proposal yet.</div>';
                 }
                 $('#proposal-list').html(html);
             });
@@ -1536,10 +1533,10 @@
                 Swal.fire({
                     title: 'Upload Proposal',
                     input: 'textarea',
-                    inputPlaceholder: 'Catatan revisi (opsional)',
+                    inputPlaceholder: 'Revision note (optional)',
                     showCancelButton: true,
                     confirmButtonText: 'Upload',
-                    cancelButtonText: 'Batal',
+                    cancelButtonText: 'Cancel',
                     confirmButtonColor: '#10b981',
                     reverseButtons: true,
                     preConfirm: function(notes) {
@@ -1558,13 +1555,13 @@
                         }).catch(function(xhr) {
                             var msg = (xhr.responseJSON && xhr.responseJSON.message)
                                 ? xhr.responseJSON.message
-                                : 'Gagal upload (HTTP ' + xhr.status + '). Periksa ukuran file atau coba lagi.';
+                                : 'Upload failed (HTTP ' + xhr.status + '). Check the file size or try again.';
                             Swal.showValidationMessage(msg);
                         });
                     }
                 }).then(function(result) {
                     if (result.isConfirmed) {
-                        toastr.success('Proposal berhasil diupload.');
+                        toastr.success('Proposal uploaded.');
                         loadProposals();
                     }
                 });
@@ -1589,7 +1586,7 @@
                     });
                 } else {
                     html =
-                        '<div class="empty-state"><i class="fa fa-chart-line"></i><p>Belum ada aktivitas.</p></div>';
+                        '<div class="empty-state"><p>No activities yet.</p></div>';
                 }
                 $('#activity-list').html(html);
                 $('#activity-loading').hide();
@@ -1597,7 +1594,7 @@
                     setTimeout(scrollToMentionedActivity, 500);
                 }
             }).fail(function() {
-                $('#activity-loading').html('<span style="color:var(--danger)">Gagal memuat aktivitas.</span>');
+                $('#activity-loading').html('<span style="color:var(--danger)">Failed to load activities.</span>');
             });
         }
 
@@ -1693,21 +1690,21 @@
             // Reply toggle
             var replyToggle = '';
             if (replyCount > 0) {
-                var toggleLabel = replyCount > 2 ? 'Lihat ' + replyCount + ' balasan' : 'Sembunyikan balasan';
+                var toggleLabel = replyCount > 2 ? 'Show ' + replyCount + ' replies' : 'Hide replies';
                 replyToggle = '<button class="activity-reply-toggle" onclick="toggleReplies(' + a.id +
-                    ')"><i class="fa fa-comments"></i> ' + toggleLabel + '</button>';
+                    ')">' + toggleLabel + '</button>';
             }
 
             // Reply form (di BAWAH replies) — multi-file
             var replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
                 '<div class="reply-input-row">' +
-                '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id +
+                '<input type="text" placeholder="Write a reply..." id="reply-input-' + a.id +
                 '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' +
                 a.id + ')}">' +
                 '<div class="reply-actions">' +
-                '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId +
+                '<button type="button" title="Attach file" onclick="$(\'#' + replyFileId +
                 '\').click()"><i class="fa fa-paperclip"></i></button>' +
-                '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id +
+                '<button type="button" title="Send" onclick="replyToActivity(' + a.id +
                 ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
                 '</div></div>' +
                 '<input type="file" id="' + replyFileId +
@@ -1730,7 +1727,7 @@
                 '<div class="activity-post-actions">' +
                 '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId +
                 '\').is(\':visible\'))$(\'#reply-input-' + a.id +
-                '\').focus()"><i class="fa fa-reply"></i> Balas</button>' +
+                '\').focus()">Reply</button>' +
                 replyToggle +
                 '</div>' +
                 repliesHtml +
@@ -1811,8 +1808,7 @@
             btns.each(function() {
                 if ($(this).attr('onclick') && $(this).attr('onclick').indexOf('toggleReplies(' + activityId +
                     ')') !== -1) {
-                    $(this).html(section.is(':visible') ? '<i class="fa fa-comments"></i> Sembunyikan balasan' :
-                        '<i class="fa fa-comments"></i> Lihat ' + count + ' balasan');
+                    $(this).text(section.is(':visible') ? 'Hide replies' : 'Show ' + count + ' replies');
                 }
             });
         }
@@ -1826,7 +1822,7 @@
             var $form = $('#reply-form-' + activityId);
             $form.addClass('loading');
             var $sendBtn = $form.find('.reply-actions button[onclick*="replyToActivity"]');
-            $sendBtn.html('<i class="fa fa-spinner fa-spin"></i>');
+            $sendBtn.html('<span class="spinner-border spinner-border-sm"></span>');
 
             var formData = new FormData();
             formData.append('_token', '{{ csrf_token() }}');
@@ -1849,7 +1845,7 @@
                     loadActivities();
                 },
                 error: function(xhr) {
-                    toastr.error(xhr.responseJSON?.message || 'Gagal mengirim balasan.');
+                    toastr.error(xhr.responseJSON?.message || 'Failed to send the reply.');
                 },
                 complete: function() {
                     $form.removeClass('loading');
@@ -1868,26 +1864,26 @@
                 $('#filePreviewBody').html('<iframe src="' + url +
                     '" style="width:100%;height:85vh;border:none;border-radius:6px"></iframe>');
                 $('#filePreviewFooter').html(
-                    '<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' +
-                    url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+                    '<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Close</button><a href="' +
+                    url + '" class="btn btn-primary btn-sm" download>Download</a>');
             } else if (imageExts.indexOf(ext) !== -1) {
                 $('#filePreviewTitle').text(name || 'Image Preview');
                 $('#filePreviewBody').html('<img src="' + url + '" alt="' + name +
                     '" style="max-width:100%;max-height:80vh;border-radius:6px;display:block;margin:0 auto">');
                 $('#filePreviewFooter').html(
-                    '<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' +
-                    url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+                    '<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Close</button><a href="' +
+                    url + '" class="btn btn-primary btn-sm" download>Download</a>');
             } else {
                 $('#filePreviewTitle').text(name || 'File Preview');
                 $('#filePreviewBody').html(
                     '<div style="padding:40px 20px;text-align:center">' +
                     '<i class="fa fa-file" style="font-size:56px;color:var(--text-muted);display:block;margin-bottom:16px"></i>' +
                     '<p style="font-size:15px;font-weight:600;color:var(--text-primary)">' + (name || 'File') + '</p>' +
-                    '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Klik Download untuk membuka file</p></div>'
+                    '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Click Download to open the file</p></div>'
                 );
                 $('#filePreviewFooter').html(
-                    '<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' +
-                    url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+                    '<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Close</button><a href="' +
+                    url + '" class="btn btn-primary btn-sm" download>Download</a>');
             }
             new bootstrap.Modal('#filePreviewModal').show();
         }
@@ -1897,10 +1893,10 @@
             var $btn = $(this);
             var content = $('#activity-input').val().trim();
             if (!content) {
-                toastr.error('Tulis aktivitas terlebih dahulu.');
+                toastr.error('Write the activity first.');
                 return;
             }
-            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
             $('.activity-form-card').addClass('loading');
 
             var formData = new FormData();
@@ -1924,7 +1920,7 @@
                     loadActivities();
                 },
                 error: function(xhr) {
-                    toastr.error(xhr.responseJSON?.message || 'Gagal posting.');
+                    toastr.error(xhr.responseJSON?.message || 'Failed to post.');
                 },
                 complete: function() {
                     $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Post');
@@ -1948,25 +1944,24 @@
                 var html = '';
                 var data = Array.isArray(res) ? res : (res.data || []);
                 if (data.length === 0) {
-                    html = '<div class="visit-empty">Belum ada visit.</div>';
+                    html = '<div class="visit-empty">No visits yet.</div>';
                 } else {
                     data.forEach(function(v) {
                         html += '<div class="visit-item">' +
-                            '<div class="visit-item-icon"><i class="fa fa-map-pin"></i></div>' +
                             '<div class="visit-item-body">' +
                             '<div class="visit-item-name">' + (v.username || '—') + '</div>' +
                             '<div class="visit-item-coords">' + (v.latitude || 0).toFixed(6) + ', ' + (v
                                 .longitude || 0).toFixed(6) + '</div>' +
                             '<div class="visit-map-link" onclick="openVisitMap(' + v.latitude + ',' + v
                             .longitude + ',\'' + (v.username || '') +
-                            '\')"><i class="fa fa-map"></i> Buka Peta</div>' +
+                            '\')">Open Map</div>' +
                             '<div class="visit-item-time">' + (v.time || '—') + '</div>' +
                             '</div></div>';
                     });
                 }
                 $('#visit-list').html(html);
             }).fail(function() {
-                $('#visit-list').html('<div class="visit-empty" style="color:var(--danger)">Gagal.</div>');
+                $('#visit-list').html('<div class="visit-empty" style="color:var(--danger)">Failed to load visits.</div>');
             });
         }
 
@@ -2008,7 +2003,7 @@
         $(document).on('click', '#btn-record-visit', function() {
 
             if ( '{{ $task->status }}' === 'todo') {
-                toastr.error('Task belum dimulai. Tidak bisa record visit.');
+                toastr.error('The task has not started yet, so a visit cannot be recorded.');
                 return;
             }
 
@@ -2016,11 +2011,11 @@
                 toastr.error('Geolocation tidak didukung.');
                 return;
             }
-            var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+            var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
             var fallback = false;
             function attemptPosition() {
                 navigator.geolocation.getCurrentPosition(function(pos) {
-                $btn.prop('disabled', false).html('<i class="fa fa-location-dot"></i> Record');
+                $btn.prop('disabled', false).html('Record Visit');
                 currentLat = pos.coords.latitude;
                 currentLng = pos.coords.longitude;
                 $('#record-visit-coords').text(currentLat.toFixed(6) + ', ' + currentLng.toFixed(6) +
@@ -2059,8 +2054,8 @@
                     attemptPosition();
                     return;
                 }
-                $btn.prop('disabled', false).html('<i class="fa fa-location-dot"></i> Record');
-                toastr.error('Gagal lokasi: ' + (err.message || 'Izin ditolak.'));
+                $btn.prop('disabled', false).html('Record Visit');
+                toastr.error('Location failed: ' + (err.message || 'Permission denied.'));
             }, {
                 enableHighAccuracy: !fallback,
                 timeout: fallback ? 15000 : 20000
@@ -2071,7 +2066,7 @@
 
         $(document).on('click', '#btn-save-record-visit', function() {
             if (!currentLat || !currentLng) return;
-            var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+            var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
             $.ajax({
                 url: '/task-planner/' + taskId + '/visit',
                 type: 'POST',
@@ -2087,10 +2082,10 @@
                     loadActivities();
                 },
                 error: function(xhr) {
-                    toastr.error(xhr.responseJSON?.message || 'Gagal.');
+                    toastr.error(xhr.responseJSON?.message || 'Failed.');
                 },
                 complete: function() {
-                    $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                    $btn.prop('disabled', false).html('Save');
                 }
             });
         });
@@ -2251,7 +2246,7 @@
                         var toggleBtn = el.closest('.activity-post-body').querySelector('.activity-reply-toggle');
                         if (toggleBtn) {
                             var count = repliesSection.querySelectorAll('.activity-reply').length;
-                            toggleBtn.innerHTML = '<i class="fa fa-comments"></i> Sembunyikan balasan';
+                            toggleBtn.textContent = 'Hide replies';
                         }
                     }
                     el.scrollIntoView({
@@ -2289,7 +2284,7 @@
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h6 class="modal-title"><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Visit
+                    <h6 class="modal-title">Visit
                         Location</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -2306,7 +2301,7 @@
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h6 class="modal-title"><i class="fa fa-map-marker me-2" style="color:var(--accent)"></i>Record Visit
+                    <h6 class="modal-title">Record Visit
                         Location</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -2318,7 +2313,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary btn-sm" id="btn-save-record-visit">
-                        <i class="fa fa-save me-1"></i> Save
+                        Save
                     </button>
                 </div>
             </div>

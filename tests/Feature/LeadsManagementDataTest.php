@@ -111,6 +111,25 @@ class LeadsManagementDataTest extends TestCase
         $this->assertSame('—', $response->json('data.0.assigned_to_name'));
     }
 
+    public function test_account_assignee_and_activity_filters(): void
+    {
+        $active = $this->createLead($this->manager->id);
+        \App\Models\Activity::create(['lead_id' => $active->id, 'user_id' => $this->manager->id, 'content' => 'Called the customer']);
+        $quiet = Lead::create(array_merge($active->only(['lead_status', 'account_contacts_id', 'source_id', 'lead_owner_id', 'lead_follow_up_date']), [
+            'lead_title' => 'Lead Tanpa Aktivitas', 'assigned_to' => null,
+        ]));
+
+        $count = fn (array $q) => $this->actingAs($this->manager)->getJson(route('leads-management.data', $q))->assertOk()->json('recordsFiltered');
+
+        $this->assertSame(2, $count([]));
+        $this->assertSame(1, $count(['activity' => '7d']));
+        $this->assertSame(1, $count(['activity' => 'none']));
+        $this->assertSame(1, $count(['assigned' => 'none']));
+        $this->assertSame(1, $count(['assigned' => $this->manager->id]));
+        $this->assertSame(0, $count(['account' => 999999]));
+        $this->assertSame($quiet->id, $this->actingAs($this->manager)->getJson(route('leads-management.data', ['activity' => 'none']))->json('data.0.id'));
+    }
+
     public function test_index_page_renders_assigned_to_column_header(): void
     {
         $response = $this->actingAs($this->manager)->get(route('leads-management.index'));

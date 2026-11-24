@@ -49,9 +49,15 @@ class OpportunityManagementController extends Controller
         $maxYear = (int) substr((string) Opportunity::max('close_date'), 0, 4) ?: $currentYear;
         $closeDateYears = range(min($minYear, $currentYear), max($maxYear, $currentYear));
 
+        $user = Auth::user();
+        // Sales non-manager hanya melihat opportunity miliknya: filter Owner disembunyikan.
+        $isSales = strtolower((string) $user->division?->division_name) === 'sales' && strtolower((string) $user->hierarchyRole?->role_name) !== 'manager';
+        // Pilihan filter Owner: user yang memiliki opportunity.
+        $owners = User::whereIn('id', Opportunity::query()->whereNotNull('owner_id')->distinct()->pluck('owner_id'))->orderBy('full_name')->get();
+
         return view('opportunity-management.index', compact(
             'stages', 'forecasts', 'lossReasons', 'divisions',
-            'sources', 'users', 'accountCompanies', 'closeDateYears'
+            'sources', 'users', 'accountCompanies', 'closeDateYears', 'isSales', 'owners'
         ));
     }
 
@@ -87,6 +93,26 @@ class OpportunityManagementController extends Controller
         if (! empty($filters['division_id'])) {
             $query->where('opportunities.division_id', $filters['division_id']);
         }
+
+        // Filter toolbar: stage tunggal, account, owner, aktivitas terakhir (dari activity opportunity).
+        if ($request->filled('stage')) {
+            $query->where('opportunities.stage_id', (int) $request->input('stage'));
+        }
+        if ($request->filled('account')) {
+            $query->where('opportunities.account_companies_id', (int) $request->input('account'));
+        }
+        if ($request->filled('owner') && ! $isSales) {
+            $request->input('owner') === 'none'
+                ? $query->whereNull('opportunities.owner_id')
+                : $query->where('opportunities.owner_id', (int) $request->input('owner'));
+        }
+        match ($request->input('activity')) {
+            '7d' => $query->whereHas('activities', fn ($q) => $q->where('created_at', '>=', now()->subDays(7))),
+            '30d' => $query->whereHas('activities', fn ($q) => $q->where('created_at', '>=', now()->subDays(30))),
+            'stale' => $query->whereHas('activities')->whereDoesntHave('activities', fn ($q) => $q->where('created_at', '>=', now()->subDays(30))),
+            'none' => $query->whereDoesntHave('activities'),
+            default => null,
+        };
 
         $searchValue = $request->input('search.value');
         if ($searchValue) {
@@ -369,7 +395,7 @@ class OpportunityManagementController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Next Step berhasil diperbarui.',
+            'message' => 'Next Step updated.',
         ]);
     }
 
@@ -389,7 +415,7 @@ class OpportunityManagementController extends Controller
         if (! (bool) $validated['budget']) {
             return response()->json([
                 'success' => false,
-                'message' => 'Budget wajib dicentang untuk bisa masuk In Review.',
+                'message' => 'Budget must be checked to move to In Review.',
             ], 422);
         }
 
@@ -422,7 +448,7 @@ class OpportunityManagementController extends Controller
         if (! (bool) $validated['authorize'] || ! (bool) $validated['timeline']) {
             return response()->json([
                 'success' => false,
-                'message' => 'Authorize dan Timeline wajib dicentang untuk mengajukan Negotiation.',
+                'message' => 'Authorize and Timeline must be checked to request Negotiation.',
             ], 422);
         }
 
@@ -454,7 +480,7 @@ class OpportunityManagementController extends Controller
         if ($opportunity->negotiation_status !== 'pending') {
             return response()->json([
                 'success' => false,
-                'message' => 'Tidak ada permintaan Negotiation yang menunggu approval.',
+                'message' => 'There is no Negotiation request awaiting approval.',
             ], 422);
         }
 
@@ -522,7 +548,7 @@ class OpportunityManagementController extends Controller
         if ($opportunity->close_loss_status !== 'pending') {
             return response()->json([
                 'success' => false,
-                'message' => 'Tidak ada permintaan Close Loss yang menunggu approval.',
+                'message' => 'There is no Close Loss request awaiting approval.',
             ], 422);
         }
 

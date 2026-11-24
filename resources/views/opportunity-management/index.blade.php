@@ -4,6 +4,7 @@
 @section('page-title', 'Opportunity Management')
 
 @section('styles')
+@include('partials.list-toolbar')
 <style>
     .modal-opportunity .modal-dialog { max-width: 800px; }
     .opp-form-section {
@@ -73,109 +74,16 @@
         box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1) !important;
     }
 
-    /* ===== Toolbar: filter Close Date + urutkan ===== */
-    .opp-toolbar {
-        margin: 6px 6px 14px;
-        border: 1px solid var(--card-border);
-        border-radius: var(--radius);
-        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    }
-    .opp-toolbar-main {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 14px 24px;
-        padding: 14px 16px;
-    }
-    .opp-toolbar-group { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-    /* Grup filter mengisi sisa lebar; rentang kustom turun ke baris kedua bila tidak muat, dropdown Stage tetap di kanan */
-    .opp-toolbar-filters { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-    .opp-stage-filter { flex: 0 0 auto; }
-    .opp-toolbar-label {
-        font-size: 10.5px;
-        font-weight: 800;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    .opp-toolbar-label i { color: var(--accent); margin-right: 5px; }
-    .opp-toolbar-controls { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
-
-    .opp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    .opp-chip {
-        padding: 7px 13px;
-        border-radius: 20px;
-        border: 1px solid var(--card-border);
-        background: var(--card);
-        color: var(--text-secondary);
-        font-size: 12px;
-        font-weight: 700;
-        font-family: inherit;
-        line-height: 1.2;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: all 0.2s var(--ease);
-    }
-    .opp-chip:hover {
-        border-color: rgba(16, 185, 129, 0.3);
-        color: var(--accent);
-        background: var(--accent-soft);
-    }
-    .opp-chip.active {
-        background: linear-gradient(135deg, var(--accent), #059669);
-        border-color: transparent;
-        color: #fff;
-        box-shadow: 0 2px 8px var(--accent-glow);
-    }
-    .opp-chip:focus-visible, .opp-summary-reset:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-    }
-
-    .opp-toolbar .opp-year { width: auto; min-width: 92px; padding: 6px 30px 6px 12px; font-size: 12.5px; font-weight: 700; }
-    .opp-range { display: flex; align-items: center; gap: 6px; }
-    .opp-range .form-control { width: 148px; padding: 6px 10px; font-size: 12.5px; }
-    .opp-range-sep { color: var(--text-muted); font-size: 12px; font-weight: 700; }
-    .opp-range.is-custom .form-control { border-color: var(--accent); }
-
-    .opp-stage-filter .form-select { min-width: 210px; padding: 7px 34px 7px 12px; font-size: 12.5px; font-weight: 600; }
-
-    .opp-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        flex-wrap: wrap;
-        padding: 9px 16px;
-        border-top: 1px solid var(--card-border);
-        font-size: 12.5px;
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-    .opp-summary strong { color: var(--text-primary); font-weight: 800; }
-    .opp-summary-reset {
-        border: none;
-        background: none;
-        padding: 2px 4px;
-        color: var(--danger);
-        font-size: 12px;
-        font-weight: 700;
-        font-family: inherit;
-        cursor: pointer;
-        border-radius: 6px;
-    }
-    .opp-summary-reset:hover { text-decoration: underline; }
-
+    /* ===== Toolbar daftar (pola sama dengan Leads / Contact / Account) ===== */
+    .opp-list-toolbar { border-bottom: 1px solid var(--card-border); margin-bottom: 6px; }
+    .opp-btn { font-size: 12.5px; height: 32px; white-space: nowrap; display: inline-flex; align-items: center; }
+    .opp-actions { display: flex; gap: 6px; margin-left: auto; }
+    .opp-summary { font-size: 12px; color: var(--text-muted); padding: 0 6px 6px; }
+    .opp-summary strong { color: var(--text-primary); }
+    @media (max-width: 767.98px) { .opp-actions { margin-left: 0; width: 100%; justify-content: flex-end; } }
     .opp-date { color: var(--text-primary); font-weight: 600; white-space: nowrap; }
     .opp-date-rel { font-size: 11px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
 
-    @media (max-width: 768px) {
-        .opp-toolbar-main { align-items: stretch; flex-direction: column; }
-        .opp-range { width: 100%; }
-        .opp-range .form-control { flex: 1; width: auto; min-width: 0; }
-        .opp-stage-filter .form-select { width: 100%; min-width: 0; }
-        .opp-toolbar .opp-year { width: 100%; }
-    }
 </style>
 @endsection
 
@@ -183,72 +91,65 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Opportunity Management</h1>
-        <p class="page-header-sub">Kelola data opportunity dan peluang penjualan</p>
+        <p class="page-header-sub">Manage sales opportunities.</p>
     </div>
-    @if($canCreate)
-    <div class="page-header-actions">
-        <button type="button" class="btn-accent" onclick="openCreateModal()">
-            <i class="fa fa-plus"></i>
-            <span>Add Opportunity</span>
-        </button>
-    </div>
-    @endif
 </div>
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa fa-bullseye me-2" style="color:var(--accent)"></i>Opportunity List</span>
+        <span>Opportunity List</span>
     </div>
     <div class="card-body-custom p-2">
-        <div class="opp-toolbar">
-            <div class="opp-toolbar-main">
-                <div class="opp-toolbar-filters">
-                <div class="opp-toolbar-group">
-                    <span class="opp-toolbar-label"><i class="fa fa-calendar-days"></i>Close Date</span>
-                    <div class="opp-toolbar-controls">
-
-                        <div class="opp-chips" role="group" aria-label="Rentang close date">
-                            <button type="button" class="opp-chip" data-preset="q1" title="Januari – Maret">Kuartal 1</button>
-                            <button type="button" class="opp-chip" data-preset="q2" title="April – Juni">Kuartal 2</button>
-                            <button type="button" class="opp-chip" data-preset="q3" title="Juli – September">Kuartal 3</button>
-                            <button type="button" class="opp-chip" data-preset="q4" title="Oktober – Desember">Kuartal 4</button>
-                            <button type="button" class="opp-chip" data-preset="year" title="Januari – Desember">Setahun</button>
-                            <button type="button" class="opp-chip" data-preset="all" title="Tanpa filter tanggal">Semua</button>
-                        </div>
-                        <div class="opp-range" id="opp-range">
-                            <input type="date" id="filter-close-from" class="form-control" aria-label="Close date dari" title="Dari tanggal">
-                            <span class="opp-range-sep">–</span>
-                            <input type="date" id="filter-close-to" class="form-control" aria-label="Close date sampai" title="Sampai tanggal">
-                        </div>
-                    </div>
-                </div>
-                </div>
-                <div class="opp-toolbar-group opp-stage-filter">
-                    <label class="opp-toolbar-label" for="filter-stage"><i class="fa fa-layer-group"></i>Stage</label>
-                    <select id="filter-stage" class="form-select">
-                        <option value="">Semua Stage</option>
-                        @foreach($stages as $s)
-                        <option value="{{ $s->id }}">{{ $s->stage_name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="opp-toolbar-group opp-stage-filter">
-                    <label class="opp-toolbar-label" for="filter-division"><i class="fa fa-building"></i>Division</label>
-                    <select id="filter-division" class="form-select">
-                        <option value="">Semua Division</option>
-                        @foreach($divisions as $d)
-                        <option value="{{ $d->id }}">{{ $d->division_name }}</option>
-                        @endforeach
-                    </select>
-                </div>
+        <div class="list-toolbar opp-list-toolbar" id="opp-toolbar">
+            <div class="lt-search">
+                <i class="fa fa-magnifying-glass"></i>
+                <input type="search" class="form-control" data-search placeholder="Search opportunity, account, stage, owner…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
             </div>
-            <div class="opp-summary" aria-live="polite">
-                <span id="opp-summary-text">Memuat…</span>
-                <button type="button" class="opp-summary-reset" id="btn-reset-close-filter" style="display:none">
-                    <i class="fa fa-xmark me-1"></i>Hapus filter
-                </button>
+            <select class="form-select" data-filter="account" data-searchable aria-label="Account">
+                <option value="">All Accounts</option>
+                @foreach($accountCompanies as $ac)<option value="{{ $ac->id }}">{{ $ac->account_name }}</option>@endforeach
+            </select>
+            @unless($isSales)
+            <select class="form-select" data-filter="owner" data-searchable aria-label="Owner">
+                <option value="">All Owners</option>
+                <option value="none">No owner</option>
+                @foreach($owners as $u)<option value="{{ $u->id }}">{{ $u->display_name }}</option>@endforeach
+            </select>
+            @endunless
+            <select class="form-select" data-filter="stage" aria-label="Stage">
+                <option value="">All Stages</option>
+                @foreach($stages as $st)<option value="{{ $st->id }}">{{ $st->stage_name }}</option>@endforeach
+            </select>
+            <select class="form-select" data-filter="division_id" aria-label="Division">
+                <option value="">All Divisions</option>
+                @foreach($divisions as $d)<option value="{{ $d->id }}">{{ $d->division_name }}</option>@endforeach
+            </select>
+            <select class="form-select" id="opp-close-preset" aria-label="Close date">
+                <option value="">Close Date: Any</option>
+                <option value="q1">Close Date: Q1 (Jan – Mar)</option>
+                <option value="q2">Close Date: Q2 (Apr – Jun)</option>
+                <option value="q3">Close Date: Q3 (Jul – Sep)</option>
+                <option value="q4">Close Date: Q4 (Oct – Dec)</option>
+                <option value="year">Close Date: Full year</option>
+                <option value="custom">Close Date: Custom range</option>
+            </select>
+            <select class="form-select" id="opp-year" aria-label="Close date year" style="display:none">
+                @foreach($closeDateYears as $y)<option value="{{ $y }}" @selected($y === now()->year)>{{ $y }}</option>@endforeach
+            </select>
+            <div class="lt-date" id="opp-close-range" title="Close date" style="display:none">
+                <input type="date" class="form-control" data-filter="close_date_from" aria-label="Close date from">
+                <span>–</span>
+                <input type="date" class="form-control" data-filter="close_date_to" aria-label="Close date to">
             </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            @if($canCreate)
+            <div class="opp-actions">
+                <button type="button" class="btn btn-sm btn-primary opp-btn" onclick="openCreateModal()">Add Opportunity</button>
+            </div>
+            @endif
         </div>
+        <div class="opp-summary" id="opp-summary-text" aria-live="polite">Loading…</div>
         <div class="table-responsive">
             <table id="opportunity-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
@@ -288,7 +189,7 @@
 
                     <div class="opp-form-section open">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
-                            <span><i class="fa fa-bullseye me-2" style="color:var(--accent)"></i>Opportunity Information</span>
+                            <span>Opportunity Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="opp-form-section-body">
@@ -326,7 +227,7 @@
                                 <div class="form-group">
                                     <label>Stage</label>
                                     <select name="stage_id" id="opp-stage">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($stages as $s)
                                         <option value="{{ $s->id }}">{{ $s->stage_name }}</option>
                                         @endforeach
@@ -339,7 +240,7 @@
                                 <div class="form-group">
                                     <label>Forecast <span class="text-danger">*</span></label>
                                     <select name="forecast_id" id="opp-forecast">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($forecasts as $f)
                                         <option value="{{ $f->id }}">{{ $f->forecast_name }}</option>
                                         @endforeach
@@ -350,7 +251,7 @@
                                 <div class="form-group" style="display: none">
                                     <label>Loss Reason</label>
                                     <select name="loss_reasons_id" id="opp-loss-reason">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($lossReasons as $lr)
                                         <option value="{{ $lr->id }}">{{ $lr->reason_name }}</option>
                                         @endforeach
@@ -359,7 +260,7 @@
                                 <div class="form-group">
                                     <label>Division</label>
                                     <select name="division_id" id="opp-division">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($divisions as $d)
                                         <option value="{{ $d->id }}">{{ $d->division_name }}</option>
                                         @endforeach
@@ -368,7 +269,7 @@
                                 <div class="form-group" style="display: none">
                                     <label>Lead Source</label>
                                     <select name="source_id" id="opp-source">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($sources as $src)
                                         <option value="{{ $src->id }}">{{ $src->source_name }}</option>
                                         @endforeach
@@ -383,7 +284,7 @@
                                 <div class="form-group">
                                     <label>End User</label>
                                     <select name="end_user_id" id="opp-end-user">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($accountCompanies as $ac)
                                         <option value="{{ $ac->id }}">{{ $ac->account_name }}</option>
                                         @endforeach
@@ -407,7 +308,7 @@
 
                     <div class="opp-form-section" style="display: none">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
-                            <span><i class="fa fa-check-circle me-2" style="color:var(--accent)"></i>BAT Information</span>
+                            <span>BAT Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="opp-form-section-body">
@@ -436,7 +337,7 @@
 
                     <div class="opp-form-section" style="display: none">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
-                            <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Information</span>
+                            <span>Additional Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="opp-form-section-body">
@@ -454,7 +355,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-opportunity">
-                    <i class="fa fa-save me-1"></i> Save
+                    Save
                 </button>
             </div>
         </div>
@@ -594,15 +495,23 @@ function initOpportunityTable() {
     }
 
     opportunityTable = $('#opportunity-table').DataTable({
+        layout: ListToolbar.layout,
+        language: {
+            processing: 'Loading…',
+            lengthMenu: 'Show _MENU_ rows',
+            info: 'Showing _START_–_END_ of _TOTAL_ opportunities',
+            infoEmpty: 'No opportunities',
+            infoFiltered: '(filtered from _MAX_)',
+            zeroRecords: '<span style="color:var(--text-muted)">No opportunities match the search / filters.</span>',
+            emptyTable: '<span style="color:var(--text-muted)">No opportunities yet.</span>',
+            paginate: { first: '«', previous: '‹', next: '›', last: '»' }
+        },
         processing: true,
         serverSide: true,
         ajax: {
             url: '{{ route("opportunity-management.data") }}',
             data: function(d) {
-                d.close_date_from = $('#filter-close-from').val();
-                d.close_date_to = $('#filter-close-to').val();
-                d.stage_ids = selectedStageIds();
-                d.division_id = $('#filter-division').val();
+                return oppToolbar.params(d);
             }
         },
         columns: [
@@ -641,7 +550,7 @@ function initOpportunityTable() {
                 render: function(data, type, row) {
                     if (!row.close_date_raw) return '—';
                     var days = moment(row.close_date_raw).startOf('day').diff(moment().startOf('day'), 'days');
-                    var rel = days === 0 ? 'Hari ini' : (days > 0 ? days + ' hari lagi' : Math.abs(days) + ' hari lalu');
+                    var rel = days === 0 ? 'Today' : (days > 0 ? 'in ' + days + ' day(s)' : Math.abs(days) + ' day(s) ago');
                     return '<div class="opp-date">' + data + '</div><div class="opp-date-rel">' + rel + '</div>';
                 }
             },
@@ -658,7 +567,7 @@ function initOpportunityTable() {
                         html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
                     if (oppCanDelete) {
-                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-opportunity" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-opportunity" title="Delete" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;
@@ -667,187 +576,77 @@ function initOpportunityTable() {
         ],
         pageLength: 10,
         lengthMenu: [10, 15, 25, 50, 100],
-        // Filter, urutan, pencarian & halaman tetap saat kembali dari halaman detail (per tab browser)
+        // Urutan & halaman tetap saat kembali dari halaman detail; filter toolbar disimpan terpisah (oppSaveFilters).
         stateSave: true,
         stateDuration: -1,
-        stateSaveParams: function(settings, data) {
-            data.oppClose = {
-                v: OPP_FILTER_VERSION,
-                preset: oppActivePreset,
-                year: $('#opp-year').val(),
-                from: $('#filter-close-from').val(),
-                to: $('#filter-close-to').val(),
-                stages: selectedStageIds(),
-                division: $('#filter-division').val(),
-            };
-        },
-        stateLoadParams: function(settings, data) {
-            var saved = data.oppClose;
-            // Filter tersimpan dari versi lama (bawaan kuartal berjalan) diabaikan
-            if (!saved || saved.v !== OPP_FILTER_VERSION) return;
-            setSelectedStages(saved.stages || []);
-            setSelectedDivision(saved.division || '');
-            if (isClosePreset(saved.preset)) {
-                if (saved.year && $('#opp-year option[value="' + saved.year + '"]').length) {
-                    $('#opp-year').val(saved.year);
-                }
-                applyClosePreset(saved.preset);
-            } else {
-                setCloseRange(saved.from, saved.to);
-            }
-        },
+        stateSaveParams: function(settings, data) { data.search.search = ''; },
+        search: { search: $('#opp-toolbar [data-search]').val() || '' },
+        stateLoadParams: function(settings, data) { data.search.search = $('#opp-toolbar [data-search]').val() || ''; },
     });
 }
 
-// --- Filter Close Date (preset + rentang kustom) ---
-const OPP_DATE_FMT = 'YYYY-MM-DD';
-// Filter bawaan saat halaman pertama dibuka: semua tanggal, supaya seluruh opportunity langsung tampil.
-// Ganti ke 'q' + moment().quarter() bila ingin bawaan kuartal berjalan.
-const OPP_DEFAULT_PRESET = 'all';
-// Naikkan angka ini bila bawaan filter berubah, agar filter tersimpan versi lama tidak dipakai lagi.
-const OPP_FILTER_VERSION = 2;
-let oppActivePreset = 'all';
+// --- Toolbar filter (pola sama dengan Leads / Contact / Account) ---
+let oppToolbar = null;
+const OPP_FILTER_KEY = 'opportunity-filters';
 
-function isClosePreset(preset) {
-    return /^(q[1-4]|year|all)$/.test(preset || '');
-}
-
-// Tahun acuan kuartal: dropdown #opp-year bila ada, kalau tidak tahun berjalan
-function closeYear() {
-    return parseInt($('#opp-year').val(), 10) || moment().year();
-}
-
-// Rentang tanggal sebuah preset pada tahun acuan
-function closePresetRange(preset) {
-    var year = closeYear();
-    if (preset === 'year') {
-        return [moment({ year: year }).startOf('year'), moment({ year: year }).endOf('year')];
-    }
-    var q = /^q([1-4])$/.exec(preset);
+// Preset close date (kuartal / setahun) pada tahun terpilih -> isi rentang tanggal.
+function oppPresetRange(preset) {
+    var year = parseInt($('#opp-year').val(), 10) || moment().year();
+    if (preset === 'year') return [moment({ year: year }).startOf('year'), moment({ year: year }).endOf('year')];
+    var q = /^q([1-4])$/.exec(preset || '');
     if (!q) return null;
     var start = moment({ year: year, month: (parseInt(q[1], 10) - 1) * 3, day: 1 });
     return [start, start.clone().add(2, 'months').endOf('month')];
 }
 
-function setCloseRange(from, to, preset) {
-    from = from || '';
-    to = to || '';
-    $('#filter-close-from').val(from);
-    $('#filter-close-to').val(to);
-
-    oppActivePreset = preset || ((from || to) ? 'custom' : 'all');
-    $('.opp-chip[data-preset]').each(function() {
-        var active = $(this).data('preset') === oppActivePreset;
-        $(this).toggleClass('active', active).attr('aria-pressed', active ? 'true' : 'false');
-    });
-    $('#opp-range').toggleClass('is-custom', oppActivePreset === 'custom');
-}
-
-function applyClosePreset(preset) {
-    var range = closePresetRange(preset);
+function oppApplyPreset(preset) {
+    var range = oppPresetRange(preset);
+    $('#opp-close-range').toggle(preset === 'custom');
+    $('#opp-year').toggle(!!range);
     if (range) {
-        setCloseRange(range[0].format(OPP_DATE_FMT), range[1].format(OPP_DATE_FMT), preset);
-    } else {
-        setCloseRange('', '', 'all');
+        $('[data-filter="close_date_from"]').val(range[0].format('YYYY-MM-DD'));
+        $('[data-filter="close_date_to"]').val(range[1].format('YYYY-MM-DD'));
+    } else if (preset !== 'custom') {
+        $('[data-filter="close_date_from"], [data-filter="close_date_to"]').val('');
     }
 }
 
-function closeRangeLabel() {
-    var from = $('#filter-close-from').val();
-    var to = $('#filter-close-to').val();
-    var fmt = function(d) { return moment(d).format('DD MMM YYYY'); };
-
-    var q = /^q([1-4])$/.exec(oppActivePreset);
-    if (q) return 'Kuartal ' + q[1] + ' ' + closeYear() + ' (' + moment(from).format('DD MMM') + ' – ' + fmt(to) + ')';
-    if (oppActivePreset === 'year') return 'Tahun ' + closeYear();
-
-    if (from && to) return from === to ? fmt(from) : fmt(from) + ' – ' + fmt(to);
-    if (from) return 'mulai ' + fmt(from);
-    if (to) return 'sampai ' + fmt(to);
-    return '';
+// Filter tetap saat kembali dari halaman detail (per tab browser).
+function oppSaveFilters() {
+    var state = { preset: $('#opp-close-preset').val(), year: $('#opp-year').val(), q: $('#opp-toolbar [data-search]').val() };
+    $('#opp-toolbar [data-filter]').each(function() { state[$(this).data('filter')] = $(this).val(); });
+    try { sessionStorage.setItem(OPP_FILTER_KEY, JSON.stringify(state)); } catch (e) {}
 }
 
-$(document).on('click', '.opp-chip[data-preset]', function() {
-    applyClosePreset($(this).data('preset'));
-    if (opportunityTable) opportunityTable.ajax.reload();
-});
-
-// Ganti tahun: kuartal/setahun yang sedang aktif ikut pindah tahun; "Semua" & rentang kustom tidak diubah
-$('#opp-year').on('change', function() {
-    if (!closePresetRange(oppActivePreset)) return;
-    applyClosePreset(oppActivePreset);
-    if (opportunityTable) opportunityTable.ajax.reload();
-});
-
-$('#filter-close-from, #filter-close-to').on('change', function() {
-    var from = $('#filter-close-from').val();
-    var to = $('#filter-close-to').val();
-
-    // Rentang terbalik → tukar otomatis, jangan dibuang
-    if (from && to && from > to) {
-        var tmp = from; from = to; to = tmp;
-    }
-    setCloseRange(from, to);
-    if (opportunityTable) opportunityTable.ajax.reload();
-});
-
-// --- Filter Stage (dropdown; kosong = semua stage) ---
-function selectedStageIds() {
-    var stage = $('#filter-stage').val();
-    return stage ? [stage] : [];
+function oppRestoreFilters() {
+    var state = null;
+    try { state = JSON.parse(sessionStorage.getItem(OPP_FILTER_KEY) || 'null'); } catch (e) {}
+    if (!state) return;
+    $('#opp-toolbar [data-filter]').each(function() {
+        var key = $(this).data('filter');
+        if (state[key] != null && (this.tagName !== 'SELECT' || $(this).find('option[value="' + state[key] + '"]').length)) $(this).val(state[key]);
+    });
+    if (state.year && $('#opp-year option[value="' + state.year + '"]').length) $('#opp-year').val(state.year);
+    $('#opp-close-preset').val(state.preset || '');
+    $('#opp-close-range').toggle(state.preset === 'custom');
+    $('#opp-year').toggle(/^(q[1-4]|year)$/.test(state.preset || ''));
+    if (state.q) $('#opp-toolbar [data-search]').val(state.q);
 }
 
-function setSelectedStages(ids) {
-    var stage = String((ids || [])[0] || '');
-    // Id tersimpan yang stage-nya sudah tidak ada → kembali ke "Semua Stage"
-    $('#filter-stage').val($('#filter-stage option[value="' + stage + '"]').length ? stage : '');
-}
-
-function stageLabel() {
-    return $('#filter-stage').val() ? $('#filter-stage option:selected').text().trim() : '';
-}
-
-$('#filter-stage').on('change', function() {
-    if (opportunityTable) opportunityTable.ajax.reload();
+$(document).on('change', '#opp-close-preset, #opp-year', function() {
+    oppApplyPreset($('#opp-close-preset').val());
+    $('[data-filter="close_date_from"]').trigger('change');
 });
 
-// --- Filter Division (dropdown; kosong = semua division) ---
-function setSelectedDivision(id) {
-    id = String(id || '');
-    // Id tersimpan yang division-nya sudah tidak ada → kembali ke "Semua Division"
-    $('#filter-division').val($('#filter-division option[value="' + id + '"]').length ? id : '');
-}
-
-function divisionLabel() {
-    return $('#filter-division').val() ? $('#filter-division option:selected').text().trim() : '';
-}
-
-$('#filter-division').on('change', function() {
-    if (opportunityTable) opportunityTable.ajax.reload();
-});
-
-$('#btn-reset-close-filter').on('click', function() {
-    applyClosePreset('all');
-    setSelectedStages([]);
-    setSelectedDivision('');
-    if (opportunityTable) opportunityTable.ajax.reload();
-});
-
-// Ringkasan hasil di bawah toolbar
+// Ringkasan hasil di bawah toolbar.
 $('#opportunity-table').on('draw.dt', function(e, settings) {
-    var api = new $.fn.dataTable.Api(settings);
-    var info = api.page.info();
-    var label = closeRangeLabel();
-    var stages = stageLabel();
-    var division = divisionLabel();
-
-    $('#opp-summary-text').html(
-        '<strong>' + info.recordsDisplay.toLocaleString('id-ID') + '</strong> opportunity' +
-        (label ? ' · Close Date <strong>' + label + '</strong>' : ' · semua tanggal') +
-        (stages ? ' · Stage <strong>' + $('<span>').text(stages).html() + '</strong>' : ' · semua stage') +
-        (division ? ' · Division <strong>' + $('<span>').text(division).html() + '</strong>' : ' · semua division')
-    );
-    $('#btn-reset-close-filter').toggle(!!(label || stages || division));
+    var info = new $.fn.dataTable.Api(settings).page.info();
+    var preset = $('#opp-close-preset').val();
+    var stage = $('[data-filter="stage"] option:selected');
+    $('#opp-summary-text').html('<strong>' + Num.format(info.recordsDisplay, 0) + '</strong> ' + (info.recordsDisplay === 1 ? 'opportunity' : 'opportunities')
+        + (preset ? ' · ' + $('<span>').text($('#opp-close-preset option:selected').text() + (/^(q[1-4]|year)$/.test(preset) ? ' ' + $('#opp-year').val() : '')).html() : '')
+        + ($('[data-filter="stage"]').val() ? ' · Stage <strong>' + $('<span>').text(stage.text()).html() + '</strong>' : ''));
+    oppSaveFilters();
 });
 
 $(document).on('click', '#btn-save-opportunity', function() {
@@ -882,7 +681,7 @@ $(document).on('click', '#btn-save-opportunity', function() {
             if (section.length && !section.hasClass('open')) {
                 section.addClass('open');
             }
-            toastr.error(v.label + ' wajib diisi.');
+            toastr.error(v.label + ' is required.');
             if (v.select2) {
                 $(v.select2).select2('focus');
             } else {
@@ -918,7 +717,7 @@ $(document).on('click', '#btn-save-opportunity', function() {
     }).then(function(result) {
         if (!result.isConfirmed) return;
 
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
         $.ajax({
             url: url,
@@ -930,10 +729,10 @@ $(document).on('click', '#btn-save-opportunity', function() {
                 toastr.success(res.message);
                 if (oppModalInstance) oppModalInstance.hide();
                 if (opportunityTable) opportunityTable.ajax.reload(null, false);
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
             },
             error: function(xhr) {
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
                 var errors = xhr.responseJSON?.errors;
                 if (errors) {
                     var first = Object.values(errors)[0];
@@ -1008,7 +807,7 @@ $(document).on('shown.bs.modal', '#opportunityModal', function() {
     if (!$('#opp-contact').hasClass('select2-hidden-accessible')) {
         $('#opp-contact').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih Contact —',
+            placeholder: '— Select Contact —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#opportunityModal')
@@ -1022,14 +821,21 @@ $(document).on('shown.bs.modal', '#opportunityModal', function() {
     if (!$('#opp-end-user').hasClass('select2-hidden-accessible')) {
         $('#opp-end-user').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih —',
+            placeholder: '— Select —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#opportunityModal')
         });
     }
 });
-applyClosePreset(OPP_DEFAULT_PRESET); // ditimpa oleh filter tersimpan (stateLoadParams) bila ada
-initOpportunityTable();
+$(document).ready(function() {
+    oppRestoreFilters();
+    oppToolbar = ListToolbar('#opp-toolbar', function() { return opportunityTable; });
+    $(document).on('click', '#opp-toolbar [data-reset]', function() {
+        $('#opp-close-preset').val('');
+        $('#opp-close-range, #opp-year').hide();
+    });
+    initOpportunityTable();
+});
 </script>
 @endsection

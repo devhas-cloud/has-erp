@@ -27,7 +27,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ route('leads-management.index') }}" class="btn-ghost">
-            <i class="fa fa-arrow-left"></i><span>Kembali</span>
+            <span>Back</span>
         </a>
     </div>
 </div>
@@ -38,7 +38,7 @@
             @csrf @method('PUT')
 
             <div class="lead-edit-section">
-                <div class="lead-edit-section-header"><i class="fa fa-user me-2" style="color:var(--accent)"></i>Lead Information</div>
+                <div class="lead-edit-section-header">Lead Information</div>
                 <div class="lead-edit-section-body">
                     <div class="lead-edit-row">
                         <div class="field small">
@@ -77,7 +77,7 @@
                         <div class="field">
                             <label>Job Title</label>
                             <select name="job_titles_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($jobTitles as $jt)
                                 <option value="{{ $jt->id }}" {{ $lead->accountContact?->job_titles_id == $jt->id ? 'selected' : '' }}>{{ $jt->title_name }}</option>
                                 @endforeach
@@ -86,7 +86,7 @@
                         <div class="field">
                             <label>Department</label>
                             <select name="divisions_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($divisions as $div)
                                 <option value="{{ $div->id }}" {{ $lead->accountContact?->divisions_id == $div->id ? 'selected' : '' }}>{{ $div->division_name }}</option>
                                 @endforeach
@@ -97,7 +97,7 @@
                         <div class="field">
                             <label>Lead Source</label>
                             <select name="source_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($sources as $src)
                                 <option value="{{ $src->id }}" {{ $lead->source_id == $src->id ? 'selected' : '' }}>{{ $src->source_name }}</option>
                                 @endforeach
@@ -106,7 +106,7 @@
                         <div class="field">
                             <label>Preferred Contact Method</label>
                             <select name="contact_methods_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($contactMethods as $cm)
                                 <option value="{{ $cm->id }}" {{ $lead->accountContact?->contact_methods_id == $cm->id ? 'selected' : '' }}>{{ $cm->method_name }}</option>
                                 @endforeach
@@ -115,7 +115,7 @@
                         <div class="field">
                             <label>Role in Project</label>
                             <select name="role_in_projects_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($roleInProjects as $rp)
                                 <option value="{{ $rp->id }}" {{ $lead->accountContact?->role_in_projects_id == $rp->id ? 'selected' : '' }}>{{ $rp->role_name }}</option>
                                 @endforeach
@@ -144,7 +144,7 @@
             </div>
 
             <div class="lead-edit-section">
-                <div class="lead-edit-section-header"><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Information</div>
+                <div class="lead-edit-section-header">Account Information</div>
                 <div class="lead-edit-section-body">
                     <div class="lead-edit-row">
                         <div class="field">
@@ -160,7 +160,7 @@
                         <div class="field">
                             <label>Segmentation</label>
                             <select name="segmentation_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($segmentations as $s)
                                 <option value="{{ $s->id }}" {{ $lead->accountCompany?->segmentation_id == $s->id ? 'selected' : '' }}>{{ $s->segmentation_name }}</option>
                                 @endforeach
@@ -169,7 +169,7 @@
                         <div class="field">
                             <label>Account Type</label>
                             <select name="account_types_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($accountTypes as $at)
                                 <option value="{{ $at->id }}" {{ $lead->accountCompany?->account_types_id == $at->id ? 'selected' : '' }}>{{ $at->type_name }}</option>
                                 @endforeach
@@ -180,7 +180,7 @@
                         <div class="field">
                             <label>Business Entity</label>
                             <select name="business_entities_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($businessEntities as $be)
                                 <option value="{{ $be->id }}" {{ $lead->accountCompany?->business_entities_id == $be->id ? 'selected' : '' }}>{{ $be->entity_name }}</option>
                                 @endforeach
@@ -189,7 +189,7 @@
                         <div class="field">
                             <label>Business Value</label>
                             <select name="business_values_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($businessValues as $bv)
                                 <option value="{{ $bv->id }}" {{ $lead->accountCompany?->business_values_id == $bv->id ? 'selected' : '' }}>{{ $bv->value_name }}</option>
                                 @endforeach
@@ -198,7 +198,7 @@
                         <div class="field">
                             <label>Interaction Level</label>
                             <select name="interaction_levels_id">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($interactionLevels as $il)
                                 <option value="{{ $il->id }}" {{ $lead->accountCompany?->interaction_levels_id == $il->id ? 'selected' : '' }}>{{ $il->level_name }}</option>
                                 @endforeach
@@ -239,7 +239,7 @@
             </div>
 
             <div class="lead-edit-section">
-                <div class="lead-edit-section-header"><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Information</div>
+                <div class="lead-edit-section-header">Additional Information</div>
                 <div class="lead-edit-section-body">
                     <div class="lead-edit-row">
                         <label class="field-check">
@@ -263,7 +263,7 @@
                         <div class="field">
                             <label>Assign To</label>
                             <select name="assigned_to">
-                                <option value="">— Pilih —</option>
+                                <option value="">— Select —</option>
                                 @foreach($users as $u)
                                 <option value="{{ $u->id }}" {{ $lead->assigned_to == $u->id ? 'selected' : '' }}>{{ $u->display_name }}</option>
                                 @endforeach
@@ -274,7 +274,7 @@
             </div>
 
             <button type="submit" class="btn-accent mt-3">
-                <i class="fa fa-save me-1"></i> Update Lead
+                Update Lead
             </button>
         </form>
     </div>

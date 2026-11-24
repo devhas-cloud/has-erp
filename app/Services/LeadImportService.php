@@ -93,7 +93,7 @@ class LeadImportService
                     $success++;
                 } else {
                     $failed++;
-                    $errors[] = "Baris {$rowNum}: {$result}";
+                    $errors[] = "Row {$rowNum}: {$result}";
                 }
             }
 
@@ -203,39 +203,39 @@ class LeadImportService
 
         foreach ($required as [$field, $value]) {
             if ($value === '') {
-                return "{$field} wajib diisi.";
+                return "{$field} is required.";
             }
         }
 
         // Validate lead_status
         $validStatuses = ['New', 'Contacted', 'Qualified', 'Unqualified'];
         if (! in_array($leadStatus, $validStatuses)) {
-            return "lead_status tidak valid: '{$leadStatus}'. Gunakan: ".implode(', ', $validStatuses);
+            return "invalid lead_status: '{$leadStatus}'. Use: ".implode(', ', $validStatuses);
         }
 
         // Validate salutation
         if (! in_array($salutation, ['Bapak', 'Ibu'])) {
-            return "salutation tidak valid: '{$salutation}'. Gunakan: Bapak, Ibu";
+            return "invalid salutation: '{$salutation}'. Use: Bapak, Ibu";
         }
 
         // Validate email format
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return "email tidak valid: '{$email}'";
+            return "invalid email: '{$email}'";
         }
 
         // Check email uniqueness
         if (AccountContact::where('email', $email)->exists()) {
-            return "email sudah digunakan: '{$email}'";
+            return "email already in use: '{$email}'";
         }
 
         // Validate follow_up_date
         if (! $this->isValidDate($followUpDate)) {
-            return "follow_up_date tidak valid: '{$followUpDate}'. Format: YYYY-MM-DD";
+            return "invalid follow_up_date: '{$followUpDate}'. Format: YYYY-MM-DD";
         }
 
         // Validate close_date (optional)
         if ($closeDate !== '' && ! $this->isValidDate($closeDate)) {
-            return "close_date tidak valid: '{$closeDate}'. Format: YYYY-MM-DD";
+            return "invalid close_date: '{$closeDate}'. Format: YYYY-MM-DD";
         }
 
         // --- Resolve lookups ---
@@ -320,7 +320,7 @@ class LeadImportService
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return 'Gagal menyimpan: '.$e->getMessage();
+            return 'Failed to save: '.$e->getMessage();
         }
     }
 
@@ -378,7 +378,7 @@ class LeadImportService
         $id = $this->lookups[$key][$name] ?? null;
         if ($id === null) {
             $valid = implode(', ', array_keys($this->lookups[$key]));
-            $errors[] = "{$label} '{$name}' tidak ditemukan. Pilihan: {$valid}";
+            $errors[] = "{$label} '{$name}' not found. Options: {$valid}";
 
             return null;
         }

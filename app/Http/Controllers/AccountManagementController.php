@@ -60,7 +60,41 @@ class AccountManagementController extends Controller
             'accountCities',
             'accountProvinces',
             'accountCountries'
-        ));
+        ) + [
+            // Pilihan filter Owner: user yang memiliki akun.
+            'accountOwners' => User::whereIn('id', AccountCompany::query()->whereNotNull('account_owner_id')->distinct()->pluck('account_owner_id'))
+                ->orderBy('full_name')->get(),
+        ]);
+    }
+
+    /** Cari + filter toolbar: account type, owner, aktivitas terakhir. Dipakai daftar & export. */
+    private function applyFilters($query, Request $request, ?string $search): void
+    {
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('account_name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhereHas('accountOwner', fn ($q) => $q->where('username', 'like', "%{$search}%")->orWhere('full_name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($request->filled('type')) {
+            $query->where('types_accounts_companies_id', (int) $request->input('type'));
+        }
+
+        if ($request->filled('owner')) {
+            $request->input('owner') === 'none'
+                ? $query->whereNull('account_owner_id')
+                : $query->where('account_owner_id', (int) $request->input('owner'));
+        }
+
+        match ($request->input('activity')) {
+            '7d' => $query->where('last_activity_at', '>=', now()->subDays(7)),
+            '30d' => $query->where('last_activity_at', '>=', now()->subDays(30)),
+            'stale' => $query->where('last_activity_at', '<', now()->subDays(30)),
+            'none' => $query->whereNull('last_activity_at'),
+            default => null,
+        };
     }
 
     public function data(Request $request): JsonResponse
@@ -69,17 +103,7 @@ class AccountManagementController extends Controller
 
         $recordsTotal = AccountCompany::count();
 
-        $searchValue = $request->input('search.value');
-        if ($searchValue) {
-            $query->where(function ($q) use ($searchValue) {
-                $q->where('account_name', 'like', "%{$searchValue}%")
-                    ->orWhere('phone', 'like', "%{$searchValue}%")
-                    ->orWhereHas('accountOwner', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%")
-                            ->orWhere('full_name', 'like', "%{$searchValue}%");
-                    });
-            });
-        }
+        $this->applyFilters($query, $request, $request->input('search.value'));
 
         $recordsFiltered = $query->count();
 
@@ -167,7 +191,7 @@ class AccountManagementController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Account berhasil ditambahkan.',
+            'message' => 'Account added.',
         ]);
     }
 
@@ -220,7 +244,7 @@ class AccountManagementController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Account berhasil diupdate.',
+            'message' => 'Account updated.',
         ]);
     }
 
@@ -294,7 +318,7 @@ class AccountManagementController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Account berhasil dihapus.',
+            'message' => 'Account deleted.',
         ]);
     }
 
@@ -335,13 +359,13 @@ class AccountManagementController extends Controller
 
             return response()->json([
                 'success' => $result['failed'] === 0,
-                'message' => "Import selesai: {$result['success']} berhasil, {$result['failed']} gagal dari ".($result['success'] + $result['failed']).' data.',
+                'message' => "Import finished: {$result['success']} succeeded, {$result['failed']} failed out of ".($result['success'] + $result['failed']).' row(s).',
                 'result' => $result,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal import: '.$e->getMessage(),
+                'message' => 'Import failed: '.$e->getMessage(),
             ], 500);
         } finally {
             if (file_exists($fullPath)) {
@@ -350,9 +374,9 @@ class AccountManagementController extends Controller
         }
     }
 
-    public function export()
+    public function export(Request $request)
     {
-        $accounts = AccountCompany::with([
+        $query = AccountCompany::with([
             'typesAccountsCompany',
             'source',
             'segmentation',
@@ -362,9 +386,10 @@ class AccountManagementController extends Controller
             'parentAccount',
             'endUserAccount',
             'accountOwner',
-        ])->where('status', 'Active')
-            ->orderBy('account_name')
-            ->get();
+        ])->where('status', 'Active');
+        // Export mengikuti filter & pencarian aktif di daftar.
+        $this->applyFilters($query, $request, $request->input('q'));
+        $accounts = $query->orderBy('account_name')->get();
 
         $headers = [
             'Account Name', 'Field Type', 'Account Source', 'Segmentation', 'Business Entity',

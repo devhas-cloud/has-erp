@@ -110,6 +110,20 @@ class OpportunityManagementDataTest extends TestCase
         $this->assertCount(3, $this->names($user));
     }
 
+    public function test_owner_account_and_activity_filters(): void
+    {
+        $water = Division::create(['division_name' => 'Water', 'description' => 'Water', 'type' => 'External', 'status' => 'Active']);
+        $user = $this->makeUser('water_filter', 'Water Filter', $water->id);
+        $opp = Opportunity::where('opportunity_name', 'Opp B1')->firstOrFail();
+        \App\Models\Activity::create(['opportunity_id' => $opp->id, 'user_id' => $user->id, 'content' => 'Site visit']);
+
+        $this->assertEqualsCanonicalizing(['Opp A1', 'Opp A2'], $this->names($user, ['owner' => $this->salesA->id]));
+        $this->assertSame(['Opp B1'], $this->names($user, ['activity' => '7d']));
+        $this->assertCount(2, $this->names($user, ['activity' => 'none']));
+        $this->assertCount(0, $this->names($user, ['account' => 999999]));
+        $this->assertCount(3, $this->names($user, ['account' => $opp->account_companies_id]));
+    }
+
     public function test_next_step_column_sorts_by_next_step(): void
     {
         $user = $this->makeUser('viewer', 'Viewer');

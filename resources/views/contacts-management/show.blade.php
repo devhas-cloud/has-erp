@@ -245,7 +245,7 @@
         <p class="page-header-sub">Informasi lengkap data kontak</p>
     </div>
     <div class="page-header-actions">
-        <a href="{{ url()->previous() }}" class="btn-ghost"> <i class="fa fa-arrow-left"></i> <span>Kembali</span> </a>
+        <a href="{{ url()->previous() }}" class="btn-ghost"><span>Back</span></a>
     </div>
 </div>
 
@@ -270,7 +270,7 @@
                     @if($contact->accountCompany?->account_name)
                         <a href="{{ route('accounts-management.show', ['accounts_management' => $contact->accountCompany->id]) }}"
                            style="color:var(--accent);text-decoration:none">
-                            <i class="fa fa-building"></i> {{ $contact->accountCompany->account_name }}
+                            {{ $contact->accountCompany->account_name }}
                         </a>
                     @endif
                 </div>
@@ -293,26 +293,26 @@
 
     <div class="account-header__actions">
         <span class="status-badge" style="background:#f1f5f9;color:var(--text-muted)">
-            <i class="fa fa-user"></i> Owner: {{ $contact->contactOwner?->display_name ?? '—' }}
+            Owner: {{ $contact->contactOwner?->display_name ?? '—' }}
         </span>
         @if($contact->assignedTo?->display_name)
             <span class="status-badge" style="background:#f1f5f9;color:var(--text-muted)">
-                <i class="fa fa-user-check"></i> Assigned: {{ $contact->assignedTo->display_name }}
+                Assigned: {{ $contact->assignedTo->display_name }}
             </span>
         @endif
         <span style="margin-left:auto"></span>
 
         @if($canCreate)
             <button type="button" class="btn btn-sm btn-accent" onclick="openContactActivityTaskModal()">
-                        <i class="fa fa-plus"></i> Add Activity
+                Add Activity
             </button>
 
             <button type="button" class="btn btn-sm btn-accent" onclick="openNewLeadModal()">
-                <i class="fa fa-bolt"></i> New Lead
+                New Lead
             </button>
             @if($contact->account_companies_id)
                 <button type="button" class="btn btn-sm btn-accent" onclick="openNewOpportunityModal()">
-                    <i class="fa fa-bullseye"></i> New Opportunity
+                    New Opportunity
                 </button>
             @endif
         @endif
@@ -324,24 +324,24 @@
         <ul class="nav nav-tabs" role="tablist" style="border-bottom:none;margin-bottom:-1px">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-contact" type="button" role="tab">
-                    <i class="fa fa-user me-1"></i> Contact Information
+                    Contact Information
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-activity" type="button" role="tab">
-                    <i class="fa fa-chart-line me-1"></i> Activity
+                    Activity
                     <span class="account-tab-badge">{{ $activityTasks->count() }}</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-lead" type="button" role="tab">
-                    <i class="fa fa-bolt me-1"></i> Leads
+                    Leads
                     <span class="account-tab-badge">{{ $contact->leads->count() }}</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-opportunity" type="button" role="tab">
-                    <i class="fa fa-bullseye me-1"></i> Opportunity
+                    Opportunity
                     <span class="account-tab-badge">{{ $opportunities->count() }}</span>
                 </button>
             </li>
@@ -354,7 +354,7 @@
                     <div class="col-lg-6">
                         <div class="card-custom" style="box-shadow:none">
                             <div class="card-header-custom">
-                                <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Contact Information</span>
+                                <span>Contact Information</span>
                             </div>
                             <div class="card-body-custom">
                                 <table class="table table-sm table-borderless mb-0 info-table">
@@ -383,7 +383,7 @@
                     <div class="col-lg-6">
                         <div class="card-custom" style="box-shadow:none">
                             <div class="card-header-custom">
-                                <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Company Information</span>
+                                <span>Company Information</span>
                             </div>
                             <div class="card-body-custom">
                                 <table class="table table-sm table-borderless mb-0 info-table">
@@ -395,7 +395,7 @@
 
                         <div class="card-custom mt-4" style="box-shadow:none">
                             <div class="card-header-custom">
-                                <span><i class="fa fa-location-dot me-2" style="color:var(--accent)"></i>Address</span>
+                                <span>Address</span>
                             </div>
                             <div class="card-body-custom">
                                 @php
@@ -408,7 +408,7 @@
                                     ])->filter()->join(', ');
                                 @endphp
                                 @if($address)
-                                    <div class="address-block"><i class="fa fa-location-dot"></i><span>{{ $address }}</span></div>
+                                    <div class="address-block"><span>{{ $address }}</span></div>
                                 @else
                                     <div class="address-block"><span style="color:var(--text-muted)">—</span></div>
                                 @endif
@@ -421,8 +421,7 @@
             <div class="tab-pane fade" id="tab-activity" role="tabpanel">
                 @if($activityTasks->isEmpty())
                     <div class="empty-state contact-empty">
-                        <i class="fa fa-chart-line"></i>
-                        <p>Belum ada activity/task pada kontak ini.</p>
+                        <p>No activities / tasks for this contact yet.</p>
                     </div>
                 @else
                     <div class="table-responsive">
@@ -472,8 +471,7 @@
             <div class="tab-pane fade" id="tab-lead" role="tabpanel">
                 @if($contact->leads->isEmpty())
                     <div class="empty-state contact-empty">
-                        <i class="fa fa-bolt"></i>
-                        <p>Belum ada lead pada kontak ini.</p>
+                        <p>No leads for this contact yet.</p>
                     </div>
                 @else
                     <div class="contact-list">
@@ -487,22 +485,19 @@
                                 };
                             @endphp
                             <a class="contact-item" href="{{ route('leads-management.show', ['leads_management' => $lead->id]) }}">
-                                <div class="contact-item__avatar" style="background:var(--info-soft);color:#1e40af">
-                                    <i class="fa fa-bolt"></i>
-                                </div>
                                 <div class="contact-item__body">
                                     <div class="contact-item__name">{{ $lead->lead_title ?? '—' }}</div>
                                     <div class="contact-item__job">
                                         @if($lead->source?->source_name)
-                                            <i class="fa fa-tag"></i> {{ $lead->source->source_name }}
+                                            Source: {{ $lead->source->source_name }}
                                         @endif
                                     </div>
                                     <div class="contact-item__meta">
                                         @if($lead->leadOwner?->display_name)
-                                            <span><i class="fa fa-user"></i> {{ $lead->leadOwner->display_name }}</span>
+                                            <span>Owner: {{ $lead->leadOwner->display_name }}</span>
                                         @endif
                                         @if($lead->lead_follow_up_date)
-                                            <span><i class="fa fa-calendar"></i> Follow up: {{ $lead->lead_follow_up_date->format('d M Y') }}</span>
+                                            <span>Follow up: {{ $lead->lead_follow_up_date->format('d M Y') }}</span>
                                         @endif
                                     </div>
                                 </div>
@@ -516,16 +511,12 @@
             <div class="tab-pane fade" id="tab-opportunity" role="tabpanel">
                 @if($opportunities->isEmpty())
                     <div class="empty-state contact-empty">
-                        <i class="fa fa-bullseye"></i>
-                        <p>Belum ada opportunity pada kontak ini.</p>
+                        <p>No opportunities for this contact yet.</p>
                     </div>
                 @else
                     <div class="contact-list">
                         @foreach($opportunities as $opp)
                             <a class="contact-item" href="{{ route('opportunity-management.show', ['opportunity' => $opp->id]) }}">
-                                <div class="contact-item__avatar" style="background:var(--accent-soft)">
-                                    <i class="fa fa-bullseye"></i>
-                                </div>
                                 <div class="contact-item__body">
                                     <div class="contact-item__name">{{ $opp->opportunity_name ?? '—' }}</div>
                                     <div class="contact-item__job">
@@ -539,10 +530,10 @@
                                     </div>
                                     <div class="contact-item__meta">
                                         @if($opp->owner?->display_name)
-                                            <span><i class="fa fa-user"></i> {{ $opp->owner->display_name }}</span>
+                                            <span>Owner: {{ $opp->owner->display_name }}</span>
                                         @endif
                                         @if($opp->close_date)
-                                            <span><i class="fa fa-calendar"></i> {{ $opp->close_date->format('d M Y') }}</span>
+                                            <span>Close date: {{ $opp->close_date->format('d M Y') }}</span>
                                         @endif
                                     </div>
                                 </div>
@@ -567,7 +558,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-bolt me-1" style="color:var(--accent)"></i> New Lead</h6>
+                <h6 class="modal-title">New Lead</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -587,7 +578,7 @@
                 <div class="form-group">
                     <label>Source <span class="text-danger">*</span></label>
                     <select id="nl-source">
-                        <option value="">— Pilih —</option>
+                        <option value="">— Select —</option>
                         @foreach($sources as $src)
                         <option value="{{ $src->id }}" @if(str_contains(strtolower($src->source_name), 'referral')) data-referral="1" @endif>
                             {{ $src->source_name }}
@@ -597,7 +588,7 @@
                 </div>
                 <div class="form-group" id="nl-referral-group" style="display:none">
                     <label>Name Referral <span class="text-danger">*</span></label>
-                    <input type="text" id="nl-referral" placeholder="Nama referral (wajib untuk sumber Referral)">
+                    <input type="text" id="nl-referral" placeholder="Referral name (required for the Referral source)">
                     <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Wajib diisi untuk sumber Referral / Employe Referral.</div>
                 </div>
                 <div class="form-group">
@@ -609,7 +600,7 @@
                 <div class="form-group">
                     <label>Assigned To</label>
                     <select id="nl-assigned">
-                        <option value="">— Pilih —</option>
+                        <option value="">— Select —</option>
                         @foreach($users as $u)
                         <option value="{{ $u->id }}">{{ $u->display_name }}</option>
                         @endforeach
@@ -620,7 +611,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-new-lead">
-                    <i class="fa fa-save me-1"></i> Save Lead
+                    Save Lead
                 </button>
             </div>
         </div>
@@ -631,7 +622,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-bullseye me-1" style="color:var(--accent)"></i> New Opportunity</h6>
+                <h6 class="modal-title">New Opportunity</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -642,7 +633,7 @@
                 <div class="form-group">
                     <label>Division <span class="text-danger">*</span></label>
                     <select id="no-division">
-                        <option value="">— Pilih —</option>
+                        <option value="">— Select —</option>
                         @foreach($divisions as $d)
                         <option value="{{ $d->id }}">{{ $d->division_name }}</option>
                         @endforeach
@@ -657,7 +648,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-new-opportunity">
-                    <i class="fa fa-save me-1"></i> Save Opportunity
+                    Save Opportunity
                 </button>
             </div>
         </div>
@@ -668,7 +659,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-chart-line me-1" style="color:var(--accent)"></i> Add Activity (Task)</h6>
+                <h6 class="modal-title">Add Activity (Task)</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -680,7 +671,7 @@
                     <div class="form-group">
                         <label>Category <span class="text-danger">*</span></label>
                         <select id="cat-category">
-                            <option value="">— Pilih —</option>
+                            <option value="">— Select —</option>
                             @foreach($taskCategories as $tc)
                             <option value="{{ $tc->id }}" data-log="{{ str_contains(mb_strtolower($tc->name), 'log') ? '1' : '0' }}">{{ $tc->name }}</option>
                             @endforeach
@@ -717,7 +708,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-contact-task">
-                    <i class="fa fa-save me-1"></i> Save Task
+                    Save Task
                 </button>
             </div>
         </div>
@@ -792,15 +783,15 @@ $(document).on('click', '#btn-save-new-lead', function() {
     const $btn = $(this);
     $('#newLeadModal .is-invalid').removeClass('is-invalid');
     let first = null;
-    if (!$('#nl-title').val().trim()) { $('#nl-title').addClass('is-invalid'); first = first || 'Lead Title wajib diisi.'; }
-    if (!$('#nl-status').val()) { $('#nl-status').addClass('is-invalid'); first = first || 'Lead Status wajib dipilih.'; }
-    if (!$('#nl-source').val()) { $('#nl-source').addClass('is-invalid'); first = first || 'Source wajib dipilih.'; }
-    if (!$('#nl-follow-up').val()) { $('#nl-follow-up').addClass('is-invalid'); first = first || 'Follow Up Date wajib diisi.'; }
+    if (!$('#nl-title').val().trim()) { $('#nl-title').addClass('is-invalid'); first = first || 'Lead Title is required.'; }
+    if (!$('#nl-status').val()) { $('#nl-status').addClass('is-invalid'); first = first || 'Select a Lead Status.'; }
+    if (!$('#nl-source').val()) { $('#nl-source').addClass('is-invalid'); first = first || 'Select a Source.'; }
+    if (!$('#nl-follow-up').val()) { $('#nl-follow-up').addClass('is-invalid'); first = first || 'Follow Up Date is required.'; }
     const isRef = $('#nl-source').find(':selected').data('referral') ? true : false;
-    if (isRef && !$('#nl-referral').val().trim()) { $('#nl-referral').addClass('is-invalid'); first = first || 'Name Referral wajib diisi untuk sumber Referral / Employe Referral.'; }
+    if (isRef && !$('#nl-referral').val().trim()) { $('#nl-referral').addClass('is-invalid'); first = first || 'Referral Name is required for the Referral / Employee Referral source.'; }
     if (first) { toastr.error(first); return; }
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
     const payload = {
         _token: '{{ csrf_token() }}',
         lead_title: $('#nl-title').val().trim(),
@@ -822,10 +813,10 @@ $(document).on('click', '#btn-save-new-lead', function() {
         },
         error: function(xhr) {
             const errs = xhr.responseJSON?.errors;
-            toastr.error(errs ? Object.values(errs)[0][0] : (xhr.responseJSON?.message || 'Gagal menyimpan lead.'));
+            toastr.error(errs ? Object.values(errs)[0][0] : (xhr.responseJSON?.message || 'Failed to save the lead.'));
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save Lead');
+            $btn.prop('disabled', false).html('Save Lead');
         }
     });
 });
@@ -835,16 +826,16 @@ $(document).on('click', '#btn-save-new-opportunity', function() {
     $('#newOpportunityModal .is-invalid').removeClass('is-invalid');
     if (!$('#no-name').val().trim()) {
         $('#no-name').addClass('is-invalid');
-        toastr.error('Opportunity Name wajib diisi.');
+        toastr.error('Opportunity Name is required.');
         return;
     }
     if (!$('#no-division').val()) {
         $('#no-division').addClass('is-invalid');
-        toastr.error('Division wajib dipilih.');
+        toastr.error('Select a Division.');
         return;
     }
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
     const payload = {
         _token: '{{ csrf_token() }}',
         opportunity_name: $('#no-name').val().trim(),
@@ -865,10 +856,10 @@ $(document).on('click', '#btn-save-new-opportunity', function() {
         },
         error: function(xhr) {
             const errs = xhr.responseJSON?.errors;
-            toastr.error(errs ? Object.values(errs)[0][0] : (xhr.responseJSON?.message || 'Gagal menyimpan opportunity.'));
+            toastr.error(errs ? Object.values(errs)[0][0] : (xhr.responseJSON?.message || 'Failed to save the opportunity.'));
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save Opportunity');
+            $btn.prop('disabled', false).html('Save Opportunity');
         }
     });
 });
@@ -952,7 +943,7 @@ $(document).on('shown.bs.modal', '#contactActivityTaskModal', function() {
     if ($('#cat-assignees').hasClass('select2-hidden-accessible')) return;
     $('#cat-assignees').select2({
         theme: 'bootstrap-5',
-        placeholder: '— Pilih user —',
+        placeholder: '— Select user —',
         allowClear: true,
         width: '100%',
         dropdownParent: $('#contactActivityTaskModal')
@@ -969,12 +960,12 @@ $(document).on('click', '#btn-save-contact-task', function() {
     const isLog = String($('#cat-category option:selected').data('log') || '') === '1';
     $('#contact-activity-task-form .is-invalid').removeClass('is-invalid');
     let first = null;
-    if (!$('#cat-title').val().trim()) { $('#cat-title').addClass('is-invalid'); first = first || 'Title wajib diisi.'; }
-    if (!$('#cat-category').val()) { $('#cat-category').addClass('is-invalid'); first = first || 'Category wajib dipilih.'; }
-    if (!$('#cat-due-date').val()) { $('#cat-due-date').addClass('is-invalid'); first = first || 'Due Date wajib diisi.'; }
+    if (!$('#cat-title').val().trim()) { $('#cat-title').addClass('is-invalid'); first = first || 'Title is required.'; }
+    if (!$('#cat-category').val()) { $('#cat-category').addClass('is-invalid'); first = first || 'Select a Category.'; }
+    if (!$('#cat-due-date').val()) { $('#cat-due-date').addClass('is-invalid'); first = first || 'Due Date is required.'; }
     if (first) { toastr.error(first); return; }
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
     const formData = new FormData();
     formData.append('_token', '{{ csrf_token() }}');
@@ -1007,10 +998,10 @@ $(document).on('click', '#btn-save-contact-task', function() {
         },
         error: function(xhr) {
             const errs = xhr.responseJSON?.errors;
-            toastr.error(errs ? Object.values(errs)[0][0] : (xhr.responseJSON?.message || 'Gagal menyimpan task.'));
+            toastr.error(errs ? Object.values(errs)[0][0] : (xhr.responseJSON?.message || 'Failed to save the task.'));
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save Task');
+            $btn.prop('disabled', false).html('Save Task');
         }
     });
 });

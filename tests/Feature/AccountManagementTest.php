@@ -97,6 +97,28 @@ class AccountManagementTest extends TestCase
         $this->assertStringContainsString('<option value="Jawa Barat">', $html);
     }
 
+    public function test_data_endpoint_filters_and_export_follow_toolbar(): void
+    {
+        $active = AccountCompany::create(array_merge($this->payload, ['status' => 'Active', 'account_owner_id' => $this->user->id]));
+        // last_activity_at diisi sistem saat ada aktivitas (tidak fillable).
+        AccountCompany::whereKey($active->id)->update(['last_activity_at' => now()->subDays(2)]);
+        $otherType = TypesAccountsCompany::create(['type_name' => 'Distributor', 'status' => 'Active']);
+        AccountCompany::create(array_merge($this->payload, ['account_name' => 'CV Maju Jaya', 'types_accounts_companies_id' => $otherType->id, 'status' => 'Active', 'account_owner_id' => null]));
+
+        $count = fn (array $params) => $this->actingAs($this->user)->getJson(route('accounts-management.data', $params))->assertOk()->json('recordsFiltered');
+
+        $this->assertSame(2, $count([]));
+        $this->assertSame(1, $count(['type' => $otherType->id]));
+        $this->assertSame(1, $count(['owner' => $this->user->id]));
+        $this->assertSame(1, $count(['owner' => 'none']));
+        $this->assertSame(1, $count(['activity' => '7d']));
+        $this->assertSame(1, $count(['activity' => 'none']));
+        $this->assertSame(1, $count(['search' => ['value' => 'Maju']]));
+
+        $this->actingAs($this->user)->get(route('accounts-management.export', ['owner' => 'none']))->assertOk();
+        $this->actingAs($this->user)->get(route('accounts-management.index'))->assertOk()->assertSee('All Account Types')->assertSee('Active Last: Any');
+    }
+
     public function test_store_persists_uploaded_icon_and_exposes_full_url(): void
     {
         Storage::fake('public');

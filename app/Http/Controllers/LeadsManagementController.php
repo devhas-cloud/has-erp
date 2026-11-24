@@ -126,6 +126,23 @@ class LeadsManagementController extends Controller
             $query->where('lead_status', $filters['lead_status']);
         }
 
+        // Filter toolbar: account, assignee, aktivitas terakhir (dari activity lead).
+        if ($request->filled('account')) {
+            $query->where('account_companies_id', (int) $request->input('account'));
+        }
+        if ($request->filled('assigned') && ! $isSales) {
+            $request->input('assigned') === 'none'
+                ? $query->whereNull('assigned_to')
+                : $query->where('assigned_to', (int) $request->input('assigned'));
+        }
+        match ($request->input('activity')) {
+            '7d' => $query->whereHas('activities', fn ($q) => $q->where('created_at', '>=', now()->subDays(7))),
+            '30d' => $query->whereHas('activities', fn ($q) => $q->where('created_at', '>=', now()->subDays(30))),
+            'stale' => $query->whereHas('activities')->whereDoesntHave('activities', fn ($q) => $q->where('created_at', '>=', now()->subDays(30))),
+            'none' => $query->whereDoesntHave('activities'),
+            default => null,
+        };
+
         $searchValue = $request->input('search.value');
         if ($searchValue) {
             $query->where(function ($q) use ($searchValue) {
@@ -213,7 +230,7 @@ class LeadsManagementController extends Controller
         };
 
         $style = $status === 'Contacted' ? 'background:var(--info-soft);color:#1e40af;' : '';
-        $icon = $status === 'Contacted' ? '<i class="fa fa-phone" style="font-size:10px"></i> ' : '';
+        $icon = '';
 
         return sprintf(
             '<span class="status-badge %s" style="%s">%s%s</span>',
@@ -881,13 +898,13 @@ class LeadsManagementController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Import selesai: {$result['success']} berhasil, {$result['failed']} gagal dari ".($result['success'] + $result['failed']).' data.',
+                'message' => "Import finished: {$result['success']} succeeded, {$result['failed']} failed out of ".($result['success'] + $result['failed']).' row(s).',
                 'result' => $result,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal import: '.$e->getMessage(),
+                'message' => 'Import failed: '.$e->getMessage(),
             ], 500);
         } finally {
             Storage::delete($path);

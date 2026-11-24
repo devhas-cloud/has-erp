@@ -4,6 +4,7 @@
 @section('page-title', 'Account Management')
 
 @section('styles')
+@include('partials.list-toolbar')
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
@@ -120,6 +121,10 @@
         display: flex;
         gap: 8px;
     }
+    .accounts-toolbar { border-bottom: 1px solid var(--card-border); margin-bottom: 6px; }
+    .accounts-btn { font-size: 12.5px; height: 32px; white-space: nowrap; display: inline-flex; align-items: center; }
+    .accounts-actions { display: flex; gap: 6px; margin-left: auto; }
+    @media (max-width: 767.98px) { .accounts-actions { margin-left: 0; width: 100%; justify-content: flex-end; } }
 </style>
 @endsection
 
@@ -127,33 +132,48 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Account Management</h1>
-        <p class="page-header-sub">Kelola data akun perusahaan</p>
+        <p class="page-header-sub">Manage customer companies (accounts).</p>
     </div>
-    @if($canRead)
-    <div class="page-header-actions">
-        <a href="{{ route('accounts-management.export') }}" class="btn btn-outline-secondary btn-sm me-2">
-            <i class="fa fa-download"></i>
-            <span>Export</span>
-        </a>
-        @if($canCreate)
-        <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="openImportModal()">
-            <i class="fa fa-upload"></i>
-            <span>Import</span>
-        </button>
-        <button type="button" class="btn-accent" onclick="openCreateModal()">
-            <i class="fa fa-plus"></i>
-            <span>Add Account</span>
-        </button>
-        @endif
-    </div>
-    @endif
 </div>
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Accounts List</span>
+        <span>Account List</span>
     </div>
-    <div class="card-body-custom p-0">
+    <div class="card-body-custom p-2">
+        <div class="list-toolbar accounts-toolbar" id="accounts-toolbar">
+            <div class="lt-search">
+                <i class="fa fa-magnifying-glass"></i>
+                <input type="search" class="form-control" data-search placeholder="Search account name, phone, owner…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
+            </div>
+            <select class="form-select" data-filter="type" aria-label="Account type">
+                <option value="">All Account Types</option>
+                @foreach($typesAccountsCompanies as $t)<option value="{{ $t->id }}">{{ $t->type_name }}</option>@endforeach
+            </select>
+            <select class="form-select" data-filter="owner" data-searchable aria-label="Owner">
+                <option value="">All Owners</option>
+                <option value="none">No owner</option>
+                @foreach($accountOwners as $u)<option value="{{ $u->id }}">{{ $u->display_name }}</option>@endforeach
+            </select>
+            <select class="form-select" data-filter="activity" aria-label="Last activity">
+                <option value="">Active Last: Any</option>
+                <option value="7d">Active in last 7 days</option>
+                <option value="30d">Active in last 30 days</option>
+                <option value="stale">Inactive over 30 days</option>
+                <option value="none">No activity yet</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            <div class="accounts-actions">
+                @if($canRead)
+                <a href="{{ route('accounts-management.export') }}" class="btn btn-sm btn-outline-secondary accounts-btn accounts-export" title="Export to Excel with the active filters">Export</a>
+                @endif
+                @if($canCreate)
+                <button type="button" class="btn btn-sm btn-outline-secondary accounts-btn" onclick="openImportModal()">Import</button>
+                <button type="button" class="btn btn-sm btn-primary accounts-btn" onclick="openCreateModal()">Add Account</button>
+                @endif
+            </div>
+        </div>
         <div class="table-responsive">
         <table id="accounts-table" class="table table-custom align-middle mb-0" style="width:100%">
             <thead>
@@ -182,28 +202,27 @@
             </div>
             <div class="modal-body">
                 <div class="text-center mb-3">
-                    <i class="fa fa-file-excel" style="font-size:40px;color:#217346"></i>
                     <p class="mt-2 mb-0" style="font-size:13px;color:var(--text-muted)">
-                        Download template, isi data, lalu upload file CSV.
+                        Download the template, fill in the data, then upload it as a CSV file.
                     </p>
                     <a href="{{ route('accounts-management.template') }}" class="btn btn-sm btn-outline-success mt-2">
-                        <i class="fa fa-download me-1"></i> Download Template (.xlsx)
+                        Download Template (.xlsx)
                     </a>
                 </div>
                 <hr>
                 <form id="import-form" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <label class="form-label" style="font-size:12px;font-weight:600">Pilih File CSV</label>
+                        <label class="form-label" for="import-file" style="font-size:12px;font-weight:600">CSV File</label>
                         <input type="file" name="file" id="import-file" class="form-control" accept=".csv,.txt" required>
-                        <small class="text-muted">Maksimal 5MB. Format: CSV (Save As dari Excel).</small>
+                        <small class="text-muted">Max 5MB. Format: CSV (Save As from Excel).</small>
                     </div>
                     <div id="import-result" style="display:none;font-size:13px;"></div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-import">
-                    <i class="fa fa-upload me-1"></i> Upload & Import
+                    Upload & Import
                 </button>
             </div>
         </div>
@@ -223,7 +242,7 @@
 
                     <div class="account-form-section open">
                         <div class="account-form-section-header" onclick="toggleAccountSection(this)">
-                            <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Company Information</span>
+                            <span>Company Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="account-form-section-body">
@@ -235,7 +254,7 @@
                                         <span id="account-icon-preview" class="avatar-circle" style="overflow:hidden;flex:0 0 36px"></span>
                                         <input type="file" name="icon" id="account-icon" accept="image/*">
                                     </div>
-                                    <small class="text-muted" style="font-size:11px">PNG/JPG, maks 2MB.</small>
+                                    <small class="text-muted" style="font-size:11px">PNG/JPG, max 2MB.</small>
                                 </div>
                             </div>
 
@@ -247,7 +266,7 @@
                                 <div class="form-group">
                                     <label>Field Type <span class="text-danger">*</span></label>
                                     <select name="types_accounts_companies_id" id="account-type">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($typesAccountsCompanies as $tac)
                                         <option value="{{ $tac->id }}">{{ $tac->type_name }}</option>
                                         @endforeach
@@ -256,7 +275,7 @@
                                 <div class="form-group">
                                     <label>Account Source <span class="text-danger">*</span></label>
                                     <select name="sources_id" id="account-source">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($sources as $src)
                                         <option value="{{ $src->id }}">{{ $src->source_name }}</option>
                                         @endforeach
@@ -285,7 +304,7 @@
                                 <div class="form-group">
                                     <label>Segmentation <span class="text-danger">*</span></label>
                                     <select name="segmentation_id" id="account-segmentation">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($segmentations as $seg)
                                         <option value="{{ $seg->id }}">{{ $seg->segmentation_name }}</option>
                                         @endforeach
@@ -294,7 +313,7 @@
                                 <div class="form-group">
                                     <label>Business Entity <span class="text-danger">*</span></label>
                                     <select name="business_entities_id" id="account-biz-entity">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($businessEntities as $be)
                                         <option value="{{ $be->id }}">{{ $be->entity_name }}</option>
                                         @endforeach
@@ -305,7 +324,7 @@
                                 <div class="form-group">
                                     <label>Business Value <span class="text-danger">*</span></label>
                                     <select name="business_values_id" id="account-biz-value">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($businessValues as $bv)
                                         <option value="{{ $bv->id }}">{{ $bv->value_name }}</option>
                                         @endforeach
@@ -315,7 +334,7 @@
                                 <div class="form-group" id="account-end-user-group" style="display:none">
                                     <label>End User <span class="text-danger" id="account-end-user-required" style="display:none">*</span></label>
                                     <select name="end_user" id="account-end-user">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($accountCompanies as $ac)
                                         <option value="{{ $ac->id }}">{{ $ac->account_name }}</option>
                                         @endforeach
@@ -324,7 +343,7 @@
                                 <div class="form-group" id="account-parent-group">
                                     <label>Parent Account</label>
                                     <select name="parent_account_id" id="account-parent">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($accountCompanies as $ac)
                                         <option value="{{ $ac->id }}">{{ $ac->account_name }}</option>
                                         @endforeach
@@ -335,7 +354,7 @@
                                 <div class="form-group">
                                     <label>Interaction Level <span class="text-danger">*</span></label>
                                     <select name="interaction_levels_id" id="account-interaction">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($interactionLevels as $il)
                                         <option value="{{ $il->id }}">{{ $il->level_name }}</option>
                                         @endforeach
@@ -347,27 +366,27 @@
 
                     <div class="account-form-section">
                         <div class="account-form-section-header" onclick="toggleAccountSection(this)">
-                            <span><i class="fa fa-file-invoice me-2" style="color:var(--accent)"></i>Billing Address</span>
+                            <span>Billing Address</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="account-form-section-body">
                             <div class="account-map-toolbar">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapPickLocation('billing')">
-                                    <i class="fa fa-map-marker-alt me-1"></i> Pilih Titik di Peta
+                                    Pick on Map
                                 </button>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapUseMyLocation('billing')">
-                                    <i class="fa fa-location-crosshairs me-1"></i> Lokasi Saya
+                                    My Location
                                 </button>
-                                <span class="map-coords" id="account-map-coords">Belum ada titik.</span>
+                                <span class="map-coords" id="account-map-coords">No point selected yet.</span>
                             </div>
                             <div class="account-map" id="account-billing-map"></div>
                             <div class="account-map-status" id="account-map-status"></div>
                             <div class="account-map-preview" id="account-map-preview">
-                                <div class="account-map-preview-title"><i class="fa fa-map-pin me-1"></i>Alamat dari Peta</div>
+                                <div class="account-map-preview-title">Address from Map</div>
                                 <div class="account-map-preview-body" id="account-map-preview-body"></div>
                                 <div class="account-map-preview-actions">
                                     <button type="button" class="btn btn-primary btn-sm" id="account-map-apply" disabled onclick="accountMapApply('billing')">
-                                        <i class="fa fa-check me-1"></i> Gunakan Alamat Ini
+                                        Use This Address
                                     </button>
                                 </div>
                             </div>
@@ -400,30 +419,30 @@
 
                     <div class="account-form-section">
                         <div class="account-form-section-header" onclick="toggleAccountSection(this)">
-                            <span><i class="fa fa-truck me-2" style="color:var(--accent)"></i>Shipping Address</span>
+                            <span>Shipping Address</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="account-form-section-body">
                             <div class="account-map-toolbar">
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="accountCopyBillingToShipping()">
-                                    <i class="fa fa-copy me-1"></i> Same as billing address
+                                    Same as billing address
                                 </button>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapPickLocation('shipping')">
-                                    <i class="fa fa-map-marker-alt me-1"></i> Pilih Titik di Peta
+                                    Pick on Map
                                 </button>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="accountMapUseMyLocation('shipping')">
-                                    <i class="fa fa-location-crosshairs me-1"></i> Lokasi Saya
+                                    My Location
                                 </button>
-                                <span class="map-coords" id="account-ship-map-coords">Belum ada titik.</span>
+                                <span class="map-coords" id="account-ship-map-coords">No point selected yet.</span>
                             </div>
                             <div class="account-map" id="account-shipping-map"></div>
                             <div class="account-map-status" id="account-ship-map-status"></div>
                             <div class="account-map-preview" id="account-ship-map-preview">
-                                <div class="account-map-preview-title"><i class="fa fa-map-pin me-1"></i>Alamat dari Peta</div>
+                                <div class="account-map-preview-title">Address from Map</div>
                                 <div class="account-map-preview-body" id="account-ship-map-preview-body"></div>
                                 <div class="account-map-preview-actions">
                                     <button type="button" class="btn btn-primary btn-sm" id="account-ship-map-apply" disabled onclick="accountMapApply('shipping')">
-                                        <i class="fa fa-check me-1"></i> Gunakan Alamat Ini
+                                        Use This Address
                                     </button>
                                 </div>
                             </div>
@@ -473,7 +492,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-account">
-                    <i class="fa fa-save me-1"></i> Save
+                    Save
                 </button>
             </div>
         </div>
@@ -644,7 +663,7 @@ function openEditModal(id) {
             accountModalInstance.show();
         },
         error: function() {
-            toastr.error('Gagal memuat data akun.');
+            toastr.error('Failed to load the account.');
         }
     });
 }
@@ -693,7 +712,7 @@ function accountMapReset(ctxKey) {
     const coords = document.getElementById(ctx.coordsId);
     const status = document.getElementById(ctx.statusId);
     const preview = document.getElementById(ctx.previewId);
-    if (coords) coords.textContent = 'Belum ada titik.';
+    if (coords) coords.textContent = 'No point selected yet.';
     if (status) { status.textContent = ''; status.className = 'account-map-status'; }
     if (preview) preview.style.display = 'none';
     const applyBtn = document.getElementById(ctx.applyBtnId);
@@ -712,12 +731,12 @@ function accountMapPickLocation(ctxKey) {
     }
     accountMapEnsure(ctxKey);
     setTimeout(function() { invalidateAccountMap(ctxKey); }, 150);
-    toastr.info('Klik pada peta untuk memilih titik alamat.');
+    toastr.info('Click on the map to pick the address point.');
 }
 
 function accountMapUseMyLocation(ctxKey) {
     if (!navigator.geolocation) {
-        toastr.error('Geolocation tidak didukung browser.');
+        toastr.error('Geolocation is not supported by this browser.');
         return;
     }
     const ctx = accountMapContexts[ctxKey];
@@ -725,7 +744,7 @@ function accountMapUseMyLocation(ctxKey) {
     setTimeout(function() { invalidateAccountMap(ctxKey); }, 150);
     const status = document.getElementById(ctx.statusId);
     status.className = 'account-map-status loading';
-    status.textContent = 'Mendapatkan lokasi Anda...';
+    status.textContent = 'Getting your location...';
     navigator.geolocation.getCurrentPosition(
         function (pos) {
             const lat = pos.coords.latitude;
@@ -735,7 +754,7 @@ function accountMapUseMyLocation(ctxKey) {
         },
         function () {
             status.className = 'account-map-status error';
-            status.textContent = 'Gagal mendapatkan lokasi. Berikan izin lalu coba lagi.';
+            status.textContent = 'Could not get your location. Allow location access and try again.';
         },
         { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -754,7 +773,7 @@ function accountMapOnPick(ctxKey, lat, lng) {
 
     const status = document.getElementById(ctx.statusId);
     status.className = 'account-map-status loading';
-    status.textContent = 'Mengambil alamat dari titik...';
+    status.textContent = 'Looking up the address for this point...';
 
     if (ctx.clickTimer) {
         clearTimeout(ctx.clickTimer);
@@ -772,7 +791,7 @@ function accountMapReverseGeocode(ctxKey, lat, lng) {
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (!data || data.error) {
-                throw new Error(data && data.error ? data.error : 'Alamat tidak ditemukan');
+                throw new Error(data && data.error ? data.error : 'Address not found');
             }
             const addr = data.address || {};
             const street = [addr.road, addr.house_number].filter(Boolean).join(' ') || [addr.neighbourhood, addr.suburb, addr.pedestrian].filter(Boolean).join(', ') || '';
@@ -792,11 +811,11 @@ function accountMapReverseGeocode(ctxKey, lat, lng) {
 
             const preview = document.getElementById(ctx.previewId);
             const body = document.getElementById(ctx.previewBodyId);
-            body.textContent = ctx.resolved.display || 'Alamat tidak lengkap.';
+            body.textContent = ctx.resolved.display || 'Incomplete address.';
             preview.style.display = 'block';
 
             status.className = 'account-map-status';
-            status.textContent = 'Alamat ditemukan. Klik "Gunakan Alamat Ini" untuk mengisi form.';
+            status.textContent = 'Address found. Click "Use This Address" to fill in the form.';
 
             const applyBtn = document.getElementById(ctx.applyBtnId);
             if (applyBtn) applyBtn.disabled = false;
@@ -804,7 +823,7 @@ function accountMapReverseGeocode(ctxKey, lat, lng) {
         .catch(function (err) {
             ctx.resolved = null;
             status.className = 'account-map-status error';
-            status.textContent = 'Gagal mengambil alamat: ' + (err.message || 'coba lagi.');
+            status.textContent = 'Failed to look up the address: ' + (err.message || 'try again.');
             const preview = document.getElementById(ctx.previewId);
             if (preview) preview.style.display = 'none';
             const applyBtn = document.getElementById(ctx.applyBtnId);
@@ -823,7 +842,7 @@ function accountMapApply(ctxKey) {
     if (r.province) document.getElementById(ctx.fields.province).value = r.province;
     if (r.postal_code) document.getElementById(ctx.fields.postal_code).value = r.postal_code;
     if (r.country) document.getElementById(ctx.fields.country).value = r.country;
-    toastr.success((ctxKey === 'billing' ? 'Alamat billing' : 'Alamat shipping') + ' diisi dari peta.');
+    toastr.success((ctxKey === 'billing' ? 'Billing' : 'Shipping') + ' address filled in from the map.');
 }
 
 function accountCopyBillingToShipping() {
@@ -839,7 +858,7 @@ function accountCopyBillingToShipping() {
         const dst = document.getElementById(pair[1]);
         if (src && dst) dst.value = src.value;
     });
-    toastr.success('Alamat billing disalin ke shipping.');
+    toastr.success('Billing address copied to shipping.');
 }
 
 function initAccountsTable() {
@@ -848,9 +867,20 @@ function initAccountsTable() {
     }
 
     accountsTable = $('#accounts-table').DataTable({
+        layout: ListToolbar.layout,
+        language: {
+            processing: 'Loading…',
+            lengthMenu: 'Show _MENU_ rows',
+            info: 'Showing _START_–_END_ of _TOTAL_ accounts',
+            infoEmpty: 'No accounts',
+            infoFiltered: '(filtered from _MAX_)',
+            zeroRecords: '<span style="color:var(--text-muted)">No accounts match the search / filters.</span>',
+            emptyTable: '<span style="color:var(--text-muted)">No accounts yet.</span>',
+            paginate: { first: '«', previous: '‹', next: '›', last: '»' }
+        },
         processing: true,
         serverSide: true,
-        ajax: '{{ route("accounts-management.data") }}',
+        ajax: { url: '{{ route("accounts-management.data") }}', data: function(d) { return accountsToolbar.params(d); } },
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
             {
@@ -889,7 +919,7 @@ function initAccountsTable() {
                         html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
                     if (accountsCanDelete) {
-                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-account" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-account" title="Delete" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;
@@ -933,7 +963,7 @@ $(document).on('click', '#btn-save-account', function() {
             if (section.length && !section.hasClass('open')) {
                 section.addClass('open');
             }
-            toastr.error(v.label + ' wajib diisi.');
+            toastr.error(v.label + ' is required.');
             $el.focus();
             return;
         }
@@ -961,7 +991,7 @@ $(document).on('click', '#btn-save-account', function() {
     }).then(function(result) {
         if (!result.isConfirmed) return;
 
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
         $.ajax({
             url: url,
@@ -973,10 +1003,10 @@ $(document).on('click', '#btn-save-account', function() {
                 toastr.success(res.message);
                 if (accountModalInstance) accountModalInstance.hide();
                 if (accountsTable) accountsTable.ajax.reload(null, false);
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
             },
             error: function(xhr) {
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
                 var errors = xhr.responseJSON?.errors;
                 if (errors) {
                     var first = Object.values(errors)[0];
@@ -1014,7 +1044,7 @@ $(document).on('shown.bs.modal', '#accountModal', function() {
     if (!$('#account-end-user').hasClass('select2-hidden-accessible')) {
         $('#account-end-user').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih —',
+            placeholder: '— Select —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#accountModal')
@@ -1023,7 +1053,7 @@ $(document).on('shown.bs.modal', '#accountModal', function() {
     if (!$('#account-parent').hasClass('select2-hidden-accessible')) {
         $('#account-parent').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih —',
+            placeholder: '— Select —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#accountModal')
@@ -1083,7 +1113,7 @@ $(document).on('click', '#btn-import', function() {
     const file = fileInput.files[0];
 
     if (!file) {
-        toastr.error('Pilih file CSV terlebih dahulu.');
+        toastr.error('Select a CSV file first.');
         return;
     }
 
@@ -1091,7 +1121,7 @@ $(document).on('click', '#btn-import', function() {
     formData.append('file', file);
     formData.append('_token', '{{ csrf_token() }}');
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Importing...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Importing...');
 
     $.ajax({
         url: '{{ route("accounts-management.import") }}',
@@ -1100,7 +1130,7 @@ $(document).on('click', '#btn-import', function() {
         processData: false,
         contentType: false,
         success: function(res) {
-            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
+            $btn.prop('disabled', false).html('Upload & Import');
 
             const resultDiv = document.getElementById('import-result');
             resultDiv.style.display = 'block';
@@ -1116,13 +1146,29 @@ $(document).on('click', '#btn-import', function() {
             if (accountsTable) accountsTable.ajax.reload(null, false);
         },
         error: function(xhr) {
-            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
-            var msg = xhr.responseJSON?.message || 'Gagal import file.';
+            $btn.prop('disabled', false).html('Upload & Import');
+            var msg = xhr.responseJSON?.message || 'Failed to import the file.';
             toastr.error(msg);
         }
     });
 });
 
-initAccountsTable();
+// Toolbar filter (cari + filter) dan export yang mengikuti filter aktif.
+let accountsToolbar = null;
+const accountsExportBase = '{{ route("accounts-management.export") }}';
+function accountsSyncExport() {
+    var params = {};
+    $('#accounts-toolbar [data-filter]').each(function() { var v = $(this).val(); if (v) params[$(this).data('filter')] = v; });
+    var q = $('#accounts-toolbar [data-search]').val();
+    if (q) params.q = q;
+    $('.accounts-export').attr('href', accountsExportBase + (Object.keys(params).length ? '?' + $.param(params) : ''));
+}
+
+$(document).ready(function() {
+    accountsToolbar = ListToolbar('#accounts-toolbar', function() { return accountsTable; });
+    initAccountsTable();
+    $('#accounts-toolbar').on('change input click', '[data-filter], [data-search], .lt-clear, [data-reset]', function() { setTimeout(accountsSyncExport, 60); });
+    accountsSyncExport();
+});
 </script>
 @endsection
