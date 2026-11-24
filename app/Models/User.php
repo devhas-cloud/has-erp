@@ -28,6 +28,7 @@ class User extends Authenticatable
         'task_role_id',
         'icon',
         'salesperson',
+        'intern',
     ];
 
     /**
@@ -60,6 +61,7 @@ class User extends Authenticatable
         return [
             'password' => 'hashed',
             'salesperson' => 'boolean',
+            'intern' => 'boolean',
         ];
     }
 
