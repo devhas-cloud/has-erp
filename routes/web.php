@@ -643,6 +643,10 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     Route::get('dashboard-visit-planner', [DashboardVisitPlannerController::class, 'index'])
         ->name('dashboard-visit-planner.index');
+    Route::get('dashboard-visit-planner/schedule-pdf', [DashboardVisitPlannerController::class, 'schedulePdf'])
+        ->name('dashboard-visit-planner.schedule-pdf');
+    Route::get('dashboard-visit-planner/visit-detail', [DashboardVisitPlannerController::class, 'visitDetail'])
+        ->name('dashboard-visit-planner.visit-detail');
 
     Route::get('dashboard-achievement', [DashboardAchievementController::class, 'index'])
         ->name('dashboard-achievement.index');

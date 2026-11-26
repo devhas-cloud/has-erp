@@ -7,7 +7,10 @@ use App\Models\Task;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\VisitBaseline;
+use App\Support\ModuleAccess;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -68,8 +71,81 @@ class DashboardVisitPlannerController extends Controller
         return view('dashboard-visit-planner.index', compact(
             'totalTasks', 'todoCount', 'inProgressCount', 'overdueCount', 'doneCount',
             'upcomingTasks', 'categories'
-        ) + ['visit' => $this->visitSchedule($request), 'visitDone' => $this->visitDone($request)]);
+        ) + [
+            'visit' => $this->visitSchedule($request),
+            'visitDone' => $this->visitDone($request),
+            'canSeeVisitDetail' => $this->canSeeVisitDetail(),
+        ]);
     }
+
+    public const MODULE_CODE = 'MOD_DASHBOARD_VISIT_PLANNER';
+
+    /** Detail per salesperson di Report Visit hanya untuk pemegang hak approve modul ini (Admin selalu). */
+    private function canSeeVisitDetail(): bool
+    {
+        return ModuleAccess::for(Auth::user())->module(self::MODULE_CODE)->canApprove();
+    }
+
+    /** Jadwal visit 7 hari kerja (filter yang sama dengan dashboard) sebagai PDF landscape. */
+    public function schedulePdf(Request $request)
+    {
+        $visit = $this->visitSchedule($request);
+        $filters = $visit['filters'];
+        $activeFilters = array_values(array_filter([
+            $filters['division_id'] ? 'Divisi: '.($visit['divisions']->firstWhere('id', $filters['division_id'])?->division_name ?? '—') : null,
+            $filters['category_id'] ? 'Kategori: '.($visit['categories']->firstWhere('id', $filters['category_id'])?->name ?? '—') : null,
+            $filters['status'] ? 'Status: '.(self::STATUS_LABELS[$filters['status']] ?? $filters['status']) : null,
+            $filters['q'] !== '' ? 'Nama: '.$filters['q'] : null,
+        ]));
+
+        $first = $visit['days'][0];
+        $last = end($visit['days']);
+
+        return Pdf::loadView('dashboard-visit-planner.schedule-pdf', [
+            'vs' => $visit,
+            'activeFilters' => $activeFilters,
+            'statusLabels' => self::STATUS_LABELS,
+            'printedBy' => Auth::user()->display_name,
+        ])->setPaper('a4', 'landscape')
+            // Diunduh sebagai file (bukan inline) agar terbuka di semua browser / viewer.
+            ->download('Jadwal-Visit-'.$first->format('Ymd').'-'.$last->format('Ymd').'.pdf');
+    }
+
+    /** Detail visit Done satu salesperson pada periode Report Visit (sama persis dengan angka card). */
+    public function visitDetail(Request $request): JsonResponse
+    {
+        abort_unless($this->canSeeVisitDetail(), 403, 'Anda tidak punya akses melihat detail visit.');
+
+        $userId = $request->integer('user_id');
+        abort_unless(User::where('salesperson', true)->whereKey($userId)->exists(), 404, 'Salesperson tidak ditemukan.');
+
+        $data = $this->visitDone($request, $userId);
+        $person = $data['people']->firstWhere(fn ($p) => (int) $p['user']->id === $userId);
+
+        return response()->json([
+            'name' => $person['user']->display_name,
+            'division' => $person['division'],
+            'period' => $data['start']->format('d M Y').' – '.$data['display_end']->format('d M Y'),
+            'summary' => [
+                'done' => $person['done'],
+                'erp' => $person['erp'],
+                'baseline' => $person['baseline'],
+                'planned' => $person['planned'],
+                'checked_in' => $person['checked_in'],
+            ],
+            'visits' => $data['detail']['visits'],
+            'baselines' => $data['detail']['baselines'],
+        ]);
+    }
+
+    public const STATUS_LABELS = [
+        'todo' => 'To Do',
+        'in_progress' => 'In Progress',
+        'waiting_approval' => 'Waiting Approval',
+        'done' => 'Done',
+        'cancelled' => 'Cancelled',
+        'late' => 'Terlambat',
+    ];
 
     /** Jumlah hari kerja (Senin–Jumat) yang ditampilkan di jadwal visit. */
     public const VISIT_WORKDAYS = 7;
@@ -109,7 +185,7 @@ class DashboardVisitPlannerController extends Controller
             ->when($filters['category_id'], fn ($q, $id) => $q->where('category_id', $id))
             ->when($filters['status'] === 'late', fn ($q) => $q->whereNotIn('status', ['done', 'cancelled'])->whereDate('due_date', '<', $today->toDateString()))
             ->when($filters['status'] && $filters['status'] !== 'late', fn ($q) => $q->where('status', $filters['status']))
-            ->with(['category', 'assignees.division', 'accountContact.accountCompany', 'project', 'visits'])
+            ->with(['category', 'assignees.division', 'accountContact.accountCompany', 'accountContact.jobTitle', 'project.company', 'visits'])
             ->orderBy('due_date')
             ->orderByRaw('time IS NULL, time')
             ->get();
@@ -148,6 +224,10 @@ class DashboardVisitPlannerController extends Controller
                     'target' => $task->accountContact?->accountCompany?->account_name
                         ?? $task->accountContact?->full_name
                         ?? $task->project?->project_number,
+                    // Kolom export PDF: perusahaan, PIC & jabatannya (dari kontak task / company project).
+                    'company' => $task->accountContact?->accountCompany?->account_name ?? $task->project?->company?->account_name,
+                    'pic' => $task->accountContact?->full_name,
+                    'pic_title' => $task->accountContact?->jobTitle?->title_name,
                     'status' => $task->status,
                     'late' => ! in_array($task->status, ['done', 'cancelled'], true) && $task->due_date->lt($today),
                     'checked_in' => $task->visits->contains('user_id', $user->id),
@@ -193,7 +273,7 @@ class DashboardVisitPlannerController extends Controller
      * hanya task yang punya assignee salesperson; per orang/divisi hanya salesperson.
      * Default Senin–Jumat minggu ini; bisa per kuartal atau rentang tanggal bebas.
      */
-    private function visitDone(Request $request): array
+    private function visitDone(Request $request, ?int $detailUserId = null): array
     {
         $period = in_array($request->input('done_period'), ['week', 'quarter', 'custom'], true) ? $request->input('done_period') : 'week';
         $year = (int) $request->input('done_year', now()->year);
@@ -227,7 +307,11 @@ class DashboardVisitPlannerController extends Controller
             ->whereDate('due_date', '>=', $start->toDateString())
             ->whereDate('due_date', '<=', $end->toDateString());
 
-        $tasks = (clone $inRange)->with(['assignees', 'visits'])->get();
+        $tasks = (clone $inRange)->with(array_merge(['assignees', 'visits'], $detailUserId
+            ? ['category', 'accountContact.accountCompany', 'project']
+            : []))->orderBy('due_date')->orderByRaw('time IS NULL, time')->get();
+        // Rincian untuk satu salesperson (modal detail card); baris = visit yang membentuk angka card.
+        $detail = ['visits' => [], 'baselines' => []];
 
         // Semua salesperson tampil (termasuk 0 visit) agar yang belum visit ikut terpantau.
         $people = User::with('division')->where('salesperson', true)->get()
@@ -258,6 +342,13 @@ class DashboardVisitPlannerController extends Controller
                 continue;
             }
             $people[$uid]['baseline'] += (int) $b->visits;
+            if ($uid === $detailUserId) {
+                $detail['baselines'][] = [
+                    'period' => $b->start_date->format('d M Y').' – '.$b->end_date->format('d M Y'),
+                    'visits' => (int) $b->visits,
+                    'note' => $b->note,
+                ];
+            }
             $windows[$uid][] = [$b->start_date->toDateString(), $b->end_date->toDateString()];
         }
 
@@ -290,9 +381,31 @@ class DashboardVisitPlannerController extends Controller
                 $people[$user->id]['planned']++;
                 if ($isDone) {
                     $people[$user->id]['erp']++;
-                    if ($task->visits->contains('user_id', $user->id)) {
+                    $checkIn = $task->visits->where('user_id', $user->id)->sortBy('id')->first();
+                    if ($checkIn) {
                         $people[$user->id]['checked_in']++;
                         $taskCheckedIn = true;
+                    }
+                    if ($user->id === $detailUserId) {
+                        $detail['visits'][] = [
+                            'id' => $task->id,
+                            'url' => route('task-planner.show', $task->id),
+                            'date' => $task->due_date->format('d/m/Y'),
+                            'day' => $task->due_date->locale('id')->isoFormat('ddd'),
+                            'time' => $task->time ? substr($task->time, 0, 5) : null,
+                            'category' => $task->category?->name,
+                            'title' => $task->title,
+                            'target' => $task->accountContact?->accountCompany?->account_name
+                                ?? $task->accountContact?->full_name
+                                ?? $task->project?->project_number,
+                            'check_in' => $checkIn ? [
+                                'at' => $checkIn->created_at?->format('d/m/Y H:i'),
+                                'address' => $checkIn->address,
+                                'map' => $checkIn->latitude && $checkIn->longitude
+                                    ? 'https://www.google.com/maps?q='.$checkIn->latitude.','.$checkIn->longitude
+                                    : null,
+                            ] : null,
+                        ];
                     }
                 }
             }
@@ -325,6 +438,7 @@ class DashboardVisitPlannerController extends Controller
             // Rate dari ERP murni: task Done / rencana (di luar jendela baseline).
             'rate' => $planned > 0 ? (int) round($erpDone / $planned * 100) : null,
             'checked_in' => $checkedIn,
+            'detail' => $detail,
             'people' => collect($people)->sortBy([
                 ['done', 'desc'],
                 ['planned', 'desc'],

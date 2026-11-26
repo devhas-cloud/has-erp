@@ -141,6 +141,32 @@
     .vd-person .c { font-size: 24px; font-weight: 700; line-height: 1; color: #10b981; flex-shrink: 0; }
     .vd-person.zero { border-left-color: var(--card-border); background: #f8fafc; }
     .vd-person.zero .c { color: var(--text-muted); }
+    /* Card bisa diklik (pemegang hak approve) -> modal detail */
+    button.vd-person { width: 100%; text-align: left; font: inherit; cursor: pointer; transition: border-color .12s ease, background-color .12s ease; }
+    button.vd-person:hover { border-color: var(--accent); background: var(--accent-subtle, #f0fdf4); }
+    button.vd-person:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /* Modal detail visit */
+    .vd-section { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 8px; }
+    .vd-day { margin-bottom: 12px; }
+    .vd-day-head { font-size: 12.5px; font-weight: 600; color: var(--text-primary); padding: 4px 0; border-bottom: 1px solid var(--card-border); margin-bottom: 6px; }
+    .vd-day-head span { font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+    .vd-item { display: grid; grid-template-columns: 52px 1fr auto; gap: 4px 12px; padding: 8px 10px; border-radius: var(--radius-sm); }
+    .vd-item + .vd-item { border-top: 1px dashed var(--card-border); }
+    .vd-item:hover { background: #f8fafc; }
+    .vd-time { font-size: 12px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; padding-top: 1px; }
+    .vd-title { font-size: 13px; font-weight: 600; text-decoration: none; }
+    .vd-meta { font-size: 11.5px; color: var(--text-muted); }
+    .vd-cat { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 0 7px; border-radius: 99px; background: #f1f5f9; color: var(--text-secondary); margin-right: 4px; }
+    .vd-ci { justify-self: end; text-align: right; max-width: 240px; }
+    .vd-badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+    .vd-badge.ok { background: #dcfce7; color: #065f46; }
+    .vd-badge.no { background: #f3f4f6; color: #6b7280; }
+    .vd-ci .addr { font-size: 11px; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
+    @media (max-width: 575.98px) { .vd-item { grid-template-columns: 44px 1fr; } .vd-ci { grid-column: 2; justify-self: start; text-align: left; } }
+    .vd-note { font-size: 12px; color: #075985; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: var(--radius-sm); padding: 8px 12px; }
+    .vd-note table { width: 100%; margin-top: 6px; font-size: 12px; }
+    .vd-note td { padding: 2px 0; vertical-align: top; }
+    .vd-empty { text-align: center; color: var(--text-muted); font-size: 13px; padding: 18px 0; }
 </style>
 @endsection
 
@@ -175,6 +201,14 @@
     ], $over), fn ($v) => $v !== null && $v !== '')).'#jadwal-visit';
     $firstDay = $vs['days'][0];
     $lastDay = end($vs['days']);
+    // Export PDF: periode & filter jadwal yang sedang tampil.
+    $vsPdfUrl = route('dashboard-visit-planner.schedule-pdf', array_filter([
+        'visit_start' => $firstDay->toDateString(),
+        'visit_division' => $vs['filters']['division_id'],
+        'visit_category' => $vs['filters']['category_id'],
+        'visit_status' => $vs['filters']['status'],
+        'visit_q' => $vs['filters']['q'] ?: null,
+    ], fn ($v) => $v !== null && $v !== ''));
 @endphp
 
 <div class="card-custom fade-in mb-4" id="jadwal-visit">
@@ -183,7 +217,8 @@
             <i class="fa fa-route me-2" style="color:var(--accent)"></i>Jadwal Visit · 7 Hari Kerja
             <span style="font-size:12px;color:var(--text-muted);font-weight:500">{{ $firstDay->format('d M') }} – {{ $lastDay->format('d M Y') }}</span>
         </span>
-        <div class="d-flex gap-1">
+        <div class="d-flex gap-1 align-items-center">
+            <a href="{{ $vsPdfUrl }}" class="btn btn-sm btn-outline-secondary me-2" style="font-size:12px" title="Unduh PDF jadwal yang sedang tampil ({{ $firstDay->format('d M') }} – {{ $lastDay->format('d M Y') }}{{ array_filter($vs['filters']) ? ', dengan filter aktif' : '' }})" download>Export PDF</a>
             <a href="{{ $vsQuery(['visit_start' => $vs['prev_start']]) }}" class="btn btn-sm btn-ghost" title="7 hari kerja sebelumnya"><i class="fa fa-chevron-left"></i></a>
             <a href="{{ $vsQuery(['visit_start' => null]) }}" class="btn btn-sm {{ $vs['is_current'] ? 'btn-accent' : 'btn-ghost' }}" style="font-size:12px">Hari ini</a>
             <a href="{{ $vsQuery(['visit_start' => $vs['next_start']]) }}" class="btn btn-sm btn-ghost" title="7 hari kerja berikutnya"><i class="fa fa-chevron-right"></i></a>
@@ -317,6 +352,14 @@
         'custom' => 'Rentang tanggal',
         default => 'Minggu ini',
     };
+    // Parameter periode untuk modal detail (sama dengan periode kartu).
+    $vdPeriodParams = array_filter([
+        'done_period' => $vd['period'],
+        'done_year' => $vd['period'] === 'quarter' ? $vd['year'] : null,
+        'done_quarter' => $vd['period'] === 'quarter' ? $vd['quarter'] : null,
+        'done_start' => $vd['period'] === 'custom' ? $vd['start']->toDateString() : null,
+        'done_end' => $vd['period'] === 'custom' ? $vd['end']->toDateString() : null,
+    ]);
 @endphp
 <div class="card-custom fade-in mb-4" id="report-visit">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -364,7 +407,11 @@
         @else
             <div class="vd-people">
                 @foreach($vd['people'] as $p)
+                    @if($canSeeVisitDetail)
+                    <button type="button" class="vd-person {{ $p['done'] === 0 ? 'zero' : '' }}" data-user="{{ $p['user']->id }}" title="Lihat detail visit {{ $p['user']->display_name }}">
+                    @else
                     <div class="vd-person {{ $p['done'] === 0 ? 'zero' : '' }}">
+                    @endif
                         <div style="min-width:0;flex:1">
                             <div class="n" title="{{ $p['user']->display_name }}">{{ $p['user']->display_name }}</div>
                             <div class="d">{{ $p['division'] }}</div>
@@ -377,12 +424,17 @@
                                 <div class="d">visit</div>
                             @endif
                         </div>
+                    @if($canSeeVisitDetail)
+                    </button>
+                    @else
                     </div>
+                    @endif
                 @endforeach
             </div>
         @endif
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:10px">
             Jumlah visit selesai (task kategori visit berstatus Done) per salesperson pada periode ini, berdasarkan jatuh tempo task.
+            @if($canSeeVisitDetail) Klik kartu untuk melihat rincian visit. @endif
             @if($vd['baseline'] > 0)
                 Termasuk {{ $vd['baseline'] }} visit baseline SF. Baseline SF menggantikan data ERP pada rentang tanggal baseline sehingga tidak terhitung dobel.
             @endif
@@ -391,6 +443,29 @@
 </div>
 
 @endsection
+
+@if($canSeeVisitDetail)
+@push('modals')
+<div class="modal fade" id="vd-modal" tabindex="-1" aria-labelledby="vd-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="vd-modal-title">Detail Visit</h5>
+                    <div style="font-size:12px;color:var(--text-muted)" id="vd-modal-sub"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body" id="vd-modal-body"></div>
+            <div class="modal-footer">
+                <span class="me-auto" style="font-size:11.5px;color:var(--text-muted)">Hanya visit berstatus Done yang dihitung, sama dengan angka di kartu.</span>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+@endpush
+@endif
 
 @section('scripts')
 <script>
@@ -411,6 +486,77 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     vdSyncPeriod();
 });
+
+@if($canSeeVisitDetail)
+// Detail visit per salesperson (periode sama dengan Report Visit).
+const vdDetailUrl = @json(route('dashboard-visit-planner.visit-detail'));
+const vdPeriodParams = @json($vdPeriodParams);
+
+function vdEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
+
+function vdRender(res) {
+    var sum = res.summary;
+    var html = '';
+
+    // Daftar visit Done dikelompokkan per tanggal.
+    html += '<div class="vd-section">' + res.visits.length + ' visit selesai</div>';
+    if (!res.visits.length) {
+        html += '<div class="vd-empty">Tidak ada visit Done dari ERP pada periode ini.</div>';
+    } else {
+        var days = [];
+        res.visits.forEach(function(v) {
+            var last = days[days.length - 1];
+            if (!last || last.date !== v.date) days.push(last = { date: v.date, day: v.day, items: [] });
+            last.items.push(v);
+        });
+        days.forEach(function(d) {
+            html += '<div class="vd-day"><div class="vd-day-head">' + vdEsc(d.day) + ', ' + vdEsc(d.date) + '<span>' + d.items.length + ' visit</span></div>';
+            d.items.forEach(function(v) {
+                var ci = v.check_in
+                    ? '<span class="vd-badge ok">Check-in ' + vdEsc((v.check_in.at || '').split(' ')[1] || '') + '</span>'
+                        + (v.check_in.address ? '<div class="addr">' + vdEsc(v.check_in.address) + '</div>' : '')
+                        + (v.check_in.map ? '<a href="' + vdEsc(v.check_in.map) + '" target="_blank" rel="noopener" style="font-size:11px">Lihat di peta</a>' : '')
+                    : '<span class="vd-badge no">Tanpa check-in</span>';
+                html += '<div class="vd-item">'
+                    + '<div class="vd-time">' + (v.time ? vdEsc(v.time) : '—') + '</div>'
+                    + '<div><a href="' + vdEsc(v.url) + '" target="_blank" rel="noopener" class="vd-title">' + vdEsc(v.title) + '</a>'
+                        + '<div class="vd-meta">' + (v.category ? '<span class="vd-cat">' + vdEsc(v.category) + '</span>' : '')
+                        + (v.target ? vdEsc(v.target) : 'Tanpa customer / project') + '</div></div>'
+                    + '<div class="vd-ci">' + ci + '</div>'
+                    + '</div>';
+            });
+            html += '</div>';
+        });
+    }
+
+    // Baseline SF: hanya jumlah, dijelaskan terpisah.
+    if (res.baselines.length) {
+        html += '<div class="vd-note mt-2"><strong>Baseline SF (' + sum.baseline + ' visit)</strong> — angka dari SF yang menggantikan data ERP pada rentangnya; tidak ada rincian per visit.'
+            + '<table>';
+        res.baselines.forEach(function(b) {
+            html += '<tr><td>' + vdEsc(b.period) + (b.note ? ' · ' + vdEsc(b.note) : '') + '</td><td class="text-end fw-semibold" style="white-space:nowrap">' + b.visits + ' visit</td></tr>';
+        });
+        html += '</table></div>';
+    }
+    $('#vd-modal-body').html(html);
+}
+
+$(document).on('click', 'button.vd-person[data-user]', function() {
+    var name = $(this).find('.n').text();
+    $('#vd-modal-title').text('Detail Visit · ' + name);
+    $('#vd-modal-sub').text('');
+    $('#vd-modal-body').html('<div class="text-center py-4" style="color:var(--text-muted)"><span class="spinner-border spinner-border-sm me-1"></span>Memuat…</div>');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('vd-modal')).show();
+    $.get(vdDetailUrl, $.extend({ user_id: $(this).data('user') }, vdPeriodParams))
+        .done(function(res) {
+            $('#vd-modal-sub').text(res.division + ' · ' + res.period);
+            vdRender(res);
+        })
+        .fail(function(xhr) {
+            $('#vd-modal-body').html('<p class="text-danger mb-0">' + vdEsc(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal memuat detail visit.') + '</p>');
+        });
+});
+@endif
 
 function vsToggleGroup(tr) {
     var group = tr.getAttribute('data-group');

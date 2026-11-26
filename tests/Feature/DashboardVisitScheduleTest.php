@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Division;
+use App\Models\Module;
+use App\Models\UserAccessControl;
+use App\Models\VisitBaseline;
 use App\Models\Task;
 use App\Models\TaskCategory;
 use App\Models\User;
@@ -109,6 +112,57 @@ class DashboardVisitScheduleTest extends TestCase
         $this->assertSame([3, 1], [$andi['count'], $andi['weekend']]);
         $response->assertDontSee('Visit akhir minggu');
         $this->assertSame(2, $visit['day_totals']['2026-11-09'], 'Task dengan 2 assignee tampil di 2 baris.');
+    }
+
+    public function test_schedule_exports_to_pdf_with_active_filters(): void
+    {
+        $this->task('Survey PLTS Gresik', '2026-11-05', [$this->imsUser], ['time' => '09:30']);
+
+        $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index'))->assertOk()
+            ->assertSee(route('dashboard-visit-planner.schedule-pdf', ['visit_start' => '2026-11-05']), false);
+        // Dengan filter aktif, tautan export membawa filter yang sama.
+        $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index', ['visit_division' => $this->imsUser->division_id, 'visit_q' => 'andi']))->assertOk()
+            ->assertSee(e(route('dashboard-visit-planner.schedule-pdf', ['visit_start' => '2026-11-05', 'visit_division' => $this->imsUser->division_id, 'visit_q' => 'andi'])), false);
+
+        $response = $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.schedule-pdf', ['visit_division' => $this->imsUser->division_id]))->assertOk();
+        $this->assertStringContainsString('application/pdf', $response->headers->get('content-type'));
+        $this->assertStringContainsString('attachment', $response->headers->get('content-disposition'), 'Diunduh sebagai file, bukan inline.');
+    }
+
+    public function test_visit_detail_follows_card_and_requires_approve_access(): void
+    {
+        // Minggu ini (Sen 2 – Min 8 Nov): 2 Done (1 check-in), 1 belum Done, 1 Cancelled.
+        $done = $this->task('Visit Done A', '2026-11-03', [$this->imsUser], ['status' => 'done', 'time' => '10:00']);
+        $done->visits()->create(['user_id' => $this->imsUser->id, 'latitude' => -7.25, 'longitude' => 112.75, 'address' => 'Gresik']);
+        $this->task('Visit Done Sabtu', '2026-11-07', [$this->imsUser], ['status' => 'done']);
+        $this->task('Visit belum', '2026-11-04', [$this->imsUser]);
+        $this->task('Visit batal', '2026-11-04', [$this->imsUser], ['status' => 'cancelled']);
+
+        $res = $this->actingAs($this->viewer)->getJson(route('dashboard-visit-planner.visit-detail', ['user_id' => $this->imsUser->id]))->assertOk();
+        $res->assertJsonPath('summary.done', 2)->assertJsonPath('summary.checked_in', 1)->assertJsonPath('summary.planned', 3)
+            ->assertJsonCount(2, 'visits')
+            ->assertJsonPath('visits.0.title', 'Visit Done A')
+            ->assertJsonPath('visits.0.check_in.address', 'Gresik');
+        $card = $this->actingAs($this->viewer)->get(route('dashboard-visit-planner.index'))->viewData('visitDone')['people']
+            ->first(fn ($p) => $p['user']->is($this->imsUser));
+        $this->assertSame(2, $card['done'], 'Detail sama dengan angka kartu.');
+
+        // Baseline SF ikut tampil sebagai baris tersendiri.
+        VisitBaseline::create(['user_id' => $this->imsUser->id, 'start_date' => '2026-10-01', 'end_date' => '2026-10-31', 'visits' => 12, 'note' => 'Data SF']);
+        $this->actingAs($this->viewer)->getJson(route('dashboard-visit-planner.visit-detail', [
+            'user_id' => $this->imsUser->id, 'done_period' => 'quarter', 'done_year' => 2026, 'done_quarter' => 4,
+        ]))->assertOk()->assertJsonPath('summary.baseline', 12)->assertJsonPath('baselines.0.note', 'Data SF');
+
+        // Tanpa hak approve: kartu tidak bisa diklik dan endpoint ditolak.
+        $module = Module::create(['module_code' => 'MOD_DASHBOARD_VISIT_PLANNER', 'module_name' => 'Dashboard Visit', 'route_name' => 'dashboard-visit-planner', 'icon' => 'fa fa-route', 'group' => 'Dashboard']);
+        $access = UserAccessControl::create(['user_id' => $this->idleUser->id, 'module_id' => $module->id, 'can_read' => true, 'can_create' => false, 'can_update' => false, 'can_delete' => false, 'can_approve' => false]);
+        $this->actingAs($this->idleUser)->get(route('dashboard-visit-planner.index'))->assertOk()->assertDontSee('data-user="'.$this->imsUser->id.'"', false);
+        $this->actingAs($this->idleUser)->getJson(route('dashboard-visit-planner.visit-detail', ['user_id' => $this->imsUser->id]))->assertForbidden();
+        $this->actingAs($this->idleUser)->get(route('dashboard-visit-planner.schedule-pdf'))->assertOk();
+
+        $access->update(['can_approve' => true]);
+        $this->actingAs($this->idleUser)->get(route('dashboard-visit-planner.index'))->assertOk()->assertSee('data-user="'.$this->imsUser->id.'"', false);
+        $this->actingAs($this->idleUser)->getJson(route('dashboard-visit-planner.visit-detail', ['user_id' => $this->imsUser->id]))->assertOk();
     }
 
     public function test_schedule_filters(): void
