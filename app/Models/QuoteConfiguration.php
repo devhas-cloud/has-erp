@@ -108,6 +108,38 @@ class QuoteConfiguration extends Model
         return $this->hasMany(self::class, 'group_id', 'group_id')->orderBy('version');
     }
 
+    /**
+     * Modul konfigurasi pemilik record, mengikuti divisinya
+     * (water-configuration, ims-configuration, ...). Divisi lain -> Water.
+     */
+    public const DIVISION_ROUTE_PREFIXES = [
+        'water' => 'water-configuration',
+        'ims' => 'ims-configuration',
+        'enviro' => 'enviro-configuration',
+        'ih' => 'ih-configuration',
+        'gas' => 'gas-configuration',
+    ];
+
+    public function routePrefix(): string
+    {
+        $division = strtolower(trim((string) $this->division?->division_name));
+
+        return self::DIVISION_ROUTE_PREFIXES[$division] ?? self::DIVISION_ROUTE_PREFIXES['water'];
+    }
+
+    /** URL detail di modul konfigurasi yang sesuai; $query mis. ['back' => 'task-5']. */
+    public function showUrl(array $query = []): string
+    {
+        $prefix = $this->routePrefix();
+
+        return route($prefix.'.show', array_merge([str_replace('-', '_', $prefix) => $this->id], $query));
+    }
+
+    public function pdfUrl(array $query = []): string
+    {
+        return route($this->routePrefix().'.pdf', array_merge(['id' => $this->id], $query));
+    }
+
     public function isLocked(): bool
     {
         return $this->status === self::STATUS_APPROVED && ! $this->unlocked_at;

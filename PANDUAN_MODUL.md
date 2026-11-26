@@ -14,6 +14,56 @@ Sumber kebenaran pola yang sudah jalan:
 
 ---
 
+## 0. Arsitektur & Peta Modul
+
+Peta singkat supaya pengembangan lanjut tidak perlu membaca semua controller. Detail kolom
+tabel ada di `skema.md`.
+
+**Stack**: Laravel 11 + Blade + Bootstrap 5 + jQuery/DataTables. Tanpa repository/interface —
+Eloquent langsung + controller + service.
+
+**Lapisan kode** (`app/`):
+
+| Lapisan | Isi |
+|---|---|
+| `Models/` | Satu model per tabel + konstanta status + relasi + scope. |
+| `Http/Controllers/` | Satu controller per modul: `index/data/create/store/show` + aksi workflow (`approve/reject/void`). |
+| `Services/` | Logika domain inti — `StockService` (semua mutasi stok), `StockException`. |
+| `Support/` | Helper — `ModuleAccess`, `SidebarMenu`, `StockCost`, `NumberSequence`, `PayableReport`, `ProjectTracker`. |
+| `Providers/` | View composer global UAC di `AppServiceProvider`. |
+
+**Peta domain** (tabel inti):
+
+| Domain | Tabel inti |
+|---|---|
+| Akses | `modules`, `module_groups`, `user_access_controls` |
+| Master | `users`, `branches`, `warehouses`, `master_products`, `suppliers`, `projects`, `quotations` |
+| Purchasing | `goods_requests` → `purchase_orders` / `direct_purchases` → `goods_receipts` |
+| Inventory | `stocks` + `stock_logs` (ledger), dokumen: `stock_entries`, `stock_transfers`, `branch_transfers`, `stock_opnames`, `packing_lists`, `delivery_orders`, `supplier_returns` |
+| Produksi | `material_requests` → `material_handovers` → `productions` → `material_returns` |
+| Finance AP | `supplier_bills` → `supplier_payments`(+`allocations`) → `supplier_refunds` |
+| Finance AR | `projects` → `project_billing_terms` → `invoices` → `customer_receipts` |
+
+**Pola kunci**:
+
+1. **Akses kontrol** — middleware `access.control` + `Module.route_name` (1 segmen) +
+   `UserAccessControl` (5 flag `can_*`) + view composer `$canCreate/...` + Admin bypass.
+2. **Stok** — `stocks` = saldo per baris (`project_id` null = stok bebas, `is_material`,
+   `serial_number`/`batch`), `stock_logs` append-only. Semua mutasi lewat `StockService`;
+   `ref_type`/`ref_id` polimorfik + `StockLog::REF_MAP` untuk lookup balik.
+3. **Nomor dokumen** — `config/document_numbers.php` prefix + `NumberSequence`.
+4. **Workflow status** — konstanta string di model + `statusBadgeHtml()`; transisi
+   `draft → waiting_approval → approved/rejected`.
+5. **Sidebar** — `module_groups.sort_order` + `Module.group` (data-driven).
+
+**Keputusan terkini**:
+
+- Registrasi modul **hanya via seeder** (`ModulesTableSeeder`), bukan migration.
+- Grup `Delivery` berisi `MOD_PACKING_LIST` + `MOD_DELIVERY_ORDER` (pindah dari Inventory);
+  `MOD_BRANCH_TRANSFER` tetap Inventory.
+
+---
+
 ## 1. Prinsip Inti (jangan dilanggar)
 
 1. **Satu gerbang akses: middleware `access.control`.** Semua route bisnis berada di dalam

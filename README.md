@@ -343,6 +343,7 @@ composer test        # php artisan test (PHPUnit 11)
 
 ## Dokumentasi Lain
 
+- `docs/wiki/` — Code Wiki: arsitektur, tanggung jawab modul, data model, kelas/fungsi kunci, dependency, dan cara menjalankan project.
 - `PANDUAN_MODUL.md` — aturan baku menambah modul baru (route naming, gate middleware, flag UI composer, approval workflow) supaya konsisten.
 - `RENCANA_PACKING_LIST.md` — keputusan & rancangan Packing List dan Delivery Order dua jalur (sudah diimplementasi).
 - `RENCANA_PROJECT_TRACKING.md` — keputusan & rancangan Project Tracking (sudah diimplementasi).

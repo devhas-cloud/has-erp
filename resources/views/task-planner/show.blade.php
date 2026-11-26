@@ -1135,10 +1135,7 @@
                                 @foreach ($quoteConfigurations as $qc)
                                 @php
                                     $rowNo++;
-                                    $isImsConfig = strtolower($qc->division?->division_name ?? '') === 'ims';
-                                    $configShowRoute = $isImsConfig ? 'ims-configuration.show' : 'water-configuration.show';
-                                    $configShowParam = $isImsConfig ? 'ims_configuration' : 'water_configuration';
-                                    $configPdfRoute = $isImsConfig ? 'ims-configuration.pdf' : 'water-configuration.pdf';
+                                    // View / PDF diarahkan ke modul konfigurasi sesuai divisi record (Water, IMS, Enviro, IH, Gas).
                                     // Divisi pembuat record = user login -> tampilkan view + pdf.
                                     $isConfigDivisiCreator = (int) $qc->division?->id === (int) auth()->user()->division_id;
                                 @endphp
@@ -1149,9 +1146,9 @@
                                     <td class="text-center" style="white-space:nowrap">
                                         @if (!$viewerIsSales)
                                             @if ($isConfigDivisiCreator)
-                                            <a href="{{ route($configShowRoute, [$configShowParam => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
+                                            <a href="{{ $qc->showUrl(['back' => 'task-'.$task->id]) }}" class="btn-icon" title="View"><i class="fa fa-eye"></i></a>
                                             @endif
-                                            <a href="{{ route($configPdfRoute, ['id' => $qc->id, 'back' => 'task-'.$task->id]) }}" class="btn-icon" target="_blank" title="PDF"><i class="fa fa-file-pdf"></i></a>
+                                            <a href="{{ $qc->pdfUrl(['back' => 'task-'.$task->id]) }}" class="btn-icon" target="_blank" title="PDF"><i class="fa fa-file-pdf"></i></a>
                                         @endif
                                     </td>
                                 </tr>
