@@ -63,6 +63,26 @@ class ProductManagementPageTest extends TestCase
             ->assertSee('Tambah Product');
     }
 
+    public function test_nameless_product_uses_description_as_name_and_is_searchable(): void
+    {
+        $this->createProduct(['name' => null, 'code' => 'DS300', 'description' => "DS300 portable sonde (4 ports)\nBaris kedua detail"]);
+        MasterProduct::create(['name' => 'Alpha Sensor', 'code' => 'A-1', 'status' => 'Active']);
+
+        $params = ['draw' => 1, 'start' => 0, 'length' => 10, 'order' => [['column' => 1, 'dir' => 'asc']], 'columns' => [1 => ['data' => 'name_display']]];
+        $rows = $this->actingAs($this->admin)->getJson(route('product-management.data', $params))->assertOk()->json('data');
+        // Urut berdasarkan nama tampilan: "Alpha..." lalu "DS300..." (dari baris pertama deskripsi).
+        $this->assertSame(['Alpha Sensor', 'DS300 portable sonde (4 ports)'], array_column($rows, 'name_display'));
+        $this->assertSame([false, true], array_column($rows, 'name_from_description'));
+
+        // Pencarian juga mencari di deskripsi.
+        $this->actingAs($this->admin)->getJson(route('product-management.data', ['draw' => 1, 'search' => ['value' => 'Baris kedua']]))
+            ->assertOk()->assertJsonPath('recordsFiltered', 1)->assertJsonPath('data.0.code', 'DS300');
+
+        $id = MasterProduct::where('code', 'DS300')->value('id');
+        $this->actingAs($this->admin)->getJson(route('product-management.edit', $id))
+            ->assertOk()->assertJsonPath('data.display_name', 'DS300 portable sonde (4 ports)')->assertJsonPath('data.name_from_description', true);
+    }
+
     public function test_index_page_renders_division_options(): void
     {
         $this->createDivision();
@@ -236,7 +256,8 @@ class ProductManagementPageTest extends TestCase
     {
         $water = $this->createDivision(); // lookup divisi Water untuk import
 
-        $csv = "Name,Code,Brand,Category,Division,Description,Selling Price,Status\n"
+        // Harga di file = harga beli; harga jual selalu dihitung dari formulasi (base: × 2).
+        $csv = "Name,Code,Brand,Category,Division,Description,Purchase Price,Status\n"
             ."pH::lyser pro,E-514-4-075,s::can,Sensor,Water,Sensor pH,12500000,Active\n"
             ."ammo::lyser pro,E-532-pro-075,s::can,Sensor,Water,Sensor ammonia,\"Rp 15.000.000,50\",Inactive\n"
             .",E-000-EMP,,,Water,,5000,Active\n"; // nama kosong => tetap boleh
@@ -253,12 +274,14 @@ class ProductManagementPageTest extends TestCase
             'code' => 'E-514-4-075',
             'name' => 'pH::lyser pro',
             'division_id' => $water->id,
-            'selling_price' => 12500000.00,
+            'purchase_price' => 12500000.00,
+            'selling_price' => 25000000.00,
             'status' => 'Active',
         ]);
         $this->assertDatabaseHas('master_products', [
             'code' => 'E-532-pro-075',
-            'selling_price' => 15000000.50,
+            'purchase_price' => 15000000.50,
+            'selling_price' => 30000001.00,
             'status' => 'Inactive',
         ]);
         $this->assertDatabaseHas('master_products', [
@@ -271,7 +294,7 @@ class ProductManagementPageTest extends TestCase
     {
         $this->createProduct(['code' => 'E-514-4-075', 'name' => 'Nama Lama']);
 
-        $csv = "Name,Code,Selling Price,Status\n"
+        $csv = "Name,Code,Purchase Price,Status\n"
             ."Nama Lama,E-999-X,1000,Active\n"         // nama duplikat (dipakai E-514-4-075) => gagal
             ."Nama Baru,E-514-4-075,999999,Active\n"   // update by code
             .",E-999,1000,Active\n"                    // nama kosong => boleh
@@ -290,10 +313,47 @@ class ProductManagementPageTest extends TestCase
         $this->assertDatabaseHas('master_products', [
             'code' => 'E-514-4-075',
             'name' => 'Nama Baru',
-            'selling_price' => 999999.00,
+            'purchase_price' => 999999.00,
+            'selling_price' => 1999998.00,
         ]);
         $this->assertDatabaseHas('master_products', ['code' => 'E-999', 'name' => null]);
         $this->assertDatabaseMissing('master_products', ['code' => 'E-999-X']);
+    }
+
+    public function test_import_template_prices_follow_form_rules(): void
+    {
+        $this->createProduct(['code' => 'OLD-1', 'name' => 'Produk Lama', 'purchase_price' => 5000000, 'selling_price' => 10000000]);
+
+        // Kolom persis seperti template; "Selling Price" di file diabaikan.
+        $csv = "name,code,brand,category,type,unit,material,parameter,division,description,purchase_price,currency,status,selling_price\n"
+            ."Produk Baru,NEW-1,,,Main,Unit,tidak,,,,\"12,000,000.00\",,Active,1\n"
+            ."Produk Ilmiah,NEW-2,,,Main,Unit,tidak,,,,1.2E+07,,Active,\n"
+            ."Produk Lama,OLD-1,,,Main,Unit,tidak,,,,,,Active,\n"; // harga kosong => harga lama tetap
+
+        $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
+        $this->actingAs($this->admin)->post(route('product-management.import'), ['file' => $file])
+            ->assertOk()->assertJsonPath('result.success', 2)->assertJsonPath('result.updated', 1);
+
+        $this->assertDatabaseHas('master_products', ['code' => 'NEW-1', 'purchase_price' => 12000000.00, 'selling_price' => 24000000.00]);
+        $this->assertDatabaseHas('master_products', ['code' => 'NEW-2', 'purchase_price' => 12000000.00, 'selling_price' => 24000000.00]);
+        $this->assertDatabaseHas('master_products', ['code' => 'OLD-1', 'purchase_price' => 5000000.00, 'selling_price' => 10000000.00]);
+    }
+
+    public function test_import_reads_price_column_as_purchase_price(): void
+    {
+        // Format daftar harga supplier: titik koma, header "Price", nilai " 1,278.00 ", #N/A, "-".
+        $csv = "name;Code;Division;Description;Price;currency;Status\n"
+            .";PX-1;;Sonde DS301; 1,278.00 ;;Active\n"
+            .";PX-2;;Plug;#N/A;;Active\n"
+            .";PX-3;;Sensor TSS; -   ;;Active\n";
+
+        $file = UploadedFile::fake()->createWithContent('products.csv', $csv);
+        $this->actingAs($this->admin)->post(route('product-management.import'), ['file' => $file])
+            ->assertOk()->assertJsonPath('result.success', 3);
+
+        $this->assertDatabaseHas('master_products', ['code' => 'PX-1', 'purchase_price' => 1278.00, 'selling_price' => 2556.00]);
+        $this->assertDatabaseHas('master_products', ['code' => 'PX-2', 'purchase_price' => null, 'selling_price' => 0]);
+        $this->assertDatabaseHas('master_products', ['code' => 'PX-3', 'purchase_price' => null]);
     }
 
     public function test_import_rejects_duplicate_name_within_same_file(): void

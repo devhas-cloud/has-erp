@@ -12,6 +12,7 @@ use App\Services\ProductXlsxTemplateGenerator;
 use App\Support\ProductPricing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductManagementController extends Controller
@@ -51,7 +52,8 @@ class ProductManagementController extends Controller
         $orderDirection = strtolower($request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         $columnOrderMap = [
-            'name_display' => 'name',
+            // Nama kosong -> urut berdasarkan deskripsi (sama dengan nama tampilan).
+            'name_display' => DB::raw("COALESCE(NULLIF(TRIM(name), ''), description)"),
             'brand' => 'brand',
             'category' => 'category',
             'type' => 'type',
@@ -67,7 +69,11 @@ class ProductManagementController extends Controller
             $columnOrderMap['selling_price_formatted'] = 'selling_price';
         }
 
-        if (is_string($orderColumnData) && isset($columnOrderMap[$orderColumnData])) {
+        if ($orderColumnData === 'name_display') {
+            // Tanpa nama & deskripsi selalu di bawah, apa pun arah urutnya.
+            $query->orderByRaw("COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(description), '')) IS NULL")
+                ->orderBy($columnOrderMap['name_display'], $orderDirection);
+        } elseif (is_string($orderColumnData) && isset($columnOrderMap[$orderColumnData])) {
             $query->orderBy($columnOrderMap[$orderColumnData], $orderDirection);
         }
         $query->orderBy('id', 'desc');
@@ -98,12 +104,14 @@ class ProductManagementController extends Controller
                 $selling = $this->formula_selling_price($product->currency_id, $product->purchase_price);
                 $sellingFormatted = number_format($selling);
             }
+            $displayName = $product->display_name;
             $data[] = [
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $product->id,
-                'name' => $product->name ?? '—',
-                'initials' => strtoupper(substr($product->name ?? '?', 0, 2)),
-                'name_display' => $product->name ?? '—',
+                'name' => $displayName ?? $product->code ?? '—',
+                'initials' => strtoupper(mb_substr($displayName ?? $product->code ?? '?', 0, 2)),
+                'name_display' => $displayName ?? '—',
+                'name_from_description' => $product->nameFromDescription(),
                 'code' => $product->code ?? '—',
                 'brand' => $product->brand ?? '—',
                 'category' => $product->category ?? '—',
@@ -200,6 +208,8 @@ class ProductManagementController extends Controller
         $baseCurrency = Currency::where('is_base', true)->where('status', 'Active')->first();
 
         $data = $product->toArray();
+        $data['display_name'] = $product->display_name;
+        $data['name_from_description'] = $product->nameFromDescription();
         $data['image_url'] = $product->image_url;
         $data['division_name'] = $product->division?->division_name;
         $data['currency_name'] = $currency?->name;
@@ -497,7 +507,8 @@ class ProductManagementController extends Controller
     }
 
     /**
-     * Terapkan filter pencarian (search.value dari DataTables / search flat dari export)
+     * Terapkan filter pencarian (search.value dari DataTables / search flat dari export;
+     * termasuk deskripsi karena nama kosong ditampilkan dari deskripsi)
      * dan filter dropdown (category, type, stock_kind, division_id, status).
      */
     private function applyProductFilters($query, Request $request)
@@ -514,6 +525,7 @@ class ProductManagementController extends Controller
         if ($searchValue) {
             $query->where(function ($q) use ($searchValue) {
                 $q->where('name', 'like', "%{$searchValue}%")
+                    ->orWhere('description', 'like', "%{$searchValue}%")
                     ->orWhere('code', 'like', "%{$searchValue}%")
                     ->orWhere('brand', 'like', "%{$searchValue}%")
                     ->orWhere('category', 'like', "%{$searchValue}%")

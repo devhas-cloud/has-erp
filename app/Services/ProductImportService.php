@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Currency;
 use App\Models\Division;
 use App\Models\MasterProduct;
+use App\Support\ProductPricing;
 
 class ProductImportService
 {
@@ -61,11 +62,17 @@ class ProductImportService
      *   - EU/ID: "15000,50", "15.000,50"
      *   - Mixed: "Rp 15.000,50", "Rp 15,000.50", "IDR 15,000"
      */
-    private function parsePrice(string $value): float
+    private function parsePrice(string $value): ?float
     {
         $s = trim($value);
-        if ($s === '') {
-            return 0.00;
+        // Kosong / '-' (harga disembunyikan di file export) = tidak diisi.
+        if ($s === '' || $s === '-') {
+            return null;
+        }
+
+        // Notasi ilmiah dari Excel, mis. "1.2E+07" / "1,2E+07".
+        if (preg_match('/^\d+(?:[.,]\d+)?e[+-]?\d+$/i', str_replace(' ', '', $s))) {
+            return (float) str_replace(',', '.', str_replace(' ', '', $s));
         }
 
         // Strip common currency prefixes (Rp, IDR, USD, $, EUR, etc.)
@@ -75,7 +82,7 @@ class ProductImportService
         // Keep only digits, dot, comma, and optional leading minus
         $s = preg_replace('/[^0-9.,-]/', '', $s);
         if ($s === '' || $s === '-' || $s === '.') {
-            return 0.00;
+            return null;
         }
 
         $lastComma = strrpos($s, ',');
@@ -227,6 +234,18 @@ class ProductImportService
         // Normalise headers (trim, lowercase, snake_case untuk label multi-kata)
         $headers = array_map(fn ($h) => str_replace([' ', '-'], '_', mb_strtolower(trim($h))), $headers);
 
+        // Nama kolom alternatif untuk harga beli (mis. file daftar harga supplier memakai "Price").
+        // Harga di file selalu = harga beli; harga jual dihitung dari formulasi.
+        if (! in_array('purchase_price', $headers, true)) {
+            foreach (['price', 'harga', 'harga_beli', 'purchase', 'unit_price'] as $alias) {
+                $index = array_search($alias, $headers, true);
+                if ($index !== false) {
+                    $headers[$index] = 'purchase_price';
+                    break;
+                }
+            }
+        }
+
         // Validate that required headers exist
         $requiredFields = ['code'];
         $missingHeaders = [];
@@ -290,8 +309,8 @@ class ProductImportService
             }
 
             try {
-                // Parse harga jual & harga beli
-                $price = $this->parsePrice($data['selling_price'] ?? '');
+                // Harga beli dari file (kosong / '-' = tidak diisi). Harga jual TIDAK dibaca dari
+                // file: selalu hasil formulasi harga beli, sama dengan form produk (controller).
                 $purchasePrice = $this->parsePrice($data['purchase_price'] ?? '');
 
                 // Parse status (case-insensitive)
@@ -319,11 +338,11 @@ class ProductImportService
                 }
 
                 // Resolve currency code → id (case-insensitive).
-                // Kosong → pakai currency base; kode tak dikenal → baris gagal.
+                // Kosong → produk lama tetap currency-nya, produk baru currency base; kode tak dikenal → baris gagal.
                 $currencyId = null;
                 $currencyInput = trim($data['currency'] ?? '');
                 if ($currencyInput === '' || ! $this->withPrices) {
-                    $currencyId = $this->baseCurrencyId();
+                    $currencyId = null;
                 } else {
                     $currencyKey = mb_strtolower($currencyInput);
                     if (! isset($this->currencyLookup[$currencyKey])) {
@@ -378,9 +397,6 @@ class ProductImportService
                     'type' => $type,
                     'parameter' => $parameter,
                     'description' => $this->nullIfEmpty($data['description'] ?? ''),
-                    'selling_price' => $price,
-                    'purchase_price' => $purchasePrice,
-                    'currency_id' => $currencyId,
                     'status' => $status,
                     'division_id' => $divisionId,
                 ];
@@ -410,13 +426,21 @@ class ProductImportService
                     continue;
                 }
 
-                if (! $this->withPrices) {
-                    unset($record['selling_price'], $record['purchase_price']);
-                    if ($existing) {
-                        unset($record['currency_id']);
-                    } else {
-                        $record['currency_id'] = $this->baseCurrencyId();
+                // Harga & currency. Importer tanpa hak harga: produk lama tetap, produk baru tanpa
+                // harga ber-currency base. Dengan hak harga: harga beli kosong = harga lama tetap,
+                // currency kosong = currency lama tetap; harga jual dihitung ulang dari formulasi.
+                if ($this->withPrices) {
+                    $record['currency_id'] = $currencyId ?? $existing?->currency_id ?? $this->baseCurrencyId();
+                    if ($purchasePrice !== null) {
+                        $record['purchase_price'] = round($purchasePrice, 2);
+                    } elseif (! $existing) {
+                        $record['purchase_price'] = null;
                     }
+                    $effectivePurchase = array_key_exists('purchase_price', $record) ? $record['purchase_price'] : $existing?->purchase_price;
+                    $record['selling_price'] = ProductPricing::price($record['currency_id'], $effectivePurchase)['price_idr'];
+                } elseif (! $existing) {
+                    $record['currency_id'] = $this->baseCurrencyId();
+                    $record['selling_price'] = 0;
                 }
 
                 if ($existing) {

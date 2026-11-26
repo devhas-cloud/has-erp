@@ -103,6 +103,31 @@ class MasterProduct extends Model
         return $query->where('status', 'Active');
     }
 
+    /** Panjang maksimum nama yang diambil dari deskripsi. */
+    public const DISPLAY_NAME_LIMIT = 120;
+
+    /**
+     * Nama tampilan: kolom name; bila kosong diambil dari baris pertama deskripsi
+     * (dipotong), agar produk impor tanpa nama tetap mudah dikenali.
+     */
+    public function getDisplayNameAttribute(): ?string
+    {
+        $name = trim((string) $this->name);
+        if ($name !== '') {
+            return $name;
+        }
+
+        $firstLine = trim(strtok(str_replace("\r", '', (string) $this->description), "\n") ?: '');
+
+        return $firstLine !== '' ? \Illuminate\Support\Str::limit($firstLine, self::DISPLAY_NAME_LIMIT) : null;
+    }
+
+    /** True bila nama tampilan berasal dari deskripsi (kolom name kosong). */
+    public function nameFromDescription(): bool
+    {
+        return trim((string) $this->name) === '' && $this->display_name !== null;
+    }
+
     public function getImageUrlAttribute(): ?string
     {
         return $this->image ? Storage::url($this->image) : null;

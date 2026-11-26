@@ -343,7 +343,7 @@
                         <table class="info-table w-100">
                             <tr>
                                 <td>Nama Produk</td>
-                                <td><strong id="pd-name">—</strong></td>
+                                <td><strong id="pd-name">—</strong><div id="pd-name-note" style="display:none;font-size:11.5px;color:var(--text-muted)">Nama belum diisi — diambil dari deskripsi.</div></td>
                             </tr>
                             <tr>
                                 <td>Code</td>
@@ -434,6 +434,8 @@ const productUpdateUrl = '{{ route("product-management.update", "__ID__") }}';
 const productDeleteUrl = '{{ route("product-management.destroy", "__ID__") }}';
 const productExportUrl = '{{ route("product-management.export") }}';
 
+function productEsc(s) { return $('<div>').text(s == null ? '' : s).html().replace(/"/g, '&quot;'); }
+
 function exportProducts() {
     var params = new URLSearchParams();
 
@@ -487,13 +489,15 @@ function initProductTable() {
                 data: 'name_display', orderable: true, searchable: true, width: '26%',
                 render: function(data, type, row) {
                     var img = row.image_url
-                        ? '<img src="' + row.image_url + '" class="avatar-circle" alt="" style="background:transparent">'
-                        : '<div class="avatar-circle">' + row.initials + '</div>';
+                        ? '<img src="' + productEsc(row.image_url) + '" class="avatar-circle" alt="" style="background:transparent">'
+                        : '<div class="avatar-circle">' + productEsc(row.initials) + '</div>';
+                    // Nama kosong -> diambil dari deskripsi (ditandai lewat tooltip).
+                    var tip = row.name_from_description ? ' title="Nama diambil dari deskripsi: ' + productEsc(data) + '"' : ' title="' + productEsc(data) + '"';
                     return '<div style="display:flex;align-items:center;gap:10px;min-width:0">' +
                         img +
                         '<div style="min-width:0">' +
-                        '<strong style="color:var(--text-primary);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">' + data + '</strong>' +
-                        '<code style="color:var(--accent);font-size:11px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (row.code || '—') + '</code>' +
+                        '<strong style="color:var(--text-primary);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block"' + tip + '>' + productEsc(data) + '</strong>' +
+                        '<code style="color:var(--accent);font-size:11px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + productEsc(row.code || '—') + '</code>' +
                         '</div>' +
                         '</div>';
                 }
@@ -549,7 +553,7 @@ function initProductTable() {
                     if (row.can_manage) btn += '<button class="btn-icon" title="Edit" onclick="openEditModal(' + data + ')"><i class="fa-solid fa-pen"></i></button>';
                     @endif
                     @if($canDelete)
-                    if (row.can_manage) btn += '<button class="btn-icon danger" title="Hapus" onclick="deleteProduct(' + data + ', \'' + row.name + '\')"><i class="fa-solid fa-trash-can"></i></button>';
+                    if (row.can_manage) btn += '<button class="btn-icon danger" title="Hapus" data-name="' + productEsc(row.name) + '" onclick="deleteProduct(' + data + ', this.dataset.name)"><i class="fa-solid fa-trash-can"></i></button>';
                     @endif
                     @if($scopedDivisionId && ($canUpdate || $canDelete))
                     if (!row.can_manage) btn += '<span class="btn-icon" style="opacity:.4;cursor:default" title="Produk divisi lain — hanya bisa dilihat"><i class="fa-solid fa-lock"></i></span>';
@@ -646,7 +650,8 @@ function openDetailModal(id) {
     $.get(productEditUrl.replace('__ID__', id), function(res) {
         var p = res.data;
 
-        $('#pd-name').text(p.name || '—');
+        $('#pd-name').text(p.display_name || '—');
+        $('#pd-name-note').toggle(!!p.name_from_description);
         $('#pd-code').text(p.code || '—');
         $('#pd-brand').text(p.brand || '—');
         $('#pd-category').text(p.category || '—');
