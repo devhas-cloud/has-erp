@@ -4,6 +4,7 @@
 @section('page-title', 'Receive Goods')
 
 @section('styles')
+@include('partials.image-compress')
 <style>
     .gr-step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11.5px; font-weight: 700; margin-right: 8px; flex-shrink: 0; }
     .gr-step.is-done { background: #065f46; }
@@ -45,6 +46,14 @@
     .gr-toggle:hover { text-decoration: underline; }
     .gr-sn-tag { font-size: 10.5px; color: #92400e; margin-left: 4px; }
     .gr-info { font-size: 12px; color: #075985; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 6px 10px; }
+    /* Foto barang ber-SN (opsional) */
+    .gr-photos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+    .gr-photo { position: relative; width: 56px; height: 56px; border-radius: 6px; overflow: hidden; border: 1px solid var(--card-border); background: #f8fafc; }
+    .gr-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .gr-photo-del { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border: 0; border-radius: 50%; background: rgba(15, 23, 42, .65); color: #fff; font-size: 10px; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+    .gr-photo-del:hover { background: #b42318; }
+    .gr-photo-add { height: 56px; font-size: 12px; }
+    .gr-photo-busy { font-size: 11.5px; color: var(--text-muted); }
     .gr-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--text-muted); padding: 10px 4px 0; }
     .gr-empty { text-align: center; padding: 36px 10px !important; color: var(--text-muted); font-size: 13px; }
 
@@ -205,6 +214,10 @@ const grShowUrl = '{{ route("goods-receipt.show", "__ID__") }}';
 const grSaveLabel = 'Receive &amp; Post';
 const grProductUrl = '{{ route("product-management.index") }}';
 const grBaseSymbol = @json($baseSymbol);
+// Batas upload server (per file, total request, jumlah file per request, foto per item).
+const grLimits = @json($uploadLimits);
+// Foto per baris sumber: { lineId: [{ file, url }] } — dikirim bersama posting.
+let grPhotos = {};
 // Kurs penerimaan per mata uang asing: { USD: { symbol, known, rate (master), stale, updated_at } }.
 let grFx = {};
 let grDirty = false;
@@ -253,7 +266,13 @@ function grDetailRow(it) {
         html += '<div class="col-6"><label class="form-label mb-0" style="font-size:11.5px">Expiry</label><input type="date" class="form-control form-control-sm gr-expiry" aria-label="Expiry"></div>';
         html += '<div class="col-6"><label class="form-label mb-0" style="font-size:11.5px">Warranty until</label><input type="date" class="form-control form-control-sm gr-warranty" aria-label="Warranty until"></div>';
         html += '<div class="col-6"><label class="form-label mb-0" style="font-size:11.5px">Note</label><input type="text" class="form-control form-control-sm gr-item-note" maxlength="255" aria-label="Note"></div>';
-        html += '</div></div></div>';
+        html += '</div></div>';
+        html += '<div class="col-12"><span class="form-label mb-0" style="font-size:11.5px">Photos (optional, up to ' + grLimits.per_item + ')</span>'
+            + '<div class="gr-photos" data-line="' + it.source_line_id + '">'
+            + '<button type="button" class="btn btn-outline-secondary btn-sm gr-photo-add" data-line="' + it.source_line_id + '">Add photos</button>'
+            + '<input type="file" class="d-none gr-photo-input" accept="image/jpeg,image/png,image/webp" multiple data-line="' + it.source_line_id + '" aria-label="Photos for ' + grEsc(it.product_code || 'item') + '">'
+            + '</div></div>';
+        html += '</div>';
     } else {
         html += '<div class="gr-info mb-2">Material: qty is added to the balance of ' + grEsc(it.product_code || 'this product')
             + ' in the destination warehouse' + (it.project_label ? ' (project-owned)' : ' (free stock)') + '.</div>';
@@ -315,8 +334,51 @@ function grRenderSource(src, count) {
     $('#gr-source-strip').css('display', 'flex');
 }
 
+function grPhotoCount() {
+    return Object.keys(grPhotos).reduce(function(sum, key) { return sum + grPhotos[key].length; }, 0);
+}
+
+function grClearPhotos() {
+    Object.keys(grPhotos).forEach(function(key) { grPhotos[key].forEach(function(p) { URL.revokeObjectURL(p.url); }); });
+    grPhotos = {};
+}
+
+function grRenderPhotos(lineId) {
+    var $wrap = $('#gr-items-body .gr-photos[data-line="' + lineId + '"]');
+    $wrap.find('.gr-photo').remove();
+    var list = grPhotos[lineId] || [];
+    var html = list.map(function(p, idx) {
+        return '<div class="gr-photo"><img src="' + p.url + '" alt="Photo ' + (idx + 1) + '">'
+            + '<button type="button" class="gr-photo-del" data-line="' + lineId + '" data-idx="' + idx + '" title="Remove photo" aria-label="Remove photo ' + (idx + 1) + '"><i class="fa fa-xmark"></i></button></div>';
+    }).join('');
+    $wrap.prepend(html);
+    $wrap.find('.gr-photo-add').toggle(list.length < grLimits.per_item);
+    grUpdateSummary();
+}
+
+function grAddPhotos(lineId, files) {
+    var list = grPhotos[lineId] = grPhotos[lineId] || [];
+    var room = grLimits.per_item - list.length;
+    files = Array.prototype.slice.call(files || []);
+    if (files.length > room) toastr.warning('Up to ' + grLimits.per_item + ' photos per item; ' + (files.length - room) + ' photo(s) skipped.');
+    files = files.slice(0, Math.max(room, 0));
+    if (!files.length) return;
+    var $wrap = $('#gr-items-body .gr-photos[data-line="' + lineId + '"]');
+    var $busy = $('<span class="gr-photo-busy"><span class="spinner-border spinner-border-sm me-1"></span>Preparing photos…</span>').appendTo($wrap);
+    Promise.all(files.map(function(f) { return window.compressImage(f); })).then(function(result) {
+        $busy.remove();
+        result.forEach(function(f) {
+            if (f.size > grLimits.file) { toastr.error(f.name + ' is too large for the server (max ' + Num.format(grLimits.file / 1048576, 1) + ' MB).'); return; }
+            list.push({ file: f, url: URL.createObjectURL(f) });
+        });
+        grMarkDirty();
+        grRenderPhotos(lineId);
+    });
+}
+
 function grLoadItems() {
     var source = grSource();
+    grClearPhotos();
     grRenderFx([]);
     //grRenderSource(null);
     if (!source) {
@@ -401,7 +463,8 @@ function grRowStatus($row) {
     // Penanda SN di bawah nama: berapa SN yang sudah diisi.
     if ($row.attr('data-serialized') === '1' && $row.attr('data-dest') === 'warehouse') {
         var sn = grSerialList($('#gr-items-body tr.gr-detail[data-for="' + $row.attr('data-line-id') + '"] .gr-serials').val()).length;
-        $row.find('.gr-sn-tag').toggle(on).text('· SN ' + sn + '/' + qty);
+        var photos = (grPhotos[$row.attr('data-line-id')] || []).length;
+        $row.find('.gr-sn-tag').toggle(on).text('· SN ' + sn + '/' + qty + (photos ? ' · ' + photos + ' photo' + (photos > 1 ? 's' : '') : ''));
     }
 }
 
@@ -452,6 +515,18 @@ function grRatesPayload() {
     return rates;
 }
 
+// Objek bersarang -> FormData dengan nama ala PHP (items[0][serial_numbers][]), termasuk file foto.
+function grFormData(data) {
+    var fd = new FormData();
+    (function walk(value, key) {
+        if (value instanceof File) { fd.append(key, value, value.name); return; }
+        if (Array.isArray(value)) { value.forEach(function(v, i) { walk(v, key + (v instanceof File || typeof v !== 'object' || v === null ? '[]' : '[' + i + ']')); }); return; }
+        if (value !== null && typeof value === 'object') { Object.keys(value).forEach(function(k) { walk(value[k], key ? key + '[' + k + ']' : k); }); return; }
+        fd.append(key, value == null ? '' : value);
+    })(data, '');
+    return fd;
+}
+
 // Pesan + tandai field yang salah (toast hanya pelengkap).
 function grFail(message, $focus) {
     toastr.error(message);
@@ -492,7 +567,9 @@ function grSave() {
             batch_number: $detail.find('.gr-batch').val() || '',
             expiry_date: $detail.find('.gr-expiry').val() || '',
             warranty_until: $detail.find('.gr-warranty').val() || '',
-            note: $detail.find('.gr-item-note').val() || ''
+            note: $detail.find('.gr-item-note').val() || '',
+            photos: $row.attr('data-serialized') === '1' && $row.attr('data-dest') === 'warehouse'
+                ? (grPhotos[$row.attr('data-line-id')] || []).map(function(p) { return p.file; }) : []
         });
     });
     if (!ok) return;
@@ -501,11 +578,21 @@ function grSave() {
     var needWarehouse = items.some(function(it) { return it.destination === 'warehouse'; });
     if (needWarehouse && !$('#gr-warehouse').val()) { grFail('Select a destination warehouse.', $('#gr-warehouse')); return; }
 
+    // Batas server: file berlebih dibuang diam-diam oleh PHP, jadi dicegah di sini.
+    var photoFiles = items.reduce(function(all, it) { return all.concat(it.photos); }, []);
+    var photoBytes = photoFiles.reduce(function(sum, f) { return sum + f.size; }, 0);
+    if (photoFiles.length > grLimits.files || photoBytes > grLimits.post * 0.9) {
+        grFail('Too many photos for one save (' + photoFiles.length + ' photos, ' + Num.format(photoBytes / 1048576, 1) + ' MB; max '
+            + grLimits.files + ' photos / ' + Num.format(grLimits.post * 0.9 / 1048576, 1) + ' MB). Remove some now and add them from the receipt detail page after posting.');
+        return;
+    }
+
     var units = items.reduce(function(sum, it) { return sum + it.qty; }, 0);
     Swal.fire({
         title: 'Post this receipt?',
         html: items.length + ' line(s), ' + units + ' unit(s) will be received'
             + (needWarehouse ? ' into <strong>' + grEsc($('#gr-warehouse option:selected').text().trim()) + '</strong>' : '')
+            + (photoFiles.length ? ', with ' + photoFiles.length + ' photo(s)' : '')
             + '.<br>Stock increases immediately; the receipt cannot be edited after posting.',
         icon: 'question',
         showCancelButton: true,
@@ -518,7 +605,7 @@ function grSave() {
         $.ajax({
             url: grStoreUrl,
             method: 'POST',
-            data: {
+            data: grFormData({
                 source_type: source.type,
                 source_id: source.id,
                 warehouse_id: needWarehouse ? $('#gr-warehouse').val() : '',
@@ -527,7 +614,9 @@ function grSave() {
                 items: items,
                 rates: grRatesPayload(),
                 _token: '{{ csrf_token() }}'
-            }
+            }),
+            processData: false,
+            contentType: false
         }).done(function(res) {
             grDirty = false;
             toastr.success(res.message || 'Saved.');
@@ -566,6 +655,17 @@ $(document).ready(function() {
         $check.prop('checked', !$check.is(':checked')).trigger('change');
     });
     $(document).on('click', '.gr-toggle', function() { grToggleDetail($(this).data('line')); });
+    $(document).on('click', '.gr-photo-add', function() { $('#gr-items-body .gr-photo-input[data-line="' + $(this).data('line') + '"]').trigger('click'); });
+    $(document).on('change', '.gr-photo-input', function() {
+        grAddPhotos(String($(this).data('line')), this.files);
+        this.value = '';
+    });
+    $(document).on('click', '.gr-photo-del', function() {
+        var line = String($(this).data('line'));
+        var removed = (grPhotos[line] || []).splice($(this).data('idx'), 1)[0];
+        if (removed) URL.revokeObjectURL(removed.url);
+        grRenderPhotos(line);
+    });
     $(document).on('change', '.gr-check', function() {
         var $row = $(this).closest('tr');
         var on = $(this).is(':checked');

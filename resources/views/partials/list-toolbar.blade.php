@@ -122,7 +122,8 @@ function ListToolbar(rootSelector, getTable) {
                 var $opt = $root.find('[data-status-select] option[value="' + key + '"]');
                 $opt.text($opt.data('label') + ' (' + total + ')');
             });
-            $root.find('[data-status-select] option[value=""]').text('All Statuses (' + all + ')');
+            var $all = $root.find('[data-status-select] option[value=""]');
+            $all.text(($all.data('label') || 'All Statuses') + ' (' + all + ')');
         }
     };
 }

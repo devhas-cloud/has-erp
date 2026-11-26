@@ -20,6 +20,8 @@ use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\InteractsWithStock;
 use Tests\TestCase;
 
@@ -182,6 +184,52 @@ class PurchasingInventoryTest extends TestCase
 
         $this->actingAs($this->warehouseUser)->get(route('goods-receipt.show', $id))->assertOk()->assertSee('SPARING Gresik');
         $this->actingAs($this->warehouseUser)->get(route('goods-receipt.create', ['source_type' => 'po', 'source_id' => $po->id]))->assertOk();
+    }
+
+    public function test_serial_items_accept_optional_photos_on_receipt_and_later(): void
+    {
+        Storage::fake('local');
+        $serial = MasterProduct::create(['code' => 'SN-CAM', 'name' => 'Kamera', 'division_id' => $this->division->id, 'status' => 'Active', 'is_material' => false]);
+        $serialPo = $this->approvedPo($this->approvedRequest(2, null, $serial));
+        $materialPo = $this->approvedPo($this->approvedRequest(3));
+
+        // Foto pada material ditolak; tidak ada yang terposting.
+        $this->actingAs($this->warehouseUser)->post(route('goods-receipt.store'), [
+            'source_type' => 'po', 'source_id' => $materialPo->id, 'warehouse_id' => $this->stockWarehouse->id,
+            'items' => [['source_line_id' => $materialPo->items->first()->id, 'qty' => 3, 'destination' => 'warehouse', 'photos' => [UploadedFile::fake()->image('m.jpg')]]],
+        ], ['Accept' => 'application/json'])->assertStatus(422);
+        $this->assertSame(0, GoodsReceipt::count());
+
+        // Barang ber-SN: 2 foto ikut tersimpan bersama posting.
+        $id = $this->actingAs($this->warehouseUser)->post(route('goods-receipt.store'), [
+            'source_type' => 'po', 'source_id' => $serialPo->id, 'warehouse_id' => $this->stockWarehouse->id,
+            'items' => [['source_line_id' => $serialPo->items->first()->id, 'qty' => 2, 'destination' => 'warehouse', 'serial_numbers' => ['A1'],
+                'photos' => [UploadedFile::fake()->image('a.jpg'), UploadedFile::fake()->image('b.png')]]],
+        ], ['Accept' => 'application/json'])->assertOk()->json('id');
+
+        $item = GoodsReceipt::findOrFail($id)->items->first();
+        $this->assertCount(2, $item->photos);
+        $item->photos->each(fn ($doc) => Storage::disk('local')->assertExists($doc->file_path));
+
+        // Foto susulan dari halaman detail, lalu ditampilkan di galeri.
+        $this->actingAs($this->warehouseUser)->post(route('goods-receipt.photos.store', [$id, $item->id]), [
+            'files' => [UploadedFile::fake()->image('c.webp')],
+        ], ['Accept' => 'application/json'])->assertOk()->assertJsonCount(3, 'photos');
+        $photo = $item->photos()->first();
+        $this->actingAs($this->warehouseUser)->get(route('goods-receipt.photos.show', [$id, $item->id, $photo->id]))->assertOk();
+        $this->actingAs($this->warehouseUser)->get(route('goods-receipt.show', $id))->assertOk()
+            ->assertSee('data-upload-url="'.route('goods-receipt.photos.store', [$id, $item->id]).'"', false)
+            ->assertSee(str_replace('/', '\\/', route('goods-receipt.photos.show', [$id, $item->id, $photo->id])), false);
+
+        // Maksimal 10 foto per item.
+        $this->actingAs($this->warehouseUser)->post(route('goods-receipt.photos.store', [$id, $item->id]), [
+            'files' => array_map(fn ($i) => UploadedFile::fake()->image("x{$i}.jpg"), range(1, 8)),
+        ], ['Accept' => 'application/json'])->assertStatus(422);
+
+        // Hapus foto (butuh hak hapus modul; Admin boleh).
+        $this->actingAs($this->admin)->deleteJson(route('goods-receipt.photos.destroy', [$id, $item->id, $photo->id]))->assertOk();
+        $this->assertCount(2, $item->photos()->get());
+        Storage::disk('local')->assertMissing($photo->file_path);
     }
 
     public function test_receipt_values_stock_in_base_currency_after_po_discount(): void

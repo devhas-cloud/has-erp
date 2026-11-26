@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManagesPurchaseDocuments;
 use App\Models\Currency;
+use App\Models\Document;
 use App\Models\DirectPurchase;
 use App\Models\DirectPurchaseItem;
 use App\Models\GoodsReceipt;
@@ -24,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Penerimaan Barang (GRN) dari Purchase Order (Approved / Diterima Sebagian)
@@ -84,7 +86,7 @@ class GoodsReceiptController extends Controller
                 ->orWhereHas('directPurchase', fn ($dp) => $dp->where('supplier_name', $supplier))))
             ->when($request->input('date_from'), fn ($q, $from) => $q->whereDate('received_date', '>=', $from))
             ->when($request->input('date_to'), fn ($q, $to) => $q->whereDate('received_date', '<=', $to))
-            ->when($request->boolean('missing_sn'), fn ($q) => $q->whereHas('items.stocks', fn ($s) => $s->missingSerial()))
+            ->when($request->boolean('missing_sn') || $request->input('kind') === 'missing_sn', fn ($q) => $q->whereHas('items.stocks', fn ($s) => $s->missingSerial()))
             // Jenis barang yang masuk gudang: material (menambah saldo) / barang ber-SN (per unit).
             ->when(in_array($request->input('kind'), ['material', 'serial'], true), fn ($q) => $q->whereHas('items', fn ($i) => $i
                 ->where('destination', GoodsReceiptItem::DESTINATION_WAREHOUSE)
@@ -146,6 +148,8 @@ class GoodsReceiptController extends Controller
             'draw' => (int) $request->input('draw'),
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
+            // Penerimaan dengan unit ber-SN yang SN-nya belum diisi (semua data, untuk pengingat di atas tabel).
+            'missing_total' => GoodsReceipt::whereHas('items.stocks', fn ($s) => $s->missingSerial())->count(),
             'data' => $data,
         ]);
     }
@@ -171,6 +175,7 @@ class GoodsReceiptController extends Controller
             'baseSymbol' => Currency::where('is_base', true)->value('symbol') ?: Currency::baseName(),
             'purchaseOrders' => $purchaseOrders,
             'directPurchases' => $directPurchases,
+            'uploadLimits' => self::uploadLimits(),
             'preselect' => [
                 'type' => $request->input('source_type'),
                 'id' => $request->integer('source_id') ?: null,
@@ -231,6 +236,30 @@ class GoodsReceiptController extends Controller
             ->all();
     }
 
+    /** Batas upload PHP agar form bisa memperingatkan sebelum file terbuang diam-diam. */
+    private static function uploadLimits(): array
+    {
+        $bytes = function (string $value): int {
+            $value = trim($value);
+            $unit = strtolower(substr($value, -1));
+            $number = (float) $value;
+
+            return (int) match ($unit) {
+                'g' => $number * 1024 ** 3,
+                'm' => $number * 1024 ** 2,
+                'k' => $number * 1024,
+                default => $number,
+            };
+        };
+
+        return [
+            'file' => \Illuminate\Http\UploadedFile::getMaxFilesize(),
+            'post' => $bytes((string) ini_get('post_max_size')) ?: PHP_INT_MAX,
+            'files' => (int) ini_get('max_file_uploads') ?: 20,
+            'per_item' => Document::MAX_FILES,
+        ];
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -248,9 +277,18 @@ class GoodsReceiptController extends Controller
             'items.*.expiry_date' => 'nullable|date',
             'items.*.warranty_until' => 'nullable|date',
             'items.*.note' => 'nullable|string|max:255',
+            'items.*.photos' => 'nullable|array|max:'.Document::MAX_FILES,
+            'items.*.photos.*' => Document::IMAGE_RULE,
             'rates' => 'nullable|array',
             'rates.*' => 'nullable|numeric|gt:0',
-        ], ['items.required' => 'Pilih minimal satu baris yang diterima.', 'rates.*.gt' => 'Exchange rate must be greater than 0.']);
+        ], [
+            'items.required' => 'Pilih minimal satu baris yang diterima.',
+            'rates.*.gt' => 'Exchange rate must be greater than 0.',
+            'items.*.photos.max' => 'Up to '.Document::MAX_FILES.' photos per item.',
+            'items.*.photos.*.mimes' => 'Photos must be JPG, PNG or WEBP.',
+            'items.*.photos.*.max' => 'Each photo must not exceed 10MB.',
+            'items.*.photos.*.uploaded' => 'A photo failed to upload (file too large for the server).',
+        ]);
 
         [$header, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
         $lines = $lines->keyBy('source_line_id');
@@ -286,6 +324,12 @@ class GoodsReceiptController extends Controller
             }
             // Material masuk ke satu saldo: batch / kedaluwarsa / garansi tidak dipakai (sementara disembunyikan).
             $tracked = $toStock && $line['serialized'];
+            if (! empty($row['photos']) && ! $tracked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Line '.($i + 1).' ('.($line['part_number'] ?: 'item').'): photos can only be attached to serial items going into the warehouse.',
+                ], 422);
+            }
             $rows[] = array_merge($line, [
                 'qty' => (int) $row['qty'],
                 'destination' => $row['destination'],
@@ -295,6 +339,7 @@ class GoodsReceiptController extends Controller
                 'warranty_until' => $tracked ? ($row['warranty_until'] ?? null) : null,
                 'note' => $row['note'] ?? null,
                 'exchange_rate' => $rate,
+                'photos' => $tracked ? array_values($row['photos'] ?? []) : [],
             ]);
         }
 
@@ -335,7 +380,21 @@ class GoodsReceiptController extends Controller
 
     private function persist(array $validated, ?Warehouse $warehouse, array $rows): GoodsReceipt
     {
-        return DB::transaction(function () use ($validated, $warehouse, $rows) {
+        // File foto tersimpan di disk sebelum commit: bila transaksi gagal, file dihapus lagi.
+        $storedPaths = [];
+        try {
+            return $this->persistRows($validated, $warehouse, $rows, $storedPaths);
+        } catch (\Throwable $e) {
+            foreach ($storedPaths as $path) {
+                Storage::disk(Document::DISK)->delete($path);
+            }
+            throw $e;
+        }
+    }
+
+    private function persistRows(array $validated, ?Warehouse $warehouse, array $rows, array &$storedPaths): GoodsReceipt
+    {
+        return DB::transaction(function () use ($validated, $warehouse, $rows, &$storedPaths) {
             $receipt = GoodsReceipt::create([
                 'receipt_number' => GoodsReceipt::generateNumber(),
                 'purchase_order_id' => $validated['source_type'] === self::SOURCE_PO ? $validated['source_id'] : null,
@@ -348,7 +407,7 @@ class GoodsReceiptController extends Controller
             ]);
 
             foreach ($rows as $i => $row) {
-                $receipt->items()->create([
+                $item = $receipt->items()->create([
                     'purchase_order_item_id' => $validated['source_type'] === self::SOURCE_PO ? $row['source_line_id'] : null,
                     'direct_purchase_item_id' => $validated['source_type'] === self::SOURCE_DP ? $row['source_line_id'] : null,
                     'master_product_id' => $row['master_product_id'],
@@ -366,6 +425,9 @@ class GoodsReceiptController extends Controller
                     'note' => $row['note'],
                     'sort_order' => $i + 1,
                 ]);
+                foreach ($row['photos'] ?? [] as $file) {
+                    $storedPaths[] = Document::storeFor($item, $file, Document::TYPE_RECEIPT_PHOTO)->file_path;
+                }
             }
 
             $this->post($receipt->load(['items.masterProduct', 'purchaseOrder', 'directPurchase']));
@@ -380,6 +442,7 @@ class GoodsReceiptController extends Controller
             'items.masterProduct',
             'items.project',
             'items.stocks.masterProduct',
+            'items.photos.uploader',
             'purchaseOrder',
             'directPurchase',
             'warehouse',
@@ -397,9 +460,98 @@ class GoodsReceiptController extends Controller
 
         return view('goods-receipt.show', [
             'receipt' => $receipt,
+            'photoLists' => $receipt->items->filter->acceptsPhotos()->mapWithKeys(fn (GoodsReceiptItem $item) => [$item->id => $this->photoList($item)]),
             'inLogs' => $inLogs,
             'documents' => $this->documentList($receipt),
         ]);
+    }
+
+    /**
+     * Foto susulan untuk barang ber-SN (juga setelah posting). Hak akses lewat
+     * middleware modul: POST -> can_create, GET -> can_read, DELETE -> can_delete.
+     */
+    public function uploadItemPhotos(Request $request, $id, $itemId): JsonResponse
+    {
+        $item = $this->photoItem($id, $itemId);
+        if (! $item->acceptsPhotos()) {
+            return response()->json(['success' => false, 'message' => 'Photos can only be attached to serial items going into the warehouse.'], 422);
+        }
+
+        $room = Document::MAX_FILES - $item->photos()->count();
+        $request->validate([
+            'files' => 'required|array|min:1|max:'.max($room, 0),
+            'files.*' => Document::IMAGE_RULE,
+        ], [
+            'files.required' => 'Select at least one photo.',
+            'files.max' => $room > 0 ? 'This item can take '.$room.' more photo(s) (max '.Document::MAX_FILES.').' : 'This item already has '.Document::MAX_FILES.' photos.',
+            'files.*.mimes' => 'Photos must be JPG, PNG or WEBP.',
+            'files.*.max' => 'Each photo must not exceed 10MB.',
+            'files.*.uploaded' => 'A photo failed to upload (file too large for the server).',
+        ]);
+
+        $stored = [];
+        try {
+            DB::transaction(function () use ($request, $item, &$stored) {
+                foreach ($request->file('files') as $file) {
+                    $stored[] = Document::storeFor($item, $file, Document::TYPE_RECEIPT_PHOTO)->file_path;
+                }
+            });
+        } catch (\Throwable $e) {
+            foreach ($stored as $path) {
+                Storage::disk(Document::DISK)->delete($path);
+            }
+            throw $e;
+        }
+
+        Log::record('upload_goods_receipt_photo', count($stored).' foto barang diunggah ke '.$item->goodsReceipt->receipt_number.' oleh '.Auth::user()->display_name, $this->documentModuleCode(), $item->goodsReceipt);
+
+        return response()->json([
+            'success' => true,
+            'message' => count($stored).' photo(s) uploaded.',
+            'photos' => $this->photoList($item),
+        ]);
+    }
+
+    public function viewItemPhoto($id, $itemId, $documentId)
+    {
+        return $this->photoItem($id, $itemId)->photos()->findOrFail($documentId)->inlineResponse();
+    }
+
+    public function deleteItemPhoto($id, $itemId, $documentId): JsonResponse
+    {
+        $item = $this->photoItem($id, $itemId);
+        $document = $item->photos()->findOrFail($documentId);
+
+        if (! $this->canDeletePhoto($document)) {
+            return response()->json(['success' => false, 'message' => 'Only the uploader can delete this photo.'], 422);
+        }
+
+        $document->delete();
+
+        return response()->json(['success' => true, 'message' => 'Photo deleted.', 'photos' => $this->photoList($item)]);
+    }
+
+    private function photoItem($id, $itemId): GoodsReceiptItem
+    {
+        return GoodsReceiptItem::with(['masterProduct', 'goodsReceipt'])
+            ->where('goods_receipt_id', $id)
+            ->findOrFail($itemId);
+    }
+
+    private function canDeletePhoto(Document $document): bool
+    {
+        return Auth::user()?->role === 'Admin' || (int) $document->uploaded_by === (int) Auth::id();
+    }
+
+    /** Daftar foto untuk UI halaman detail. */
+    private function photoList(GoodsReceiptItem $item): array
+    {
+        return $item->photos()->with('uploader')->get()->map(fn (Document $doc) => [
+            'id' => $doc->id,
+            'url' => route('goods-receipt.photos.show', [$item->goods_receipt_id, $item->id, $doc->id]),
+            'delete_url' => $this->canDeletePhoto($doc) ? route('goods-receipt.photos.destroy', [$item->goods_receipt_id, $item->id, $doc->id]) : null,
+            'title' => ($doc->uploader?->display_name ?? '—').' · '.$doc->created_at?->format('d/m/Y H:i'),
+        ])->values()->all();
     }
 
     /**

@@ -421,6 +421,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('goods-receipt/{id}/documents', [GoodsReceiptController::class, 'uploadDocument'])->name('goods-receipt.documents.store');
     Route::get('goods-receipt/{id}/documents/{document}', [GoodsReceiptController::class, 'viewDocument'])->name('goods-receipt.documents.show');
     Route::delete('goods-receipt/{id}/documents/{document}', [GoodsReceiptController::class, 'deleteDocument'])->name('goods-receipt.documents.destroy');
+    Route::post('goods-receipt/{id}/items/{item}/photos', [GoodsReceiptController::class, 'uploadItemPhotos'])->whereNumber(['id', 'item'])->name('goods-receipt.photos.store');
+    Route::get('goods-receipt/{id}/items/{item}/photos/{document}', [GoodsReceiptController::class, 'viewItemPhoto'])->whereNumber(['id', 'item', 'document'])->name('goods-receipt.photos.show');
+    Route::delete('goods-receipt/{id}/items/{item}/photos/{document}', [GoodsReceiptController::class, 'deleteItemPhoto'])->whereNumber(['id', 'item', 'document'])->name('goods-receipt.photos.destroy');
     Route::resource('goods-receipt', GoodsReceiptController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
 
     Route::get('stock-out', [StockOutController::class, 'index'])->name('stock-out.index');

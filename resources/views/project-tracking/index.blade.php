@@ -6,15 +6,6 @@
 @section('styles')
 @include('partials.list-toolbar')
 <style>
-    .pt-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #d1d5db; vertical-align: middle; }
-    .pt-dot.done { background: #2f7a4b; }
-    .pt-dot.run { background: #d97706; }
-    .pt-dot.late { background: #b42318; }
-    .pt-dot.na { background: transparent; border: 1.5px dashed #9ca3af; }
-    .pt-dots { white-space: nowrap; }
-    .pt-dots .pt-dot { margin-right: 5px; }
-    .pt-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-muted); }
-    .pt-legend span { display: inline-flex; align-items: center; gap: 5px; }
     .pt-flag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin: 1px 3px 1px 0; white-space: nowrap; }
     .pt-flag.danger { background: var(--danger-soft); color: #b42318; }
     .pt-flag.warn { background: var(--warning-soft, #fef3c7); color: #92400e; }
@@ -25,6 +16,7 @@
     .pt-kpi { border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--card, #fff); height: 100%; }
     .pt-kpi .l { font-size: 12px; color: var(--text-muted); }
     .pt-kpi .v { font-size: 22px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1.2; }
+    .pt-sub { font-size: 11.5px; color: var(--text-muted); }
 </style>
 @endsection
 
@@ -32,17 +24,17 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Project Tracking</h1>
-        <p class="page-header-sub">Proses setiap project dari opportunity sampai penagihan, dihitung dari dokumen yang ada</p>
+        <p class="page-header-sub">The journey of every project from customer PO to invoice, in 9 stages calculated from existing documents and tasks.</p>
     </div>
 </div>
 
 <div class="row g-2 mb-3">
     @foreach([
-        ['Project aktif', $summary['active'], null],
-        ['Menunggu pembelian', $summary['purchasing'], null],
-        ['Tahap kirim (PKL / DO)', $summary['shipping'], null],
-        ['Belum ditagih penuh', $summary['unbilled'], null],
-        ['Lewat jatuh tempo', $summary['overdue'], '#b42318'],
+        ['Active projects', $summary['active'], null],
+        ['In purchasing (stages 2–5)', $summary['purchasing'], null],
+        ['In production & delivery (6–8)', $summary['shipping'], null],
+        ['Not fully billed', $summary['unbilled'], null],
+        ['Past due date', $summary['overdue'], '#b42318'],
     ] as [$label, $value, $color])
         <div class="col-6 col-md">
             <div class="pt-kpi"><div class="l">{{ $label }}</div><div class="v" @if($color && $value) style="color:{{ $color }}" @endif>{{ $value }}</div></div>
@@ -51,64 +43,54 @@
 </div>
 
 <div class="card-custom fade-in">
-    <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span><i class="fa-solid fa-route me-2" style="color:var(--accent)"></i>Daftar Project</span>
-        <div class="pt-legend">
-            <span><i class="pt-dot done"></i>Selesai</span>
-            <span><i class="pt-dot run"></i>Berjalan</span>
-            <span><i class="pt-dot late"></i>Terlambat</span>
-            <span><i class="pt-dot"></i>Belum mulai</span>
-            <span><i class="pt-dot na"></i>Tidak dipakai</span>
-        </div>
-    </div>
+    <div class="card-header-custom">Projects</div>
     <div class="card-body-custom p-2">
         <div class="list-toolbar" id="pt-toolbar">
             <div class="lt-search">
                 <i class="fa fa-magnifying-glass"></i>
-                <input type="search" class="form-control" data-search placeholder="Cari no. / nama project, customer…" autocomplete="off">
-                <button type="button" class="lt-clear" title="Hapus pencarian"><i class="fa fa-xmark"></i></button>
+                <input type="search" class="form-control" data-search placeholder="Search project no. / name, customer…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
             </div>
-            <select class="form-select" data-filter="status" aria-label="Status project">
-                <option value="active" selected>Project Active</option>
+            <select class="form-select" data-filter="status" aria-label="Project status">
+                <option value="active" selected>Active projects</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
-                <option value="">Semua Status</option>
+                <option value="">All statuses</option>
             </select>
             <select class="form-select" data-filter="company" data-searchable aria-label="Customer">
-                <option value="">Semua Customer</option>
+                <option value="">All customers</option>
                 @foreach($companies as $c)
                     <option value="{{ $c->id }}">{{ $c->account_name }}</option>
                 @endforeach
             </select>
-            <select class="form-select" data-filter="stage" aria-label="Tahap saat ini">
-                <option value="">Semua Tahap</option>
+            <select class="form-select" data-filter="stage" aria-label="Current stage">
+                <option value="">All stages</option>
                 @foreach(\App\Support\ProjectTracker::STAGES as $n => $name)
                     @continue($n === 1)
-                    <option value="{{ $n }}">Di tahap: {{ $name }}</option>
+                    <option value="{{ $n }}">At stage {{ $n }}: {{ $name }}</option>
                 @endforeach
-                <option value="done">Semua tahap selesai</option>
+                <option value="done">All stages done</option>
             </select>
-            <select class="form-select" data-filter="problem" aria-label="Peringatan">
-                <option value="">Semua</option>
-                <option value="1">Hanya yang bermasalah</option>
+            <select class="form-select" data-filter="problem" aria-label="Alerts">
+                <option value="">All projects</option>
+                <option value="1">With alerts only</option>
             </select>
-            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
         </div>
         <div class="table-responsive">
             <table id="pt-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
                     <tr>
                         <th>Project</th>
-                        <th title="1 Project · 2 Pembelian · 3 Terima Barang · 4 Produksi · 5 Packing List · 6 Delivery Order · 7 Invoice">Tahap 1–7</th>
-                        <th>Tahap Saat Ini</th>
-                        <th>Jatuh Tempo</th>
-                        <th style="width:140px">Ditagih / Diterima</th>
-                        <th>Peringatan</th>
+                        <th>Current Stage</th>
+                        <th>Due Date</th>
+                        <th style="width:140px">Billed / Collected</th>
+                        <th>Alerts</th>
                     </tr>
                 </thead>
             </table>
         </div>
-        <div class="px-2 pt-2" style="font-size:12px;color:var(--text-muted)"><i class="fa fa-circle-info me-1"></i>Arahkan kursor ke titik tahap untuk ringkasannya. Peringatan "tertahan" memakai batas {{ $alertDays }} hari.</div>
+        <div class="px-2 pt-2 pt-sub">Open a project to see its full 9-stage journey. "Stuck" alerts use a {{ $alertDays }}-day threshold.</div>
     </div>
 </div>
 @endsection
@@ -126,8 +108,14 @@ $(document).ready(function() {
     ptTable = $('#pt-table').DataTable({
         layout: ListToolbar.layout,
         language: {
-            zeroRecords: '<span style="color:var(--text-muted)"><i class="fa-solid fa-filter-circle-xmark me-1"></i>Tidak ada project yang cocok dengan pencarian / filter.</span>',
-            emptyTable: '<span style="color:var(--text-muted)"><i class="fa-solid fa-inbox me-1"></i>Tidak ada project.</span>'
+            processing: 'Loading…',
+            lengthMenu: 'Show _MENU_ rows',
+            info: 'Showing _START_–_END_ of _TOTAL_ projects',
+            infoEmpty: 'No projects',
+            infoFiltered: '(filtered from _MAX_)',
+            zeroRecords: '<span style="color:var(--text-muted)">No projects match the search / filters.</span>',
+            emptyTable: '<span style="color:var(--text-muted)">No projects.</span>',
+            paginate: { first: '«', previous: '‹', next: '›', last: '»' }
         },
         processing: true,
         serverSide: false,
@@ -139,28 +127,25 @@ $(document).ready(function() {
                 if (type !== 'display') return data + ' ' + row.project_name + ' ' + (row.customer || '');
                 return '<a href="' + row.url + '" class="fw-semibold text-decoration-none">' + ptEsc(data) + '</a>'
                     + '<div style="font-size:12px;color:var(--text-secondary)">' + ptEsc(row.project_name) + '</div>'
-                    + '<div style="font-size:11.5px;color:var(--text-muted)">' + ptEsc(row.customer || '—') + '</div>';
-            } },
-            { data: 'stages', orderable: false, className: 'pt-dots', render: function(stages, type) {
-                if (type !== 'display') return '';
-                return stages.map(function(s) {
-                    return '<i class="pt-dot ' + s.status + '" title="' + ptEsc(s.n + ' ' + s.name + ' — ' + s.status_label + ': ' + s.summary) + '"></i>';
-                }).join('');
+                    + '<div class="pt-sub">' + ptEsc(row.customer || '—') + '</div>';
             } },
             { data: 'current_label', render: function(data, type, row) {
-                if (type !== 'display') return data;
-                return '<span class="fw-semibold">' + ptEsc(data) + '</span>' + (row.current_summary ? '<div style="font-size:11.5px;color:var(--text-muted)">' + ptEsc(row.current_summary) + '</div>' : '');
+                if (type !== 'display') return row.current || 99;
+                return '<span class="fw-semibold">' + (row.current ? row.current + ' · ' : '') + ptEsc(data) + '</span>'
+                    + (row.current_since ? '<div class="pt-sub">since ' + ptEsc(row.current_since) + '</div>' : '')
+                    + (row.current_summary ? '<div class="pt-sub">' + ptEsc(row.current_summary) + '</div>' : '')
+                    + '<div class="pt-sub">' + row.progress.done + ' of ' + row.progress.total + ' stages done</div>';
             } },
             { data: 'due_days', render: function(data, type, row) {
                 if (type !== 'display') return data == null ? 999999 : data;
                 if (!row.due_date) return '<span style="color:var(--text-muted)">—</span>';
-                var note = data < 0 ? '<div style="font-size:11.5px;color:#b42318">lewat ' + Math.abs(data) + ' hari</div>' : '<div style="font-size:11.5px;color:var(--text-muted)">' + data + ' hari lagi</div>';
+                var note = data < 0 ? '<div class="pt-sub" style="color:#b42318">' + Math.abs(data) + ' day(s) past</div>' : '<div class="pt-sub">in ' + data + ' day(s)</div>';
                 return ptEsc(row.due_date) + note;
             } },
             { data: 'billed_pct', render: function(data, type, row) {
                 if (type !== 'display') return data;
                 return '<div class="pt-bar"><span class="billed" style="width:' + data + '%"></span><span class="paid" style="width:' + row.paid_pct + '%"></span></div>'
-                    + '<span style="font-size:11.5px;color:var(--text-muted)">' + data + '% / ' + row.paid_pct + '%</span>';
+                    + '<span class="pt-sub">' + data + '% / ' + row.paid_pct + '%</span>';
             } },
             { data: 'alerts', orderable: false, render: function(alerts, type) {
                 if (type !== 'display') return alerts.length;

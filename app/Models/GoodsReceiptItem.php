@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * Baris Penerimaan Barang dari baris PO atau baris Direct Purchase.
@@ -55,6 +56,26 @@ class GoodsReceiptItem extends Model
             'warranty_until' => 'date',
             'serial_numbers' => 'array',
         ];
+    }
+
+    /** Dipakai Document::storeFor(). */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable');
+    }
+
+    /** Foto barang ber-SN saat diterima (opsional, per baris item). */
+    public function photos(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable')->where('type', Document::TYPE_RECEIPT_PHOTO)->orderBy('id');
+    }
+
+    /** Foto hanya untuk barang ber-SN yang masuk gudang (bukan material, bukan Langsung Pakai). */
+    public function acceptsPhotos(): bool
+    {
+        return $this->destination === self::DESTINATION_WAREHOUSE
+            && $this->masterProduct !== null
+            && ! $this->masterProduct->isMaterial();
     }
 
     public function goodsReceipt(): BelongsTo

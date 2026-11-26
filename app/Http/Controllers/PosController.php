@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountCompany;
 use App\Models\Log;
 use App\Models\Pos;
 use App\Models\PosItem;
@@ -27,15 +28,20 @@ class PosController extends Controller
     {
         return view('pos.index', [
             'canCreate' => ModuleAccess::for(Auth::user())->module(Pos::MODULE_CODE)->canCreate(),
+            // Filter customer hanya berisi customer yang punya POS.
+            'companies' => AccountCompany::whereIn('id', Pos::whereNotNull('company_id')->select('company_id'))
+                ->orderBy('account_name')->get(['id', 'account_name']),
         ]);
     }
 
     public function data(Request $request): JsonResponse
     {
-        $query = Pos::with(['company', 'quotation', 'project', 'creator', 'items'])
-            ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
+        // Filter selain status; jumlah per status mengikuti filter ini.
+        $query = Pos::query()
+            ->when($request->input('company'), fn ($q, $company) => $q->where('company_id', $company))
             ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('date', '>=', $date))
-            ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('date', '<=', $date));
+            ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('date', '<=', $date))
+            ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', Auth::id()));
 
         $search = trim((string) $request->input('search.value', ''));
         if ($search !== '') {
@@ -46,26 +52,36 @@ class PosController extends Controller
                 ->orWhereHas('items', fn ($i) => $i->where('description', 'like', "%{$search}%")));
         }
 
+        $statusCounts = (clone $query)->toBase()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status')
+            ->map(fn ($total) => (int) $total);
+        $query->with(['company', 'quotation', 'project', 'creator'])->withCount('items')->when($request->input('status'), fn ($q, $status) => $q->where('status', $status));
+
         $recordsTotal = Pos::count();
         $recordsFiltered = (clone $query)->count();
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
-        $rows = $query->orderByDesc('id')->offset($start)->limit($length)->get();
+        // Yang perlu tindakan lebih dulu: menunggu approval, ditolak, draft, lalu disetujui.
+        $rows = $query->orderByRaw("CASE status WHEN 'waiting_approval' THEN 0 WHEN 'rejected' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END")
+            ->orderByDesc('id')->offset($start)->limit($length)->get();
 
         return response()->json([
             'draw' => (int) $request->input('draw'),
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
+            'status_counts' => collect(Pos::STATUS_LABELS)->map(fn ($label, $key) => $statusCounts[$key] ?? 0),
             'data' => $rows->map(fn (Pos $pos, $i) => [
                 'DT_RowIndex' => $start + $i + 1,
                 'id' => $pos->id,
                 'pos_number' => $pos->pos_number,
                 'date' => $pos->date?->format('d/m/Y'),
                 'company' => $pos->company?->account_name ?? '—',
-                'quotation' => $pos->quotation?->quotation_number ?? '—',
-                'item_count' => $pos->items->count(),
-                'grand_total' => Number::money($pos->grand_total),
-                'project' => $pos->project?->project_number ?? '—',
+                'quotation' => $pos->quotation?->quotation_number,
+                'quotation_url' => $pos->quotation_id ? route('quotation.show', $pos->quotation_id) : null,
+                'item_count' => $pos->items_count,
+                'grand_total' => 'Rp '.Number::money($pos->grand_total),
+                'requires_dp' => (bool) $pos->requires_dp,
+                'project' => $pos->project?->project_number,
+                'project_url' => $pos->project_id ? route('project.show', $pos->project_id) : null,
                 'creator' => $pos->creator?->display_name ?? '—',
                 'status' => $pos->status,
                 'status_badge' => $pos->statusBadgeHtml(),
@@ -85,7 +101,7 @@ class PosController extends Controller
     {
         $pos = Pos::with('items')->findOrFail($id);
 
-        abort_unless(in_array($pos->status, [Pos::STATUS_DRAFT, Pos::STATUS_REJECTED], true), 403, 'POS yang sudah diajukan/disetujui tidak bisa diubah.');
+        abort_unless(in_array($pos->status, [Pos::STATUS_DRAFT, Pos::STATUS_REJECTED], true), 403, 'A submitted or approved POS cannot be edited.');
 
         return view('pos.form', [
             'pos' => $pos,
@@ -154,14 +170,14 @@ class PosController extends Controller
 
         Log::record('create_pos', 'POS '.$pos->pos_number.' dibuat oleh '.Auth::user()->display_name, Pos::MODULE_CODE, $pos);
 
-        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' tersimpan sebagai Draft.', 'id' => $pos->id]);
+        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' saved as Draft.', 'id' => $pos->id]);
     }
 
     public function update(Request $request, $id): JsonResponse
     {
         $pos = Pos::findOrFail($id);
 
-        abort_unless(in_array($pos->status, [Pos::STATUS_DRAFT, Pos::STATUS_REJECTED], true), 403, 'POS yang sudah diajukan/disetujui tidak bisa diubah.');
+        abort_unless(in_array($pos->status, [Pos::STATUS_DRAFT, Pos::STATUS_REJECTED], true), 403, 'A submitted or approved POS cannot be edited.');
 
         $validated = $this->validateInput($request);
 
@@ -194,7 +210,7 @@ class PosController extends Controller
 
         Log::record('update_pos', 'POS '.$pos->pos_number.' diubah oleh '.Auth::user()->display_name, Pos::MODULE_CODE, $pos);
 
-        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' diperbarui.', 'id' => $pos->id]);
+        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' updated.', 'id' => $pos->id]);
     }
 
     public function show($id)
@@ -214,18 +230,18 @@ class PosController extends Controller
         $pos = Pos::with('items')->findOrFail($id);
 
         if (! in_array($pos->status, [Pos::STATUS_DRAFT, Pos::STATUS_REJECTED], true)) {
-            return response()->json(['success' => false, 'message' => 'POS ini tidak bisa diajukan.'], 422);
+            return response()->json(['success' => false, 'message' => 'This POS cannot be submitted.'], 422);
         }
 
         if ($pos->items->isEmpty()) {
-            return response()->json(['success' => false, 'message' => 'POS harus punya minimal satu item.'], 422);
+            return response()->json(['success' => false, 'message' => 'A POS must have at least one item.'], 422);
         }
 
         $pos->update(['status' => Pos::STATUS_WAITING_APPROVAL]);
 
         Log::record('submit_pos', 'POS '.$pos->pos_number.' diajukan untuk approval oleh '.Auth::user()->display_name, Pos::MODULE_CODE, $pos);
 
-        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' diajukan untuk approval.']);
+        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' submitted for approval.']);
     }
 
     public function approve($id): JsonResponse
@@ -233,7 +249,7 @@ class PosController extends Controller
         $pos = Pos::findOrFail($id);
 
         if (! $pos->isWaitingApproval()) {
-            return response()->json(['success' => false, 'message' => 'POS ini tidak sedang menunggu approval.'], 422);
+            return response()->json(['success' => false, 'message' => 'This POS is not waiting for approval.'], 422);
         }
 
         $pos->update([
@@ -244,17 +260,17 @@ class PosController extends Controller
 
         Log::record('approve_pos', 'POS '.$pos->pos_number.' disetujui oleh '.Auth::user()->display_name, Pos::MODULE_CODE, $pos);
 
-        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' disetujui.']);
+        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' approved.']);
     }
 
     public function reject(Request $request, $id): JsonResponse
     {
-        $validated = $request->validate(['reason' => 'required|string|max:255'], ['reason.required' => 'Alasan penolakan wajib diisi.']);
+        $validated = $request->validate(['reason' => 'required|string|max:255'], ['reason.required' => 'Rejection reason is required.']);
 
         $pos = Pos::findOrFail($id);
 
         if (! $pos->isWaitingApproval()) {
-            return response()->json(['success' => false, 'message' => 'POS ini tidak sedang menunggu approval.'], 422);
+            return response()->json(['success' => false, 'message' => 'This POS is not waiting for approval.'], 422);
         }
 
         $pos->update([
@@ -266,21 +282,21 @@ class PosController extends Controller
 
         Log::record('reject_pos', 'POS '.$pos->pos_number.' ditolak oleh '.Auth::user()->display_name.': '.$validated['reason'], Pos::MODULE_CODE, $pos);
 
-        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' ditolak.']);
+        return response()->json(['success' => true, 'message' => 'POS '.$pos->pos_number.' rejected.']);
     }
 
     public function destroy($id): JsonResponse
     {
         $pos = Pos::findOrFail($id);
 
-        abort_unless(in_array($pos->status, [Pos::STATUS_DRAFT, Pos::STATUS_REJECTED], true), 403, 'Hanya POS Draft/Rejected yang bisa dihapus.');
+        abort_unless(in_array($pos->status, [Pos::STATUS_DRAFT, Pos::STATUS_REJECTED], true), 403, 'Only Draft / Rejected POS can be deleted.');
 
         $number = $pos->pos_number;
         $pos->delete();
 
         Log::record('delete_pos', 'POS '.$number.' dihapus oleh '.Auth::user()->display_name, Pos::MODULE_CODE);
 
-        return response()->json(['success' => true, 'message' => 'POS '.$number.' dihapus.']);
+        return response()->json(['success' => true, 'message' => 'POS '.$number.' deleted.']);
     }
 
     private function validateInput(Request $request): array
@@ -299,10 +315,10 @@ class PosController extends Controller
             'items.*.unit' => 'nullable|string|max:50',
             'items.*.unit_price' => 'required|numeric|gte:0',
         ], [
-            'quotation_id.required' => 'POS wajib berbasis quotation. Pilih quotation terlebih dahulu.',
-            'items.required' => 'Minimal satu item wajib diisi.',
-            'items.*.description.required' => 'Deskripsi (penamaan customer) item wajib diisi.',
-            'items.*.qty.gt' => 'Qty item harus lebih dari 0.',
+            'quotation_id.required' => 'A POS must be based on a quotation. Select a quotation first.',
+            'items.required' => 'At least one item is required.',
+            'items.*.description.required' => 'Item description (customer naming) is required.',
+            'items.*.qty.gt' => 'Item qty must be greater than 0.',
         ]);
     }
 
@@ -312,7 +328,7 @@ class PosController extends Controller
         if (! $quotation?->profitEstimate) {
             throw new HttpResponseException(response()->json([
                 'success' => false,
-                'message' => 'Estimasi PL belum dibuat untuk quotation ini. Buat Profit Estimate terlebih dahulu.',
+                'message' => 'No Profit Estimate exists for this quotation yet. Create the Profit Estimate first.',
             ], 422));
         }
 
@@ -335,7 +351,7 @@ class PosController extends Controller
         if (abs($posTotal - $quotationTotal) > 1) {
             throw new HttpResponseException(response()->json([
                 'success' => false,
-                'message' => 'Grand total POS ('.Number::money($posTotal).') tidak sesuai dengan grand total quotation ('.Number::money($quotationTotal).'). Sesuaikan item, diskon, atau PPN agar sesuai quotation.',
+                'message' => 'POS grand total ('.Number::money($posTotal).') does not match the quotation grand total ('.Number::money($quotationTotal).'). Adjust the items, discount or VAT to match the quotation.',
             ], 422));
         }
     }

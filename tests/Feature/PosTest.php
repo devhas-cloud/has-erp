@@ -132,7 +132,7 @@ class PosTest extends TestCase
         // Setelah disetujui, tersedia tombol "Buat Project" (link ke form project).
         $this->actingAs($this->creator)->get(route('pos.show', $pos->id))
             ->assertOk()
-            ->assertSee('Buat Project');
+            ->assertSee('Create Project');
     }
 
     public function test_pos_requires_profit_estimate(): void
@@ -155,7 +155,7 @@ class PosTest extends TestCase
         $this->store($quotation, [
             ['description' => 'Panel', 'qty' => 1, 'unit' => 'Unit', 'unit_price' => 100],
         ])->assertStatus(422)->assertJsonFragment([
-            'message' => 'Estimasi PL belum dibuat untuk quotation ini. Buat Profit Estimate terlebih dahulu.',
+            'message' => 'No Profit Estimate exists for this quotation yet. Create the Profit Estimate first.',
         ]);
     }
 
