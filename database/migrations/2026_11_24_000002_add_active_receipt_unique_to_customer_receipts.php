@@ -44,6 +44,16 @@ return new class extends Migration
 
     public function down(): void
     {
+        // MySQL memakai unique ini sebagai index foreign key invoice_id (index bawaan FK
+        // dihapus otomatis saat unique dibuat). Buat lagi index FK-nya dulu agar unique bisa di-drop.
+        $hasFkIndex = collect(Schema::getIndexes('customer_receipts'))
+            ->contains(fn ($index) => $index['columns'] === ['invoice_id']);
+        if (! $hasFkIndex) {
+            Schema::table('customer_receipts', function (Blueprint $table) {
+                $table->index('invoice_id', 'customer_receipts_invoice_id_foreign');
+            });
+        }
+
         Schema::table('customer_receipts', function (Blueprint $table) {
             $table->dropUnique('customer_receipts_invoice_active_unique');
             $table->dropColumn('active_receipt');

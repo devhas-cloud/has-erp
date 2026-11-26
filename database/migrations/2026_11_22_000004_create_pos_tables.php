@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -63,6 +64,13 @@ return new class extends Migration
 
     public function down(): void
     {
+        // project_id kembali wajib: hentikan rollback sebelum ada yang berubah bila masih ada
+        // invoice tanpa project (invoice dari POS). Tangani / pindahkan invoice tsb lebih dulu.
+        $orphans = DB::table('invoices')->whereNull('project_id')->pluck('id');
+        if ($orphans->isNotEmpty()) {
+            throw new RuntimeException('Rollback POS dibatalkan: invoice tanpa project masih ada (id: '.$orphans->implode(', ').'). Hubungkan ke project atau hapus dulu.');
+        }
+
         Schema::table('invoices', function (Blueprint $table) {
             $table->dropForeign(['pos_id']);
             $table->dropColumn('pos_id');
