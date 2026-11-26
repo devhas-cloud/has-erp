@@ -125,6 +125,45 @@ class SupplierTaxReturnTest extends TestCase
         $this->actingAs($this->admin)->get(route('supplier-bill.edit', $id))->assertForbidden();
     }
 
+    public function test_material_return_leaves_at_receipt_cost_and_reaverages_balance(): void
+    {
+        // Penerimaan lewat GRN: 10 x 1.000 masuk saldo material gudang.
+        $item = $this->po->items()->first();
+        $this->actingAs($this->admin)->postJson(route('goods-receipt.store'), [
+            'source_type' => 'po', 'source_id' => $this->po->id, 'warehouse_id' => $this->warehouse->id,
+            'items' => [['source_line_id' => $item->id, 'qty' => 10, 'destination' => 'warehouse']],
+        ])->assertOk();
+        // Daftar & detail penerimaan: komposisi material, nilai masuk gudang, filter jenis.
+        $this->actingAs($this->admin)->getJson(route('goods-receipt.data', ['draw' => 1]))->assertOk()
+            ->assertJsonPath('data.0.material_lines', 1)->assertJsonPath('data.0.serial_units', 0)
+            ->assertJsonPath('data.0.stock_value', 10000);
+        $this->actingAs($this->admin)->getJson(route('goods-receipt.data', ['draw' => 1, 'kind' => 'serial']))->assertOk()->assertJsonPath('recordsFiltered', 0);
+        $this->actingAs($this->admin)->getJson(route('goods-receipt.data', ['draw' => 1, 'kind' => 'material']))->assertOk()->assertJsonPath('recordsFiltered', 1);
+        $receiptId = GoodsReceipt::value('id');
+        $this->actingAs($this->admin)->get(route('goods-receipt.show', $receiptId))->assertOk()->assertSee('Added to balance')->assertSee('Stock card');
+        $this->actingAs($this->admin)->get(route('goods-receipt.index'))->assertOk()->assertSee('Contains Materials');
+
+        // Stok lain produk sama (harga 4.000) melebur ke saldo yang sama -> rata-rata 2.500.
+        $row = $this->seedStock($this->warehouse->id, $this->product, 10, ['unit_cost' => 4000])->first();
+        $this->assertSame(1, Stock::count());
+        $this->assertEquals(2500, $row->fresh()->unit_cost);
+
+        $this->actingAs($this->admin)->postJson(route('supplier-return.store'), [
+            'purchase_order_id' => $this->po->id, 'warehouse_id' => $this->warehouse->id,
+            'return_date' => now()->toDateString(), 'reason' => 'Cacat produksi',
+            'items' => [['purchase_order_item_id' => $item->id, 'picks' => [['stock_id' => $row->id, 'qty' => 4]]]],
+        ])->assertOk();
+
+        // Retur keluar dengan harga penerimaan PO (1.000), bukan rata-rata 2.500.
+        $log = StockLog::where('type', StockLog::TYPE_RETURN_SUPPLIER)->firstOrFail();
+        $this->assertEquals(-4, $log->qty);
+        $this->assertEquals(1000, $log->unit_cost);
+        // Sisa 16 unit bernilai 50.000 - 4.000 = 46.000 -> rata-rata 2.875.
+        $row->refresh();
+        $this->assertEquals(16, $row->qty);
+        $this->assertEquals(2875, $row->unit_cost);
+    }
+
     public function test_return_reduces_received_billable_and_stock(): void
     {
         $this->receive(10);
@@ -144,17 +183,20 @@ class SupplierTaxReturnTest extends TestCase
         $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + $pick(5))->assertStatus(422);
         $this->actingAs($this->admin)->postJson(route('supplier-return.store'), array_merge($payload, ['reason' => '']) + $pick(3))->assertStatus(422);
 
-        // Baris stok yang bukan dari penerimaan PO ini ditolak.
-        $other = $this->seedStock($this->warehouse->id, $this->product, 5)->first();
+        // Baris stok produk lain ditolak (material = saldo gabungan produk yang sama).
+        $otherProduct = MasterProduct::create(['code' => 'PN-2', 'name' => 'Sensor DO', 'division_id' => $this->product->division_id, 'status' => 'Active', 'is_material' => true]);
+        $other = $this->seedStock($this->warehouse->id, $otherProduct, 5)->first();
         $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + ['items' => [['purchase_order_item_id' => $item->id, 'picks' => [['stock_id' => $other->id, 'qty' => 3]]]]])
             ->assertStatus(422);
+        // Stok masuk lain untuk produk yang sama melebur ke saldo yang sama.
+        $this->assertSame($row->id, $this->seedStock($this->warehouse->id, $this->product, 2)->first()->id);
 
         $id = $this->actingAs($this->admin)->postJson(route('supplier-return.store'), $payload + $pick(3))->assertOk()->json('id');
 
         $item = $item->fresh();
         $this->assertSame(7, $item->receivedQty());
         $this->assertSame(1, $item->billableQty());
-        $this->assertEquals(7, $row->fresh()->qty);
+        $this->assertEquals(9, $row->fresh()->qty);
         $this->assertDatabaseHas('stock_logs', ['type' => StockLog::TYPE_RETURN_SUPPLIER, 'qty' => -3, 'stock_id' => $row->id]);
         $this->assertDatabaseHas('supplier_return_items', ['supplier_return_id' => $id, 'stock_id' => $row->id, 'destination' => 'warehouse']);
         // PO kembali menunggu barang pengganti.

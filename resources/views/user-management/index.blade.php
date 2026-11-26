@@ -97,6 +97,10 @@ function initUsersTable() {
                         html += ' <span class="status-badge" style="background:var(--success-soft);color:#065f46;font-size:10.5px" title="Dipantau di Dashboard Task Planner">'
                             + '<i class="fa-solid fa-briefcase" style="font-size:9px"></i> Salesperson</span>';
                     }
+                    if (row.intern) {
+                        html += ' <span class="status-badge" style="background:#fef3c7;color:#92400e;font-size:10.5px" title="Akun magang">'
+                            + '<i class="fa-solid fa-graduation-cap" style="font-size:9px"></i> Magang</span>';
+                    }
                     if (row.branch_name) {
                         html += '<div style="font-size:11.5px;color:var(--text-muted)"><i class="fa-solid fa-code-branch" style="font-size:10px"></i> ' + $('<div>').text(row.branch_name).html() + '</div>';
                     }

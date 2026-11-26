@@ -16,6 +16,7 @@
 return [
     // Admin
     'projects' => 'PRJ',
+    'pos' => 'SO',                 // Point of Sale (Sales Order)
 
     // Purchasing
     'goods_requests' => 'PR',      // Purchase Requisition (Permintaan Barang)
@@ -36,6 +37,7 @@ return [
     'material_requests' => 'MR',   // Material Request (kebutuhan material project)
     'material_handovers' => 'MH',  // Material Handover (serah terima ke produksi)
     'productions' => 'MO',         // Manufacturing Order (produksi barang jadi)
+    'material_returns' => 'RMP',   // Return Material Produksi (retur material ke gudang)
 
     // Finance
     'invoices' => 'INV',           // Sales Invoice

@@ -28,6 +28,9 @@ class Stock extends Model
     /** Barang jadi hasil produksi (source_id = productions.id). */
     public const SOURCE_PRODUCTION = 'production';
 
+    /** Material kembali dari produksi (source_id = material_returns.id). */
+    public const SOURCE_PRODUCTION_RETURN = 'production_return';
+
     /** Selisih qty di bawah ini dianggap 0 (sisa pecahan desimal). */
     public const EPSILON = 0.00005;
 

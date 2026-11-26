@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * Tagihan Supplier (grup Finance, Tahap 1) — mengakui hutang dari PO dengan
@@ -142,7 +143,11 @@ class SupplierBillController extends Controller
     {
         $validated = $request->validate([
             'purchase_order_id' => 'required|integer|exists:purchase_orders,id',
-            'bill_id' => 'nullable|integer',
+            'bill_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('supplier_bills', 'id')->where('purchase_order_id', $request->integer('purchase_order_id')),
+            ],
         ]);
 
         $po = $this->loadPurchaseOrder((int) $validated['purchase_order_id']);
@@ -157,7 +162,8 @@ class SupplierBillController extends Controller
                 'currency' => $po->currencyCode(),
                 'base_currency' => Currency::baseName(),
                 'is_foreign' => $po->currencyCode() !== Currency::baseName(),
-                'default_rate' => Currency::rateOf($po->currencyCode()),
+                // Default kurs tagihan: kurs PO (kurs penerimaan per baris dipakai form bila tercatat).
+                'default_rate' => $po->exchangeRate(),
                 'discount_percent' => (float) $po->discount_percent,
                 'ppn_percent' => (float) $po->ppn_percent,
                 'payment_term_days' => $this->termDays($po),
@@ -187,7 +193,7 @@ class SupplierBillController extends Controller
         $this->ensureUniqueInvoice($po->supplier_id, $validated['supplier_invoice_number']);
 
         $bill = DB::transaction(function () use ($validated, $po, $rows, $isAdvance) {
-            $bill = SupplierBill::create($this->headerAttributes($validated, $po) + [
+            $bill = SupplierBill::create($this->headerAttributes($validated, $po) + ['receipt_rate' => $this->receiptRateOf($po, $rows, [])] + [
                 'bill_number' => SupplierBill::generateNumber($validated['bill_date']),
                 'bill_type' => $validated['bill_type'],
                 'supplier_id' => $po->supplier_id,
@@ -255,7 +261,7 @@ class SupplierBillController extends Controller
         $this->ensureUniqueInvoice($po->supplier_id, $validated['supplier_invoice_number'], $bill->id);
 
         DB::transaction(function () use ($bill, $validated, $po, $rows) {
-            $bill->update($this->headerAttributes($validated, $po));
+            $bill->update($this->headerAttributes($validated, $po) + ['receipt_rate' => $this->receiptRateOf($po, $rows, $this->ownQty($bill->id))]);
             if ($bill->isAdvance()) {
                 $this->setAdvanceAmount($bill, (float) $validated['advance_amount']);
             } else {
@@ -462,6 +468,31 @@ class SupplierBillController extends Controller
     }
 
     /**
+     * Kurs rata-rata penerimaan barang yang ditagih, tertimbang nilai baris (FIFO per baris PO).
+     * null untuk tagihan base / uang muka / penerimaan tanpa kurs tercatat.
+     */
+    private function receiptRateOf(PurchaseOrder $po, array $rows, array $own): ?float
+    {
+        if ($po->currencyCode() === Currency::baseName()) {
+            return null;
+        }
+
+        $poItems = $po->items->keyBy('id');
+        $weighted = 0.0;
+        $amount = 0.0;
+        foreach ($rows as $row) {
+            $item = $poItems->get($row['purchase_order_item_id']);
+            $rate = $item?->receiptRate($item->billedQty() - (int) ($own[$item->id] ?? 0), (int) $row['qty']);
+            if ($rate) {
+                $weighted += $row['amount'] * $rate;
+                $amount += $row['amount'];
+            }
+        }
+
+        return $amount > 0 ? round($weighted / $amount, 6) : null;
+    }
+
+    /**
      * Baris barang + biaya tambahan (project = project barang bila semuanya satu project).
      */
     private function syncItems(SupplierBill $bill, array $rows, array $charges = [], ?float $pphBase = null): void
@@ -645,6 +676,8 @@ class SupplierBillController extends Controller
             'received' => $item->receivedQty(),
             'billed' => $item->billedQty() - (int) ($own[$item->id] ?? 0),
             'billable' => $item->billableQty() + (int) ($own[$item->id] ?? 0),
+            // Kurs penerimaan unit yang belum ditagih (FIFO) — default kurs tagihan.
+            'receipt_rate' => $item->receiptRate($item->billedQty() - (int) ($own[$item->id] ?? 0), $item->billableQty() + (int) ($own[$item->id] ?? 0)),
             'project_label' => ($request = $item->goodsRequest()) && $request->isForProject()
                 ? ($request->project?->project_number.' — '.$request->project?->project_name)
                 : 'Stok / Internal',

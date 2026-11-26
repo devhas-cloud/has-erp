@@ -12,6 +12,8 @@ use App\Models\PackingList;
 use App\Models\Project;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
+use App\Models\Task;
+use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
@@ -90,15 +92,53 @@ class ProjectTrackingTest extends TestCase
         $t = (new ProjectTracker)->forProject($project->fresh());
         $status = collect($t['stages'])->map(fn ($s) => $s['status'])->all();
         $this->assertSame([
-            1 => ProjectTracker::DONE, 2 => ProjectTracker::LATE, 3 => ProjectTracker::IDLE, 4 => ProjectTracker::NA,
-            5 => ProjectTracker::IDLE, 6 => ProjectTracker::IDLE, 7 => ProjectTracker::IDLE,
+            1 => ProjectTracker::DONE, 2 => ProjectTracker::LATE, 3 => ProjectTracker::IDLE, 4 => ProjectTracker::IDLE,
+            5 => ProjectTracker::IDLE, 6 => ProjectTracker::NA, 7 => ProjectTracker::IDLE, 8 => ProjectTracker::NA,
+            9 => ProjectTracker::IDLE,
         ], $status);
         $this->assertSame(2, $t['current']);
-        $this->assertStringContainsString('Approval PO Supplier 0/2', $t['alerts'][0][1]);
+        $this->assertStringContainsString('Supplier PO approval 0/2', $t['alerts'][0][1]);
 
         // Project baru (< batas hari) belum dianggap tertahan.
         $fresh = $this->project('26110002');
         $this->assertSame(ProjectTracker::IDLE, (new ProjectTracker)->forProject($fresh)['stages'][2]['status']);
+    }
+
+    public function test_incoming_quality_and_installation_follow_project_tasks(): void
+    {
+        $project = $this->project('26110009');
+        $iq = TaskCategory::create(['name' => 'Incoming Quality']);
+        $install = TaskCategory::create(['name' => 'Installasi']);
+
+        // Tanpa task Installasi -> tahap 8 tidak dipakai; tanpa task IQ -> belum mulai.
+        $t = (new ProjectTracker)->forProject($project);
+        $this->assertSame(ProjectTracker::IDLE, $t['stages'][5]['status']);
+        $this->assertSame(ProjectTracker::NA, $t['stages'][8]['status']);
+
+        $task = fn (TaskCategory $cat, string $status, string $due) => Task::create([
+            'creator_id' => $this->user->id, 'project_id' => $project->id, 'category_id' => $cat->id,
+            'title' => $cat->name.' '.$status, 'status' => $status, 'due_date' => $due,
+        ]);
+        $task($iq, 'done', '2026-11-10');
+        $task($iq, 'in_progress', '2026-12-31');
+        $late = $task($install, 'todo', '2026-11-01');
+
+        $t = (new ProjectTracker)->forProject($project->fresh());
+        $this->assertSame(ProjectTracker::RUN, $t['stages'][5]['status']);
+        $this->assertSame(50, $t['stages'][5]['progress']);
+        $this->assertStringContainsString('1 of 2 task(s) done', $t['stages'][5]['summary']);
+        $this->assertSame(ProjectTracker::LATE, $t['stages'][8]['status'], 'task Installasi lewat due date');
+        $this->assertNotNull($t['stages'][5]['start']);
+
+        Task::where('project_id', $project->id)->update(['status' => 'done']);
+        $t = (new ProjectTracker)->forProject($project->fresh());
+        $this->assertSame(ProjectTracker::DONE, $t['stages'][5]['status']);
+        $this->assertSame(ProjectTracker::DONE, $t['stages'][8]['status']);
+        $this->assertNotNull($t['stages'][8]['end']);
+
+        // Task batal diabaikan: tanpa task Installasi aktif -> tahap tidak dipakai lagi.
+        $late->update(['status' => Task::STATUS_CANCELLED]);
+        $this->assertSame(ProjectTracker::NA, (new ProjectTracker)->forProject($project->fresh())['stages'][8]['status']);
     }
 
     public function test_delivery_and_invoice_stages(): void
@@ -115,19 +155,20 @@ class ProjectTrackingTest extends TestCase
         $this->postedDo($project, [[$childA->id, 2], [$single->id, 2]]);
         $this->postedDo($project, [[$childB->id, 1]], DeliveryOrder::STATUS_DRAFT);
         $t = (new ProjectTracker)->forProject($project->fresh());
-        $this->assertSame(ProjectTracker::LATE, $t['stages'][6]['status'], 'lewat jatuh tempo & belum terkirim semua');
-        $this->assertSame(25, $t['stages'][6]['progress']);
-        $this->assertSame(ProjectTracker::NA, $t['stages'][5]['status'], 'DO langsung tanpa PKL');
+        $this->assertSame(ProjectTracker::LATE, $t['stages'][7]['status'], 'lewat jatuh tempo & belum terkirim semua');
+        $this->assertSame(25, $t['stages'][7]['progress']);
         $this->assertSame(ProjectTracker::NA, $t['stages'][2]['status'], 'tanpa pembelian tapi sudah ada DO');
-        $this->assertSame(ProjectTracker::NA, $t['stages'][3]['status']);
-        $this->assertStringContainsString('Lewat jatuh tempo 8 hari', collect($t['alerts'])->pluck(1)->implode('|'));
+        $this->assertSame(ProjectTracker::NA, $t['stages'][3]['status'], 'tanpa pembelian -> pembayaran tidak dipakai');
+        $this->assertSame(ProjectTracker::NA, $t['stages'][4]['status']);
+        $this->assertSame(ProjectTracker::NA, $t['stages'][5]['status'], 'tanpa barang diterima -> pengecekan tidak dipakai');
+        $this->assertStringContainsString('Past due date by 8 days', collect($t['alerts'])->pluck(1)->implode('|'));
 
         // Semua item Quotation terkirim -> selesai (aturan a).
         $this->postedDo($project, [[$childB->id, 1], [$single->id, 2]]);
         DeliveryOrder::where('status', DeliveryOrder::STATUS_DRAFT)->delete();
         $t = (new ProjectTracker)->forProject($project->fresh());
-        $this->assertSame(ProjectTracker::DONE, $t['stages'][6]['status']);
-        $this->assertSame(100, $t['stages'][6]['progress']);
+        $this->assertSame(ProjectTracker::DONE, $t['stages'][7]['status']);
+        $this->assertSame(100, $t['stages'][7]['progress']);
 
         // Invoice: DPP 1.000.000; 30% ditagih & lunas, 70% belum lunas lewat jatuh tempo.
         $invoice = fn (string $no, float $amount, string $status, string $due) => Invoice::create([
@@ -138,14 +179,15 @@ class ProjectTrackingTest extends TestCase
         $invoice('INV-1', 300000, Invoice::STATUS_PAID, '2026-10-30');
         $invoice('INV-2', 700000, Invoice::STATUS_UNPAID, '2026-11-01');
         $t = (new ProjectTracker)->forProject($project->fresh());
-        $this->assertSame(ProjectTracker::LATE, $t['stages'][7]['status']);
+        $this->assertSame(ProjectTracker::LATE, $t['stages'][9]['status']);
         $this->assertSame(100, $t['finance']['billed_pct']);
         $this->assertSame(30, $t['finance']['paid_pct']);
-        $this->assertSame(7, $t['current']);
+        $this->assertSame(9, $t['current']);
+        $this->assertSame('2026-10-15', $t['stages'][9]['start']->toDateString(), 'tanggal tahap invoice = invoice pertama');
 
         Invoice::where('invoice_number', 'INV-2')->update(['status' => Invoice::STATUS_PAID]);
         $t = (new ProjectTracker)->forProject($project->fresh());
-        $this->assertSame(ProjectTracker::DONE, $t['stages'][7]['status']);
+        $this->assertSame(ProjectTracker::DONE, $t['stages'][9]['status']);
     }
 
     public function test_stock_rule_packing_list_and_pages(): void
@@ -157,36 +199,35 @@ class ProjectTrackingTest extends TestCase
 
         // Stok project lama tanpa PKL / DO + unit tanpa SN -> peringatan.
         $alerts = collect((new ProjectTracker)->forProject($project)['alerts'])->pluck(1)->implode('|');
-        $this->assertStringContainsString('belum ber-SN', $alerts);
-        $this->assertStringContainsString('siap tapi belum dikirim', $alerts);
+        $this->assertStringContainsString('without SN', $alerts);
+        $this->assertStringContainsString('ready but not delivered', $alerts);
 
-        // PKL Siap Kirim -> tahap 5 berjalan.
+        // PKL Siap Kirim -> tahap 7 (Delivery) berjalan.
         PackingList::create(['packing_number' => 'PKL-26110001', 'project_id' => $project->id, 'warehouse_id' => $this->warehouse->id, 'packing_date' => '2026-11-18', 'status' => PackingList::STATUS_READY, 'recipient_name' => 'PT Maju']);
         $t = (new ProjectTracker)->forProject($project->fresh());
-        $this->assertSame(ProjectTracker::RUN, $t['stages'][5]['status']);
-        $this->assertStringNotContainsString('siap tapi belum dikirim', collect($t['alerts'])->pluck(1)->implode('|'));
+        $this->assertSame(ProjectTracker::RUN, $t['stages'][7]['status']);
+        $this->assertStringNotContainsString('ready but not delivered', collect($t['alerts'])->pluck(1)->implode('|'));
 
-        // Aturan b: DO terposting, stok habis, PKL terkirim -> tahap 5 & 6 selesai (tanpa Quotation).
+        // Aturan b: DO terposting, stok habis, PKL terkirim -> tahap 7 selesai (tanpa Quotation).
         $this->postedDo($project, [[null, 1]]);
         PackingList::query()->update(['status' => PackingList::STATUS_SHIPPED]);
         app(\App\Services\StockService::class)->updateDetails($unit->fresh(), ['serial_number' => 'SN-1'], ['note' => 'sn']);
         app(\App\Services\StockService::class)->take($unit->fresh(), 1, \App\Models\StockLog::TYPE_OUT, ['note' => 'kirim']);
         $t = (new ProjectTracker)->forProject($project->fresh());
-        $this->assertSame(ProjectTracker::DONE, $t['stages'][5]['status']);
-        $this->assertSame(ProjectTracker::DONE, $t['stages'][6]['status']);
-        $this->assertNull($t['stages'][6]['progress']);
+        $this->assertSame(ProjectTracker::DONE, $t['stages'][7]['status']);
+        $this->assertNull($t['stages'][7]['progress']);
 
         // Halaman: daftar (default Active), filter, dan kartu di detail project.
         $this->project('26110005', ['status' => Project::STATUS_COMPLETED]);
-        $this->actingAs($this->user)->get(route('project-tracking.index'))->assertOk()->assertSee('Project aktif');
+        $this->actingAs($this->user)->get(route('project-tracking.index'))->assertOk()->assertSee('Active projects');
         $rows = $this->actingAs($this->user)->getJson(route('project-tracking.data'))->assertOk()->json('data');
         $this->assertSame(['26110004'], array_column($rows, 'project_number'));
         $this->assertCount(2, $this->actingAs($this->user)->getJson(route('project-tracking.data', ['status' => '']))->json('data'));
-        $this->assertSame([], $this->actingAs($this->user)->getJson(route('project-tracking.data', ['stage' => 6]))->json('data'));
+        $this->assertSame([], $this->actingAs($this->user)->getJson(route('project-tracking.data', ['stage' => 6]))->json('data'), 'tidak ada project di tahap Production');
         $this->assertSame(route('project-tracking.show', $project->id), $rows[0]['url']);
         $this->actingAs($this->user)->get(route('project-tracking.show', $project->id))->assertOk()
-            ->assertSee('Linimasa Tahap')->assertSee('DO-2611')
-            ->assertSee('Ringkasan Project')->assertSee('PO-26110004')->assertSee('Belum ada termin penagihan.')->assertSee(route('project.show', $project->id), false);
+            ->assertSee('Stage Timeline')->assertSee('Project Journey')->assertSee('DO-2611')->assertSee('PKL-26110001')
+            ->assertSee('Project Summary')->assertSee('PO-26110004')->assertSee('No billing terms yet.')->assertSee(route('project.show', $project->id), false);
         // Detail project tidak lagi memuat tracking.
         $this->actingAs($this->admin)->get(route('project.show', $project->id))->assertOk()->assertDontSee('Linimasa Tahap');
     }
@@ -206,10 +247,10 @@ class ProjectTrackingTest extends TestCase
 
         $t = (new ProjectTracker)->forProject($project->fresh());
         $this->assertSame(ProjectTracker::DONE, $t['stages'][2]['status']);
-        $this->assertSame(ProjectTracker::LATE, $t['stages'][3]['status'], 'DP disetujui > 14 hari, barang belum datang');
-        $this->assertSame(0, $t['stages'][3]['progress']);
+        $this->assertSame(ProjectTracker::LATE, $t['stages'][4]['status'], 'DP disetujui > 14 hari, barang belum datang');
+        $this->assertSame(0, $t['stages'][4]['progress']);
         $this->assertSame(3, $t['current']);
-        $this->assertStringContainsString('belum datang', collect($t['alerts'])->pluck(1)->implode('|'));
+        $this->assertStringContainsString('not arrived', collect($t['alerts'])->pluck(1)->implode('|'));
         $this->assertSame([route('direct-purchase.show', $dp->id)], collect($t['stages'][2]['docs'])->pluck(1)->all());
     }
 }

@@ -82,7 +82,7 @@ class PayableDueReminderTest extends TestCase
         $this->assertSame('already_sent', $notifier->send()['status']);
         $this->actingAs($this->admin)->postJson(route('finance-notification.send', 'payable'))->assertOk()->assertJsonPath('success', true);
 
-        $this->actingAs($this->admin)->get(route('payable-report.index'))->assertOk()->assertSee('Pengingat Jatuh Tempo')->assertSee('Aktif · setiap hari 08:05')
+        $this->actingAs($this->admin)->get(route('payable-report.index'))->assertOk()->assertSee('Due date reminder (WhatsApp)')->assertSee('Active · daily at 08:05')
             ->assertSee(route('finance-notification.index'), false)->assertDontSee('Simpan Pengaturan');
         $this->actingAs($this->admin)->get(route('finance-notification.index'))->assertOk()->assertSee('Pengingat Hutang Supplier')->assertSee('Finance HAS');
         $this->artisan('finance:send-due-reminders', ['--preview' => true])->expectsOutputToContain('Pengingat Hutang Supplier')->assertSuccessful();

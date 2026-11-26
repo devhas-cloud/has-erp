@@ -156,6 +156,7 @@ class PurchaseOrderController extends Controller
             ]);
 
             $this->syncItems($po, $validated['items'] ?? []);
+            $this->syncExchangeRate($po, $validated['exchange_rate'] ?? null);
 
             return $po;
         }));
@@ -258,6 +259,7 @@ class PurchaseOrderController extends Controller
             ]);
 
             $this->syncItems($purchaseOrder, $validated['items'] ?? []);
+            $this->syncExchangeRate($purchaseOrder, $validated['exchange_rate'] ?? null);
         });
 
         return response()->json([
@@ -512,6 +514,18 @@ class PurchaseOrderController extends Controller
         return response()->json(['success' => true, 'data' => $data, 'projects' => $projects]);
     }
 
+    /**
+     * Kurs PO ditetapkan saat PO dibuat / diubah (Draft): valas = isian form, default kurs master;
+     * mata uang dasar -> NULL. Penerimaan barang memakai kurs ini.
+     */
+    private function syncExchangeRate(PurchaseOrder $po, $rate): void
+    {
+        $code = $po->load('items')->currencyCode();
+        $foreign = $code !== Currency::baseName();
+
+        $po->update(['exchange_rate' => $foreign ? round((float) ($rate ?: Currency::rateOf($code)), 6) : null]);
+    }
+
     private function validatePurchaseOrder(Request $request): array
     {
         $validated = $request->validate([
@@ -529,6 +543,7 @@ class PurchaseOrderController extends Controller
             'your_ref' => 'nullable|string|max:100',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
             'ppn_percent' => 'nullable|numeric|min:0|max:100',
+            'exchange_rate' => 'nullable|numeric|gt:0',
             'notes' => 'nullable|string',
             'request_by_name' => 'nullable|string|max:150',
             'finance_name' => 'nullable|string|max:150',

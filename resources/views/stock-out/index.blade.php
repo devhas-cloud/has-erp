@@ -67,7 +67,7 @@
     </div>
 </div>
 
-<div class="so-stats fade-in" id="so-stats">
+<div class="so-stats fade-in" id="so-stats" style="display: none">
     <button type="button" class="so-stat" data-coverage="">
         <div class="so-stat-num">{{ $stats['all'] }}</div>
         <div class="so-stat-label"><span class="so-dot" style="background:var(--accent)"></span>Semua item menunggu</div>

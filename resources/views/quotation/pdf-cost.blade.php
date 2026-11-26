@@ -315,7 +315,7 @@
                 </td>
                 <td>
                     <div class="name">
-                        {{ $quotation->salesNames() ?: '________' }}<br>
+                        {{ $quotation->printSalesNames() ?: '________' }}<br>
                         <span class="phone">{{ $quotation->contact_phone ?? '' }}</span>
                     </div>
                 </td>

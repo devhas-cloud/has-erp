@@ -776,7 +776,7 @@
     </div>
     <div class="card-body-custom">
         <div class="row g-3">
-            @foreach([['Komitmen (PO/DP)', $pc['commitment']], ['Diterima', $pc['received']], ['Ditagih', $pc['billed']], ['Terbayar', $pc['paid']], ['Alokasi Stok', $pc['stock_allocated']], ['Total Biaya', $pc['actual']], ['Estimasi Biaya (PL)', $pc['estimate']]] as [$label, $value])
+            @foreach([['Komitmen (PO/DP)', $pc['commitment']], ['Diterima', $pc['received']], ['Ditagih', $pc['billed']], ['Terbayar', $pc['paid']], ['Alokasi Stok', $pc['stock_allocated']], ['Selisih Kurs', abs($pc['fx']) >= 0.01 ? $pc['fx'] : null], ['Total Biaya', $pc['actual']], ['Estimasi Biaya (PL)', $pc['estimate']]] as [$label, $value])
                 <div class="col-6 col-md-3">
                     <div class="pj-label">{{ $label }}</div>
                     <div class="fw-semibold" style="font-variant-numeric:tabular-nums">{{ $value !== null ? $fmt($value) : '—' }}</div>

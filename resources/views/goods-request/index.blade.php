@@ -20,7 +20,6 @@
     @if($canCreate ?? false)
     <div class="page-header-actions">
         <a href="{{ route('goods-request.create') }}" class="btn-accent">
-            <i class="fa fa-plus"></i>
             <span>New Purchase Request</span>
         </a>
     </div>
@@ -29,7 +28,7 @@
 
 <div class="card-custom fade-in">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span><i class="fa-solid fa-dolly me-2" style="color:var(--accent)"></i>Purchase Request List</span>
+        <span>Purchase Request List</span>
     </div>
     <div class="card-body-custom p-2">
         <div class="list-toolbar" id="gr-toolbar">
@@ -75,7 +74,7 @@
                 <option value="">All Requesters</option>
                 <option value="1">Created by Me</option>
             </select>
-            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled><i class="fa fa-rotate-left me-1"></i>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
         </div>
         <div class="table-responsive">
             <table id="gr-table" class="table table-custom align-middle mb-0" style="width:100%">
@@ -141,8 +140,8 @@ function initGrTable() {
                 render: function(data, type, row) {
                     var html = '<div class="gr-cell-main">' + grEsc(data) + '</div>';
                     html += '<div style="font-size:13px">' + grEsc(row.project_name) + '</div>';
-                    if (row.purpose === 'internal') html += '<div class="gr-cell-sub"><i class="fa fa-warehouse me-1"></i>Purpose: stock / internal</div>';
-                    if (row.opportunity_name) html += '<div class="gr-cell-sub"><i class="fa fa-bullseye me-1"></i>' + grEsc(row.opportunity_name) + '</div>';
+                    if (row.purpose === 'internal') html += '<div class="gr-cell-sub">Purpose: stock / internal</div>';
+                    if (row.opportunity_name) html += '<div class="gr-cell-sub">' + grEsc(row.opportunity_name) + '</div>';
                     return html;
                 }
             },
@@ -167,12 +166,12 @@ function initGrTable() {
                 render: function(data, type, row) {
                     if (row.status === 'waiting_approval') {
                         var progress = row.required_approvals > 1 ? ' ' + row.approval_count + '/' + row.required_approvals : '';
-                        return data + '<div class="gr-cell-sub mt-1"><i class="fa fa-user-check me-1"></i>Awaiting approval' + progress + '</div>';
+                        return data + '<div class="gr-cell-sub mt-1">Awaiting approval' + progress + '</div>';
                     }
                     if (row.fulfillment) {
                         var labels = { none: 'Not processed', partial: 'Partially fulfilled', done: 'Fulfilled' };
                         var colors = { none: '#6b7280', partial: '#b45309', done: '#166534' };
-                        return data + '<div class="gr-cell-sub mt-1" style="color:' + colors[row.fulfillment] + '"><i class="fa fa-boxes-stacked me-1"></i>' + labels[row.fulfillment] + '</div>';
+                        return data + '<div class="gr-cell-sub mt-1" style="color:' + colors[row.fulfillment] + '">' + labels[row.fulfillment] + '</div>';
                     }
                     return data;
                 }

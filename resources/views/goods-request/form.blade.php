@@ -117,6 +117,7 @@
     .gr-pp-footer-info { font-size: 12.5px; color: var(--text-muted); }
     .gr-pp-pager .page-link { font-size: 12.5px; padding: 3px 9px; }
     .gr-pp-selected-badge { font-size: 11.5px; background: #d1fae5 !important; color: #065f46 !important; border: 1px solid #a7f3d0; border-radius: 999px; }
+    .gr-added-tag { font-size: 10.5px; font-weight: 600; color: var(--accent); white-space: nowrap; }
 </style>
 @endsection
 
@@ -128,7 +129,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ $goodsRequest ? route('goods-request.show', $goodsRequest->id) : route('goods-request.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Back
+            Back
         </a>
     </div>
 </div>
@@ -137,16 +138,16 @@
     <div class="col-xl-9">
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Request Information</span>
+                <span>Request Information</span>
             </div>
             <div class="card-body-custom">
                 @php $purposeValue = $purpose ?? \App\Models\GoodsRequest::PURPOSE_PROJECT; @endphp
                 <label class="form-label">Request Purpose <span class="text-danger">*</span></label>
                 <div class="gr-purpose mb-3">
                     <input type="radio" name="gr-purpose" id="gr-purpose-project" value="project" @checked($purposeValue === 'project') @disabled($goodsRequest)>
-                    <label for="gr-purpose-project"><strong><i class="fa-solid fa-diagram-project me-1"></i> Project</strong>Items for a customer project, to be allocated to the project.</label>
+                    <label for="gr-purpose-project"><strong>Project</strong>Items for a customer project, to be allocated to the project.</label>
                     <input type="radio" name="gr-purpose" id="gr-purpose-internal" value="internal" @checked($purposeValue === 'internal') @disabled($goodsRequest)>
-                    <label for="gr-purpose-internal"><strong><i class="fa-solid fa-warehouse me-1"></i> Stock / Internal</strong>Restock or internal needs, without a project.</label>
+                    <label for="gr-purpose-internal"><strong>Stock / Internal</strong>Restock or internal needs, without a project.</label>
                 </div>
                 <div class="row g-3">
                     <div class="col-lg-7 gr-project-field">
@@ -169,7 +170,7 @@
                         @if($goodsRequest)
                             <input type="hidden" id="gr-project-id-hidden" value="{{ $goodsRequest->project_id }}">
                             <input type="hidden" id="gr-opportunity-id-hidden" value="{{ $goodsRequest->opportunity()?->id }}">
-                            <small class="gr-hint"><i class="fa fa-lock me-1"></i>The project cannot be changed after the purchase request is created.</small>
+                            <small class="gr-hint">The project cannot be changed after the purchase request is created.</small>
                         @else
                             <small class="gr-hint">Only active projects whose PO Supplier Approval has been approved by 2 approvers.</small>
                         @endif
@@ -189,15 +190,15 @@
         <div class="card-custom fade-in">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>
-                    <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Items
+                    Items
                     <span class="gr-chip ms-1" id="gr-items-count">0 item</span>
                 </span>
                 <div class="d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-soft btn-sm" id="gr-btn-pick" disabled title="Only for projects with a quotation">
-                        <i class="fa fa-cart-plus me-1"></i> Add from Configuration
+                        Add from Configuration
                     </button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="grOpenProductPicker()">
-                        <i class="fa fa-magnifying-glass me-1"></i> Add from Catalog
+                        Add from Catalog
                     </button>
                 </div>
             </div>
@@ -219,18 +220,18 @@
                     </table>
                 </div>
                 <div class="config-card-empty" id="gr-items-empty">
-                    <i class="fa-solid fa-inbox"></i> No items yet.
+                    No items yet.
                     <div class="gr-empty-actions">
                         <button type="button" class="btn btn-soft btn-sm" id="gr-empty-pick" onclick="grLoadPicker()">
-                            <i class="fa fa-cart-plus me-1"></i> Add from Configuration
+                            Add from Configuration
                         </button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="grOpenProductPicker()">
-                            <i class="fa fa-magnifying-glass me-1"></i> Search Catalog
+                            Search Catalog
                         </button>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center px-2 pt-2" id="gr-items-footer" style="display:none !important">
-                    <small class="gr-hint"><i class="fa fa-circle-info me-1"></i>Every item must be linked to a master product so it can be fulfilled from stock, ordered via PO, and received into the warehouse.</small>
+                    <small class="gr-hint">Every item must be linked to a master product so it can be fulfilled from stock, ordered via PO, and received into the warehouse.</small>
                     <small class="gr-hint">Descriptions can be formatted: <b>Ctrl+B</b> bold, <i>Ctrl+I</i> italic.</small>
                 </div>
             </div>
@@ -240,7 +241,7 @@
     <div class="col-xl-3">
         <div class="card-custom fade-in gr-summary-sticky">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-clipboard-check me-2" style="color:var(--accent)"></i>Summary</span>
+                <span>Summary</span>
             </div>
             <div class="card-body-custom">
                 <div class="gr-summary-row"><span class="lbl">Items</span><span class="val" id="gr-sum-items">0</span></div>
@@ -250,10 +251,10 @@
                 <div class="gr-summary-row"><span class="lbl"><span class="gr-chip danger">No product yet</span></span><span class="val" id="gr-sum-manual">0</span></div>
 
                 <button type="button" class="btn btn-primary w-100 mt-3" id="gr-save-btn" onclick="grSave()">
-                    <i class="fa fa-save me-1"></i> Save {{ $goodsRequest ? 'Changes' : 'Draft' }}
+                    Save {{ $goodsRequest ? 'Changes' : 'Draft' }}
                 </button>
                 <div class="gr-summary-note">
-                    <i class="fa-solid fa-circle-info me-1"></i>
+                    
                     Saved as <strong>Draft</strong>. Submit for approval from the detail page once the items are complete.
                 </div>
             </div>
@@ -268,7 +269,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-cart-plus me-2" style="color:var(--accent)"></i>Add Items from Configuration</h6>
+                <h6 class="modal-title">Add Items from Configuration</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -285,7 +286,7 @@
                     <span class="gr-picker-selcount" id="gr-picker-selcount">No items selected</span>
                     <button type="button" class="btn btn-link btn-sm p-0" id="gr-picker-clear" style="display:none">Clear selection</button>
                 </div>
-                <small class="d-block mb-3" style="color:var(--text-muted)"><i class="fa fa-hand-pointer me-1"></i>Click a row to select it, Shift+click to select a range, click a configuration header to select all of it. Items are ordered by parent → child hierarchy.</small>
+                <small class="d-block mb-3" style="color:var(--text-muted)">Click a row to select it, Shift+click to select a range, click a configuration header to select all of it. Items are ordered by parent → child hierarchy.</small>
                 <div id="gr-picker-body">
                     <div class="config-card-empty"><span class="config-spinner"></span>Loading...</div>
                 </div>
@@ -293,7 +294,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="gr-picker-apply" onclick="grApplyPicked()" disabled>
-                    <i class="fa fa-plus me-1"></i> <span id="gr-picker-apply-label">Add Selected</span>
+                    <span id="gr-picker-apply-label">Add Selected</span>
                 </button>
             </div>
         </div>
@@ -304,7 +305,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Add from Product Catalog</h6>
+                <h6 class="modal-title">Add from Product Catalog</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -344,7 +345,7 @@
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2">
                     <div class="d-flex align-items-center gap-2 gr-pp-footer-info">
-                        Tampilkan
+                        Show
                         <select id="gr-product-per-page" class="form-select form-select-sm" style="width:auto">
                             <option value="10">10</option>
                             <option value="15" selected>15</option>
@@ -357,11 +358,11 @@
                 </div>
             </div>
             <div class="modal-footer justify-content-between">
-                <small class="gr-hint"><i class="fa fa-circle-info me-1"></i>Item not in the catalog? Add it to Master Product first.</small>
+                <small class="gr-hint">Item not in the catalog? Add it to Master Product first.</small>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary btn-sm" id="gr-product-apply" onclick="grApplyProductPicked()" disabled>
-                        <i class="fa fa-plus me-1"></i> Add <span id="gr-product-apply-count">0</span> Item(s)
+                        Add <span id="gr-product-apply-count">0</span> Item(s)
                     </button>
                 </div>
             </div>
@@ -487,7 +488,7 @@ function grCurrencyCell(item, source) {
     if (source !== 'manual') {
         return '<input type="hidden" class="gr-currency" value="' + grEsc(currency) + '">'
             + '<span class="gr-chip" style="margin-top:6px" title="Follows the ' + (source === 'config' ? 'configuration' : 'catalog') + '; cannot be changed">'
-            + '<i class="fa fa-lock" style="font-size:9px"></i> ' + grEsc(currency) + '</span>';
+            + grEsc(currency) + '</span>';
     }
     var html = '<select class="form-select form-select-sm gr-currency">';
     (grCurrencies.length ? grCurrencies : [grBaseCurrency]).forEach(function(c) {
@@ -501,11 +502,11 @@ function grProductCell(item) {
     if (item.master_product_id) {
         return '<div class="gr-product-cell"><div style="font-weight:600;font-size:13px">' + grEsc(item.part_number || '—') + '</div>'
             + '<div class="gr-hint">' + grEsc(item.product_name || '') + '</div>'
-            + '<a href="javascript:void(0)" class="gr-product-link" onclick="grPickProductForRow(this)"><i class="fa fa-arrows-rotate me-1"></i>Change product</a></div>';
+            + '<a href="javascript:void(0)" class="gr-product-link" onclick="grPickProductForRow(this)">Change product</a></div>';
     }
     return '<div class="gr-product-cell"><div style="font-size:12.5px">' + grEsc(item.part_number || '—') + '</div>'
-        + '<span class="gr-chip danger mb-1"><i class="fa fa-triangle-exclamation"></i> Not linked to a product</span><br>'
-        + '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 mt-1" onclick="grPickProductForRow(this)"><i class="fa fa-magnifying-glass me-1"></i>Select product</button></div>';
+        + '<span class="gr-chip danger mb-1">Not linked to a product</span><br>'
+        + '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 mt-1" onclick="grPickProductForRow(this)">Select product</button></div>';
 }
 
 function grRowHtml(item) {
@@ -663,20 +664,20 @@ function grLoadPicker() {
             grPickerPool = res.data || [];
             var hidden = res.hidden_count || 0;
             var hiddenNote = hidden
-                ? '<div class="gr-hint mb-2"><i class="fa fa-eye-slash me-1"></i>' + hidden + ' configuration item(s) hidden because they are already requested in another Purchase Request.</div>'
+                ? '<div class="gr-hint mb-2">' + hidden + ' configuration item(s) hidden because they are already requested in another Purchase Request.</div>'
                 : '';
             if (grPickerPool.length === 0) {
-                $('#gr-picker-body').html(hiddenNote + '<div class="config-card-empty"><i class="fa-solid fa-inbox"></i>'
+                $('#gr-picker-body').html(hiddenNote + '<div class="config-card-empty">'
                     + (hidden ? 'All configuration items have already been requested.' : 'No approved configuration items for this opportunity yet.') + '</div>');
                 grPickerSync();
                 return;
             }
             $('#gr-picker-body').html(hiddenNote + grBuildPickerGroupsHtml(grPickerPool)
-                + '<div class="config-card-empty" id="gr-picker-noresult" style="display:none"><i class="fa-solid fa-magnifying-glass"></i>No items match the search.</div>');
+                + '<div class="config-card-empty" id="gr-picker-noresult" style="display:none">No items match the search.</div>');
             grPickerSync();
         })
         .fail(function() {
-            $('#gr-picker-body').html('<div class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load items.</div>');
+            $('#gr-picker-body').html('<div class="config-card-empty">Failed to load items.</div>');
         });
 }
 
@@ -733,7 +734,7 @@ function grBuildPickerGroupsHtml(pool) {
             html += '<tr class="gr-picker-item-row' + (isAdded ? ' is-added' : '') + '" data-group="' + divGroup + '" data-search="' + grEsc(searchText) + '"'
                 + (isAdded ? ' title="Already in the list"' : '') + '>';
             html += '<td>' + (isAdded
-                ? '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>'
+                ? '<span class="gr-added-tag" title="Already in the list">Added</span>'
                 : '<input type="checkbox" class="gr-picker-check" data-idx="' + idx + '" aria-label="Select item">') + '</td>';
             html += '<td>' + grEsc(it.item_no || '') + '</td>';
             html += '<td style="padding-left:' + pad + 'px">' + grEsc(it.part_number || '—') + '</td>';
@@ -861,7 +862,7 @@ function grRenderProductPool(meta) {
     var added = grExistingIds('data-product-id');
 
     if (grProductPool.length === 0) {
-        $('#gr-product-body').html('<tr><td colspan="4" class="config-card-empty"><i class="fa-solid fa-inbox"></i>No products found. Try other keywords or filters.</td></tr>');
+        $('#gr-product-body').html('<tr><td colspan="4" class="config-card-empty">No products found. Try other keywords or filters.</td></tr>');
     } else {
         var html = '';
         grProductPool.forEach(function(p, idx) {
@@ -872,12 +873,12 @@ function grRenderProductPool(meta) {
 
             html += '<tr data-idx="' + idx + '" class="' + (isAdded ? 'is-added' : (isSelected ? 'is-selected' : '')) + '">';
             html += '<td class="text-center">' + (isAdded
-                ? '<i class="fa fa-check" style="color:var(--accent)" title="Already in the list"></i>'
+                ? '<span class="gr-added-tag" title="Already in the list">Added</span>'
                 : '<input type="checkbox" class="gr-product-check" data-idx="' + idx + '"' + (isSelected ? ' checked' : '') + '>') + '</td>';
             html += '<td style="font-size:12.5px">' + grEsc(p.code || '—') + '</td>';
             html += '<td><div class="gr-pp-name">' + grEsc(p.name || desc || '—') + (isAdded ? ' <span class="gr-existing-badge">Already added</span>' : '') + '</div>';
             if (desc && desc !== p.name) html += '<div class="gr-pp-desc">' + grEsc(desc) + '</div>';
-            if (meta) html += '<div class="gr-pp-meta"><i class="fa fa-tag me-1"></i>' + grEsc(meta) + '</div>';
+            if (meta) html += '<div class="gr-pp-meta">' + grEsc(meta) + '</div>';
             html += '</td>';
             html += '<td style="font-size:12.5px">' + grEsc(p.division_name || '—') + '<div class="gr-pp-meta">' + grEsc(p.currency || '') + '</div></td>';
             html += '</tr>';
@@ -938,7 +939,7 @@ function grLoadProducts() {
         })
         .fail(function(xhr, status) {
             if (status === 'abort') return;
-            $('#gr-product-body').html('<tr><td colspan="4" class="config-card-empty"><i class="fa-solid fa-triangle-exclamation"></i>Failed to load products.</td></tr>');
+            $('#gr-product-body').html('<tr><td colspan="4" class="config-card-empty">Failed to load products.</td></tr>');
         });
 }
 
@@ -961,8 +962,8 @@ function grFillProductFilters(filters) {
 function grOpenProductPicker(forRow) {
     if (!forRow) grProductTargetRow = null;
     $('#gr-product-apply').html(grProductTargetRow
-        ? '<i class="fa fa-check me-1"></i> Use Selected Product'
-        : '<i class="fa fa-plus me-1"></i> Add <span id="gr-product-apply-count">0</span> Item(s)');
+        ? 'Use Selected Product'
+        : 'Add <span id="gr-product-apply-count">0</span> Item(s)');
     if (!grProductPickerInstance) {
         grProductPickerInstance = new bootstrap.Modal(document.getElementById('grProductPickerModal'));
 
@@ -1083,7 +1084,7 @@ function grValidate() {
 function grSetSaving(saving) {
     $('#gr-save-btn').prop('disabled', saving).html(saving
         ? '<span class="spinner-border spinner-border-sm me-1"></span> Saving...'
-        : '<i class="fa fa-save me-1"></i> Save {{ $goodsRequest ? 'Changes' : 'Draft' }}');
+        : 'Save {{ $goodsRequest ? 'Changes' : 'Draft' }}');
 }
 
 function grSave() {
@@ -1103,7 +1104,7 @@ function grSave() {
     grSetSaving(true);
     $.ajax({ url: url, method: method, data: payload })
         .done(function(res) {
-            toastr.success(res.message || 'Tersimpan.');
+            toastr.success(res.message || 'Saved.');
             setTimeout(function() {
                 window.location.href = grUpdateUrl ? grShowUrl : '{{ route("goods-request.index") }}';
             }, 800);

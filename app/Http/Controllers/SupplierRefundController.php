@@ -98,19 +98,7 @@ class SupplierRefundController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'purchase_order_id' => 'required|integer|exists:purchase_orders,id',
-            'refund_date' => 'required|date|before_or_equal:today',
-            'method' => 'required|in:'.implode(',', array_keys(SupplierPayment::METHOD_LABELS)),
-            'destination_account' => 'nullable|string|max:150',
-            'reference_number' => 'required_unless:method,cash|nullable|string|max:100',
-            'amount' => 'required|numeric|gt:0',
-            'exchange_rate' => 'nullable|numeric|gt:0',
-            'notes' => 'nullable|string|max:2000',
-        ], [
-            'refund_date.before_or_equal' => 'Tanggal refund tidak boleh melebihi hari ini.',
-            'reference_number.required_unless' => 'No. referensi wajib diisi untuk transfer / giro.',
-        ]);
+        $validated = $this->validateRefund($request);
 
         $po = $this->loadPurchaseOrder((int) $validated['purchase_order_id']);
         $amount = round((float) $validated['amount'], 2);
@@ -147,6 +135,65 @@ class SupplierRefundController extends Controller
         $this->log($refund, 'create_supplier_refund', 'dibuat (draft)');
 
         return response()->json(['success' => true, 'message' => 'Refund '.$refund->refund_number.' disimpan sebagai draft.', 'id' => $refund->id]);
+    }
+
+    public function edit($id)
+    {
+        $refund = SupplierRefund::with('purchaseOrder.supplier')->findOrFail($id);
+        if (! $refund->isDraft()) {
+            return redirect()->route('supplier-refund.show', $refund->id)
+                ->with('error', 'Hanya refund Draft yang bisa diedit.');
+        }
+
+        $po = $this->loadPurchaseOrder($refund->purchase_order_id);
+
+        return view('supplier-refund.form', [
+            'refund' => $refund,
+            'pending' => $this->pendingRefunds(),
+            'preselectPoId' => $refund->purchase_order_id,
+            'baseCurrency' => Currency::baseName(),
+            'rates' => collect(Currency::formOptions())->pluck('rate', 'name'),
+            'maxRefund' => $this->refundRoom($po, $refund->id),
+        ]);
+    }
+
+    public function update(Request $request, $id): JsonResponse
+    {
+        $refund = SupplierRefund::findOrFail($id);
+        if (! $refund->isDraft()) {
+            return response()->json(['success' => false, 'message' => 'Hanya refund Draft yang bisa diedit.'], 422);
+        }
+
+        $validated = $this->validateRefund($request, false);
+        $po = $this->loadPurchaseOrder($refund->purchase_order_id);
+        $amount = round((float) $validated['amount'], 2);
+        $room = $this->refundRoom($po, $refund->id);
+        if ($amount > $room + 0.005) {
+            return response()->json(['success' => false, 'message' => 'Nominal refund melebihi saldo uang muka yang harus dikembalikan ('.$po->currencyCode().' '.SupplierBill::formatMoney($room).').'], 422);
+        }
+
+        $currency = $po->currencyCode();
+        $isBase = $currency === Currency::baseName();
+        if (! $isBase && empty($validated['exchange_rate'])) {
+            return response()->json(['success' => false, 'message' => 'Kurs '.$currency.' wajib diisi untuk refund valas.'], 422);
+        }
+        $rate = $isBase ? 1.0 : (float) $validated['exchange_rate'];
+        $received = round($amount * $rate, 2);
+
+        $refund->update([
+            'refund_date' => $validated['refund_date'],
+            'method' => $validated['method'],
+            'destination_account' => $validated['destination_account'] ?? null,
+            'reference_number' => $validated['reference_number'] ?? null,
+            'amount' => $amount,
+            'exchange_rate' => $rate,
+            'amount_base' => $received,
+            'notes' => $validated['notes'] ?? null,
+        ] + $this->fxAttributes($po, $amount, $received));
+
+        $this->log($refund, 'update_supplier_refund', 'diubah (draft)');
+
+        return response()->json(['success' => true, 'message' => 'Draft refund '.$refund->refund_number.' diperbarui.', 'id' => $refund->id]);
     }
 
     public function show($id)
@@ -220,11 +267,36 @@ class SupplierRefundController extends Controller
     /**
      * Sisa yang boleh dicatat = refund jatuh tempo - draft refund lain yang belum diposting.
      */
-    private function refundRoom(PurchaseOrder $po): float
+    private function refundRoom(PurchaseOrder $po, ?int $exceptRefundId = null): float
     {
-        $drafts = $po->supplierRefunds->where('status', SupplierRefund::STATUS_DRAFT)->sum('amount');
+        $drafts = $po->supplierRefunds
+            ->where('status', SupplierRefund::STATUS_DRAFT)
+            ->when($exceptRefundId, fn ($items) => $items->where('id', '!=', $exceptRefundId))
+            ->sum('amount');
 
         return round(max(0, $po->refundDue() - $drafts), 2);
+    }
+
+    private function validateRefund(Request $request, bool $withPurchaseOrder = true): array
+    {
+        $rules = [
+            'refund_date' => 'required|date|before_or_equal:today',
+            'method' => 'required|in:'.implode(',', array_keys(SupplierPayment::METHOD_LABELS)),
+            'destination_account' => 'nullable|string|max:150',
+            'reference_number' => 'required_unless:method,cash|nullable|string|max:100',
+            'amount' => 'required|numeric|gt:0',
+            'exchange_rate' => 'nullable|numeric|gt:0',
+            'notes' => 'nullable|string|max:2000',
+        ];
+
+        if ($withPurchaseOrder) {
+            $rules = ['purchase_order_id' => 'required|integer|exists:purchase_orders,id'] + $rules;
+        }
+
+        return $request->validate($rules, [
+            'refund_date.before_or_equal' => 'Tanggal refund tidak boleh melebihi hari ini.',
+            'reference_number.required_unless' => 'No. referensi wajib diisi untuk transfer / giro.',
+        ]);
     }
 
     private function loadPurchaseOrder(int $id): PurchaseOrder

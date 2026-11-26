@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountCompany;
 use App\Models\Currency;
 use App\Models\Division;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsRequest;
 use App\Models\MasterProduct;
 use App\Models\Module;
+use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
@@ -66,12 +68,12 @@ class SupplierForeignCurrencyTest extends TestCase
         $this->po->items()->create(['goods_request_item_id' => $requestItem->id, 'master_product_id' => $product->id, 'part_number' => 'FM-1', 'description' => 'Flow Meter', 'qty' => 10, 'unit' => 'Unit', 'price' => 100, 'currency' => 'USD', 'sort_order' => 1]);
     }
 
-    private function receive(int $qty): void
+    private function receive(int $qty, ?float $rate = null): void
     {
         $warehouse = Warehouse::firstOrCreate(['code' => 'G1'], ['name' => 'Gudang', 'status' => 'Active']);
         $receipt = GoodsReceipt::create(['receipt_number' => 'GRN-'.uniqid(), 'purchase_order_id' => $this->po->id, 'warehouse_id' => $warehouse->id, 'received_date' => now()->toDateString(), 'status' => GoodsReceipt::STATUS_POSTED, 'created_by' => $this->staff->id]);
         $item = $this->po->items()->first();
-        $receipt->items()->create(['purchase_order_item_id' => $item->id, 'master_product_id' => $item->master_product_id, 'qty' => $qty, 'destination' => 'warehouse', 'sort_order' => 1]);
+        $receipt->items()->create(['purchase_order_item_id' => $item->id, 'master_product_id' => $item->master_product_id, 'qty' => $qty, 'currency' => 'USD', 'price' => 100, 'exchange_rate' => $rate, 'destination' => 'warehouse', 'sort_order' => 1]);
         $this->po->refreshReceiptStatus();
     }
 
@@ -116,6 +118,60 @@ class SupplierForeignCurrencyTest extends TestCase
             ->assertSee('1 USD = IDR 16,200')->assertSee('Kurs tanggal invoice supplier');
     }
 
+    public function test_bill_defaults_to_receipt_rate_fifo_and_shows_receipt_difference(): void
+    {
+        $this->receive(4, 15000);
+        $this->receive(6, 16000);
+
+        // Unit belum ditagih: 4 × 15,000 + 6 × 16,000 -> rata-rata 15,600.
+        $this->actingAs($this->staff)->getJson(route('supplier-bill.billable-lines', ['purchase_order_id' => $this->po->id]))
+            ->assertOk()->assertJsonPath('lines.0.receipt_rate', 15600);
+
+        // Tagihan pertama 5 unit (FIFO: 4 @15,000 + 1 @16,000), kurs invoice 16,000.
+        $id = $this->regularBill(5, 16000)->assertOk()->json('id');
+        $bill = SupplierBill::findOrFail($id);
+        $this->assertEquals(15200, $bill->receipt_rate);
+        $this->assertEquals(400000, $bill->receiptFxDifference()); // 500 USD × 800 -> rugi
+
+        // Sisa 5 unit semuanya diterima @16,000.
+        $this->actingAs($this->staff)->getJson(route('supplier-bill.billable-lines', ['purchase_order_id' => $this->po->id]))
+            ->assertJsonPath('lines.0.receipt_rate', 16000);
+
+        $this->actingAs($this->approver)->postJson(route('supplier-bill.approve', $id))->assertOk();
+        $this->actingAs($this->staff)->get(route('supplier-bill.show', $id))->assertOk()
+            ->assertSee('Kurs penerimaan barang 15,200')->assertSee('rugi selisih IDR 400,000');
+    }
+
+    public function test_project_cost_uses_receipt_rate_plus_fx_differences(): void
+    {
+        $project = Project::create([
+            'project_number' => '26110001', 'project_name' => 'SPARING Gresik',
+            'company_id' => AccountCompany::create(['account_name' => 'PT Maju', 'status' => 'Active'])->id,
+            'po_number_company' => 'PO-1', 'po_date' => '2026-10-01', 'po_date_received' => '2026-10-02', 'po_due_date' => '2026-11-01',
+            'total_sale_amount' => 1, 'net_sale_amount' => 1, 'status' => Project::STATUS_ACTIVE,
+        ]);
+        GoodsRequest::query()->update(['purpose' => GoodsRequest::PURPOSE_PROJECT, 'project_id' => $project->id]);
+
+        // Terima 10 × USD 100 @15,000 = nilai stok Rp 15,000,000.
+        $this->receive(10, 15000);
+        $cost = (new PayableReport)->projectCosts($project->id)->first();
+        $this->assertEquals(15000000, $cost['received']);
+        $this->assertEquals(15000000, $cost['commitment']);
+        $this->assertEquals(0, $cost['fx']);
+
+        // Tagihan @16,000 (selisih terima Rp 1,000,000), dibayar @16,500 (selisih bayar Rp 500,000).
+        $bill = SupplierBill::findOrFail($this->regularBill(10, 16000)->assertOk()->json('id'));
+        $this->actingAs($this->approver)->postJson(route('supplier-bill.approve', $bill->id))->assertOk();
+        $this->pay($bill, 1000, ['exchange_rate' => 16500]);
+
+        $cost = (new PayableReport)->projectCosts($project->id)->first();
+        $this->assertEquals(15000000, $cost['received']); // nilai stok tetap
+        $this->assertEquals(1000000, $cost['fx_receipt']);
+        $this->assertEquals(500000, $cost['fx_payment']);
+        $this->assertEquals(1500000, $cost['fx']);
+        $this->assertEquals(16500000, $cost['actual']); // = Rupiah riil yang dibayar
+    }
+
     public function test_partial_payments_realize_fx_difference_from_bank_rate(): void
     {
         $this->receive(10);
@@ -146,8 +202,13 @@ class SupplierForeignCurrencyTest extends TestCase
 
         $this->actingAs($this->approver)->get(route('supplier-payment.show', $first->id))->assertOk()
             ->assertSee('Rugi selisih kurs IDR 80,000')->assertSee('Biaya bank IDR 25,000');
-        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'fx']))->assertOk()
-            ->assertSee($first->payment_number)->assertSee('Total selisih kurs terealisasi (rugi)');
+        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'fx']))->assertOk()->assertSee('Exchange Differences');
+        $fxData = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'fx']))->assertOk()->json();
+        $this->assertSame(2, $fxData['recordsTotal']);
+        $this->assertStringContainsString($first->payment_number, collect($fxData['data'])->pluck('html')->implode(''));
+        $this->assertSame('Total (loss)', $fxData['footer'][1]);
+        // Tagihan sudah lunas: filter "masih punya sisa" mengosongkan daftar.
+        $this->assertSame(0, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'fx', 'outstanding' => 'yes']))->json('recordsTotal'));
         $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => 'fx']))->assertOk();
     }
 
@@ -192,9 +253,10 @@ class SupplierForeignCurrencyTest extends TestCase
 
         // Kurs master naik ke 17.000: hutang tetap dinilai nilai buku, selisih 800.000 belum terealisasi.
         Currency::where('name', 'USD')->update(['rate' => 17000]);
-        $row = (new PayableReport)->supplierSummary()->first();
-        $this->assertEquals(16200000, $row['outstanding']);
-        $this->assertEquals(800000, $row['unrealized_fx']);
+        // supplierByCurrency kini sadar-mata-uang: sisa dalam USD (bukan nilai buku IDR).
+        $row = (new PayableReport)->supplierByCurrency()->first();
+        $this->assertSame('USD', $row['currency']);
+        $this->assertEquals(1000, $row['sisa']);
         $this->assertEquals(800000, (new PayableReport)->fx()['unrealized_total']);
 
         // Tagihan lama berkurs perkiraan (hasil migrasi) boleh dikoreksi sekali, walau sudah ada pembayaran Posted.

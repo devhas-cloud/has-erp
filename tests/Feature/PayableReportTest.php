@@ -14,6 +14,7 @@ use App\Models\StockLog;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Models\SupplierPayment;
+use App\Models\SupplierReturn;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\StockService;
@@ -93,17 +94,52 @@ class PayableReportTest extends TestCase
         ]);
     }
 
-    public function test_supplier_summary_aging_and_schedule(): void
+    public function test_supplier_tab_totals_per_currency_and_footer_matches_columns(): void
+    {
+        // Tagihan USD untuk supplier yang sama -> baris terpisah, total tidak dicampur dengan IDR.
+        $usd = $this->bill($this->beta, 1234.5, '2026-12-31', 'INV-USD');
+        $usd->update(['currency' => 'USD', 'exchange_rate' => 16000]);
+
+        $json = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'supplier']))->assertOk()->json();
+        $this->assertCount(5, $json['footer']);
+        $this->assertSame('Total per currency', $json['footer'][1]);
+        $this->assertStringContainsString('USD 1,234.50', $json['footer'][2]);
+        $this->assertStringContainsString('IDR ', $json['footer'][2]);
+        $this->assertStringContainsString('USD 1,234.50', collect($json['data'])->pluck('html')->implode(''));
+
+        $this->assertCount(6, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'project']))->json('footer'));
+        $this->assertCount(10, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'fx']))->json('footer'));
+
+        // Filter mata uang & masih punya sisa.
+        $this->assertSame(1, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'supplier', 'currency' => 'USD']))->json('recordsTotal'));
+        $this->assertSame(0, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'supplier', 'outstanding' => 'no']))->json('recordsTotal'));
+        $this->assertSame(3, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'supplier', 'outstanding' => 'yes']))->json('recordsTotal'));
+    }
+
+    public function test_project_tab_groups_by_supplier_and_project_with_supplier_filter(): void
+    {
+        $json = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'project', 'supplier' => $this->alpha->id]))->assertOk()->json();
+        $this->assertSame(1, $json['recordsTotal']);
+        $this->assertStringContainsString('PT Alpha', $json['data'][0]['html']);
+        $this->assertStringContainsString('SPARING Gresik', $json['data'][0]['html']);
+
+        $this->assertSame(0, $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'project', 'supplier' => $this->beta->id]))->json('recordsTotal'));
+    }
+
+    public function test_supplier_by_currency_aging_and_schedule(): void
     {
         $report = new PayableReport;
 
-        $summary = $report->supplierSummary()->keyBy(fn ($r) => $r['supplier']->name);
-        $this->assertEquals(5500, $summary['PT Alpha']['outstanding']);
-        $this->assertEquals(4000, $summary['PT Alpha']['overdue']);
-        $this->assertSame(1, $summary['PT Alpha']['overdue_count']);
+        // Hutang murni dari tagihan, per (supplier × mata uang): Total=amountDue,
+        // Bayar=paidAmount, Sisa=outstanding.
+        $summary = $report->supplierByCurrency()->keyBy(fn ($r) => $r['supplier']->name);
+        $this->assertSame('IDR', $summary['PT Alpha']['currency']);
+        $this->assertEquals(7500, $summary['PT Alpha']['total']);
         $this->assertEquals(2000, $summary['PT Alpha']['paid']);
-        $this->assertEquals(10000, $summary['PT Alpha']['po_value']);
-        $this->assertEquals(800, $summary['PT Beta']['outstanding']);
+        $this->assertEquals(5500, $summary['PT Alpha']['sisa']);
+        $this->assertEquals(4000, $summary['PT Alpha']['overdue']);
+        $this->assertSame(2, $summary['PT Alpha']['open_count']);
+        $this->assertEquals(800, $summary['PT Beta']['sisa']);
 
         $aging = $report->aging()->keyBy(fn ($r) => $r['supplier']->name);
         $this->assertEquals(4000, $aging['PT Alpha']['buckets']['d31_60']);
@@ -127,16 +163,72 @@ class PayableReportTest extends TestCase
         $this->assertNull($cost['estimate']);
 
         foreach (array_keys(PayableReportController::TABS) as $tab) {
-            $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => $tab]))->assertOk()->assertSee('Laporan Hutang');
+            $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => $tab]))->assertOk()->assertSee('Payables Report');
+            $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => $tab]))->assertOk();
         }
-        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'aging']))->assertSee('PT Alpha')->assertSee('4,000');
-        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'project']))->assertSee('SPARING Gresik')->assertSee('11,500');
+        // Semua tab ajax: halaman merender cangkang tabel; data lewat endpoint.
+        $this->actingAs($this->admin)->get(route('payable-report.index', ['tab' => 'project']))->assertSee('Total Payable')->assertSee('Outstanding');
 
-        $export = $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => 'schedule']));
+        $supplierData = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'supplier', 'draw' => 1]))->assertOk()->json();
+        $this->assertSame(2, $supplierData['recordsTotal']);
+
+        $projectData = $this->actingAs($this->admin)->getJson(route('payable-report.data', ['tab' => 'project', 'draw' => 1]))->assertOk()->json();
+        $this->assertSame(1, $projectData['recordsTotal']);
+        $this->assertStringContainsString('SPARING Gresik', $projectData['data'][0]['html']);
+
+        $export = $this->actingAs($this->admin)->get(route('payable-report.export', ['tab' => 'project']));
         $export->assertOk();
-        $this->assertStringContainsString('laporan-hutang-schedule', (string) $export->headers->get('content-disposition'));
+        $this->assertStringContainsString('laporan-hutang-project', (string) $export->headers->get('content-disposition'));
 
         $this->actingAs($this->admin)->get(route('project.show', $this->project->id))->assertOk()->assertSee('Biaya Pembelian');
         $this->actingAs($this->admin)->get(route('supplier-bill.index', ['supplier_id' => $this->alpha->id, 'overdue' => 1]))->assertOk();
+    }
+
+    public function test_project_bills_reconcile_advance_pph_and_discount(): void
+    {
+        $poItem = $this->po->items()->firstOrFail();
+        $bill = SupplierBill::create([
+            'bill_number' => SupplierBill::generateNumber(), 'supplier_id' => $this->alpha->id, 'purchase_order_id' => $this->po->id,
+            'supplier_invoice_number' => 'INV-ADJ', 'bill_date' => '2026-10-01', 'due_date' => '2026-12-01', 'currency' => 'IDR',
+            'subtotal' => 6000, 'discount_percent' => 10, 'discount_amount' => 600,
+            'ppn_percent' => 11, 'ppn_amount' => 594, 'total' => 5994,
+            'advance_deduction' => 1000, 'pph_amount' => 100,
+            'status' => SupplierBill::STATUS_VERIFIED, 'created_by' => $this->admin->id,
+        ]);
+        $bill->items()->create([
+            'line_type' => 'item', 'purchase_order_item_id' => $poItem->id, 'project_id' => $this->project->id,
+            'qty' => 6, 'price' => 1000, 'amount' => 6000,
+        ]);
+
+        $row = (new PayableReport)->projectBills()->first(fn (array $r) => $r['bill']->id === $bill->id);
+
+        // amountDue = 5.994 - 1.000 advance - 100 PPh = 4.894.
+        $this->assertEquals(4894, $row['total']);
+        $this->assertEquals(0, $row['paid']);
+        $this->assertEquals(4894, $row['sisa']);
+    }
+
+    public function test_receipt_unit_cost_subtracts_supplier_returns(): void
+    {
+        $poItem = $this->po->items()->firstOrFail();
+        $warehouse = Warehouse::firstOrFail();
+        $product = MasterProduct::where('code', 'PN-1')->firstOrFail();
+        $stock = $this->seedStock($warehouse->id, $product, 2, ['unit_cost' => 500])->first();
+
+        $return = SupplierReturn::create([
+            'return_number' => 'RTV-TEST', 'supplier_id' => $this->alpha->id, 'purchase_order_id' => $this->po->id,
+            'warehouse_id' => $warehouse->id, 'return_date' => '2026-10-02', 'reason' => 'Rusak',
+            'status' => SupplierReturn::STATUS_POSTED, 'created_by' => $this->admin->id,
+        ]);
+        $return->items()->create([
+            'purchase_order_item_id' => $poItem->id, 'stock_id' => $stock->id, 'master_product_id' => $product->id,
+            'project_id' => $this->project->id, 'qty' => 2, 'unit' => 'Unit', 'destination' => 'warehouse', 'sort_order' => 1,
+        ]);
+
+        $cost = (new PayableReport)->projectCosts($this->project->id)->first();
+
+        // 6 diterima @1.000 = 6.000; retur 2 @500 = 1.000; sisa 4 unit -> 1.250/unit.
+        $this->assertEquals(5000, $cost['received']);
+        $this->assertEquals(11000, $cost['commitment']);
     }
 }

@@ -7,6 +7,7 @@ use App\Models\Division;
 use App\Models\Document;
 use App\Models\Log;
 use App\Models\MasterProduct;
+use App\Models\Pos;
 use App\Models\Project;
 use App\Models\ProjectAchievement;
 use App\Models\ProjectBillingTerm;
@@ -220,6 +221,14 @@ class ProjectController extends Controller
 
             if ($quotation && $quotation->status !== Quotation::STATUS_FINISH) {
                 $quotation->update(['status' => Quotation::STATUS_FINISH]);
+            }
+
+            if ($quotation) {
+                // Tautkan POS milik quotation (belum terpakai) ke project ini.
+                Pos::where('quotation_id', $quotation->id)
+                    ->whereNull('project_id')
+                    ->orderBy('id')
+                    ->first()?->update(['project_id' => $project->id]);
             }
 
             return $project;
@@ -872,6 +881,7 @@ class ProjectController extends Controller
         return Quotation::with(['opportunity.accountCompany', 'profitEstimate'])
             ->whereIn('status', [Quotation::STATUS_APPROVED, Quotation::STATUS_FINISH])
             ->whereNotNull('opportunity_id')
+            ->whereHas('pos')
             ->whereNotIn('id', Project::whereNotNull('quotation_id')->select('quotation_id'))
             ->orderByDesc('id')
             ->get();

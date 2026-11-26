@@ -811,16 +811,16 @@
     <div class="page-header-actions">
         @if($canUpdate && $canApprove)
         <button type="button" class="btn-accent" onclick="openEditModal({{ $opportunity->id }})">
-            <i class="fa fa-pen"></i><span>Edit</span>
+            <span>Edit</span>
         </button>
         @else
         <button type="button" class="btn-accent-danger" onclick="openCloseLossModal()">
-            <i class="fa fa-circle-xmark"></i> Close Lost
+            Close Lost
         </button>
         @endif
 
         <a href="{{ url()->previous() }}" class="btn-ghost">
-            <i class="fa fa-arrow-left"></i><span>Kembali</span>
+            <span>Back</span>
         </a>
     </div>
 </div>
@@ -877,13 +877,7 @@
                         @php $sid = (int) $s->id; @endphp
                         <div class="opp-pipeline__step {{ $sid < $effectiveStage ? 'done' : ($sid === $effectiveStage ? 'current' : '') }}">
                             <div class="opp-pipeline__dot">
-                                @if($sid < $effectiveStage)
-                                    <i class="fa fa-check"></i>
-                                @elseif($sid === $effectiveStage)
-                                    <i class="fa fa-circle"></i>
-                                @else
-                                    <i class="fa fa-circle-thin"></i>
-                                @endif
+                                {{ $loop->iteration }}
                             </div>
                             <div class="opp-pipeline__label">{{ $s->stage_name }}</div>
                             <div class="opp-pipeline__prob">{{ $s->probability ?? 0 }}%</div>
@@ -891,7 +885,7 @@
                     @endforeach
                     @if($isLost)
                         <div class="opp-pipeline__step current lost">
-                            <div class="opp-pipeline__dot"><i class="fa fa-times"></i></div>
+                            <div class="opp-pipeline__dot">&times;</div>
                             <div class="opp-pipeline__label">Closed Lost</div>
                             <div class="opp-pipeline__prob">{{ $opportunity->stage?->probability ?? 0 }}%</div>
                         </div>
@@ -900,7 +894,7 @@
 
                 <div class="opp-pipeline__status">
                     @if($isLost)
-                        <span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d"><i class="fa fa-times-circle"></i> Closed Lost</span>
+                        <span class="status-badge" style="background:var(--danger-soft);color:#7f1d1d">Closed Lost</span>
                         @if($opportunity->lossReason?->reason_name)
                             <span>· {{ $opportunity->lossReason->reason_name }}</span>
                         @endif
@@ -908,11 +902,10 @@
                             <span style="color:var(--text-secondary)">· {{ Str::limit($opportunity->close_loss_note, 60) }}</span>
                         @endif
                     @elseif($isWon)
-                        <i class="fa fa-trophy" style="color:var(--success)"></i>
                         <b>Closed Won</b>
                         <span style="color:var(--text-secondary)">· {{ $opportunity->close_won_date?->format('d M Y') ?? '—' }}</span>
                     @else
-                        <span>Tahap <b>{{ $currentIdx ?? '—' }}</b> dari {{ $mainStages->count() }}</span>
+                        <span>Stage <b>{{ $currentIdx ?? '—' }}</b> of {{ $mainStages->count() }}</span>
                         <span style="color:var(--text-secondary)">· {{ $opportunity->stage?->stage_name ?? '—' }}</span>
                         <span style="color:var(--text-secondary)">· Probabilitas {{ $opportunity->stage?->probability ?? 0 }}%</span>
                     @endif
@@ -922,7 +915,7 @@
                     <div class="opp-meta-group">
                         <span class="opp-meta-group__label">Readiness</span>
                         <div class="opp-meta-chip-row">
-                            <span class="opp-meta-chip">{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Quote Ready</span>
+                            <span class="opp-meta-chip">Quote Ready: {!! $opportunity->quote_ready ? '<strong style="color:var(--success)">Yes</strong>' : '<span style="color:var(--text-muted)">No</span>' !!}</span>
                             {{-- <span class="opp-meta-chip">{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Budget</span>
                             <span class="opp-meta-chip">{!! $opportunity->authorize ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Authorize</span>
                             <span class="opp-meta-chip">{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted)"></i>' !!} Timeline</span> --}}
@@ -931,7 +924,7 @@
                     <div class="opp-meta-group opp-meta-group--date">
                         <span class="opp-meta-group__label">Close Date</span>
                         <div class="opp-meta-chip-row">
-                            <span class="opp-meta-chip"><i class="fa fa-calendar-check" style="color:var(--accent)"></i> {{ $opportunity->close_date?->format('d M Y') ?? '—' }}</span>
+                            <span class="opp-meta-chip">{{ $opportunity->close_date?->format('d M Y') ?? '—' }}</span>
                         </div>
                     </div>
                 </div>
@@ -940,7 +933,7 @@
                 {{--
                 <div class="opp-header__actions">
                     @if($opportunity->close_loss_status === 'pending')
-                        <span class="status-badge" style="background:#fef3c7;color:#92400e"><i class="fa fa-hourglass-half"></i> Menunggu Approval Close Loss</span>
+                        <span class="status-badge" style="background:#fef3c7;color:#92400e">Awaiting Close Loss approval</span>
                         @if($canApprove)
                             <button type="button" class="btn btn-sm btn-success" onclick="openCloseLossReview()">
                                 <i class="fa fa-eye"></i> Review &amp; Approve
@@ -948,35 +941,35 @@
                         @endif
                         @if($canUpdate && !$canApprove)
                             <button type="button" class="btn btn-sm btn-outline-danger" onclick="openCloseLossModal()">
-                                <i class="fa fa-pen"></i> Ubah
+                                Change
                             </button>
                         @endif
                     @elseif($opportunity->negotiation_status === 'pending')
-                        <span class="status-badge" style="background:#fef3c7;color:#92400e"><i class="fa fa-hourglass-half"></i> Menunggu Approval Negotiation</span>
+                        <span class="status-badge" style="background:#fef3c7;color:#92400e">Awaiting Negotiation approval</span>
                         @if($canApprove)
                             <button type="button"class="btn btn-sm btn-accent" style="height: 18px"  onclick="approveTransition('negotiation')">
-                                <i class="fa fa-check"></i> Approve
+                                Approve
                             </button>
                         @endif
                     @elseif($canUpdate && !$canApprove)
 
                         @if($opportunity->stage?->id === 2) <!-- Jika tahap Proposal & Quote -->
                             <button type="button" class="btn btn-sm btn-accent" style="height: 30px"  onclick="openInReviewModal()">
-                                <i class="fa fa-arrow-right"></i> In Review
+                                In Review
                             </button>
 
                         <button type="button" class="btn btn-accent-danger" style="height: 30px" onclick="openCloseLossModal()">
-                            <i class="fa fa-circle-xmark"></i> Close Lost
+                            Close Lost
                         </button>
                         @endif
 
                         @if($opportunity->stage?->id === 3) <!-- Jika tahap In Review -->
                             <button type="button" class="btn btn-sm btn-accent" style="height: 30px;" onclick="openNegotiationModal()">
-                                <i class="fa fa-handshake"></i> Negotiation
+                                Negotiation
                             </button>
 
                         <button type="button" class="btn btn-accent-danger" style="height: 30px;" onclick="openCloseLossModal()">
-                            <i class="fa fa-circle-xmark"></i> Close Lost
+                            Close Lost
                         </button>
                         @endif
 
@@ -985,7 +978,7 @@
 
                 <div class="opp-header__actions">
                     @if($opportunity->close_loss_status === 'pending')
-                        <span class="status-badge" style="background:#fef3c7;color:#92400e"><i class="fa fa-hourglass-half"></i> Menunggu Approval Close Loss</span>
+                        <span class="status-badge" style="background:#fef3c7;color:#92400e">Awaiting Close Loss approval</span>
                         @if($canApprove)
                             <button type="button" class="btn btn-sm btn-success" onclick="openCloseLossReview()">
                                 <i class="fa fa-eye"></i> Review &amp; Approve
@@ -993,7 +986,7 @@
                         @endif
                         @if($canUpdate && !$canApprove)
                             <button type="button" class="btn btn-sm btn-outline-danger" onclick="openCloseLossModal()">
-                                <i class="fa fa-pen"></i> Ubah
+                                Change
                             </button>
                         @endif
                     @endif
@@ -1001,7 +994,6 @@
 
 
                 <div class="opp-header__nextstep">
-                    <i class="fa fa-tasks"></i>
                     <span>Next Step</span>
                     <strong>{{ $opportunity->next_step ?? '—' }}</strong>
                     @if($canUpdate)
@@ -1022,17 +1014,17 @@
                 <ul class="nav nav-tabs" role="tablist" style="border-bottom:none;margin-bottom:-1px">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-activity" type="button" role="tab">
-                            <i class="fa fa-chart-line me-1"></i> Activity
+                            Activity
                         </button>
                     </li>
                     {{-- <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-noted" type="button" role="tab">
-                            <i class="fa fa-sticky-note me-1"></i> Noted
+                            Noted
                         </button>
                     </li> --}}
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-logs" type="button" role="tab">
-                            <i class="fa fa-history me-1"></i> Logs
+                            Logs
                         </button>
                     </li>
                 </ul>
@@ -1043,11 +1035,11 @@
                         <div class="activity-feed" id="activity-feed">
                             <div id="activity-list"></div>
                             <div id="activity-loading" style="text-align:center;padding:20px;color:var(--text-muted)">
-                                <i class="fa fa-spinner fa-spin"></i> Loading...
+                                <span class="spinner-border spinner-border-sm me-1"></span> Loading...
                             </div>
                         </div>
                         <div class="activity-form-card">
-                            <textarea id="activity-input" placeholder="Tulis aktivitas..." rows="2"></textarea>
+                            <textarea id="activity-input" placeholder="Write an activity..." rows="2"></textarea>
                             <div class="mention-suggestions" id="mention-suggestions"></div>
                             <div class="activity-form-actions">
                                 <div>
@@ -1066,8 +1058,7 @@
                     </div>
                     <div class="tab-pane fade" id="tab-noted" role="tabpanel">
                         <div class="empty-state">
-                            <i class="fa fa-sticky-note"></i>
-                            <p>Belum ada catatan.</p>
+                            <p>No notes yet.</p>
                         </div>
                     </div>
                     <div class="tab-pane fade" id="tab-logs" role="tabpanel">
@@ -1076,8 +1067,7 @@
                         @endphp
                         @if ($opportunityLogs->isEmpty())
                             <div class="empty-state">
-                                <i class="fa fa-history"></i>
-                                <p>Belum ada log.</p>
+                                <p>No logs yet.</p>
                             </div>
                         @else
                             <div style="padding:4px 0">
@@ -1110,18 +1100,18 @@
         <!-- ── Task Card ── -->
         <div class="card-custom fade-in stagger-1 card-collapsible">
             <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
-                <span><i class="fa fa-tasks me-2" style="color:var(--accent)"></i>Task</span>
+                <span>Task</span>
                 <span class="chevron"><i class="fa fa-chevron-down"></i></span>
             </div>
             <div class="card-body-custom">
                 <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
                     <button type="button" class="btn btn-sm btn-accent" style="height: 25px;" onclick="openCreateTaskModal()">
-                        <i class="fa fa-plus"></i> Add Task
+                        Add Task
                     </button>
                 </div>
                 <div id="task-list">
                     <div style="text-align:center;padding:20px;color:var(--text-muted)">
-                        <i class="fa fa-spinner fa-spin"></i> Loading...
+                        <span class="spinner-border spinner-border-sm me-1"></span> Loading...
                     </div>
                 </div>
             </div>
@@ -1130,7 +1120,7 @@
 
         <div class="card-custom fade-in stagger-1 card-collapsible collapsed">
             <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
-                <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Company</span>
+                <span>Account Company</span>
                 <span class="chevron"><i class="fa fa-chevron-down"></i></span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
@@ -1161,7 +1151,7 @@
 
         <div class="card-custom fade-in stagger-1 mt-4 card-collapsible collapsed">
             <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
-                <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Account Contact</span>
+                <span>Account Contact</span>
                 <span class="chevron"><i class="fa fa-chevron-down"></i></span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
@@ -1183,7 +1173,7 @@
 
         <div class="card-custom fade-in stagger-3 mt-4 card-collapsible collapsed">
             <div class="card-header-custom" onclick="toggleCard(this)" style="cursor:pointer">
-                <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Opportunity Details</span>
+                <span>Opportunity Details</span>
                 <span class="chevron"><i class="fa fa-chevron-down"></i></span>
             </div>
             <div class="card-body-custom" style="padding-top:12px;padding-bottom:12px">
@@ -1203,10 +1193,10 @@
                     <tr><td>Lead</td><td>{{ $opportunity->lead?->lead_title ?? '—' }}</td></tr>
                     <tr><td>Next Step</td><td>{{ $opportunity->next_step ?? '—' }}</td></tr>
                     <tr><td>Description</td><td>{{ $opportunity->description ?? '—' }}</td></tr>
-                    <tr><td>Budget</td><td>{!! $opportunity->budget ? '<i class="fa fa-check-circle" style="color:var(--success)"></i> Ya' : '<i class="fa fa-minus-circle" style="color:var(--text-muted)"></i> Tidak' !!}</td></tr>
-                    <tr><td>Authorize</td><td>{!! $opportunity->authorize ? '<i class="fa fa-check-circle" style="color:var(--success)"></i> Ya' : '<i class="fa fa-minus-circle" style="color:var(--text-muted)"></i> Tidak' !!}</td></tr>
-                    <tr><td>Timeline</td><td>{!! $opportunity->timeline ? '<i class="fa fa-check-circle" style="color:var(--success)"></i> Ya' : '<i class="fa fa-minus-circle" style="color:var(--text-muted)"></i> Tidak' !!}</td></tr>
-                    <tr><td>Quote Ready</td><td>{!! $opportunity->quote_ready ? '<i class="fa fa-check-circle" style="color:var(--success)"></i> Ya' : '<i class="fa fa-minus-circle" style="color:var(--text-muted)"></i> Tidak' !!}</td></tr>
+                    <tr><td>Budget</td><td>{!! $opportunity->budget ? '<span style="color:var(--success);font-weight:600">Yes</span>' : '<span style="color:var(--text-muted)">No</span>' !!}</td></tr>
+                    <tr><td>Authorize</td><td>{!! $opportunity->authorize ? '<span style="color:var(--success);font-weight:600">Yes</span>' : '<span style="color:var(--text-muted)">No</span>' !!}</td></tr>
+                    <tr><td>Timeline</td><td>{!! $opportunity->timeline ? '<span style="color:var(--success);font-weight:600">Yes</span>' : '<span style="color:var(--text-muted)">No</span>' !!}</td></tr>
+                    <tr><td>Quote Ready</td><td>{!! $opportunity->quote_ready ? '<span style="color:var(--success);font-weight:600">Yes</span>' : '<span style="color:var(--text-muted)">No</span>' !!}</td></tr>
                     <tr><td>Close Won Date</td><td>{{ $opportunity->close_won_date?->format('d M Y') ?? '—' }}</td></tr>
                     <tr><td>End User</td><td>{{ $opportunity->endUser?->account_name ?? '—' }}</td></tr>
                     <tr><td>Owner</td><td><strong>{{ $opportunity->owner?->display_name ?? '—' }}</strong></td></tr>
@@ -1231,7 +1221,7 @@
 
                     <div class="opp-form-section open">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
-                            <span><i class="fa fa-bullseye me-2" style="color:var(--accent)"></i>Opportunity Information</span>
+                            <span>Opportunity Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="opp-form-section-body">
@@ -1267,7 +1257,7 @@
                                 <div class="form-group">
                                     <label>Stage</label>
                                     <select name="stage_id" id="opp-stage">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($stages as $s)
                                         <option value="{{ $s->id }}">{{ $s->stage_name }}</option>
                                         @endforeach
@@ -1277,7 +1267,7 @@
                                 <div class="form-group">
                                     <label>Loss Reason</label>
                                     <select name="loss_reasons_id" id="opp-loss-reason">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($lossReasons as $lr)
                                         <option value="{{ $lr->id }}">{{ $lr->reason_name }}</option>
                                         @endforeach
@@ -1291,7 +1281,7 @@
                                 <div class="form-group small" style="display: none">
                                     <label>Forecast <span class="text-danger">*</span></label>
                                     <select name="forecast_id" id="opp-forecast">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($forecasts as $f)
                                         <option value="{{ $f->id }}">{{ $f->forecast_name }}</option>
                                         @endforeach
@@ -1303,7 +1293,7 @@
                                 <div class="form-group">
                                     <label>Division</label>
                                     <select name="division_id" id="opp-division">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($divisions as $d)
                                         <option value="{{ $d->id }}">{{ $d->division_name }}</option>
                                         @endforeach
@@ -1312,7 +1302,7 @@
                                 <div class="form-group">
                                     <label>Lead Source</label>
                                     <select name="source_id" id="opp-source">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($sources as $src)
                                         <option value="{{ $src->id }}">{{ $src->source_name }}</option>
                                         @endforeach
@@ -1327,7 +1317,7 @@
                                 <div class="form-group">
                                     <label>End User</label>
                                     <select name="end_user_id" id="opp-end-user">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($accountCompanies as $ac)
                                         <option value="{{ $ac->id }}">{{ $ac->account_name }}</option>
                                         @endforeach
@@ -1351,7 +1341,7 @@
 
                     <div class="opp-form-section">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
-                            <span><i class="fa fa-check-circle me-2" style="color:var(--accent)"></i>BAT Information</span>
+                            <span>BAT Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="opp-form-section-body">
@@ -1380,7 +1370,7 @@
 
                     <div class="opp-form-section" style="display: none">
                         <div class="opp-form-section-header" onclick="toggleOppSection(this)">
-                            <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Information</span>
+                            <span>Additional Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="opp-form-section-body">
@@ -1397,7 +1387,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-opportunity">
-                    <i class="fa fa-save me-1"></i> Save
+                    Save
                 </button>
             </div>
         </div>
@@ -1419,7 +1409,7 @@
 
                     <div class="task-form-section open">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
-                            <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Task Information</span>
+                            <span>Task Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="task-form-section-body">
@@ -1475,7 +1465,7 @@
 
                     <div class="task-form-section open" id="task-assignees-section">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
-                            <span><i class="fa fa-users me-2" style="color:var(--accent)"></i>Assign To</span>
+                            <span>Assign To</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="task-form-section-body">
@@ -1484,7 +1474,7 @@
                                 <div class="form-group">
                                     <label>Penanganan</label>
                                     <select name="handling_group_id" id="task-handling-group" style="width:100%">
-                                        <option value="">— Pilih Penanganan —</option>
+                                        <option value="">— Select Handling —</option>
                                         @foreach ($handlingGroups as $hg)
                                             <option value="{{ $hg->id }}">{{ $hg->name }}</option>
                                         @endforeach
@@ -1505,7 +1495,7 @@
 
                     <div class="task-form-section" style="display:none">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
-                            <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Settings</span>
+                            <span>Alert Settings</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="task-form-section-body">
@@ -1532,7 +1522,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-opportunity-task">
-                    <i class="fa fa-save me-1"></i> Add Task
+                    Add Task
                 </button>
             </div>
         </div>
@@ -1571,7 +1561,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-submit-in-review">
-                    <i class="fa fa-arrow-right me-1"></i> Lanjut ke In Review
+                    Lanjut ke In Review
                 </button>
             </div>
         </div>
@@ -1603,7 +1593,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-submit-negotiation">
-                    <i class="fa fa-save me-1"></i> Submit Approval
+                    Submit Approval
                 </button>
             </div>
         </div>
@@ -1621,7 +1611,7 @@
                 <div class="form-group" style="margin-bottom:16px">
                     <label>Loss Reason <span class="text-danger">*</span></label>
                     <select id="cl-loss-reason" style="width:100%">
-                        <option value="">— Pilih Alasan —</option>
+                        <option value="">— Select Reason —</option>
                         @foreach($lossReasons as $lr)
                         <option value="{{ $lr->id }}">{{ $lr->reason_name }}</option>
                         @endforeach
@@ -1633,16 +1623,16 @@
                 </div>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:8px">
                     @if($opportunity->close_loss_status === 'pending')
-                        <i class="fa fa-info-circle"></i> Permintaan akan diperbarui dan tetap menunggu approval.
+                        The request will be updated and stays awaiting approval.
                     @else
-                        <i class="fa fa-info-circle"></i> Permintaan Close Loss membutuhkan approval sebelum stage berubah.
+                        A Close Loss request needs approval before the stage changes.
                     @endif
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-submit-close-loss">
-                    <i class="fa fa-save me-1"></i> Submit
+                    Submit
                 </button>
             </div>
         </div>
@@ -1653,7 +1643,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-circle-exclamation" style="color:var(--danger)"></i> Review Close Loss</h6>
+                <h6 class="modal-title">Review Close Loss</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -1678,9 +1668,9 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success btn-sm" id="btn-approve-close-loss">
-                    <i class="fa fa-check me-1"></i> Setujui Close Loss
+                    Approve Close Loss
                 </button>
             </div>
         </div>
@@ -1691,7 +1681,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-tasks me-1"></i> Edit Next Step</h6>
+                <h6 class="modal-title">Edit Next Step</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -1703,7 +1693,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-next-step">
-                    <i class="fa fa-save me-1"></i> Save
+                    Save
                 </button>
             </div>
         </div>
@@ -1828,13 +1818,13 @@ $(document).on('click', '#btn-save-opportunity', function() {
 
     if (!$('#opp-name').val() || !$('#opp-name').val().trim()) {
         $('#opp-name').addClass('is-invalid');
-        toastr.error('Opportunity Name wajib diisi.');
+        toastr.error('Opportunity Name is required.');
         $('#opp-name').focus();
         return;
     }
     if (!$('#opp-company-id').val()) {
         $('#opp-company').next('.select2-container').find('.select2-selection').addClass('is-invalid');
-        toastr.error('Account Company wajib dipilih.');
+        toastr.error('Select an Account Company.');
         return;
     }
     // if (!$('#opp-forecast').val()) {
@@ -1867,7 +1857,7 @@ $(document).on('click', '#btn-save-opportunity', function() {
     }).then(function(result) {
         if (!result.isConfirmed) return;
 
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
         $.ajax({
             url: url,
@@ -1881,7 +1871,7 @@ $(document).on('click', '#btn-save-opportunity', function() {
                 location.reload();
             },
             error: function(xhr) {
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
                 var errors = xhr.responseJSON?.errors;
                 if (errors) {
                     var first = Object.values(errors)[0];
@@ -1926,7 +1916,7 @@ $(document).on('shown.bs.modal', '#opportunityModal', function() {
     if (!$('#opp-contact').hasClass('select2-hidden-accessible')) {
         $('#opp-contact').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih Contact —',
+            placeholder: '— Select Contact —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#opportunityModal')
@@ -1940,7 +1930,7 @@ $(document).on('shown.bs.modal', '#opportunityModal', function() {
     if (!$('#opp-end-user').hasClass('select2-hidden-accessible')) {
         $('#opp-end-user').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih —',
+            placeholder: '— Select —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#opportunityModal')
@@ -2067,7 +2057,7 @@ $(document).on('change', '#task-handling-group', function() {
             $assignees.trigger('change');
         },
         error: function() {
-            toastr.error('Gagal memuat anggota penanganan.');
+            toastr.error('Failed to load the handling members.');
         }
     });
 });
@@ -2084,7 +2074,7 @@ function loadActivities() {
         if (res.data && res.data.length > 0) {
             res.data.forEach(function(a) { html += renderActivity(a); });
         } else {
-            html = '<div class="empty-state"><i class="fa fa-chart-line"></i><p>Belum ada aktivitas.</p></div>';
+            html = '<div class="empty-state"><p>No activities yet.</p></div>';
         }
         $('#activity-list').html(html);
         $('#activity-loading').hide();
@@ -2092,7 +2082,7 @@ function loadActivities() {
             setTimeout(scrollToMentionedActivity, 500);
         }
     }).fail(function() {
-        $('#activity-loading').html('<span style="color:var(--danger)">Gagal memuat aktivitas.</span>');
+        $('#activity-loading').html('<span style="color:var(--danger)">Failed to load activities.</span>');
     });
 }
 
@@ -2117,7 +2107,7 @@ function renderActivity(a) {
             if (at.attachment_type === 'image') {
                 attachmentsHtml += '<img src="' + url + '" class="activity-post-attachment-image" onclick="openFilePreview(\'' + url + '\',\'' + name + '\')">';
             } else {
-                attachmentsHtml += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + url + '\',\'' + name + '\');return false"><i class="fa fa-file"></i> ' + name + '</a>';
+                attachmentsHtml += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + url + '\',\'' + name + '\');return false">' + name + '</a>';
             }
         });
     }
@@ -2127,7 +2117,7 @@ function renderActivity(a) {
     var relatedBadge = '';
     if (a.related) {
         var relIcon = (a.related.type === 'quote_pdf' || a.related.type === 'proposal_pdf') ? 'fa-file-pdf' : (a.related.type === 'proposal' ? 'fa-file-text' : 'fa-file-invoice');
-        relatedBadge = '<a href="' + a.related.url + '" target="_blank" rel="noopener" class="status-badge" style="font-size:10px;padding:1px 8px;margin-left:8px;color:var(--accent);background:var(--accent-soft);text-decoration:none" title="Buka dokumen terkait"><i class="fa ' + relIcon + '" style="font-size:9px"></i> ' + a.related.label + '</a>';
+        relatedBadge = '<a href="' + a.related.url + '" target="_blank" rel="noopener" class="status-badge" style="font-size:10px;padding:1px 8px;margin-left:8px;color:var(--accent);background:var(--accent-soft);text-decoration:none" title="Open related document">' + a.related.label + '</a>';
     }
 
     var replyCount = (a.replies && a.replies.length) ? a.replies.length : 0;
@@ -2150,7 +2140,7 @@ function renderActivity(a) {
                     if (at.attachment_type === 'image') {
                         rAttach += '<img src="' + u + '" class="activity-post-attachment-image" onclick="openFilePreview(\'' + u + '\',\'' + n + '\')" style="width:60px;height:60px;display:inline-block;margin-right:4px">';
                     } else {
-                        rAttach += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + u + '\',\'' + n + '\');return false" style="display:inline-flex;margin-right:4px"><i class="fa fa-file"></i> ' + n + '</a>';
+                        rAttach += '<a href="#" class="activity-post-attachment" onclick="openFilePreview(\'' + u + '\',\'' + n + '\');return false" style="display:inline-flex;margin-right:4px">' + n + '</a>';
                     }
                 });
                 rAttach = '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">' + rAttach + '</div>';
@@ -2167,18 +2157,18 @@ function renderActivity(a) {
 
     var replyToggle = '';
     if (replyCount > 0) {
-        var toggleLabel = replyCount > 2 ? 'Lihat ' + replyCount + ' balasan' : 'Sembunyikan balasan';
-        replyToggle = '<button class="activity-reply-toggle" onclick="toggleReplies(' + a.id + ')"><i class="fa fa-comments"></i> ' + toggleLabel + '</button>';
+        var toggleLabel = replyCount > 2 ? 'Show ' + replyCount + ' replies' : 'Hide replies';
+        replyToggle = '<button class="activity-reply-toggle" onclick="toggleReplies(' + a.id + ')">' + toggleLabel + '</button>';
     }
 
     var replyFormHtml = '';
     if (!hasTaskNested) {
         replyFormHtml = '<div class="activity-reply-form" id="' + replyFormId + '" style="display:none">' +
             '<div class="reply-input-row">' +
-            '<input type="text" placeholder="Tulis balasan..." id="reply-input-' + a.id + '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' + a.id + ')}">' +
+            '<input type="text" placeholder="Write a reply..." id="reply-input-' + a.id + '" onkeydown="if(event.key==\'Enter\'&&!(typeof mentionActive!==\'undefined\'&&mentionActive)){event.preventDefault();replyToActivity(' + a.id + ')}">' +
             '<div class="reply-actions">' +
-            '<button type="button" title="Lampirkan file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
-            '<button type="button" title="Kirim" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
+            '<button type="button" title="Attach file" onclick="$(\'#' + replyFileId + '\').click()"><i class="fa fa-paperclip"></i></button>' +
+            '<button type="button" title="Send" onclick="replyToActivity(' + a.id + ')" style="color:var(--accent)"><i class="fa fa-paper-plane"></i></button>' +
             '</div></div>' +
             '<input type="file" id="' + replyFileId + '" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple onchange="handleReplyFiles(' + a.id + ')">' +
             '<div class="reply-file-previews" id="reply-previews-' + a.id + '"></div>' +
@@ -2197,7 +2187,7 @@ function renderActivity(a) {
         '<div class="activity-post-content">' + renderMentions(a.content || '') + '</div>' +
         (attachmentsHtml ? '<div class="activity-post-attachments">' + attachmentsHtml + '</div>' : '') +
         '<div class="activity-post-actions">' +
-        (hasTaskNested ? '' : '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()"><i class="fa fa-reply"></i> Balas</button>') +
+        (hasTaskNested ? '' : '<button onclick="$(\'#' + replyFormId + '\').toggle();if($(\'#' + replyFormId + '\').is(\':visible\'))$(\'#reply-input-' + a.id + '\').focus()">Reply</button>') +
         replyToggle +
         '</div>' +
         repliesHtml +
@@ -2261,7 +2251,7 @@ function toggleReplies(activityId) {
     var btns = $('.activity-reply-toggle');
     btns.each(function() {
         if ($(this).attr('onclick') && $(this).attr('onclick').indexOf('toggleReplies(' + activityId + ')') !== -1) {
-            $(this).html(section.is(':visible') ? '<i class="fa fa-comments"></i> Sembunyikan balasan' : '<i class="fa fa-comments"></i> Lihat ' + count + ' balasan');
+            $(this).text(section.is(':visible') ? 'Hide replies' : 'Show ' + count + ' replies');
         }
     });
 }
@@ -2275,7 +2265,7 @@ function replyToActivity(activityId) {
     var $form = $('#reply-form-' + activityId);
     $form.addClass('loading');
     var $sendBtn = $form.find('.reply-actions button[onclick*="replyToActivity"]');
-    $sendBtn.html('<i class="fa fa-spinner fa-spin"></i>');
+    $sendBtn.html('<span class="spinner-border spinner-border-sm"></span>');
 
     var formData = new FormData();
     formData.append('_token', '{{ csrf_token() }}');
@@ -2296,7 +2286,7 @@ function replyToActivity(activityId) {
             loadActivities();
         },
         error: function(xhr) {
-            toastr.error(xhr.responseJSON?.message || 'Gagal mengirim balasan.');
+            toastr.error(xhr.responseJSON?.message || 'Failed to send the reply.');
         },
         complete: function() {
             $form.removeClass('loading');
@@ -2308,8 +2298,8 @@ function replyToActivity(activityId) {
 $(document).on('click', '#btn-post-activity', function() {
     var $btn = $(this);
     var content = $('#activity-input').val().trim();
-    if (!content) { toastr.error('Tulis aktivitas terlebih dahulu.'); return; }
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+    if (!content) { toastr.error('Write the activity first.'); return; }
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
     $('.activity-form-card').addClass('loading');
 
     var formData = new FormData();
@@ -2335,7 +2325,7 @@ $(document).on('click', '#btn-post-activity', function() {
             loadActivities();
         },
         error: function(xhr) {
-            toastr.error(xhr.responseJSON?.message || 'Gagal posting.');
+            toastr.error(xhr.responseJSON?.message || 'Failed to post.');
         },
         complete: function() {
             $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Post');
@@ -2392,15 +2382,15 @@ function openFilePreview(url, name) {
     if (ext === 'pdf') {
         $('#filePreviewTitle').text(name || 'PDF Preview');
         $('#filePreviewBody').html('<iframe src="' + url + '" style="width:100%;height:85vh;border:none;border-radius:6px"></iframe>');
-        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Close</button><a href="' + url + '" class="btn btn-primary btn-sm" download>Download</a>');
     } else if (videoExts.indexOf(ext) !== -1) {
         $('#filePreviewTitle').text(name || 'Video Preview');
         $('#filePreviewBody').html('<video src="' + url + '" controls style="max-width:100%;max-height:80vh;border-radius:6px;display:block;margin:0 auto"></video>');
-        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Close</button><a href="' + url + '" class="btn btn-primary btn-sm" download>Download</a>');
     } else if (imageExts.indexOf(ext) !== -1) {
         $('#filePreviewTitle').text(name || 'Image Preview');
         $('#filePreviewBody').html('<img src="' + url + '" alt="' + name + '" style="max-width:100%;max-height:80vh;border-radius:6px;display:block;margin:0 auto">');
-        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Close</button><a href="' + url + '" class="btn btn-primary btn-sm" download>Download</a>');
     } else {
         $('#filePreviewTitle').text(name || 'File Preview');
         $('#filePreviewBody').html(
@@ -2409,7 +2399,7 @@ function openFilePreview(url, name) {
             '<p style="font-size:15px;font-weight:600;color:var(--text-primary)">' + (name || 'File') + '</p>' +
             '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">File akan diunduh secara otomatis</p></div>'
         );
-        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Tutup</button><a href="' + url + '" class="btn btn-primary btn-sm" download><i class="fa fa-download me-1"></i>Download</a>');
+        $('#filePreviewFooter').html('<button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Close</button><a href="' + url + '" class="btn btn-primary btn-sm" download>Download</a>');
     }
     new bootstrap.Modal('#filePreviewModal').show();
 }
@@ -2440,11 +2430,11 @@ $(document).on('click', '#btn-save-opportunity-task', function() {
     var title = $('#task-title').val().trim();
     var category = $('#task-category-id').val();
     var dueDate = $('#task-due-date').val();
-    if (!title) { toastr.error('Title wajib diisi.'); return; }
-    if (!category) { toastr.error('Category wajib diisi.'); return; }
-    if (!dueDate) { toastr.error('Due Date wajib diisi.'); return; }
+    if (!title) { toastr.error('Title is required.'); return; }
+    if (!category) { toastr.error('Category is required.'); return; }
+    if (!dueDate) { toastr.error('Due Date is required.'); return; }
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Creating...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Creating...');
 
     var formData = new FormData();
     formData.append('_token', '{{ csrf_token() }}');
@@ -2485,11 +2475,11 @@ $(document).on('click', '#btn-save-opportunity-task', function() {
                 var first = Object.values(errors)[0];
                 toastr.error(Array.isArray(first) ? first[0] : first);
             } else {
-                toastr.error(xhr.responseJSON?.message || 'Gagal menambah task.');
+                toastr.error(xhr.responseJSON?.message || 'Failed to add the task.');
             }
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Add Task');
+            $btn.prop('disabled', false).html('Add Task');
         }
     });
 });
@@ -2508,21 +2498,20 @@ function loadTasks() {
                 var dueLabel = t.due_date ? new Date(t.due_date).toISOString().split('T')[0] : '—';
                 var dueStyle = (!['done', 'cancelled'].includes(t.status) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString())) ? 'color:#dc3545;font-weight:600' : '';
                 html += '<div class="task-item" onclick="window.location.href=\'/task-planner/' + t.id + '?back=opportunity-' + opportunityId + '\'" style="cursor:pointer">' +
-                    '<div class="task-item-icon" style="' + iconBg + '"><i class="fa fa-tasks"></i></div>' +
                     '<div class="task-item-body">' +
                     '<div class="task-item-title">' + escapeHtml(t.title) + '</div>' +
-                    '<div class="task-item-meta"><i class="fa fa-user"></i> ' + escapeHtml(assigneeName) + ' · <i class="fa fa-user-pen"></i> ' + escapeHtml(creatorName) + '</div>' +
-                    '<div class="task-item-meta" style="margin-top:2px"><i class="fa fa-folder"></i> ' + escapeHtml(categoryName) + ' · <i class="fa fa-calendar" style="' + dueStyle + '"></i> <span style="' + dueStyle + '">' + dueLabel + '</span></div>' +
+                    '<div class="task-item-meta">Assignee: ' + escapeHtml(assigneeName) + ' · Created by: ' + escapeHtml(creatorName) + '</div>' +
+                    '<div class="task-item-meta" style="margin-top:2px">Category: ' + escapeHtml(categoryName) + ' · Due: <span style="' + dueStyle + '">' + dueLabel + '</span></div>' +
                     '</div>' +
                     '<span class="task-item-status ' + statusClass + '">' + statusLabel + '</span>' +
                     '</div>';
             });
         } else {
-            html = '<div class="empty-state"><i class="fa fa-tasks"></i><p>Belum ada task.</p></div>';
+            html = '<div class="empty-state"><p>No tasks yet.</p></div>';
         }
         $('#task-list').html(html);
     }).fail(function() {
-        $('#task-list').html('<div style="text-align:center;padding:20px;color:var(--danger)">Gagal memuat task.</div>');
+        $('#task-list').html('<div style="text-align:center;padding:20px;color:var(--danger)">Failed to load tasks.</div>');
     });
 }
 
@@ -2644,7 +2633,7 @@ function openInReviewModal() {
 }
 
 function openNegotiationModal() {
-    $('#negotiationModalTitle').text(oppStageData.negotiation_status === 'pending' ? 'Ubah Negotiation' : 'Negotiation');
+    $('#negotiationModalTitle').text(oppStageData.negotiation_status === 'pending' ? 'Change Negotiation' : 'Negotiation');
     $('#neg-authorize').prop('checked', oppStageData.authorize);
     $('#neg-timeline').prop('checked', oppStageData.timeline);
     $('#neg-authorize, #neg-timeline').closest('.form-check-inline').removeClass('is-invalid');
@@ -2652,7 +2641,7 @@ function openNegotiationModal() {
 }
 
 function openCloseLossModal() {
-    $('#closeLossModalTitle').text(oppStageData.close_loss_status === 'pending' ? 'Ubah Close Loss' : 'Close Loss');
+    $('#closeLossModalTitle').text(oppStageData.close_loss_status === 'pending' ? 'Change Close Loss' : 'Close Loss');
     $('#cl-loss-reason').val(oppStageData.loss_reasons_id || '');
     $('#cl-loss-note').val(oppStageData.close_loss_note || '');
     $('#cl-loss-reason, #cl-loss-note').removeClass('is-invalid');
@@ -2675,7 +2664,7 @@ function openNextStepModal() {
 
 $(document).on('click', '#btn-save-next-step', function() {
     const $btn = $(this);
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
     $.ajax({
         url: nextStepUrl.replace('__ID__', {{ $opportunity->id }}),
         type: 'POST',
@@ -2690,10 +2679,10 @@ $(document).on('click', '#btn-save-next-step', function() {
             setTimeout(function() { location.reload(); }, 600);
         },
         error: function(xhr) {
-            toastr.error(xhr.responseJSON?.errors ? Object.values(xhr.responseJSON.errors)[0][0] : (xhr.responseJSON?.message || 'Gagal menyimpan.'));
+            toastr.error(xhr.responseJSON?.errors ? Object.values(xhr.responseJSON.errors)[0][0] : (xhr.responseJSON?.message || 'Failed to save.'));
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+            $btn.prop('disabled', false).html('Save');
         }
     });
 });
@@ -2706,12 +2695,12 @@ function approveTransition(type) {
     const url = type === 'negotiation' ? approveNegotiationUrl : approveCloseLossUrl;
     const label = type === 'negotiation' ? 'Negotiation' : 'Close Loss';
     Swal.fire({
-        title: 'Setujui ' + label + '?',
+        title: 'Approve ' + label + '?',
         text: 'Opportunity akan pindah ke stage berikutnya. Tindakan ini tidak bisa dibatalkan.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, setujui!',
-        cancelButtonText: 'Batal',
+        confirmButtonText: 'Yes, approve',
+        cancelButtonText: 'Cancel',
         confirmButtonColor: type === 'close-loss' ? '#dc2626' : '#2563eb',
         cancelButtonColor: '#64748b',
         reverseButtons: true,
@@ -2726,7 +2715,7 @@ function approveTransition(type) {
                 setTimeout(function() { location.reload(); }, 600);
             },
             error: function(xhr) {
-                toastr.error(xhr.responseJSON?.message || 'Gagal approve.');
+                toastr.error(xhr.responseJSON?.message || 'Failed to approve.');
             }
         });
     });
@@ -2736,10 +2725,10 @@ $(document).on('click', '#btn-submit-in-review', function() {
     const $btn = $(this);
     if (!$('#in-review-budget').is(':checked')) {
         $('#in-review-budget').closest('.form-check-inline').addClass('is-invalid');
-        toastr.error('Budget wajib dicentang untuk lanjut ke In Review.');
+        toastr.error('Budget must be checked to move to In Review.');
         return;
     }
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Memproses...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Memproses...');
     $.ajax({
         url: inReviewUrl.replace('__ID__', {{ $opportunity->id }}),
         type: 'POST',
@@ -2750,10 +2739,10 @@ $(document).on('click', '#btn-submit-in-review', function() {
             setTimeout(function() { location.reload(); }, 600);
         },
         error: function(xhr) {
-            toastr.error(xhr.responseJSON?.message || 'Gagal memproses.');
+            toastr.error(xhr.responseJSON?.message || 'Failed to process.');
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-arrow-right me-1"></i> Lanjut ke In Review');
+            $btn.prop('disabled', false).html('Lanjut ke In Review');
         }
     });
 });
@@ -2766,10 +2755,10 @@ $(document).on('click', '#btn-submit-negotiation', function() {
     if (!auth || !time) {
         if (!auth) $('#neg-authorize').closest('.form-check-inline').addClass('is-invalid');
         if (!time) $('#neg-timeline').closest('.form-check-inline').addClass('is-invalid');
-        toastr.error('Authorize dan Timeline wajib dicentang.');
+        toastr.error('Authorize and Timeline must be checked.');
         return;
     }
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Mengirim...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Mengirim...');
     $.ajax({
         url: negotiationUrl.replace('__ID__', {{ $opportunity->id }}),
         type: 'POST',
@@ -2780,10 +2769,10 @@ $(document).on('click', '#btn-submit-negotiation', function() {
             setTimeout(function() { location.reload(); }, 600);
         },
         error: function(xhr) {
-            toastr.error(xhr.responseJSON?.message || 'Gagal mengirim permintaan.');
+            toastr.error(xhr.responseJSON?.message || 'Failed to send the request.');
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Submit Approval');
+            $btn.prop('disabled', false).html('Submit Approval');
         }
     });
 });
@@ -2794,11 +2783,11 @@ $(document).on('click', '#btn-submit-close-loss', function() {
     const note = $('#cl-loss-note').val().trim();
     let firstInvalid = null;
     $('#cl-loss-reason, #cl-loss-note').removeClass('is-invalid');
-    if (!reason) { $('#cl-loss-reason').addClass('is-invalid'); firstInvalid = firstInvalid || 'Loss Reason wajib dipilih.'; }
-    if (!note) { $('#cl-loss-note').addClass('is-invalid'); firstInvalid = firstInvalid || 'Deskripsi alasan wajib diisi.'; }
+    if (!reason) { $('#cl-loss-reason').addClass('is-invalid'); firstInvalid = firstInvalid || 'Select a Loss Reason.'; }
+    if (!note) { $('#cl-loss-note').addClass('is-invalid'); firstInvalid = firstInvalid || 'Reason description is required.'; }
     if (firstInvalid) { toastr.error(firstInvalid); return; }
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Mengirim...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Mengirim...');
     $.ajax({
         url: closeLossUrl.replace('__ID__', {{ $opportunity->id }}),
         type: 'POST',
@@ -2813,10 +2802,10 @@ $(document).on('click', '#btn-submit-close-loss', function() {
             setTimeout(function() { location.reload(); }, 600);
         },
         error: function(xhr) {
-            toastr.error(xhr.responseJSON?.errors ? Object.values(xhr.responseJSON.errors)[0][0] : (xhr.responseJSON?.message || 'Gagal mengirim permintaan.'));
+            toastr.error(xhr.responseJSON?.errors ? Object.values(xhr.responseJSON.errors)[0][0] : (xhr.responseJSON?.message || 'Failed to send the request.'));
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Submit');
+            $btn.prop('disabled', false).html('Submit');
         }
     });
 });
@@ -2857,7 +2846,7 @@ function scrollToTarget(id) {
                 var toggleBtn = el.closest('.activity-post-body').querySelector('.activity-reply-toggle');
                 if (toggleBtn) {
                     var count = repliesSection.querySelectorAll('.activity-reply').length;
-                    toggleBtn.innerHTML = '<i class="fa fa-comments"></i> Sembunyikan balasan';
+                    toggleBtn.textContent = 'Hide replies';
                 }
             }
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });

@@ -4,6 +4,7 @@
 @section('page-title', 'Contact Management')
 
 @section('styles')
+@include('partials.list-toolbar')
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
@@ -68,6 +69,10 @@
     .mobile-picker { display: flex; gap: 8px; align-items: stretch; }
     .mobile-picker select { width: 92px; flex: 0 0 92px; }
     .mobile-picker input { flex: 1; }
+    .contacts-toolbar { border-bottom: 1px solid var(--card-border); margin-bottom: 6px; }
+    .contacts-btn { font-size: 12.5px; height: 32px; white-space: nowrap; display: inline-flex; align-items: center; }
+    .contacts-actions { display: flex; gap: 6px; margin-left: auto; }
+    @media (max-width: 767.98px) { .contacts-actions { margin-left: 0; width: 100%; justify-content: flex-end; } }
 </style>
 @endsection
 
@@ -75,33 +80,50 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Contact Management</h1>
-        <p class="page-header-sub">Kelola data kontak dan relasi perusahaan</p>
+        <p class="page-header-sub">Manage customer contacts and their company relations.</p>
     </div>
-    @if($canRead)
-    <div class="page-header-actions">
-        <a href="{{ route('contact-management.export') }}" class="btn btn-outline-secondary btn-sm me-2">
-            <i class="fa fa-download"></i>
-            <span>Export</span>
-        </a>
-        @if($canCreate)
-        <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="openImportModal()">
-            <i class="fa fa-upload"></i>
-            <span>Import</span>
-        </button>
-        <button type="button" class="btn-accent" onclick="openCreateModal()">
-            <i class="fa fa-plus"></i>
-            <span>Add Contact</span>
-        </button>
-        @endif
-    </div>
-    @endif
 </div>
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa fa-address-book me-2" style="color:var(--accent)"></i>Contacts List</span>
+        <span>Contact List</span>
     </div>
     <div class="card-body-custom p-2">
+        <div class="list-toolbar contacts-toolbar" id="contacts-toolbar">
+            <div class="lt-search">
+                <i class="fa fa-magnifying-glass"></i>
+                <input type="search" class="form-control" data-search placeholder="Search name, email, mobile, account, owner…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
+            </div>
+            <select class="form-select" data-filter="account" data-searchable aria-label="Account">
+                <option value="">All Accounts</option>
+                @foreach($accountCompanies as $ac)<option value="{{ $ac->id }}">{{ $ac->account_name }}</option>@endforeach
+            </select>
+            @unless($restrictedSales)
+            <select class="form-select" data-filter="assigned" data-searchable aria-label="Assigned to">
+                <option value="">All Assignees</option>
+                <option value="none">Unassigned</option>
+                @foreach($assignableUsers as $au)<option value="{{ $au->id }}">{{ $au->display_name }}</option>@endforeach
+            </select>
+            @endunless
+            <select class="form-select" data-filter="activity" aria-label="Last activity">
+                <option value="">Active Last: Any</option>
+                <option value="7d">Active in last 7 days</option>
+                <option value="30d">Active in last 30 days</option>
+                <option value="stale">Inactive over 30 days</option>
+                <option value="none">No activity yet</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            <div class="contacts-actions">
+                @if($canRead)
+                <a href="{{ route('contact-management.export') }}" class="btn btn-sm btn-outline-secondary contacts-btn contacts-export" title="Export to Excel with the active filters">Export</a>
+                @endif
+                @if($canCreate)
+                <button type="button" class="btn btn-sm btn-outline-secondary contacts-btn" onclick="openImportModal()">Import</button>
+                <button type="button" class="btn btn-sm btn-primary contacts-btn" onclick="openCreateModal()">Add Contact</button>
+                @endif
+            </div>
+        </div>
         <div class="table-responsive">
         <table id="contacts-table" class="table table-custom align-middle mb-0" style="width:100%">
             <thead>
@@ -134,29 +156,24 @@
             </div>
             <div class="modal-body">
                 <div class="text-center mb-3">
-                    <i class="fa fa-file-excel" style="font-size:40px;color:#217346"></i>
-                    <p class="mt-2 mb-0" style="font-size:13px;color:var(--text-muted)">
-                        Download template, isi data, lalu upload file CSV.
+                    <p class="mb-0" style="font-size:13px;color:var(--text-muted)">
+                        Download the template, fill in the data, then upload it as a CSV file.
                     </p>
-                    <a href="{{ route('contact-management.template') }}" class="btn btn-sm btn-outline-success mt-2">
-                        <i class="fa fa-download me-1"></i> Download Template (.xlsx)
-                    </a>
+                    <a href="{{ route('contact-management.template') }}" class="btn btn-sm btn-outline-secondary mt-2">Download Template (.xlsx)</a>
                 </div>
                 <hr>
                 <form id="import-form" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <label class="form-label" style="font-size:12px;font-weight:600">Pilih File CSV</label>
+                        <label class="form-label" for="import-file" style="font-size:12px;font-weight:600">CSV File</label>
                         <input type="file" name="file" id="import-file" class="form-control" accept=".csv,.txt" required>
-                        <small class="text-muted">Maksimal 5MB. Format: CSV (Save As dari Excel).</small>
+                        <small class="text-muted">Max 5MB. Format: CSV (Save As from Excel).</small>
                     </div>
                     <div id="import-result" style="display:none;font-size:13px;"></div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-primary btn-sm" id="btn-import">
-                    <i class="fa fa-upload me-1"></i> Upload & Import
-                </button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-import">Upload &amp; Import</button>
             </div>
         </div>
     </div>
@@ -175,7 +192,7 @@
 
                     <div class="contact-form-section open">
                         <div class="contact-form-section-header" onclick="toggleContactSection(this)">
-                            <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Contact Information</span>
+                            <span>Contact Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="contact-form-section-body">
@@ -186,7 +203,7 @@
                                         <span id="contact-icon-preview" class="avatar-circle" style="overflow:hidden;flex:0 0 36px"></span>
                                         <input type="file" name="icon" id="contact-icon" accept="image/*">
                                     </div>
-                                    <small class="text-muted" style="font-size:11px">PNG/JPG, maks 2MB.</small>
+                                    <small class="text-muted" style="font-size:11px">PNG/JPG, max 2MB.</small>
                                 </div>
                             </div>
                             <div class="contact-form-row">
@@ -207,7 +224,7 @@
                                 <div class="form-group">
                                     <label>Account Name <span class="text-danger">*</span></label>
                                     <select name="account_companies_id" id="contact-account">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($accountCompanies as $ac)
                                         <option value="{{ $ac->id }}">{{ $ac->account_name }}</option>
                                         @endforeach
@@ -236,7 +253,7 @@
                                 <div class="form-group">
                                     <label>Job Title <span class="text-danger">*</span></label>
                                     <select name="job_titles_id" id="contact-job-title">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($jobTitles as $jt)
                                         <option value="{{ $jt->id }}">{{ $jt->title_name }}</option>
                                         @endforeach
@@ -245,7 +262,7 @@
                                 <div class="form-group">
                                     <label>Contact Source <span class="text-danger">*</span></label>
                                     <select name="sources_id" id="contact-source">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($sources as $src)
                                         <option value="{{ $src->id }}" @if(str_contains(strtolower($src->source_name), 'referral')) data-referral="1" @endif>{{ $src->source_name }}</option>
                                         @endforeach
@@ -254,7 +271,7 @@
                                 <div class="form-group">
                                     <label>Department <span class="text-danger">*</span></label>
                                     <select name="divisions_id" id="contact-division">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($divisions as $div)
                                         <option value="{{ $div->id }}">{{ $div->division_name }}</option>
                                         @endforeach
@@ -264,14 +281,14 @@
                             <div class="contact-form-row" id="contact-referral-group" style="display:none">
                                 <div class="form-group">
                                     <label>Referral Name <span class="text-danger">*</span></label>
-                                    <input type="text" name="name_referral" id="contact-referral" maxlength="150" placeholder="Nama pemberi referensi">
+                                    <input type="text" name="name_referral" id="contact-referral" maxlength="150" placeholder="Name of the person who referred">
                                 </div>
                             </div>
                             <div class="contact-form-row">
                                 <div class="form-group">
                                     <label>Preferred Contact Method <span class="text-danger">*</span></label>
                                     <select name="contact_methods_id" id="contact-method">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($contactMethods as $cm)
                                         <option value="{{ $cm->id }}">{{ $cm->method_name }}</option>
                                         @endforeach
@@ -280,7 +297,7 @@
                                 <div class="form-group">
                                     <label>Role in Project <span class="text-danger">*</span></label>
                                     <select name="role_in_projects_id" id="contact-role">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($roleInProjects as $rp)
                                         <option value="{{ $rp->id }}">{{ $rp->role_name }}</option>
                                         @endforeach
@@ -291,7 +308,7 @@
                                 <div class="form-group" id="contact-assigned-to-group" @if($contactCurrentUserIsSales) style="display:none" @endif>
                                     <label>Assigned To</label>
                                     <select name="assigned_to_id" id="contact-assigned-to">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($assignableUsers as $au)
                                         <option value="{{ $au->id }}">{{ $au->display_name }}</option>
                                         @endforeach
@@ -303,7 +320,7 @@
 
                     <div class="contact-form-section" style="display: none">
                         <div class="contact-form-section-header" onclick="toggleContactSection(this)">
-                            <span><i class="fa fa-map-marker-alt me-2" style="color:var(--accent)"></i>Address Information</span>
+                            <span>Address Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="contact-form-section-body">
@@ -336,10 +353,8 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm" id="btn-save-contact">
-                    <i class="fa fa-save me-1"></i> Save
-                </button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-contact">Save</button>
             </div>
         </div>
     </div>
@@ -523,7 +538,7 @@ function openEditModal(id) {
             contactModalInstance.show();
         },
         error: function() {
-            toastr.error('Gagal memuat data kontak.');
+            toastr.error('Failed to load the contact.');
         }
     });
 }
@@ -534,9 +549,20 @@ function initContactsTable() {
     }
 
     contactsTable = $('#contacts-table').DataTable({
+        layout: ListToolbar.layout,
+        language: {
+            processing: 'Loading…',
+            lengthMenu: 'Show _MENU_ rows',
+            info: 'Showing _START_–_END_ of _TOTAL_ contacts',
+            infoEmpty: 'No contacts',
+            infoFiltered: '(filtered from _MAX_)',
+            zeroRecords: '<span style="color:var(--text-muted)">No contacts match the search / filters.</span>',
+            emptyTable: '<span style="color:var(--text-muted)">No contacts yet.</span>',
+            paginate: { first: '«', previous: '‹', next: '›', last: '»' }
+        },
         processing: true,
         serverSide: true,
-        ajax: '{{ route("contact-management.data") }}',
+        ajax: { url: '{{ route("contact-management.data") }}', data: function(d) { return contactsToolbar.params(d); } },
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
             {
@@ -590,7 +616,7 @@ function initContactsTable() {
                         html += ' <button type="button" class="btn-icon" title="Edit" onclick="openEditModal(' + row.id + ')"><i class="fa fa-pen"></i></button>';
                     }
                     if (contactsCanDelete) {
-                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-contact" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-contact" title="Delete" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;
@@ -600,23 +626,6 @@ function initContactsTable() {
         order: [[1, 'asc']],
         pageLength: 10,
         lengthMenu: [10, 15, 25, 50, 100],
-        searching : true,
-        // language: {
-        //     processing: '<i class="fa fa-spinner fa-spin"></i> Loading...',
-        //     search: '',
-        //     searchPlaceholder: 'Search...',
-        //     lengthMenu: '_MENU_',
-        //     info: 'Show _START_–_END_ of _TOTAL_',
-        //     infoEmpty: 'No data available.',
-        //     infoFiltered: '(filtered from _MAX_ total entries)',
-        //     zeroRecords: 'No data found.',
-        //     paginate: {
-        //         first: '<i class="fa fa-angle-double-left"></i>',
-        //         last: '<i class="fa fa-angle-double-right"></i>',
-        //         previous: '<i class="fa fa-angle-left"></i>',
-        //         next: '<i class="fa fa-angle-right"></i>'
-        //     }
-        // },
     });
 }
 
@@ -650,7 +659,7 @@ $(document).on('click', '#btn-save-contact', function() {
             if (section.length && !section.hasClass('open')) {
                 section.addClass('open');
             }
-            toastr.error(v.label + ' wajib diisi.');
+            toastr.error(v.label + ' is required.');
             $el.focus();
             return;
         }
@@ -658,7 +667,7 @@ $(document).on('click', '#btn-save-contact', function() {
 
     if (!$('#contact-mobile').val() || !$('#contact-mobile').val().replace(/\D/g, '')) {
         $('#contact-mobile').addClass('is-invalid');
-        toastr.error('Mobile wajib diisi.');
+        toastr.error('Mobile is required.');
         $('#contact-mobile').focus();
         return;
     }
@@ -667,7 +676,7 @@ $(document).on('click', '#btn-save-contact', function() {
     if ($('#contact-source').find(':selected').data('referral') && !$.trim($('#contact-referral').val())) {
         $('#contact-referral-group').show();
         $('#contact-referral').addClass('is-invalid');
-        toastr.error('Referral Name wajib diisi untuk sumber Referral.');
+        toastr.error('Referral Name is required for the Referral source.');
         $('#contact-referral').focus();
         return;
     }
@@ -694,7 +703,7 @@ $(document).on('click', '#btn-save-contact', function() {
     }).then(function(result) {
         if (!result.isConfirmed) return;
 
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
         $.ajax({
             url: url,
@@ -706,10 +715,10 @@ $(document).on('click', '#btn-save-contact', function() {
                 toastr.success(res.message);
                 if (contactModalInstance) contactModalInstance.hide();
                 if (contactsTable) contactsTable.ajax.reload(null, false);
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).text('Save');
             },
             error: function(xhr) {
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).text('Save');
                 var errors = xhr.responseJSON?.errors;
                 if (errors) {
                     var first = Object.values(errors)[0];
@@ -777,7 +786,7 @@ $(document).on('shown.bs.modal', '#contactModal', function() {
     if (!$('#contact-account').hasClass('select2-hidden-accessible')) {
         $('#contact-account').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih —',
+            placeholder: '— Select —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#contactModal')
@@ -803,7 +812,7 @@ $(document).on('click', '#btn-import', function() {
     const file = fileInput.files[0];
 
     if (!file) {
-        toastr.error('Pilih file CSV terlebih dahulu.');
+        toastr.error('Select a CSV file first.');
         return;
     }
 
@@ -811,7 +820,7 @@ $(document).on('click', '#btn-import', function() {
     formData.append('file', file);
     formData.append('_token', '{{ csrf_token() }}');
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Importing...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Importing...');
 
     $.ajax({
         url: '{{ route("contact-management.import") }}',
@@ -820,14 +829,14 @@ $(document).on('click', '#btn-import', function() {
         processData: false,
         contentType: false,
         success: function(res) {
-            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
+            $btn.prop('disabled', false).text('Upload & Import');
 
             const resultDiv = document.getElementById('import-result');
             resultDiv.style.display = 'block';
 
             let html = '<div class="alert alert-success py-2 mb-2">' + res.message + '</div>';
             if (res.result && res.result.errors && res.result.errors.length > 0) {
-                html += '<div class="alert alert-warning py-2"><strong>Detail error:</strong><br>' +
+                html += '<div class="alert alert-warning py-2"><strong>Error details:</strong><br>' +
                     res.result.errors.map(function(e) { return '&bull; ' + e; }).join('<br>') +
                     '</div>';
             }
@@ -836,13 +845,29 @@ $(document).on('click', '#btn-import', function() {
             if (contactsTable) contactsTable.ajax.reload(null, false);
         },
         error: function(xhr) {
-            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
-            var msg = xhr.responseJSON?.message || 'Gagal import file.';
+            $btn.prop('disabled', false).text('Upload & Import');
+            var msg = xhr.responseJSON?.message || 'Failed to import the file.';
             toastr.error(msg);
         }
     });
 });
 
-initContactsTable();
+// Toolbar filter (cari + filter) dan export yang mengikuti filter aktif.
+let contactsToolbar = null;
+const contactsExportBase = '{{ route("contact-management.export") }}';
+function contactsSyncExport() {
+    var params = {};
+    $('#contacts-toolbar [data-filter]').each(function() { var v = $(this).val(); if (v) params[$(this).data('filter')] = v; });
+    var q = $('#contacts-toolbar [data-search]').val();
+    if (q) params.q = q;
+    $('.contacts-export').attr('href', contactsExportBase + (Object.keys(params).length ? '?' + $.param(params) : ''));
+}
+
+$(document).ready(function() {
+    contactsToolbar = ListToolbar('#contacts-toolbar', function() { return contactsTable; });
+    initContactsTable();
+    $('#contacts-toolbar').on('change input click', '[data-filter], [data-search], .lt-clear, [data-reset]', function() { setTimeout(contactsSyncExport, 60); });
+    contactsSyncExport();
+});
 </script>
 @endsection

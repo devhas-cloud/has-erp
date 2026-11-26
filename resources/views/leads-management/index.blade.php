@@ -4,6 +4,7 @@
 @section('page-title', 'Leads Management')
 
 @section('styles')
+@include('partials.list-toolbar')
 <style>
     .modal-lead .modal-dialog { max-width: 800px; }
     .lead-form-section {
@@ -133,107 +134,16 @@
         gap: 8px;
     }
 
-    /* ===== Toolbar: filter Created Date + Lead Status ===== */
-    .lead-toolbar {
-        margin: 6px 6px 14px;
-        border: 1px solid var(--card-border);
-        border-radius: var(--radius);
-        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    }
-    .lead-toolbar-main {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 14px 24px;
-        padding: 14px 16px;
-    }
-    .lead-toolbar-group { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-    /* Grup filter mengisi sisa lebar; rentang kustom turun ke baris kedua bila tidak muat, dropdown Lead Status tetap di kanan */
-    .lead-toolbar-filters { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-    .lead-status-filter { flex: 0 0 auto; }
-    .lead-toolbar-label {
-        font-size: 10.5px;
-        font-weight: 800;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    .lead-toolbar-label i { color: var(--accent); margin-right: 5px; }
-    .lead-toolbar-controls { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
-
-    .lead-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    .lead-chip {
-        padding: 7px 13px;
-        border-radius: 20px;
-        border: 1px solid var(--card-border);
-        background: var(--card);
-        color: var(--text-secondary);
-        font-size: 12px;
-        font-weight: 700;
-        font-family: inherit;
-        line-height: 1.2;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: all 0.2s var(--ease);
-    }
-    .lead-chip:hover {
-        border-color: rgba(16, 185, 129, 0.3);
-        color: var(--accent);
-        background: var(--accent-soft);
-    }
-    .lead-chip.active {
-        background: linear-gradient(135deg, var(--accent), #059669);
-        border-color: transparent;
-        color: #fff;
-        box-shadow: 0 2px 8px var(--accent-glow);
-    }
-    .lead-chip:focus-visible, .lead-summary-reset:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-    }
-
-    .lead-range { display: flex; align-items: center; gap: 6px; }
-    .lead-range .form-control { width: 148px; padding: 6px 10px; font-size: 12.5px; }
-    .lead-range-sep { color: var(--text-muted); font-size: 12px; font-weight: 700; }
-    .lead-range.is-custom .form-control { border-color: var(--accent); }
-
-    .lead-status-filter .form-select { min-width: 210px; padding: 7px 34px 7px 12px; font-size: 12.5px; font-weight: 600; }
-
-    .lead-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        flex-wrap: wrap;
-        padding: 9px 16px;
-        border-top: 1px solid var(--card-border);
-        font-size: 12.5px;
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-    .lead-summary strong { color: var(--text-primary); font-weight: 800; }
-    .lead-summary-reset {
-        border: none;
-        background: none;
-        padding: 2px 4px;
-        color: var(--danger);
-        font-size: 12px;
-        font-weight: 700;
-        font-family: inherit;
-        cursor: pointer;
-        border-radius: 6px;
-    }
-    .lead-summary-reset:hover { text-decoration: underline; }
-
+    /* ===== Toolbar daftar (pola sama dengan Contact / Account) ===== */
+    .leads-toolbar { border-bottom: 1px solid var(--card-border); margin-bottom: 6px; }
+    .leads-btn { font-size: 12.5px; height: 32px; white-space: nowrap; display: inline-flex; align-items: center; }
+    .leads-actions { display: flex; gap: 6px; margin-left: auto; }
+    .leads-summary { font-size: 12px; color: var(--text-muted); padding: 0 6px 6px; }
+    .leads-summary strong { color: var(--text-primary); }
+    @media (max-width: 767.98px) { .leads-actions { margin-left: 0; width: 100%; justify-content: flex-end; } }
     .lead-date { color: var(--text-primary); font-weight: 600; white-space: nowrap; }
     .lead-date-rel { font-size: 11px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
 
-    @media (max-width: 768px) {
-        .lead-toolbar-main { align-items: stretch; flex-direction: column; }
-        .lead-range { width: 100%; }
-        .lead-range .form-control { flex: 1; width: auto; min-width: 0; }
-        .lead-status-filter .form-select { width: 100%; min-width: 0; }
-    }
 </style>
 @endsection
 
@@ -241,70 +151,66 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Leads Management</h1>
-        <p class="page-header-sub">Kelola data leads dan calon pelanggan</p>
+        <p class="page-header-sub">Manage leads and prospective customers.</p>
     </div>
-    @if($canCreate)
-    <div class="page-header-actions">
-        {{-- <a href="{{ route('leads-management.template') }}" class="btn btn-outline-secondary btn-sm me-2" title="Download Template">
-            <i class="fa fa-download"></i>
-            <span>Template</span>
-        </a> --}}
-        <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="openImportModal()">
-            <i class="fa fa-upload"></i>
-            <span>Import</span>
-        </button>
-        <button type="button" class="btn-accent" onclick="openCreateModal()">
-            <i class="fa fa-plus"></i>
-            <span>Add Lead</span>
-        </button>
-    </div>
-    @endif
 </div>
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa fa-bullhorn me-2" style="color:var(--accent)"></i>Leads List</span>
+        <span>Lead List</span>
     </div>
     <div class="card-body-custom p-2">
-        <div class="lead-toolbar">
-            <div class="lead-toolbar-main">
-                <div class="lead-toolbar-filters">
-                    <div class="lead-toolbar-group">
-                        <span class="lead-toolbar-label"><i class="fa fa-calendar-days"></i>Created Date</span>
-                        <div class="lead-toolbar-controls">
-                            <div class="lead-chips" role="group" aria-label="Rentang tanggal dibuat">
-                                <button type="button" class="lead-chip" data-preset="q1" title="Januari – Maret">Kuartal 1</button>
-                                <button type="button" class="lead-chip" data-preset="q2" title="April – Juni">Kuartal 2</button>
-                                <button type="button" class="lead-chip" data-preset="q3" title="Juli – September">Kuartal 3</button>
-                                <button type="button" class="lead-chip" data-preset="q4" title="Oktober – Desember">Kuartal 4</button>
-                                <button type="button" class="lead-chip" data-preset="year" title="Januari – Desember">Setahun</button>
-                                <button type="button" class="lead-chip" data-preset="all" title="Tanpa filter tanggal">Semua</button>
-                            </div>
-                            <div class="lead-range" id="lead-range">
-                                <input type="date" id="filter-created-from" class="form-control" aria-label="Dibuat dari tanggal" title="Dari tanggal">
-                                <span class="lead-range-sep">–</span>
-                                <input type="date" id="filter-created-to" class="form-control" aria-label="Dibuat sampai tanggal" title="Sampai tanggal">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="lead-toolbar-group lead-status-filter">
-                    <label class="lead-toolbar-label" for="filter-lead-status"><i class="fa fa-layer-group"></i>Lead Status</label>
-                    <select id="filter-lead-status" class="form-select">
-                        <option value="">Semua Status</option>
-                        @foreach(['New', 'Approach', 'Qualified', 'Unqualified', 'Converted'] as $status)
-                        <option value="{{ $status }}">{{ $status }}</option>
-                        @endforeach
-                    </select>
-                </div>
+        <div class="list-toolbar leads-toolbar" id="leads-toolbar">
+            <div class="lt-search">
+                <i class="fa fa-magnifying-glass"></i>
+                <input type="search" class="form-control" data-search placeholder="Search title, contact, account, owner…" autocomplete="off">
+                <button type="button" class="lt-clear" title="Clear search"><i class="fa fa-xmark"></i></button>
             </div>
-            <div class="lead-summary" aria-live="polite">
-                <span id="lead-summary-text">Memuat…</span>
-                <button type="button" class="lead-summary-reset" id="btn-reset-lead-filter" style="display:none">
-                    <i class="fa fa-xmark me-1"></i>Hapus filter
-                </button>
+            <select class="form-select" data-filter="account" data-searchable aria-label="Account">
+                <option value="">All Accounts</option>
+                @foreach($accountCompanies as $ac)<option value="{{ $ac->id }}">{{ $ac->account_name }}</option>@endforeach
+            </select>
+            @unless($isSales)
+            <select class="form-select" data-filter="assigned" data-searchable aria-label="Assigned to">
+                <option value="">All Assignees</option>
+                <option value="none">Unassigned</option>
+                @foreach($users as $u)<option value="{{ $u->id }}">{{ $u->display_name }}</option>@endforeach
+            </select>
+            @endunless
+            <select class="form-select" data-filter="lead_status" aria-label="Lead status">
+                <option value="">All Statuses</option>
+                @foreach(['New', 'Approach', 'Qualified', 'Unqualified', 'Converted'] as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach
+            </select>
+            <select class="form-select" data-filter="activity" aria-label="Last activity">
+                <option value="">Active Last: Any</option>
+                <option value="7d">Active in last 7 days</option>
+                <option value="30d">Active in last 30 days</option>
+                <option value="stale">Inactive over 30 days</option>
+                <option value="none">No activity yet</option>
+            </select>
+            <select class="form-select" id="leads-created-preset" aria-label="Created date">
+                <option value="">Created: Any</option>
+                <option value="q1">Created: Q1 (Jan – Mar)</option>
+                <option value="q2">Created: Q2 (Apr – Jun)</option>
+                <option value="q3">Created: Q3 (Jul – Sep)</option>
+                <option value="q4">Created: Q4 (Oct – Dec)</option>
+                <option value="year">Created: This year</option>
+                <option value="custom">Created: Custom range</option>
+            </select>
+            <div class="lt-date" id="leads-created-range" title="Created date" style="display:none">
+                <input type="date" class="form-control" data-filter="created_from" aria-label="Created from">
+                <span>–</span>
+                <input type="date" class="form-control" data-filter="created_to" aria-label="Created to">
             </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary lt-reset" data-reset disabled>Reset <span class="badge rounded-pill ms-1" style="display:none">0</span></button>
+            @if($canCreate)
+            <div class="leads-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary leads-btn" onclick="openImportModal()">Import</button>
+                <button type="button" class="btn btn-sm btn-primary leads-btn" onclick="openCreateModal()">Add Lead</button>
+            </div>
+            @endif
         </div>
+        <div class="leads-summary" id="lead-summary-text" aria-live="polite">Loading…</div>
         <div class="table-responsive">
             <table id="leads-table" class="table table-custom align-middle mb-0" style="width:100%">
                 <thead>
@@ -341,7 +247,7 @@
 
                     <div class="lead-form-section open">
                         <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
-                            <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Lead Information</span>
+                            <span>Lead Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="lead-form-section-body">
@@ -362,7 +268,7 @@
                                 <div class="form-group">
                                     <label>Salutation <span class="text-danger">*</span></label>
                                     <select name="salutation" id="lead-salutation">
-                                        <option value="">—Pilih—</option>
+                                        <option value="">— Select —</option>
                                         <option value="Bapak">Bapak</option>
                                         <option value="Ibu">Ibu</option>
                                     </select>
@@ -384,7 +290,7 @@
                                         <input type="tel" id="lead-mobile" placeholder="8123456789" inputmode="numeric">
                                     </div>
                                     <input type="hidden" name="mobile" id="lead-mobile-full">
-                                    <div class="form-text" style="font-size:11px;color:var(--text-muted)">Minimal isi salah satu: Email atau Mobile.</div>
+                                    <div class="form-text" style="font-size:11px;color:var(--text-muted)">Fill in at least one: Email or Mobile.</div>
                                 </div>
                                 <div class="form-group" style="display:none">
                                     <label>Phone</label>
@@ -395,7 +301,7 @@
                                 <div class="form-group">
                                     <label>Job Title <span class="text-danger">*</span></label>
                                     <select name="job_titles_id" id="lead-job-title">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($jobTitles as $jt)
                                         <option value="{{ $jt->id }}">{{ $jt->title_name }}</option>
                                         @endforeach
@@ -404,7 +310,7 @@
                                 <div class="form-group">
                                     <label>Department <span class="text-danger">*</span></label>
                                     <select name="divisions_id" id="lead-division">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($divisions as $div)
                                         <option value="{{ $div->id }}">{{ $div->division_name }}</option>
                                         @endforeach
@@ -415,7 +321,7 @@
                                 <div class="form-group">
                                     <label>Lead Source <span class="text-danger">*</span></label>
                                     <select name="source_id" id="lead-source">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($sources as $src)
                                         <option value="{{ $src->id }}" @if(str_contains(strtolower($src->source_name), 'referral')) data-referral="1" @endif>{{ $src->source_name }}</option>
                                         @endforeach
@@ -424,7 +330,7 @@
                                 <div class="form-group">
                                     <label>Preferred Contact Method</label>
                                     <select name="contact_methods_id" id="lead-contact-method">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($contactMethods as $cm)
                                         <option value="{{ $cm->id }}">{{ $cm->method_name }}</option>
                                         @endforeach
@@ -433,7 +339,7 @@
                                 <div class="form-group">
                                     <label>Role in Project</label>
                                     <select name="role_in_projects_id" id="lead-role">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($roleInProjects as $rp)
                                         <option value="{{ $rp->id }}">{{ $rp->role_name }}</option>
                                         @endforeach
@@ -455,7 +361,7 @@
                                 <div class="form-group">
                                         <label>Assign To</label>
                                         <select name="assigned_to" id="lead-assigned">
-                                            <option value="">— Pilih —</option>
+                                            <option value="">— Select —</option>
                                             @foreach($users as $u)
                                             <option value="{{ $u->id }}">{{ $u->display_name }}</option>
                                             @endforeach
@@ -487,7 +393,7 @@
 
                     <div class="lead-form-section">
                         <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
-                            <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Account Information</span>
+                            <span>Account Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="lead-form-section-body">
@@ -504,7 +410,7 @@
                                 <div class="form-group">
                                     <label>Field Type <span class="text-danger lead-field-required" style="display: none">*</span></label>
                                     <select name="types_accounts_companies_id" id="lead-field-type">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($typesAccountsCompanies as $tac)
                                         <option value="{{ $tac->id }}">{{ $tac->type_name }}</option>
                                         @endforeach
@@ -513,7 +419,7 @@
                                 <div class="form-group">
                                     <label>Segmentation <span class="text-danger lead-field-required" style="display: none">*</span></label>
                                     <select name="segmentation_id" id="lead-segmentation">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($segmentations as $seg)
                                         <option value="{{ $seg->id }}">{{ $seg->segmentation_name }}</option>
                                         @endforeach
@@ -522,7 +428,7 @@
                                 <div class="form-group" style="display:none">
                                     <label>Account Type <span class="text-danger">*</span></label>
                                     <select name="account_types_id" id="lead-account-type">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($accountTypes as $at)
                                         <option value="{{ $at->id }}">{{ $at->type_name }}</option>
                                         @endforeach
@@ -533,7 +439,7 @@
                                 <div class="form-group">
                                     <label>Business Entity</label>
                                     <select name="business_entities_id" id="lead-biz-entity">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($businessEntities as $be)
                                         <option value="{{ $be->id }}">{{ $be->entity_name }}</option>
                                         @endforeach
@@ -542,7 +448,7 @@
                                 <div class="form-group">
                                     <label>Business Value</label>
                                     <select name="business_values_id" id="lead-biz-value">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($businessValues as $bv)
                                         <option value="{{ $bv->id }}">{{ $bv->value_name }}</option>
                                         @endforeach
@@ -551,7 +457,7 @@
                                 <div class="form-group" style="display: none">
                                     <label>Interaction Level</label>
                                     <select name="interaction_levels_id" id="lead-interaction">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($interactionLevels as $il)
                                         <option value="{{ $il->id }}">{{ $il->level_name }}</option>
                                         @endforeach
@@ -561,21 +467,21 @@
                             <div class="lead-addr-map-group" id="lead-addr-map-group">
                                 <div class="lead-addr-map-toolbar">
                                     <button type="button" class="btn btn-secondary btn-sm" onclick="leadAddrMapPickLocation()">
-                                        <i class="fa fa-map-marker-alt me-1"></i> Pilih Titik di Peta
+                                        Pick on Map
                                     </button>
                                     <button type="button" class="btn btn-secondary btn-sm" onclick="leadAddrMapUseMyLocation()">
-                                        <i class="fa fa-location-crosshairs me-1"></i> Lokasi Saya
+                                        My Location
                                     </button>
-                                    <span class="map-coords" id="lead-addr-map-coords">Belum ada titik.</span>
+                                    <span class="map-coords" id="lead-addr-map-coords">No point selected yet.</span>
                                 </div>
                                 <div class="lead-addr-map" id="lead-addr-map"></div>
                                 <div class="lead-addr-map-status" id="lead-addr-map-status"></div>
                                 <div class="lead-addr-map-preview" id="lead-addr-map-preview">
-                                    <div class="lead-addr-map-preview-title"><i class="fa fa-map-pin me-1"></i>Alamat dari Peta</div>
+                                    <div class="lead-addr-map-preview-title">Address from Map</div>
                                     <div class="lead-addr-map-preview-body" id="lead-addr-map-preview-body"></div>
                                     <div class="lead-addr-map-preview-actions">
                                         <button type="button" class="btn btn-primary btn-sm" id="lead-addr-map-apply" disabled onclick="leadAddrMapApply()">
-                                            <i class="fa fa-check me-1"></i> Gunakan Alamat Ini
+                                            Use This Address
                                         </button>
                                     </div>
                                 </div>
@@ -608,7 +514,7 @@
                                 <div class="form-group">
                                     <label>End User</label>
                                     <select name="end_user" id="lead-end-user">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($accountCompanies as $ac)
                                         <option value="{{ $ac->id }}">{{ $ac->account_name }}</option>
                                         @endforeach
@@ -620,7 +526,7 @@
 
                     <div class="lead-form-section"  style="display: none">
                         <div class="lead-form-section-header" onclick="toggleLeadSection(this)">
-                            <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Additional Information</span>
+                            <span>Additional Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="lead-form-section-body">
@@ -661,7 +567,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-lead">
-                    <i class="fa fa-save me-1"></i> Save
+                    Save
                 </button>
             </div>
         </div>
@@ -679,28 +585,27 @@
             </div>
             <div class="modal-body">
                 <div class="text-center mb-3">
-                    <i class="fa fa-file-excel" style="font-size:40px;color:#217346"></i>
-                    <p class="mt-2 mb-0" style="font-size:13px;color:var(--text-muted)">
-                        Download template, isi data, lalu upload file CSV.
+                    <p class="mb-0" style="font-size:13px;color:var(--text-muted)">
+                        Download the template, fill in the data, then upload it as a CSV file.
                     </p>
                     <a href="{{ route('leads-management.template') }}" class="btn btn-sm btn-outline-success mt-2">
-                        <i class="fa fa-download me-1"></i> Download Template (.xlsx)
+                        Download Template (.xlsx)
                     </a>
                 </div>
                 <hr>
                 <form id="import-form" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <label class="form-label" style="font-size:12px;font-weight:600">Pilih File CSV</label>
+                        <label class="form-label" for="import-file" style="font-size:12px;font-weight:600">CSV File</label>
                         <input type="file" name="file" id="import-file" class="form-control" accept=".csv,.txt" required>
-                        <small class="text-muted">Maksimal 5MB. Format: CSV (Save As dari Excel).</small>
+                        <small class="text-muted">Max 5MB. Format: CSV (Save As from Excel).</small>
                     </div>
                     <div id="import-result" style="display:none;font-size:13px;"></div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-import">
-                    <i class="fa fa-upload me-1"></i> Upload & Import
+                    Upload & Import
                 </button>
             </div>
         </div>
@@ -875,7 +780,7 @@ function leadAddrMapReset() {
         clearTimeout(leadAddrClickTimer);
         leadAddrClickTimer = null;
     }
-    $('#lead-addr-map-coords').text('Belum ada titik.');
+    $('#lead-addr-map-coords').text('No point selected yet.');
     $('#lead-addr-map-status').attr('class', 'lead-addr-map-status').text('');
     $('#lead-addr-map-preview').hide();
     $('#lead-addr-map-apply').prop('disabled', true);
@@ -888,25 +793,25 @@ function leadAddrMapPickLocation() {
     }
     leadAddrMapEnsure();
     setTimeout(function() { leadAddrMapInvalidate(); }, 150);
-    toastr.info('Klik pada peta untuk memilih titik alamat.');
+    toastr.info('Click on the map to pick the address point.');
 }
 
 function leadAddrMapUseMyLocation() {
     if (!navigator.geolocation) {
-        toastr.error('Geolocation tidak didukung browser.');
+        toastr.error('Geolocation is not supported by this browser.');
         return;
     }
     leadAddrMapEnsure();
     setTimeout(function() { leadAddrMapInvalidate(); }, 150);
     const status = $('#lead-addr-map-status');
-    status.attr('class', 'lead-addr-map-status loading').text('Mendapatkan lokasi Anda...');
+    status.attr('class', 'lead-addr-map-status loading').text('Getting your location...');
     navigator.geolocation.getCurrentPosition(
         function(pos) {
             leadAddrMap.setView([pos.coords.latitude, pos.coords.longitude], 15);
             leadAddrMapOnPick(pos.coords.latitude, pos.coords.longitude);
         },
         function() {
-            status.attr('class', 'lead-addr-map-status error').text('Gagal mendapatkan lokasi. Berikan izin lalu coba lagi.');
+            status.attr('class', 'lead-addr-map-status error').text('Could not get your location. Allow location access and try again.');
         },
         { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -918,7 +823,7 @@ function leadAddrMapOnPick(lat, lng) {
     leadAddrMap.setView([lat, lng], 15);
     $('#lead-addr-map-coords').text(lat.toFixed(6) + ', ' + lng.toFixed(6));
     const status = $('#lead-addr-map-status');
-    status.attr('class', 'lead-addr-map-status loading').text('Mengambil alamat dari titik...');
+    status.attr('class', 'lead-addr-map-status loading').text('Looking up the address for this point...');
     if (leadAddrClickTimer) clearTimeout(leadAddrClickTimer);
     leadAddrClickTimer = setTimeout(function() { leadAddrMapReverseGeocode(lat, lng); }, 600);
 }
@@ -930,7 +835,7 @@ function leadAddrMapReverseGeocode(lat, lng) {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!data || data.error) {
-                throw new Error(data && data.error ? data.error : 'Alamat tidak ditemukan');
+                throw new Error(data && data.error ? data.error : 'Address not found');
             }
             const addr = data.address || {};
             const street = [addr.road, addr.house_number].filter(Boolean).join(' ') || [addr.neighbourhood, addr.suburb, addr.pedestrian].filter(Boolean).join(', ') || '';
@@ -948,14 +853,14 @@ function leadAddrMapReverseGeocode(lat, lng) {
                 display: [street, city, province, postal, country].filter(Boolean).join('\n'),
             };
 
-            $('#lead-addr-map-preview-body').text(leadAddrResolved.display || 'Alamat tidak lengkap.');
+            $('#lead-addr-map-preview-body').text(leadAddrResolved.display || 'Incomplete address.');
             $('#lead-addr-map-preview').show();
-            status.attr('class', 'lead-addr-map-status').text('Alamat ditemukan. Klik "Gunakan Alamat Ini" untuk mengisi form.');
+            status.attr('class', 'lead-addr-map-status').text('Address found. Click "Use This Address" to fill in the form.');
             $('#lead-addr-map-apply').prop('disabled', false);
         })
         .catch(function(err) {
             leadAddrResolved = null;
-            status.attr('class', 'lead-addr-map-status error').text('Gagal mengambil alamat: ' + (err.message || 'coba lagi.'));
+            status.attr('class', 'lead-addr-map-status error').text('Failed to look up the address: ' + (err.message || 'try again.'));
             $('#lead-addr-map-preview').hide();
             $('#lead-addr-map-apply').prop('disabled', true);
         });
@@ -969,7 +874,7 @@ function leadAddrMapApply() {
     if (r.province) $('#lead-addr-province').val(r.province);
     if (r.postal_code) $('#lead-addr-zip').val(r.postal_code);
     if (r.country) $('#lead-addr-country').val(r.country);
-    toastr.success('Alamat diisi dari peta.');
+    toastr.success('Address filled in from the map.');
 }
 
 function toggleLeadSection(header) {
@@ -1086,15 +991,22 @@ function initLeadsTable() {
     }
 
     leadsTable = $('#leads-table').DataTable({
+        layout: ListToolbar.layout,
+        language: {
+            processing: 'Loading…',
+            lengthMenu: 'Show _MENU_ rows',
+            info: 'Showing _START_–_END_ of _TOTAL_ leads',
+            infoEmpty: 'No leads',
+            infoFiltered: '(filtered from _MAX_)',
+            zeroRecords: '<span style="color:var(--text-muted)">No leads match the search / filters.</span>',
+            emptyTable: '<span style="color:var(--text-muted)">No leads yet.</span>',
+            paginate: { first: '«', previous: '‹', next: '›', last: '»' }
+        },
         processing: true,
         serverSide: true,
         ajax: {
             url: '{{ route("leads-management.data") }}',
-            data: function(d) {
-                d.created_from = $('#filter-created-from').val();
-                d.created_to = $('#filter-created-to').val();
-                d.lead_status = $('#filter-lead-status').val();
-            }
+            data: function(d) { return leadsToolbar.params(d); }
         },
         columns: [
             { data: 'DT_RowIndex', orderable: false, searchable: false, className: 'text-center' },
@@ -1132,7 +1044,7 @@ function initLeadsTable() {
                 render: function(data, type, row) {
                     if (!row.created_at_raw) return '—';
                     var days = moment().startOf('day').diff(moment(row.created_at_raw).startOf('day'), 'days');
-                    var rel = days <= 0 ? 'Hari ini' : (days === 1 ? 'Kemarin' : days + ' hari lalu');
+                    var rel = days <= 0 ? 'Today' : (days === 1 ? 'Yesterday' : days + ' days ago');
                     return '<div class="lead-date">' + data + '</div><div class="lead-date-rel">' + rel + '</div>';
                 }
             },
@@ -1154,7 +1066,7 @@ function initLeadsTable() {
                     }
 
                     if (leadsCanDelete) {
-                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-lead" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn btn-sm btn-ghost text-danger btn-delete-lead" title="Delete" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;
@@ -1163,156 +1075,75 @@ function initLeadsTable() {
         ],
         pageLength: 10,
         lengthMenu: [10, 15, 25, 50, 100],
-        // Filter, urutan, pencarian & halaman tetap saat kembali dari halaman detail (per tab browser)
+        // Urutan & halaman tetap saat kembali dari halaman detail; filter toolbar disimpan terpisah (leadsSaveFilters).
         stateSave: true,
         stateDuration: -1,
-        stateSaveParams: function(settings, data) {
-            data.leadFilter = {
-                preset: leadActivePreset,
-                from: $('#filter-created-from').val(),
-                to: $('#filter-created-to').val(),
-                status: $('#filter-lead-status').val(),
-            };
-        },
-        stateLoadParams: function(settings, data) {
-            var saved = data.leadFilter;
-            if (!saved) return;
-            setLeadStatusFilter(saved.status);
-            if (isCreatedPreset(saved.preset)) {
-                applyCreatedPreset(saved.preset);
-            } else {
-                setCreatedRange(saved.from, saved.to);
-            }
-        },
-        // language: {
-        //     processing: '<i class="fa fa-spinner fa-spin"></i> Loading...',
-        //     search: '',
-        //     searchPlaceholder: 'Search...',
-        //     lengthMenu: '_MENU_',
-        //     info: 'Show _START_–_END_ of _TOTAL_',
-        //     infoEmpty: 'No data available.',
-        //     infoFiltered: '(filtered from _MAX_ total entries)',
-        //     zeroRecords: 'No data found.',
-        //     paginate: {
-        //         first: '<i class="fa fa-angle-double-left"></i>',
-        //         last: '<i class="fa fa-angle-double-right"></i>',
-        //         previous: '<i class="fa fa-angle-left"></i>',
-        //         next: '<i class="fa fa-angle-right"></i>'
-        //     }
-        // },
-        // initComplete: function() {
-        //     $('.dataTables_filter input').attr('placeholder', 'Search...');
-        // }
+        stateSaveParams: function(settings, data) { data.search.search = ''; },
+        // Pencarian dikembalikan dari kotak cari toolbar (dipulihkan leadsRestoreFilters).
+        search: { search: $('#leads-toolbar [data-search]').val() || '' },
+        stateLoadParams: function(settings, data) { data.search.search = $('#leads-toolbar [data-search]').val() || ''; },
     });
 }
 
-// --- Filter Created Date (kuartal + rentang kustom) ---
-const LEAD_DATE_FMT = 'YYYY-MM-DD';
-// Filter bawaan saat halaman pertama dibuka: semua tanggal, urut terbaru. Ganti ke 'q' + moment().quarter() untuk kuartal berjalan.
-const LEAD_DEFAULT_PRESET = 'all';
-let leadActivePreset = 'all';
+// --- Toolbar filter (pola sama dengan Contact / Account) ---
+let leadsToolbar = null;
+const LEADS_FILTER_KEY = 'leads-filters';
 
-function isCreatedPreset(preset) {
-    return /^(q[1-4]|year|all)$/.test(preset || '');
-}
-
-// Rentang tanggal sebuah preset pada tahun berjalan
-function createdPresetRange(preset) {
+// Preset tanggal dibuat (kuartal / setahun) pada tahun berjalan -> isi rentang tanggal.
+function leadsPresetRange(preset) {
     var year = moment().year();
-    if (preset === 'year') {
-        return [moment({ year: year }).startOf('year'), moment({ year: year }).endOf('year')];
-    }
-    var q = /^q([1-4])$/.exec(preset);
+    if (preset === 'year') return [moment({ year: year }).startOf('year'), moment({ year: year }).endOf('year')];
+    var q = /^q([1-4])$/.exec(preset || '');
     if (!q) return null;
     var start = moment({ year: year, month: (parseInt(q[1], 10) - 1) * 3, day: 1 });
     return [start, start.clone().add(2, 'months').endOf('month')];
 }
 
-function setCreatedRange(from, to, preset) {
-    from = from || '';
-    to = to || '';
-    $('#filter-created-from').val(from);
-    $('#filter-created-to').val(to);
-
-    leadActivePreset = preset || ((from || to) ? 'custom' : 'all');
-    $('.lead-chip[data-preset]').each(function() {
-        var active = $(this).data('preset') === leadActivePreset;
-        $(this).toggleClass('active', active).attr('aria-pressed', active ? 'true' : 'false');
-    });
-    $('#lead-range').toggleClass('is-custom', leadActivePreset === 'custom');
-}
-
-function applyCreatedPreset(preset) {
-    var range = createdPresetRange(preset);
+function leadsApplyPreset(preset) {
+    var range = leadsPresetRange(preset);
+    $('#leads-created-range').toggle(preset === 'custom');
     if (range) {
-        setCreatedRange(range[0].format(LEAD_DATE_FMT), range[1].format(LEAD_DATE_FMT), preset);
-    } else {
-        setCreatedRange('', '', 'all');
+        $('[data-filter="created_from"]').val(range[0].format('YYYY-MM-DD'));
+        $('[data-filter="created_to"]').val(range[1].format('YYYY-MM-DD'));
+    } else if (preset !== 'custom') {
+        $('[data-filter="created_from"], [data-filter="created_to"]').val('');
     }
 }
 
-function createdRangeLabel() {
-    var from = $('#filter-created-from').val();
-    var to = $('#filter-created-to').val();
-    var fmt = function(d) { return moment(d).format('DD MMM YYYY'); };
-
-    var q = /^q([1-4])$/.exec(leadActivePreset);
-    if (q) return 'Kuartal ' + q[1] + ' ' + moment().year() + ' (' + moment(from).format('DD MMM') + ' – ' + fmt(to) + ')';
-    if (leadActivePreset === 'year') return 'Tahun ' + moment().year();
-
-    if (from && to) return from === to ? fmt(from) : fmt(from) + ' – ' + fmt(to);
-    if (from) return 'mulai ' + fmt(from);
-    if (to) return 'sampai ' + fmt(to);
-    return '';
+// Filter tetap saat kembali dari halaman detail (per tab browser).
+function leadsSaveFilters() {
+    var state = { preset: $('#leads-created-preset').val(), q: $('#leads-toolbar [data-search]').val() };
+    $('#leads-toolbar [data-filter]').each(function() { state[$(this).data('filter')] = $(this).val(); });
+    try { sessionStorage.setItem(LEADS_FILTER_KEY, JSON.stringify(state)); } catch (e) {}
 }
 
-$(document).on('click', '.lead-chip[data-preset]', function() {
-    applyCreatedPreset($(this).data('preset'));
-    if (leadsTable) leadsTable.ajax.reload();
-});
-
-$('#filter-created-from, #filter-created-to').on('change', function() {
-    var from = $('#filter-created-from').val();
-    var to = $('#filter-created-to').val();
-
-    // Rentang terbalik → tukar otomatis, jangan dibuang
-    if (from && to && from > to) {
-        var tmp = from; from = to; to = tmp;
-    }
-    setCreatedRange(from, to);
-    if (leadsTable) leadsTable.ajax.reload();
-});
-
-// --- Filter Lead Status (dropdown; kosong = semua status) ---
-function setLeadStatusFilter(status) {
-    status = status || '';
-    // Status tersimpan yang sudah tidak ada di pilihan → kembali ke "Semua Status"
-    $('#filter-lead-status').val($('#filter-lead-status option[value="' + status + '"]').length ? status : '');
+function leadsRestoreFilters() {
+    var state = null;
+    try { state = JSON.parse(sessionStorage.getItem(LEADS_FILTER_KEY) || 'null'); } catch (e) {}
+    if (!state) return;
+    $('#leads-toolbar [data-filter]').each(function() {
+        var key = $(this).data('filter');
+        if (state[key] != null && (this.tagName !== 'SELECT' || $(this).find('option[value="' + state[key] + '"]').length)) $(this).val(state[key]);
+    });
+    $('#leads-created-preset').val(state.preset || '');
+    $('#leads-created-range').toggle(state.preset === 'custom');
+    if (state.q) $('#leads-toolbar [data-search]').val(state.q);
 }
 
-$('#filter-lead-status').on('change', function() {
-    if (leadsTable) leadsTable.ajax.reload();
+$(document).on('change', '#leads-created-preset', function() {
+    leadsApplyPreset($(this).val());
+    $('[data-filter="created_from"]').trigger('change');
 });
 
-$('#btn-reset-lead-filter').on('click', function() {
-    applyCreatedPreset('all');
-    setLeadStatusFilter('');
-    if (leadsTable) leadsTable.ajax.reload();
-});
-
-// Ringkasan hasil di bawah toolbar
+// Ringkasan hasil di bawah toolbar.
 $('#leads-table').on('draw.dt', function(e, settings) {
-    var api = new $.fn.dataTable.Api(settings);
-    var info = api.page.info();
-    var label = createdRangeLabel();
-    var status = $('#filter-lead-status').val();
-
-    $('#lead-summary-text').html(
-        '<strong>' + info.recordsDisplay.toLocaleString('id-ID') + '</strong> lead' +
-        (label ? ' · Created Date <strong>' + label + '</strong>' : ' · semua tanggal') +
-        (status ? ' · Status <strong>' + $('<span>').text(status).html() + '</strong>' : ' · semua status')
-    );
-    $('#btn-reset-lead-filter').toggle(!!(label || status));
+    var info = new $.fn.dataTable.Api(settings).page.info();
+    var preset = $('#leads-created-preset option:selected');
+    var status = $('[data-filter="lead_status"]').val();
+    $('#lead-summary-text').html('<strong>' + Num.format(info.recordsDisplay, 0) + '</strong> lead(s)'
+        + ($('#leads-created-preset').val() ? ' · ' + $('<span>').text(preset.text()).html() : '')
+        + (status ? ' · Status <strong>' + $('<span>').text(status).html() + '</strong>' : ''));
+    leadsSaveFilters();
 });
 
 $(document).on('click', '#btn-save-lead', function() {
@@ -1343,7 +1174,7 @@ $(document).on('click', '#btn-save-lead', function() {
             if (section.length && !section.hasClass('open')) {
                 section.addClass('open');
             }
-            toastr.error(v.label + ' wajib diisi.');
+            toastr.error(v.label + ' is required.');
             $el.focus();
             return;
         }
@@ -1352,7 +1183,7 @@ $(document).on('click', '#btn-save-lead', function() {
 
     if ($('#lead-referral-group').is(':visible') && !($('#lead-referral').val() || '').trim()) {
         $('#lead-referral').addClass('is-invalid');
-        toastr.error('Referral Name wajib diisi.');
+        toastr.error('Referral Name is required.');
         $('#lead-referral').focus();
         return;
     }
@@ -1374,7 +1205,7 @@ $(document).on('click', '#btn-save-lead', function() {
                 if (section.length && !section.hasClass('open')) {
                     section.addClass('open');
                 }
-                toastr.error(v.label + ' wajib diisi.');
+                toastr.error(v.label + ' is required.');
                 $el.focus();
                 return;
             }
@@ -1386,7 +1217,7 @@ $(document).on('click', '#btn-save-lead', function() {
     if (!leadEmail && !leadMobileDigits) {
         $('#lead-email').addClass('is-invalid');
         $('#lead-mobile').addClass('is-invalid');
-        toastr.error('Minimal isi salah satu: Email atau Mobile.');
+        toastr.error('Fill in at least one: Email or Mobile.');
         return;
     }
     if (leadEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(leadEmail)) {
@@ -1433,7 +1264,7 @@ $(document).on('click', '#btn-save-lead', function() {
     }).then(function(result) {
         if (!result.isConfirmed) return;
 
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
         $.ajax({
             url: url,
@@ -1445,10 +1276,10 @@ $(document).on('click', '#btn-save-lead', function() {
                 toastr.success(res.message);
                 if (leadModalInstance) leadModalInstance.hide();
                 if (leadsTable) leadsTable.ajax.reload(null, false);
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
             },
             error: function(xhr) {
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
                 var errors = xhr.responseJSON?.errors;
                 if (errors) {
                     var first = Object.values(errors)[0];
@@ -1515,7 +1346,7 @@ $(document).on('click', '#btn-import', function() {
     const file = fileInput.files[0];
 
     if (!file) {
-        toastr.error('Pilih file CSV terlebih dahulu.');
+        toastr.error('Select a CSV file first.');
         return;
     }
 
@@ -1523,7 +1354,7 @@ $(document).on('click', '#btn-import', function() {
     formData.append('file', file);
     formData.append('_token', '{{ csrf_token() }}');
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Importing...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Importing...');
 
     $.ajax({
         url: '{{ route("leads-management.import") }}',
@@ -1532,7 +1363,7 @@ $(document).on('click', '#btn-import', function() {
         processData: false,
         contentType: false,
         success: function(res) {
-            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
+            $btn.prop('disabled', false).html('Upload & Import');
 
             const resultDiv = document.getElementById('import-result');
             resultDiv.style.display = 'block';
@@ -1548,8 +1379,8 @@ $(document).on('click', '#btn-import', function() {
             if (leadsTable) leadsTable.ajax.reload(null, false);
         },
         error: function(xhr) {
-            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload & Import');
-            var msg = xhr.responseJSON?.message || 'Gagal import file.';
+            $btn.prop('disabled', false).html('Upload & Import');
+            var msg = xhr.responseJSON?.message || 'Failed to import the file.';
             toastr.error(msg);
         }
     });
@@ -1630,7 +1461,7 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
     if (!$('#lead-end-user').hasClass('select2-hidden-accessible')) {
         $('#lead-end-user').select2({
             theme: 'bootstrap-5',
-            placeholder: '— Pilih —',
+            placeholder: '— Select —',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#leadModal')
@@ -1638,7 +1469,14 @@ $(document).on('shown.bs.modal', '#leadModal', function() {
     }
 });
 
-applyCreatedPreset(LEAD_DEFAULT_PRESET); // ditimpa oleh filter tersimpan (stateLoadParams) bila ada
-initLeadsTable();
+$(document).ready(function() {
+    leadsRestoreFilters();
+    leadsToolbar = ListToolbar('#leads-toolbar', function() { return leadsTable; });
+    $(document).on('click', '#leads-toolbar [data-reset]', function() {
+        $('#leads-created-preset').val('');
+        $('#leads-created-range').hide();
+    });
+    initLeadsTable();
+});
 </script>
 @endsection

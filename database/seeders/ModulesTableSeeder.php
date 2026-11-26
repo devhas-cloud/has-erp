@@ -18,6 +18,7 @@ class ModulesTableSeeder extends Seeder
         'Admin',
         'Purchasing',
         'Inventory',
+        'Delivery',
         'Produksi',
         'Finance',
         'Employee Relations',
@@ -41,6 +42,7 @@ class ModulesTableSeeder extends Seeder
         'Admin' => [
             'MOD_QUOTATION',
             'MOD_PROFIT_ESTIMATE',
+            'MOD_POS',
             'MOD_PROJECT',
             'MOD_PROJECT_TRACKING',
             'MOD_PO_SUPPLIER_APPROVAL',
@@ -54,8 +56,6 @@ class ModulesTableSeeder extends Seeder
         'Inventory' => [
             'MOD_GOODS_RECEIPT',
             'MOD_STOCK_OUT',
-            'MOD_PACKING_LIST',
-            'MOD_DELIVERY_ORDER',
             'MOD_STOCK_TRANSFER',
             'MOD_BRANCH_TRANSFER',
             'MOD_STOCK_ENTRY',
@@ -63,10 +63,15 @@ class ModulesTableSeeder extends Seeder
             'MOD_STOCK_DETAIL',
             'MOD_STOCK_REPORT',
         ],
+        'Delivery' => [
+            'MOD_PACKING_LIST',
+            'MOD_DELIVERY_ORDER',
+        ],
         'Produksi' => [
             'MOD_MATERIAL_REQUEST',
             'MOD_MATERIAL_HANDOVER',
             'MOD_PRODUCTION',
+            'MOD_MATERIAL_RETURN',
         ],
         'Finance' => [
             'MOD_INVOICE',
@@ -285,6 +290,14 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Admin',
             ],
             [
+                'module_code' => 'MOD_POS',
+                'module_name' => 'POS',
+                'description' => 'Point of Sale (Sales Order): dokumen penjualan datar dari quotation — item berpenamaan customer, 3 mode pembayaran (DP / tanpa DP / lunas), lalu Project dibuat setelah DP/termin terpenuhi',
+                'route_name' => 'pos',
+                'icon' => 'fa fa-cash-register',
+                'group' => 'Admin',
+            ],
+            [
                 'module_code' => 'MOD_GOODS_REQUEST',
                 'module_name' => 'Purchase Request',
                 'description' => 'Menu pengajuan permintaan barang ke purchasing, terikat pada quotation yang PO Supplier Approval-nya sudah disetujui 2 approver',
@@ -389,6 +402,14 @@ class ModulesTableSeeder extends Seeder
                 'group' => 'Produksi',
             ],
             [
+                'module_code' => 'MOD_MATERIAL_RETURN',
+                'module_name' => 'Retur Material Produksi',
+                'description' => 'Produksi mengembalikan material sisa yang belum terpakai ke gudang asal sebagai stok bebas',
+                'route_name' => 'material-return',
+                'icon' => 'fa fa-rotate-left',
+                'group' => 'Produksi',
+            ],
+            [
                 'module_code' => 'MOD_PROJECT_TRACKING',
                 'module_name' => 'Project Tracking',
                 'description' => 'Monitoring proses setiap project dalam 7 tahap — dari opportunity sampai penagihan — beserta peringatan',
@@ -402,7 +423,7 @@ class ModulesTableSeeder extends Seeder
                 'description' => 'Gudang mengemas barang milik project per koli (dimensi, berat) — stok dipesan saat Siap Kirim, keluar saat Delivery Order diposting',
                 'route_name' => 'packing-list',
                 'icon' => 'fa fa-box',
-                'group' => 'Inventory',
+                'group' => 'Delivery',
             ],
             [
                 'module_code' => 'MOD_DELIVERY_ORDER',
@@ -410,7 +431,7 @@ class ModulesTableSeeder extends Seeder
                 'description' => 'Surat jalan pengiriman barang milik project dari gudang (umumnya transit) ke customer — draft lalu diposting oleh gudang',
                 'route_name' => 'delivery-order',
                 'icon' => 'fa fa-truck',
-                'group' => 'Inventory',
+                'group' => 'Delivery',
             ],
             [
                 'module_code' => 'MOD_STOCK_OPNAME',

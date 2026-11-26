@@ -20,6 +20,8 @@ use Illuminate\Support\Collection;
  *  - product_id     : satu produk
  *  - product_ids    : beberapa produk (mis. baris PO yang diretur)
  *  - source_ids     : hanya baris dari item GRN tertentu (retur supplier)
+ *  - material_product_id : bersama source_ids — saldo material produk ini juga boleh
+ *                   (material dilebur jadi satu saldo, tidak lagi per penerimaan)
  *  - q              : cari kode/nama produk, SN, batch / No. MFG, catatan
  *  - limit          : default 100
  */
@@ -45,9 +47,17 @@ class StockPicker
             ->when($filters['free_or_project'] ?? null, fn (Builder $b, $id) => $b->where(fn (Builder $w) => $w->whereNull('project_id')->orWhere('project_id', (int) $id)))
             ->when($filters['product_id'] ?? null, fn (Builder $b, $id) => $b->where('master_product_id', (int) $id))
             ->when($filters['product_ids'] ?? null, fn (Builder $b, $ids) => $b->whereIn('master_product_id', (array) $ids))
-            ->when(array_key_exists('source_ids', $filters), fn (Builder $b) => $b
-                ->where('source_type', Stock::SOURCE_GOODS_RECEIPT_ITEM)
-                ->whereIn('source_id', (array) ($filters['source_ids'] ?: [0])))
+            ->when(array_key_exists('source_ids', $filters), fn (Builder $b) => $b->where(function (Builder $w) use ($filters) {
+                $w->where(fn (Builder $src) => $src
+                    ->where('source_type', Stock::SOURCE_GOODS_RECEIPT_ITEM)
+                    ->whereIn('source_id', (array) ($filters['source_ids'] ?: [0])));
+                if (! empty($filters['material_product_id'])) {
+                    $w->orWhere(fn (Builder $m) => $m
+                        ->where('master_product_id', (int) $filters['material_product_id'])
+                        ->whereNull('serial_number')
+                        ->whereHas('masterProduct', fn (Builder $p) => $p->where('is_material', true)));
+                }
+            }))
             ->when($q !== '', fn (Builder $b) => $b->where(function (Builder $w) use ($q) {
                 $w->where('serial_number', 'like', "%{$q}%")
                     ->orWhere('batch_number', 'like', "%{$q}%")

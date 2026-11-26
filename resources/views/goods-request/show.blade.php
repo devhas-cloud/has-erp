@@ -128,7 +128,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ route('goods-request.index') }}" class="btn btn-secondary btn-sm">
-            <i class="fa fa-arrow-left me-1"></i> Back
+            Back
         </a>
     </div>
 </div>
@@ -141,9 +141,7 @@
                 @if($n > 1)<div class="gr-step-line {{ $n <= $step ? 'done' : '' }}"></div>@endif
                 <div class="gr-step {{ $cls }}">
                     <span class="dot">
-                        @if($cls === 'done')<i class="fa fa-check"></i>
-                        @elseif($cls === 'failed')<i class="fa fa-xmark"></i>
-                        @else{{ $n }}@endif
+                        {{ $n }}
                     </span>
                     <span>{{ $label }}@if($who)<span class="sub">{{ $who }}</span>@endif</span>
                 </div>
@@ -158,23 +156,23 @@
             <div class="gr-actions">
                 @if($canModify)
                     <a href="{{ route('goods-request.edit', $goodsRequest->id) }}" class="btn btn-secondary btn-sm">
-                        <i class="fa fa-pen me-1"></i> Edit
+                        Edit
                     </a>
                     @if($canDelete ?? false)
                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="grDelete()">
-                        <i class="fa fa-trash me-1"></i> Delete
+                        Delete
                     </button>
                     @endif
                     <button type="button" class="btn btn-primary btn-sm" onclick="grSubmit()" @disabled($items->isEmpty())>
-                        <i class="fa fa-paper-plane me-1"></i> Submit Approval
+                        Submit Approval
                     </button>
                 @endif
                 @if($canApproveThis)
                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="grOpenReject()">
-                        <i class="fa fa-xmark me-1"></i> Reject
+                        Reject
                     </button>
                     <button type="button" class="btn btn-success btn-sm" onclick="grApprove()">
-                        <i class="fa fa-check me-1"></i> Approve{{ $required > 1 ? ' ('.($approvals->count() + 1).'/'.$required.')' : '' }}
+                        Approve{{ $required > 1 ? ' ('.($approvals->count() + 1).'/'.$required.')' : '' }}
                     </button>
                 @endif
             </div>
@@ -206,7 +204,6 @@
 
 @if($isRejected && $goodsRequest->approval_note)
 <div class="gr-banner danger">
-    <i class="fa fa-circle-exclamation mt-1"></i>
     <div>
         <div class="title">Rejection Reason</div>
         <div>{{ $goodsRequest->approval_note }}</div>
@@ -218,7 +215,7 @@
     <div class="col-lg-6">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-diagram-project me-2" style="color:var(--accent)"></i>Project &amp; Customer</span>
+                <span>Project &amp; Customer</span>
             </div>
             <div class="card-body-custom">
                 @php $quotation = $goodsRequest->quotation(); @endphp
@@ -258,7 +255,7 @@
     <div class="col-lg-6">
         <div class="card-custom fade-in h-100">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-user-check me-2" style="color:var(--accent)"></i>Request &amp; Approval</span>
+                <span>Request &amp; Approval</span>
             </div>
             <div class="card-body-custom">
                 <dl class="gr-dl">
@@ -273,7 +270,7 @@
                     <dd>
                         @forelse($approvals as $i => $approval)
                             <div class="{{ $i ? 'mt-1' : '' }}">
-                                <i class="fa fa-circle-check me-1" style="color:var(--accent)"></i>{{ $approval->user?->display_name ?? '—' }}
+                                {{ $approval->user?->display_name ?? '—' }}
                                 <span class="muted">· {{ $approval->approved_at?->format('d M Y H:i') }}</span>
                             </div>
                         @empty
@@ -306,23 +303,22 @@
 <div class="card-custom fade-in mb-4">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
-            <i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Items <span class="gr-chip ms-1">{{ $items->count() }} item</span>
+            Items <span class="gr-chip ms-1">{{ $items->count() }} {{ \Illuminate\Support\Str::plural('item', $items->count()) }}</span>
             @if($fulfillment)
                 <span class="gr-chip ms-1 {{ $fulfillment === 'done' ? 'catalog' : ($fulfillment === 'partial' ? 'warn' : 'manual') }}">Fulfillment: {{ \App\Models\GoodsRequest::FULFILLMENT_LABELS[$fulfillment] }}</span>
             @endif
         </span>
         <div class="d-flex gap-2">
             @if($hasRemaining && $canCloseRemaining)
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="grOpenClose(null, 'all remaining quantities')"><i class="fa fa-ban me-1"></i> Close All Remaining</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="grOpenClose(null, 'all remaining quantities')">Close All Remaining</button>
             @endif
             @if($canModify)
-                <a href="{{ route('goods-request.edit', $goodsRequest->id) }}" class="btn btn-soft btn-sm"><i class="fa fa-pen me-1"></i> Edit Items</a>
+                <a href="{{ route('goods-request.edit', $goodsRequest->id) }}" class="btn btn-soft btn-sm">Edit Items</a>
             @endif
         </div>
     </div>
     @if($unmappedCount)
         <div class="gr-banner danger mx-3 mt-3 mb-0">
-            <i class="fa fa-triangle-exclamation mt-1"></i>
             <div>
                 <div class="title">{{ $unmappedCount }} item(s) not linked to a master product</div>
                 <div>Items without a master product cannot be fulfilled from stock, ordered via PO, or received into the warehouse. Click <strong>Map</strong> on the item — the system suggests a product based on the part number.</div>
@@ -358,11 +354,11 @@
                                 @if($item->masterProduct)
                                     <div class="muted">{{ $item->masterProduct->name }}</div>
                                 @else
-                                    <span class="gr-chip warn mt-1"><i class="fa fa-triangle-exclamation"></i> No product yet</span>
+                                    <span class="gr-chip warn mt-1">No product yet</span>
                                     <div class="mt-1">
                                         <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
                                             onclick="grOpenMap({{ $item->id }}, @js($item->part_number), @js($suggestion ? ['id' => $suggestion->id, 'text' => $suggestion->code.' — '.$suggestion->name] : null))">
-                                            <i class="fa fa-link me-1"></i> Map
+                                            Map
                                         </button>
                                     </div>
                                 @endif
@@ -393,13 +389,13 @@
                                     <div class="mt-1 d-flex align-items-center gap-2">
                                         <span class="gr-chip warn">Remaining {{ $remainingQty }}</span>
                                         @if($canCloseRemaining)
-                                            <a href="javascript:void(0)" class="muted" onclick="grOpenClose({{ $item->id }}, @js($item->part_number ?: 'this item'))"><i class="fa fa-ban me-1"></i>Close remaining</a>
+                                            <a href="javascript:void(0)" class="muted" onclick="grOpenClose({{ $item->id }}, @js($item->part_number ?: 'this item'))">Close remaining</a>
                                         @endif
                                     </div>
                                 @elseif($stockQty <= 0 && $poLines->isEmpty() && $item->closed_qty <= 0)
                                     <span class="gr-chip warn">Not processed</span>
                                 @else
-                                    <div class="mt-1"><span class="gr-chip catalog"><i class="fa fa-check"></i> Fulfilled</span></div>
+                                    <div class="mt-1"><span class="gr-chip catalog">Fulfilled</span></div>
                                 @endif
                             </td>
                             @endif
@@ -407,7 +403,7 @@
                     @empty
                         <tr>
                             <td colspan="{{ $showPoColumn ? 6 : 5 }}" class="text-center py-4" style="color:var(--text-muted)">
-                                <i class="fa-solid fa-inbox me-1"></i> No items yet.
+                                No items yet.
                                 @if($canModify)<a href="{{ route('goods-request.edit', $goodsRequest->id) }}">Add now</a>@endif
                             </td>
                         </tr>
@@ -426,7 +422,7 @@
         </div>
         @if($showPoColumn)
             <div class="px-2 pt-2 muted">
-                <i class="fa fa-circle-info me-1"></i>Fulfillment is optional: take from stock (Stock Fulfillment menu) and/or buy via Purchase Order. Remaining quantities no longer needed can be closed.
+                Fulfillment is optional: take from stock (Stock Fulfillment menu) and/or buy via Purchase Order. Remaining quantities no longer needed can be closed.
             </div>
         @endif
     </div>
@@ -448,7 +444,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-close-remaining"><i class="fa fa-ban me-1"></i> Close Remaining</button>
+                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-close-remaining">Close Remaining</button>
             </div>
         </div>
     </div>
@@ -468,7 +464,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-map"><i class="fa fa-link me-1"></i> Map</button>
+                <button type="button" class="btn btn-primary btn-sm" id="gr-btn-map">Map</button>
             </div>
         </div>
     </div>
@@ -489,7 +485,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger btn-sm" id="gr-btn-reject">
-                    <i class="fa fa-xmark me-1"></i> Reject
+                    Reject
                 </button>
             </div>
         </div>
@@ -553,7 +549,7 @@ function grOpenMap(itemId, partNumber, suggestion) {
     $('#gr-map-product').empty();
     if (suggestion) {
         $('#gr-map-product').append(new Option(suggestion.text, suggestion.id, true, true)).trigger('change');
-        $('#gr-map-hint').html('<i class="fa fa-wand-magic-sparkles me-1"></i>Suggested: the part number matches a product code. Review it, then click Map.');
+        $('#gr-map-hint').html('Suggested: the part number matches a product code. Review it, then click Map.');
     } else {
         $('#gr-map-hint').text('No product with the same code. Search for the product manually.');
     }

@@ -48,51 +48,91 @@ class ContactManagementController extends Controller
             ->orderBy('full_name')
             ->get();
 
+        // Sales non-manager hanya melihat kontaknya sendiri: filter Assigned To disembunyikan.
+        $restrictedSales = $this->isRestrictedSales();
+
         return view('contacts-management.index', compact(
             'accountCompanies', 'jobTitles', 'sources', 'divisions',
-            'contactMethods', 'roleInProjects', 'assignableUsers'
+            'contactMethods', 'roleInProjects', 'assignableUsers', 'restrictedSales'
         ));
     }
 
-    public function data(Request $request): JsonResponse
+    /** User Sales yang bukan Manager hanya boleh melihat kontak yang ditugaskan / dimilikinya. */
+    private function isRestrictedSales(): bool
     {
+        return strtolower((string) Auth::user()->division?->division_name) === 'sales'
+            && strtolower((string) Auth::user()->taskRole?->role_name) !== 'manager';
+    }
 
-        $query = AccountContact::with([
-            'accountCompany',
-            'contactOwner',
-            'assignedTo',
-            'jobTitle'
-        ]);
-
-        // Jika divisi sales dan bukan manager, filter hanya kontak yang dimiliki oleh user saat ini
-        if (strtolower(Auth::user()->division?->division_name) === 'sales' && strtolower(Auth::user()->taskRole?->role_name) !== 'manager') {
+    /** Kontak aktif yang boleh dilihat user (dipakai daftar & export). */
+    private function visibleContacts()
+    {
+        $query = AccountContact::query()->where('status', 'Active');
+        if ($this->isRestrictedSales()) {
             $query->where(function ($q) {
                 $q->where('assigned_to_id', Auth::id())
                     ->orWhere('contact_owner_id', Auth::id());
             });
         }
 
-        $query->where('status', 'Active');
-        $recordsTotal = (clone $query)->count();
+        return $query;
+    }
 
-        $searchValue = $request->input('search.value');
-        if ($searchValue) {
-            $query->where(function ($q) use ($searchValue) {
-                $q->where('full_name', 'like', "%{$searchValue}%")
-                    ->orWhere('email', 'like', "%{$searchValue}%")
-                    ->orWhere('mobile', 'like', "%{$searchValue}%")
-                    ->orWhereHas('accountCompany', function ($q) use ($searchValue) {
-                        $q->where('account_name', 'like', "%{$searchValue}%");
-                    })
-                    ->orWhereHas('contactOwner', function ($q) use ($searchValue) {
-                        $q->where('username', 'like', "%{$searchValue}%")
-                            ->orWhere('full_name', 'like', "%{$searchValue}%");
-                    })
-                    ->orWhereHas('jobTitle', function ($q) use ($searchValue) {
-                        $q->where('title_name', 'like', "%{$searchValue}%");
-                    });
+    /**
+     * Cari + filter toolbar: account, department, job title, source, role in project,
+     * assigned to, aktivitas terakhir, dan "milik saya". Dipakai daftar & export.
+     */
+    private function applyFilters($query, Request $request, ?string $search): void
+    {
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('full_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhereHas('accountCompany', fn ($q) => $q->where('account_name', 'like', "%{$search}%"))
+                    ->orWhereHas('contactOwner', fn ($q) => $q->where('username', 'like', "%{$search}%")->orWhere('full_name', 'like', "%{$search}%"))
+                    ->orWhereHas('jobTitle', fn ($q) => $q->where('title_name', 'like', "%{$search}%"));
             });
         }
+
+        foreach ([
+            'account' => 'account_companies_id',
+            'division' => 'divisions_id',
+            'job_title' => 'job_titles_id',
+            'source' => 'sources_id',
+            'role' => 'role_in_projects_id',
+        ] as $param => $column) {
+            if ($request->filled($param)) {
+                $query->where($column, (int) $request->input($param));
+            }
+        }
+
+        if ($request->filled('assigned') && ! $this->isRestrictedSales()) {
+            $request->input('assigned') === 'none'
+                ? $query->whereNull('assigned_to_id')
+                : $query->where('assigned_to_id', (int) $request->input('assigned'));
+        }
+
+        match ($request->input('activity')) {
+            '7d' => $query->where('last_activity_at', '>=', now()->subDays(7)),
+            '30d' => $query->where('last_activity_at', '>=', now()->subDays(30)),
+            'stale' => $query->where('last_activity_at', '<', now()->subDays(30)),
+            'none' => $query->whereNull('last_activity_at'),
+            default => null,
+        };
+
+        if ($request->boolean('mine')) {
+            $query->where('contact_owner_id', Auth::id());
+        }
+    }
+
+    public function data(Request $request): JsonResponse
+    {
+
+        $query = $this->visibleContacts()->with(['accountCompany', 'contactOwner', 'assignedTo', 'jobTitle']);
+        $recordsTotal = (clone $query)->count();
+
+        $this->applyFilters($query, $request, $request->input('search.value'));
 
         $recordsFiltered = $query->count();
 
@@ -195,7 +235,7 @@ class ContactManagementController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Contact berhasil ditambahkan.',
+            'message' => 'Contact added.',
         ]);
     }
 
@@ -251,7 +291,7 @@ class ContactManagementController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Contact berhasil diupdate.',
+            'message' => 'Contact updated.',
         ]);
     }
 
@@ -332,7 +372,7 @@ $sources = Source::where('status', 'Active')->get();
 
         return response()->json([
             'success' => true,
-            'message' => 'Lead berhasil dibuat.',
+            'message' => 'Lead created.',
             'data' => $lead,
         ]);
     }
@@ -419,14 +459,14 @@ $sources = Source::where('status', 'Active')->get();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Task berhasil dibuat.',
+                'message' => 'Task created.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal membuat task: '.$e->getMessage(),
+                'message' => 'Failed to create the task: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -444,7 +484,7 @@ $sources = Source::where('status', 'Active')->get();
         if (! $task) {
             return response()->json([
                 'success' => false,
-                'message' => 'Task tidak ditemukan.',
+                'message' => 'Task not found.',
             ], 404);
         }
 
@@ -454,7 +494,7 @@ $sources = Source::where('status', 'Active')->get();
 
         return response()->json([
             'success' => true,
-            'message' => 'Task berhasil dihapus.',
+            'message' => 'Task deleted.',
         ]);
     }
 
@@ -465,7 +505,7 @@ $sources = Source::where('status', 'Active')->get();
 
         return response()->json([
             'success' => true,
-            'message' => 'Contact berhasil dihapus.',
+            'message' => 'Contact deleted.',
         ]);
     }
 
@@ -506,13 +546,13 @@ $sources = Source::where('status', 'Active')->get();
 
             return response()->json([
                 'success' => $result['failed'] === 0,
-                'message' => "Import selesai: {$result['success']} berhasil, {$result['failed']} gagal dari ".($result['success'] + $result['failed']).' data.',
+                'message' => "Import finished: {$result['success']} succeeded, {$result['failed']} failed out of ".($result['success'] + $result['failed']).' row(s).',
                 'result' => $result,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal import: '.$e->getMessage(),
+                'message' => 'Import failed: '.$e->getMessage(),
             ], 500);
         } finally {
             if (file_exists($fullPath)) {
@@ -533,9 +573,9 @@ $sources = Source::where('status', 'Active')->get();
         }
     }
 
-    public function export()
+    public function export(Request $request)
     {
-        $query = AccountContact::with([
+        $query = $this->visibleContacts()->with([
             'accountCompany',
             'contactOwner',
             'assignedTo',
@@ -544,15 +584,9 @@ $sources = Source::where('status', 'Active')->get();
             'division',
             'contactMethod',
             'roleInProject',
-        ])->where('status', 'Active');
-
-        // Sama seperti data(): user Sales non-Manager hanya melihat kontak yang ditugaskan padanya
-        if (strtolower(Auth::user()->division?->division_name) === 'sales' && Auth::user()->taskRole?->role_name !== 'Manager') {
-            $query->where(function ($q) {
-                $q->where('assigned_to_id', Auth::id())
-                    ->orWhere('contact_owner_id', Auth::id());
-            });
-        }
+        ]);
+        // Export mengikuti filter & pencarian aktif di daftar.
+        $this->applyFilters($query, $request, $request->input('q'));
 
         $contacts = $query->orderBy('full_name')->get();
 

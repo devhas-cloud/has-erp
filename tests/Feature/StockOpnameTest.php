@@ -86,16 +86,19 @@ class StockOpnameTest extends TestCase
         ]);
     }
 
-    public function test_each_stock_row_keeps_its_own_cost_and_report_value(): void
+    public function test_material_balance_uses_weighted_cost_and_report_value(): void
     {
         $this->entry(10, 1000);
         $this->entry(10, 2000);
         // Tanpa harga -> harga beli master.
         $this->entry(5, null);
 
-        $this->assertSame([1000.0, 2000.0, 900.0], Stock::orderBy('id')->pluck('unit_cost')->all());
+        // Material = satu saldo; harga rata-rata tertimbang (10×1000 + 10×2000 + 5×900) / 25.
+        $this->assertSame(1, Stock::count());
+        $this->assertEquals(1380, Stock::firstOrFail()->unit_cost);
+        $this->assertSame([1000.0, 2000.0, 900.0], StockLog::where('type', StockLog::TYPE_IN)->orderBy('id')->pluck('unit_cost')->all());
 
-        // Alokasi memindah baris beserta harganya: nilai total tidak berubah.
+        // Alokasi memindah qty beserta harganya: nilai total tidak berubah.
         $project = $this->project();
         $first = Stock::orderBy('id')->firstOrFail();
         $this->actingAs($this->counter)->postJson(route('stock-transfer.store'), [
@@ -104,13 +107,18 @@ class StockOpnameTest extends TestCase
             'to_project_id' => $project->id,
             'items' => [['stock_id' => $first->id, 'qty' => 5]],
         ])->assertOk();
-        $this->assertEquals(1000, Stock::where('project_id', $project->id)->value('unit_cost'));
+        $this->assertEquals(1380, Stock::where('project_id', $project->id)->value('unit_cost'));
 
         $this->actingAs($this->counter)->getJson(route('stock-report.data', ['ownership' => 'free']))
             ->assertOk()
-            ->assertJsonPath('total_value', 29500)
-            ->assertJsonPath('data.0.average_cost', 1475);
-        $this->actingAs($this->counter)->getJson(route('stock-report.data'))->assertOk()->assertJsonPath('total_value', 34500);
+            ->assertJsonPath('total_value', 27600)
+            ->assertJsonPath('data.0.average_cost', 1380);
+        $this->actingAs($this->counter)->getJson(route('stock-report.data'))->assertOk()->assertJsonPath('total_value', 34500)
+            ->assertJsonPath('summary.material_value', 34500)->assertJsonPath('summary.material_positions', 2)
+            ->assertJsonPath('summary.serial_units', 0)->assertJsonPath('data.0.units', 1);
+        $this->actingAs($this->counter)->getJson(route('stock-report.data', ['kind' => 'serial']))->assertOk()->assertJsonPath('recordsFiltered', 0);
+        $this->actingAs($this->counter)->getJson(route('stock-report.data', ['kind' => 'material', 'missing_sn' => 1]))->assertOk()->assertJsonPath('recordsFiltered', 0);
+        $this->actingAs($this->counter)->get(route('stock-report.index'))->assertOk()->assertSee('SN belum diisi');
 
         $this->actingAs($this->counter)->get(route('stock-report.card', $this->product->id))->assertOk()->assertSee('34,500');
     }
@@ -179,7 +187,7 @@ class StockOpnameTest extends TestCase
         $this->actingAs($this->counter)->get(route('stock-opname.show', $id))->assertOk()->assertSee('Rusak 2');
     }
 
-    public function test_opname_rejects_minus_result_and_extra_qty_becomes_new_row(): void
+    public function test_opname_rejects_minus_result_and_extra_qty_raises_balance(): void
     {
         $this->entry(5, 1000);
         $row = Stock::firstOrFail();
@@ -194,7 +202,7 @@ class StockOpnameTest extends TestCase
         $this->actingAs($this->approver)->postJson(route('stock-opname.approve', $id))->assertStatus(422)->assertJsonPath('success', false);
         $this->assertEquals(2, $this->stockBalance($this->warehouse->id, $this->product->id));
 
-        // Lebih dari qty awal baris: kelebihannya jadi baris baru (parent_id).
+        // Lebih dari qty awal: saldo material naik langsung (tanpa baris baru).
         $id = $this->actingAs($this->counter)->postJson(route('stock-opname.store'), [
             'warehouse_id' => $this->warehouse->id,
             'opname_date' => '2026-11-03',
@@ -203,7 +211,7 @@ class StockOpnameTest extends TestCase
         $this->actingAs($this->approver)->postJson(route('stock-opname.approve', $id))->assertOk();
 
         $this->assertEquals(7, $this->stockBalance($this->warehouse->id, $this->product->id));
-        $this->assertEquals(5, $row->fresh()->qty);
-        $this->assertEquals(2, Stock::where('parent_id', $row->id)->value('qty'));
+        $this->assertEquals(7, $row->fresh()->qty);
+        $this->assertSame(1, Stock::count());
     }
 }

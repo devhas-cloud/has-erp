@@ -144,6 +144,7 @@ class DirectPurchaseController extends Controller
             ]);
 
             $this->syncItems($dp, $validated['items'] ?? []);
+            $this->syncExchangeRate($dp, $validated['exchange_rate'] ?? null);
 
             return $dp;
         }));
@@ -247,6 +248,7 @@ class DirectPurchaseController extends Controller
             ]);
 
             $this->syncItems($directPurchase, $validated['items'] ?? []);
+            $this->syncExchangeRate($directPurchase, $validated['exchange_rate'] ?? null);
         });
 
         return response()->json([
@@ -342,6 +344,39 @@ class DirectPurchaseController extends Controller
      */
     public function materialRequests(Request $request): JsonResponse
     {
+        ['branches' => $branches, 'branch_id' => $branchId, 'rows' => $rows] = $this->materialRequestReference($request);
+
+        return response()->json([
+            'success' => true,
+            'branch_id' => $branchId,
+            'branches' => $branches->map(fn (Branch $b) => ['id' => $b->id, 'name' => $b->name]),
+            'data' => $rows,
+        ]);
+    }
+
+    /**
+     * PDF acuan pembelian dari pop-up "Add from Material Request": daftar material
+     * yang dibutuhkan satu branch (No, Code, Product, Remaining, In Stock).
+     */
+    public function materialRequestsPdf(Request $request)
+    {
+        ['branches' => $branches, 'branch_id' => $branchId, 'rows' => $rows, 'requests' => $requests] = $this->materialRequestReference($request);
+
+        return Pdf::loadView('direct-purchase.material-request-pdf', [
+            'branch' => $branches->firstWhere('id', $branchId),
+            'rows' => $rows,
+            'requestNumbers' => $requests->pluck('request_number')->sort()->values(),
+            'printedBy' => Auth::user()->display_name,
+        ])->setPaper('a4', 'portrait')->stream('MaterialRequest-PurchaseReference.pdf');
+    }
+
+    /**
+     * Data acuan pembelian dari Material Request Disetujui (dipakai pop-up & PDF).
+     *
+     * @return array{branches: \Illuminate\Support\Collection, branch_id: ?int, rows: \Illuminate\Support\Collection, requests: \Illuminate\Support\Collection}
+     */
+    private function materialRequestReference(Request $request): array
+    {
         $pending = MaterialRequest::visibleTo(Auth::user())
             ->where('status', MaterialRequest::STATUS_APPROVED)
             ->with(['branch:id,name', 'items.handoverItems', 'items.masterProduct.currency'])
@@ -394,12 +429,7 @@ class DirectPurchaseController extends Controller
             ];
         })->sortBy('code')->values();
 
-        return response()->json([
-            'success' => true,
-            'branch_id' => $branchId,
-            'branches' => $branches->map(fn (Branch $b) => ['id' => $b->id, 'name' => $b->name]),
-            'data' => $rows,
-        ]);
+        return ['branches' => $branches, 'branch_id' => $branchId, 'rows' => $rows, 'requests' => $requests->values()];
     }
 
     /**
@@ -467,6 +497,18 @@ class DirectPurchaseController extends Controller
         return response()->json($response);
     }
 
+    /**
+     * Kurs DP ditetapkan saat DP dibuat / diubah (Draft), sama seperti PO: valas = isian
+     * form, default kurs master; mata uang dasar -> NULL. Penerimaan barang memakai kurs ini.
+     */
+    private function syncExchangeRate(DirectPurchase $dp, $rate): void
+    {
+        $code = $dp->load('items')->currencyCode();
+        $foreign = $code !== Currency::baseName();
+
+        $dp->update(['exchange_rate' => $foreign ? round((float) ($rate ?: Currency::rateOf($code)), 6) : null]);
+    }
+
     private function validateDirectPurchase(Request $request): array
     {
         $validated = $request->validate([
@@ -476,6 +518,7 @@ class DirectPurchaseController extends Controller
             'date' => 'nullable|date',
             'payment_term_days' => 'nullable|integer|min:0|max:365',
             'ppn_percent' => 'nullable|numeric|min:0|max:100',
+            'exchange_rate' => 'nullable|numeric|gt:0',
             'purpose' => 'required|in:'.implode(',', array_keys(DirectPurchase::PURPOSE_LABELS)),
             'project_id' => 'required_if:purpose,'.DirectPurchase::PURPOSE_PROJECT.'|nullable|integer|exists:projects,id',
             'notes' => 'nullable|string',

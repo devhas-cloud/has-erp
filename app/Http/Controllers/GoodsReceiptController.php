@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManagesPurchaseDocuments;
+use App\Models\Currency;
+use App\Models\Document;
 use App\Models\DirectPurchase;
 use App\Models\DirectPurchaseItem;
 use App\Models\GoodsReceipt;
@@ -23,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Penerimaan Barang (GRN) dari Purchase Order (Approved / Diterima Sebagian)
@@ -57,7 +60,7 @@ class GoodsReceiptController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $query = GoodsReceipt::withCount('items')->with(['purchaseOrder', 'directPurchase', 'warehouse.branch', 'items:id,goods_receipt_id']);
+        $query = GoodsReceipt::withCount('items')->with(['purchaseOrder', 'directPurchase', 'warehouse.branch', 'creator', 'items:id,goods_receipt_id,master_product_id,qty,unit,destination', 'items.masterProduct:id,is_material']);
 
         $recordsTotal = (clone $query)->count();
 
@@ -83,7 +86,11 @@ class GoodsReceiptController extends Controller
                 ->orWhereHas('directPurchase', fn ($dp) => $dp->where('supplier_name', $supplier))))
             ->when($request->input('date_from'), fn ($q, $from) => $q->whereDate('received_date', '>=', $from))
             ->when($request->input('date_to'), fn ($q, $to) => $q->whereDate('received_date', '<=', $to))
-            ->when($request->boolean('missing_sn'), fn ($q) => $q->whereHas('items.stocks', fn ($s) => $s->missingSerial()))
+            ->when($request->boolean('missing_sn') || $request->input('kind') === 'missing_sn', fn ($q) => $q->whereHas('items.stocks', fn ($s) => $s->missingSerial()))
+            // Jenis barang yang masuk gudang: material (menambah saldo) / barang ber-SN (per unit).
+            ->when(in_array($request->input('kind'), ['material', 'serial'], true), fn ($q) => $q->whereHas('items', fn ($i) => $i
+                ->where('destination', GoodsReceiptItem::DESTINATION_WAREHOUSE)
+                ->whereHas('masterProduct', fn ($p) => $p->where('is_material', $request->input('kind') === 'material'))))
             ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', Auth::id()));
 
         $recordsFiltered = (clone $query)->count();
@@ -106,6 +113,14 @@ class GoodsReceiptController extends Controller
             ->pluck('source_id')
             ->countBy(fn ($itemId) => $itemToReceipt[$itemId]);
 
+        // Nilai masuk gudang = log masuk (harga modal saat diterima, mata uang dasar).
+        $values = $itemToReceipt->isEmpty() ? collect() : StockLog::where('ref_type', StockLog::REF_GOODS_RECEIPT_ITEM)
+            ->whereIn('ref_id', $itemToReceipt->keys())
+            ->where('type', StockLog::TYPE_IN)
+            ->get(['ref_id', 'qty', 'unit_cost'])
+            ->groupBy(fn ($log) => $itemToReceipt[$log->ref_id])
+            ->map(fn ($logs) => round($logs->sum(fn ($log) => $log->qty * $log->unit_cost), 2));
+
         $data = $receipts->map(fn (GoodsReceipt $receipt, $i) => [
             'DT_RowIndex' => $start + $i + 1,
             'id' => $receipt->id,
@@ -117,6 +132,12 @@ class GoodsReceiptController extends Controller
             'warehouse_branch' => $receipt->warehouse?->branch?->name,
             'received_date' => $receipt->received_date?->format('d/m/Y') ?? '—',
             'item_count' => $receipt->items_count,
+            'material_lines' => $receipt->items->filter(fn ($i) => $i->destination === GoodsReceiptItem::DESTINATION_WAREHOUSE && $i->masterProduct?->isMaterial())->count(),
+            'serial_units' => (int) $receipt->items->filter(fn ($i) => $i->destination === GoodsReceiptItem::DESTINATION_WAREHOUSE && $i->masterProduct && ! $i->masterProduct->isMaterial())->sum('qty'),
+            'direct_lines' => $receipt->items->where('destination', GoodsReceiptItem::DESTINATION_DIRECT)->count(),
+            'stock_value' => (float) ($values[$receipt->id] ?? 0),
+            'creator' => $receipt->creator?->display_name,
+            'source_url' => $receipt->purchase_order_id ? route('purchase-order.show', $receipt->purchase_order_id) : ($receipt->direct_purchase_id ? route('direct-purchase.show', $receipt->direct_purchase_id) : null),
             'missing_serial' => (int) ($missing[$receipt->id] ?? 0),
             'status' => $receipt->status,
             'status_label' => $receipt->status_label,
@@ -127,6 +148,8 @@ class GoodsReceiptController extends Controller
             'draw' => (int) $request->input('draw'),
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
+            // Penerimaan dengan unit ber-SN yang SN-nya belum diisi (semua data, untuk pengingat di atas tabel).
+            'missing_total' => GoodsReceipt::whereHas('items.stocks', fn ($s) => $s->missingSerial())->count(),
             'data' => $data,
         ]);
     }
@@ -149,8 +172,10 @@ class GoodsReceiptController extends Controller
 
         return view('goods-receipt.form', [
             'warehouses' => Warehouse::active()->orderBy('name')->get(),
+            'baseSymbol' => Currency::where('is_base', true)->value('symbol') ?: Currency::baseName(),
             'purchaseOrders' => $purchaseOrders,
             'directPurchases' => $directPurchases,
+            'uploadLimits' => self::uploadLimits(),
             'preselect' => [
                 'type' => $request->input('source_type'),
                 'id' => $request->integer('source_id') ?: null,
@@ -169,12 +194,70 @@ class GoodsReceiptController extends Controller
         ]);
 
         [$header, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
+        $lines = $lines->filter(fn ($line) => $line['remaining'] > 0)->values();
 
         return response()->json([
             'success' => true,
             'source' => $header,
-            'items' => $lines->filter(fn ($line) => $line['remaining'] > 0)->values(),
+            'items' => $lines,
+            'base_currency' => Currency::baseName(),
+            'currencies' => $this->foreignCurrencies($lines, $header),
         ]);
+    }
+
+    /**
+     * Mata uang asing pada baris sumber beserta kurs yang dipakai:
+     * PO / Direct Purchase -> kurs yang ditetapkan di dokumen (locked); dokumen lama tanpa kurs ->
+     * kurs master (boleh diubah).
+     * known=false: kode tidak ada di master Currency -> penerimaan ditolak.
+     */
+    private function foreignCurrencies(Collection $lines, array $header): array
+    {
+        $poRate = $header['exchange_rate'] ?? null;
+
+        return $lines->pluck('currency')
+            ->map(fn ($c) => strtoupper(trim((string) $c)))
+            ->reject(fn ($c) => Currency::isBaseCode($c))
+            ->unique()
+            ->values()
+            ->map(function (string $code) use ($poRate) {
+                $currency = Currency::findByCode($code);
+
+                return [
+                    'code' => $code,
+                    'symbol' => $currency?->symbol ?: $code,
+                    'known' => (bool) $currency,
+                    'locked' => $poRate !== null,
+                    'rate' => $poRate ?? ($currency ? (float) $currency->rate : null),
+                    'updated_at' => $currency?->updated_at?->format('d/m/Y'),
+                    'stale' => $currency ? $currency->isStale() : false,
+                ];
+            })
+            ->all();
+    }
+
+    /** Batas upload PHP agar form bisa memperingatkan sebelum file terbuang diam-diam. */
+    private static function uploadLimits(): array
+    {
+        $bytes = function (string $value): int {
+            $value = trim($value);
+            $unit = strtolower(substr($value, -1));
+            $number = (float) $value;
+
+            return (int) match ($unit) {
+                'g' => $number * 1024 ** 3,
+                'm' => $number * 1024 ** 2,
+                'k' => $number * 1024,
+                default => $number,
+            };
+        };
+
+        return [
+            'file' => \Illuminate\Http\UploadedFile::getMaxFilesize(),
+            'post' => $bytes((string) ini_get('post_max_size')) ?: PHP_INT_MAX,
+            'files' => (int) ini_get('max_file_uploads') ?: 20,
+            'per_item' => Document::MAX_FILES,
+        ];
     }
 
     public function store(Request $request): JsonResponse
@@ -194,44 +277,69 @@ class GoodsReceiptController extends Controller
             'items.*.expiry_date' => 'nullable|date',
             'items.*.warranty_until' => 'nullable|date',
             'items.*.note' => 'nullable|string|max:255',
-        ], ['items.required' => 'Pilih minimal satu baris yang diterima.']);
+            'items.*.photos' => 'nullable|array|max:'.Document::MAX_FILES,
+            'items.*.photos.*' => Document::IMAGE_RULE,
+            'rates' => 'nullable|array',
+            'rates.*' => 'nullable|numeric|gt:0',
+        ], [
+            'items.required' => 'Pilih minimal satu baris yang diterima.',
+            'rates.*.gt' => 'Exchange rate must be greater than 0.',
+            'items.*.photos.max' => 'Up to '.Document::MAX_FILES.' photos per item.',
+            'items.*.photos.*.mimes' => 'Photos must be JPG, PNG or WEBP.',
+            'items.*.photos.*.max' => 'Each photo must not exceed 10MB.',
+            'items.*.photos.*.uploaded' => 'A photo failed to upload (file too large for the server).',
+        ]);
 
-        [, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
+        [$header, $lines] = $this->resolveSource($validated['source_type'], (int) $validated['source_id']);
         $lines = $lines->keyBy('source_line_id');
 
         $toWarehouse = collect($validated['items'])->contains('destination', GoodsReceiptItem::DESTINATION_WAREHOUSE);
         $warehouse = $toWarehouse ? Warehouse::active()->find($validated['warehouse_id'] ?? 0) : null;
         if ($toWarehouse && ! $warehouse) {
-            return response()->json(['success' => false, 'message' => 'Pilih gudang tujuan (aktif) untuk barang yang masuk gudang.'], 422);
+            return response()->json(['success' => false, 'message' => 'Select an active destination warehouse for goods going into stock.'], 422);
         }
 
         $rows = [];
         foreach (array_values($validated['items']) as $i => $row) {
             $line = $lines->get((int) $row['source_line_id']);
             if (! $line) {
-                return response()->json(['success' => false, 'message' => 'Baris '.($i + 1).' tidak valid untuk sumber ini.'], 422);
+                return response()->json(['success' => false, 'message' => 'Line '.($i + 1).' is not valid for this source.'], 422);
             }
             if ((int) $row['qty'] > $line['remaining']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Qty baris '.($i + 1).' ('.($line['part_number'] ?: 'item').') melebihi sisa yang belum diterima ('.$line['remaining'].').',
+                    'message' => 'Qty on line '.($i + 1).' ('.($line['part_number'] ?: 'item').') exceeds the outstanding qty ('.$line['remaining'].').',
                 ], 422);
             }
             $toStock = $row['destination'] === GoodsReceiptItem::DESTINATION_WAREHOUSE;
             if ($toStock && ! $line['master_product_id']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Baris '.($i + 1).' ('.($line['part_number'] ?: 'item').') belum terhubung master produk, jadi tidak bisa masuk gudang. Pilih Langsung Pakai atau petakan produknya dulu.',
+                    'message' => 'Line '.($i + 1).' ('.($line['part_number'] ?: 'item').') is not linked to a master product, so it cannot go into stock. Map the product first.',
+                ], 422);
+            }
+            $rate = $this->receiptRate($line['currency'], $validated['rates'] ?? [], $header['exchange_rate'] ?? null);
+            if (is_string($rate)) {
+                return response()->json(['success' => false, 'message' => 'Line '.($i + 1).' ('.($line['part_number'] ?: 'item').'): '.$rate], 422);
+            }
+            // Material masuk ke satu saldo: batch / kedaluwarsa / garansi tidak dipakai (sementara disembunyikan).
+            $tracked = $toStock && $line['serialized'];
+            if (! empty($row['photos']) && ! $tracked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Line '.($i + 1).' ('.($line['part_number'] ?: 'item').'): photos can only be attached to serial items going into the warehouse.',
                 ], 422);
             }
             $rows[] = array_merge($line, [
                 'qty' => (int) $row['qty'],
                 'destination' => $row['destination'],
                 'serial_numbers' => $toStock ? StockService::parseSerials($row['serial_numbers'] ?? null) : [],
-                'batch_number' => $toStock ? ($row['batch_number'] ?? null) : null,
-                'expiry_date' => $toStock ? ($row['expiry_date'] ?? null) : null,
-                'warranty_until' => $toStock ? ($row['warranty_until'] ?? null) : null,
+                'batch_number' => $tracked ? ($row['batch_number'] ?? null) : null,
+                'expiry_date' => $tracked ? ($row['expiry_date'] ?? null) : null,
+                'warranty_until' => $tracked ? ($row['warranty_until'] ?? null) : null,
                 'note' => $row['note'] ?? null,
+                'exchange_rate' => $rate,
+                'photos' => $tracked ? array_values($row['photos'] ?? []) : [],
             ]);
         }
 
@@ -243,14 +351,50 @@ class GoodsReceiptController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Penerimaan '.$receipt->receipt_number.' diposting.'.($warehouse ? ' Stok '.$warehouse->name.' bertambah.' : ''),
+            'message' => 'Receipt '.$receipt->receipt_number.' posted.'.($warehouse ? ' Stock in '.$warehouse->name.' increased.' : ''),
             'id' => $receipt->id,
         ]);
     }
 
+    /**
+     * Kurs penerimaan untuk satu mata uang: base = 1; PO = kurs yang ditetapkan di PO
+     * (isian form diabaikan); Direct Purchase = isian form, default kurs master.
+     * Mengembalikan pesan error (string) bila mata uang tidak dikenal / kurs tidak valid.
+     */
+    private function receiptRate(?string $currency, array $rates, ?float $poRate = null): float|string
+    {
+        if (Currency::isBaseCode($currency)) {
+            return 1.0;
+        }
+
+        $code = strtoupper(trim((string) $currency));
+        $master = Currency::findByCode($code);
+        if (! $master) {
+            return 'currency '.$code.' is not registered in the Currency master. Add it (with its rate) first.';
+        }
+
+        $rate = (float) ($poRate ?? $rates[$code] ?? $master->rate);
+
+        return $rate > 0 ? $rate : 'enter a valid exchange rate for '.$code.'.';
+    }
+
     private function persist(array $validated, ?Warehouse $warehouse, array $rows): GoodsReceipt
     {
-        return DB::transaction(function () use ($validated, $warehouse, $rows) {
+        // File foto tersimpan di disk sebelum commit: bila transaksi gagal, file dihapus lagi.
+        $storedPaths = [];
+        try {
+            return $this->persistRows($validated, $warehouse, $rows, $storedPaths);
+        } catch (\Throwable $e) {
+            foreach ($storedPaths as $path) {
+                Storage::disk(Document::DISK)->delete($path);
+            }
+            throw $e;
+        }
+    }
+
+    private function persistRows(array $validated, ?Warehouse $warehouse, array $rows, array &$storedPaths): GoodsReceipt
+    {
+        return DB::transaction(function () use ($validated, $warehouse, $rows, &$storedPaths) {
             $receipt = GoodsReceipt::create([
                 'receipt_number' => GoodsReceipt::generateNumber(),
                 'purchase_order_id' => $validated['source_type'] === self::SOURCE_PO ? $validated['source_id'] : null,
@@ -263,7 +407,7 @@ class GoodsReceiptController extends Controller
             ]);
 
             foreach ($rows as $i => $row) {
-                $receipt->items()->create([
+                $item = $receipt->items()->create([
                     'purchase_order_item_id' => $validated['source_type'] === self::SOURCE_PO ? $row['source_line_id'] : null,
                     'direct_purchase_item_id' => $validated['source_type'] === self::SOURCE_DP ? $row['source_line_id'] : null,
                     'master_product_id' => $row['master_product_id'],
@@ -271,6 +415,7 @@ class GoodsReceiptController extends Controller
                     'unit' => $row['unit'],
                     'currency' => $row['currency'],
                     'price' => $row['price'],
+                    'exchange_rate' => $row['exchange_rate'],
                     'destination' => $row['destination'],
                     'project_id' => $row['project_id'],
                     'batch_number' => $row['batch_number'],
@@ -280,6 +425,9 @@ class GoodsReceiptController extends Controller
                     'note' => $row['note'],
                     'sort_order' => $i + 1,
                 ]);
+                foreach ($row['photos'] ?? [] as $file) {
+                    $storedPaths[] = Document::storeFor($item, $file, Document::TYPE_RECEIPT_PHOTO)->file_path;
+                }
             }
 
             $this->post($receipt->load(['items.masterProduct', 'purchaseOrder', 'directPurchase']));
@@ -294,6 +442,7 @@ class GoodsReceiptController extends Controller
             'items.masterProduct',
             'items.project',
             'items.stocks.masterProduct',
+            'items.photos.uploader',
             'purchaseOrder',
             'directPurchase',
             'warehouse',
@@ -301,10 +450,108 @@ class GoodsReceiptController extends Controller
             'postedBy',
         ])->findOrFail($id);
 
+        // Log masuk per baris: harga modal saat diterima & saldo material sesudahnya.
+        $inLogs = StockLog::where('ref_type', StockLog::REF_GOODS_RECEIPT_ITEM)
+            ->whereIn('ref_id', $receipt->items->pluck('id')->all() ?: [0])
+            ->where('type', StockLog::TYPE_IN)
+            ->orderBy('id')
+            ->get()
+            ->groupBy('ref_id');
+
         return view('goods-receipt.show', [
             'receipt' => $receipt,
+            'photoLists' => $receipt->items->filter->acceptsPhotos()->mapWithKeys(fn (GoodsReceiptItem $item) => [$item->id => $this->photoList($item)]),
+            'inLogs' => $inLogs,
             'documents' => $this->documentList($receipt),
         ]);
+    }
+
+    /**
+     * Foto susulan untuk barang ber-SN (juga setelah posting). Hak akses lewat
+     * middleware modul: POST -> can_create, GET -> can_read, DELETE -> can_delete.
+     */
+    public function uploadItemPhotos(Request $request, $id, $itemId): JsonResponse
+    {
+        $item = $this->photoItem($id, $itemId);
+        if (! $item->acceptsPhotos()) {
+            return response()->json(['success' => false, 'message' => 'Photos can only be attached to serial items going into the warehouse.'], 422);
+        }
+
+        $room = Document::MAX_FILES - $item->photos()->count();
+        $request->validate([
+            'files' => 'required|array|min:1|max:'.max($room, 0),
+            'files.*' => Document::IMAGE_RULE,
+        ], [
+            'files.required' => 'Select at least one photo.',
+            'files.max' => $room > 0 ? 'This item can take '.$room.' more photo(s) (max '.Document::MAX_FILES.').' : 'This item already has '.Document::MAX_FILES.' photos.',
+            'files.*.mimes' => 'Photos must be JPG, PNG or WEBP.',
+            'files.*.max' => 'Each photo must not exceed 10MB.',
+            'files.*.uploaded' => 'A photo failed to upload (file too large for the server).',
+        ]);
+
+        $stored = [];
+        try {
+            DB::transaction(function () use ($request, $item, &$stored) {
+                foreach ($request->file('files') as $file) {
+                    $stored[] = Document::storeFor($item, $file, Document::TYPE_RECEIPT_PHOTO)->file_path;
+                }
+            });
+        } catch (\Throwable $e) {
+            foreach ($stored as $path) {
+                Storage::disk(Document::DISK)->delete($path);
+            }
+            throw $e;
+        }
+
+        Log::record('upload_goods_receipt_photo', count($stored).' foto barang diunggah ke '.$item->goodsReceipt->receipt_number.' oleh '.Auth::user()->display_name, $this->documentModuleCode(), $item->goodsReceipt);
+
+        return response()->json([
+            'success' => true,
+            'message' => count($stored).' photo(s) uploaded.',
+            'photos' => $this->photoList($item),
+        ]);
+    }
+
+    public function viewItemPhoto($id, $itemId, $documentId)
+    {
+        return $this->photoItem($id, $itemId)->photos()->findOrFail($documentId)->inlineResponse();
+    }
+
+    public function deleteItemPhoto($id, $itemId, $documentId): JsonResponse
+    {
+        $item = $this->photoItem($id, $itemId);
+        $document = $item->photos()->findOrFail($documentId);
+
+        if (! $this->canDeletePhoto($document)) {
+            return response()->json(['success' => false, 'message' => 'Only the uploader can delete this photo.'], 422);
+        }
+
+        $document->delete();
+
+        return response()->json(['success' => true, 'message' => 'Photo deleted.', 'photos' => $this->photoList($item)]);
+    }
+
+    private function photoItem($id, $itemId): GoodsReceiptItem
+    {
+        return GoodsReceiptItem::with(['masterProduct', 'goodsReceipt'])
+            ->where('goods_receipt_id', $id)
+            ->findOrFail($itemId);
+    }
+
+    private function canDeletePhoto(Document $document): bool
+    {
+        return Auth::user()?->role === 'Admin' || (int) $document->uploaded_by === (int) Auth::id();
+    }
+
+    /** Daftar foto untuk UI halaman detail. */
+    private function photoList(GoodsReceiptItem $item): array
+    {
+        return $item->photos()->with('uploader')->get()->map(fn (Document $doc) => [
+            'id' => $doc->id,
+            'url' => route('goods-receipt.photos.show', [$item->goods_receipt_id, $item->id, $doc->id]),
+            'delete_url' => $this->canDeletePhoto($doc) ? route('goods-receipt.photos.destroy', [$item->goods_receipt_id, $item->id, $doc->id]) : null,
+            'title' => ($doc->uploader?->display_name ?? '—').' · '.$doc->created_at?->format('d/m/Y H:i'),
+        ])->values()->all();
     }
 
     /**
@@ -315,12 +562,12 @@ class GoodsReceiptController extends Controller
         $receipt = GoodsReceipt::findOrFail($id);
 
         if ($receipt->status !== GoodsReceipt::STATUS_DRAFT) {
-            return response()->json(['success' => false, 'message' => 'Penerimaan yang sudah diposting tidak bisa dihapus.'], 422);
+            return response()->json(['success' => false, 'message' => 'A posted receipt cannot be deleted.'], 422);
         }
 
         $receipt->delete();
 
-        return response()->json(['success' => true, 'message' => 'Penerimaan dihapus.']);
+        return response()->json(['success' => true, 'message' => 'Receipt deleted.']);
     }
 
     /**
@@ -348,7 +595,7 @@ class GoodsReceiptController extends Controller
                 'warranty_until' => $item->warranty_until,
                 'unit' => $item->unit,
                 'unit_cost' => $item->price !== null
-                    ? StockCost::toBase((float) $item->price, $item->currency, (float) ($receipt->purchaseOrder?->discount_percent ?? 0))
+                    ? StockCost::toBase((float) $item->price, $item->currency, (float) ($receipt->purchaseOrder?->discount_percent ?? 0), $item->exchange_rate)
                     : StockCost::standardCost((int) $item->master_product_id),
                 'source_type' => Stock::SOURCE_GOODS_RECEIPT_ITEM,
                 'source_id' => $item->id,
@@ -389,7 +636,7 @@ class GoodsReceiptController extends Controller
         if ($type === self::SOURCE_PO) {
             $po = PurchaseOrder::with(['items.masterProduct', 'items.goodsReceiptItems.goodsReceipt', 'items.goodsRequestItem.goodsRequest.project'])->findOrFail($id);
             if (! $po->isReceivable()) {
-                $fail('Purchase order harus berstatus Approved / Diterima Sebagian untuk diterima.');
+                $fail('The purchase order must be Approved / Partially Received to receive goods.');
             }
 
             $lines = $po->items->map(fn (PurchaseOrderItem $item) => $this->line(
@@ -402,12 +649,15 @@ class GoodsReceiptController extends Controller
                 'id' => $po->id,
                 'number' => $po->po_number,
                 'supplier_name' => $po->supplier_name,
+                'discount_percent' => (float) ($po->discount_percent ?? 0),
+                // Kurs ditetapkan di PO (terkunci saat terima); PO valas lama tanpa kurs -> isian form, default kurs master.
+                'exchange_rate' => $po->currencyCode() !== Currency::baseName() && $po->exchange_rate ? (float) $po->exchange_rate : null,
             ], $lines];
         }
 
         $dp = DirectPurchase::with(['items.masterProduct', 'items.goodsReceiptItems.goodsReceipt', 'project'])->findOrFail($id);
         if ($dp->status !== DirectPurchase::STATUS_APPROVED) {
-            $fail('Direct purchase harus berstatus Approved untuk diterima.');
+            $fail('The direct purchase must be Approved to receive goods.');
         }
 
         $lines = $dp->items->map(fn (DirectPurchaseItem $item) => $this->line(
@@ -420,7 +670,9 @@ class GoodsReceiptController extends Controller
             'id' => $dp->id,
             'number' => $dp->dp_number,
             'supplier_name' => $dp->supplier_name,
-            'purpose' => $dp->purpose,
+            'purpose' => $dp->purpose_label,
+            // Kurs ditetapkan di DP (terkunci saat terima); DP valas lama tanpa kurs -> isian form, default kurs master.
+            'exchange_rate' => $dp->currencyCode() !== Currency::baseName() && $dp->exchange_rate ? (float) $dp->exchange_rate : null,
         ], $lines];
     }
 

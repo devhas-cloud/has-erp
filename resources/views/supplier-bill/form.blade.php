@@ -91,7 +91,7 @@
                     <div class="col-lg-4" id="sb-rate-wrap" style="display:none">
                         <label class="form-label" for="sb-rate">Kurs <span class="sb-rate-cur">—</span> → <span class="sb-base-cur">IDR</span> <span class="text-danger">*</span></label>
                         <input type="text" inputmode="decimal" id="sb-rate" class="form-control text-end" value="{{ $bill && $bill->isForeign() ? \App\Support\Number::rate($bill->exchange_rate) : '' }}">
-                        <small class="sb-hint">Kurs pada tanggal invoice supplier — menjadi nilai buku hutang. Default kurs master.</small>
+                        <small class="sb-hint" id="sb-rate-hint">Kurs pada tanggal invoice supplier — menjadi nilai buku hutang.</small>
                     </div>
                     <div class="col-12">
                         <label class="form-label">Catatan</label>
@@ -190,6 +190,7 @@
                 <div class="sb-sum-row" id="sb-sum-ppn-row"><span class="lbl" id="sb-sum-ppn-lbl">PPN</span><span class="val" id="sb-sum-ppn">0</span></div>
                 <div class="sb-total"><span>Total Tagihan</span><span class="val" id="sb-sum-total">0</span></div>
                 <div class="sb-sum-row" id="sb-sum-base-row" style="display:none"><span class="lbl">≈ <span class="sb-base-cur">IDR</span> (kurs tagihan)</span><span class="val" id="sb-sum-base">0</span></div>
+                <div class="sb-sum-row" id="sb-sum-rfx-row" style="display:none" title="Nilai barang × (kurs tagihan − kurs penerimaan). Info saja: nilai stok tidak diubah."><span class="lbl" id="sb-sum-rfx-lbl">Selisih kurs terima vs tagihan</span><span class="val" id="sb-sum-rfx">0</span></div>
                 <div class="sb-sum-row mt-1" id="sb-sum-pph-row" style="display:none"><span class="lbl" id="sb-sum-pph-lbl">PPh dipotong</span><span class="val text-danger" id="sb-sum-pph">0</span></div>
                 <div class="sb-sum-row" id="sb-sum-adv-row" style="display:none"><span class="lbl">Dipotong uang muka</span><span class="val text-danger" id="sb-sum-adv">0</span></div>
                 <div class="sb-sum-row" id="sb-sum-due-row" style="display:none"><span class="lbl fw-semibold">Yang ditransfer</span><span class="val" id="sb-sum-due">0</span></div>
@@ -212,6 +213,8 @@ const sbSaveUrl = '{{ $isEdit ? route("supplier-bill.update", $bill->id) : route
 const sbSaveMethod = '{{ $isEdit ? "PUT" : "POST" }}';
 const sbShowUrl = '{{ route("supplier-bill.show", "__ID__") }}';
 const sbBillId = @json($bill?->id);
+// Kurs tagihan mengikuti kurs penerimaan selama belum diubah manual (tagihan baru).
+let sbRateTouched = !!sbBillId;
 const sbSaveLabel = $('#sb-save').html();
 let sbInitialItems = @json($items);
 let sbHeader = null;
@@ -388,7 +391,7 @@ function sbLoad() {
         res.lines.forEach(function(l) {
             var pre = initial[l.purchase_order_item_id] || {};
             var locked = l.billable <= 0;
-            html += '<tr data-id="' + l.purchase_order_item_id + '" data-max="' + l.billable + '" data-po-price="' + l.price + '"' + (locked ? ' style="opacity:.55"' : '') + '>';
+            html += '<tr data-id="' + l.purchase_order_item_id + '" data-max="' + l.billable + '" data-po-price="' + l.price + '" data-receipt-rate="' + (l.receipt_rate || '') + '"' + (locked ? ' style="opacity:.55"' : '') + '>';
             html += '<td><div class="fw-semibold" style="font-size:13px">' + sbEsc(l.part_number || '—') + '</div>'
                 + '<div class="sb-hint">' + (l.description || '') + '</div>'
                 + '<div class="sb-hint"><i class="fa fa-diagram-project me-1"></i>' + sbEsc(l.project_label) + '</div></td>';
@@ -478,18 +481,41 @@ function sbRecalc() {
     $('#sb-sum-adv').text('- ' + cur + sbFmt(adv));
     $('#sb-sum-due-row').toggle(adv > 0 || pph > 0);
     $('#sb-sum-due').text(cur + sbFmt(total - pph - adv));
-    sbRenderBase(total);
+    sbRenderBase(total, subtotal - disc);
+}
+
+// Kurs rata-rata penerimaan barang yang sedang ditagih (tertimbang nilai baris); null bila tidak tercatat.
+function sbReceiptRate() {
+    var weighted = 0, amount = 0;
+    $('#sb-lines tr[data-id]').each(function() {
+        var rate = parseFloat($(this).attr('data-receipt-rate'));
+        var value = (parseInt($(this).find('.sb-qty').val(), 10) || 0) * sbParse($(this).find('.sb-price').val());
+        if (rate > 0 && value > 0) { weighted += value * rate; amount += value; }
+    });
+    return amount > 0 ? weighted / amount : null;
 }
 
 // Nilai Rupiah tagihan valas menurut kurs tanggal invoice supplier.
-function sbRenderBase(total) {
+function sbRenderBase(total, goods) {
     var show = !!(sbHeader && sbHeader.is_foreign);
+    var receiptRate = show ? sbReceiptRate() : null;
+    if (show && !sbRateTouched) $('#sb-rate').val(sbFmt(receiptRate || sbHeader.default_rate));
+    if (show) {
+        $('#sb-rate-hint').html(receiptRate
+            ? 'Kurs penerimaan barang: <strong>' + sbFmt(receiptRate) + '</strong>' + (sbRateTouched ? ' · <a href="#" id="sb-rate-use-receipt">pakai</a>' : ' (otomatis)') + '. Ubah bila kurs invoice supplier berbeda.'
+            : 'Kurs pada tanggal invoice supplier — menjadi nilai buku hutang. Default kurs master (kurs penerimaan tidak tercatat).');
+    }
+    var diff = receiptRate ? Math.round(goods * (sbParse($('#sb-rate').val()) - receiptRate) * 100) / 100 : 0;
+    $('#sb-sum-rfx-row').toggle(Math.abs(diff) >= 0.01);
+    $('#sb-sum-rfx-lbl').text(diff > 0 ? 'Rugi selisih kurs terima vs tagihan' : 'Laba selisih kurs terima vs tagihan');
+    $('#sb-sum-rfx').text((sbHeader ? sbHeader.base_currency + ' ' : '') + sbFmt(Math.abs(diff))).toggleClass('text-danger', diff > 0).toggleClass('text-success', diff < 0);
     $('#sb-sum-base-row').toggle(show);
     if (show) $('#sb-sum-base').text(sbHeader.base_currency + ' ' + sbFmt(Math.round(total * sbParse($('#sb-rate').val()) * 100) / 100));
 }
 
-$(document).on('change', '#sb-po', function() { $('#sb-rate').val(''); sbLoad(); });
-$(document).on('input', '#sb-rate', function() { this.value = this.value.replace(/[^\d.,]/g, ''); $(this).removeClass('is-invalid'); sbRecalc(); });
+$(document).on('change', '#sb-po', function() { $('#sb-rate').val(''); sbRateTouched = false; sbLoad(); });
+$(document).on('click', '#sb-rate-use-receipt', function(e) { e.preventDefault(); sbRateTouched = false; sbRecalc(); });
+$(document).on('input', '#sb-rate', function() { sbRateTouched = true; this.value = this.value.replace(/[^\d.,]/g, ''); $(this).removeClass('is-invalid'); sbRecalc(); });
 $(document).on('blur', '#sb-rate', function() { if ($(this).val() !== '') $(this).val(sbFmt(sbParse($(this).val()))); });
 $(document).on('change', '#sb-date', function() {
     if (sbHeader) $('#sb-due').val(sbAddDays($(this).val(), sbType() === 'advance' ? 0 : sbHeader.payment_term_days));

@@ -502,7 +502,8 @@
                 white-space: nowrap;
             }
         }
-    </style>
+        .contact-card__label { font-size: 11px; color: var(--text-muted); min-width: 52px; display: inline-block; }
+</style>
 @endsection
 
 @section('content')
@@ -520,7 +521,7 @@
         </div>
         <div class="page-header-actions">
             <a href="{{ route('accounts-management.index') }}" class="btn-ghost">
-                <i class="fa fa-arrow-left"></i><span>Kembali</span>
+                <span>Back</span>
             </a>
         </div>
     </div>
@@ -561,25 +562,23 @@
 
         <div class="account-header__meta">
             @if ($account->phone)
-                <a class="account-meta-chip" href="tel:{{ $account->phone }}"><i class="fa fa-phone"></i>
-                    {{ $account->phone }}</a>
+                <a class="account-meta-chip" href="tel:{{ $account->phone }}">Phone: {{ $account->phone }}</a>
             @endif
             @if ($account->website)
-                <a class="account-meta-chip" href="{{ $account->website }}" target="_blank" rel="noopener"><i
-                        class="fa fa-globe"></i> {{ $account->website }}</a>
+                <a class="account-meta-chip" href="{{ $account->website }}" target="_blank" rel="noopener">{{ $account->website }}</a>
             @endif
             @if ($account->end_user)
-                <span class="account-meta-chip"><i class="fa fa-user-tag"></i> End User: {{ $account->end_user }}</span>
+                <span class="account-meta-chip">End User: {{ $account->end_user }}</span>
             @endif
             @if ($account->parentAccount?->account_name)
-                <span class="account-meta-chip"><i class="fa fa-sitemap"></i> Parent:
+                <span class="account-meta-chip">Parent:
                     {{ $account->parentAccount->account_name }}</span>
             @endif
 
             <span style="margin-left:auto"></span>
             @if ($canCreate)
                 <button type="button" class="btn-accent btn-sm" onclick="openAccountContactModal()">
-                    <i class="fa fa-plus"></i> Add Contact
+                    Add Contact
                 </button>
             @endif
         </div>
@@ -591,26 +590,26 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-company" type="button"
                         role="tab">
-                        <i class="fa fa-building me-1"></i> Company Information
+                        Company Information
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-contact" type="button"
                         role="tab">
-                        <i class="fa fa-users me-1"></i> Contact
+                        Contact
                         <span class="account-tab-badge">{{ $account->contacts->count() }}</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-lead" type="button" role="tab">
-                        <i class="fa fa-bolt me-1"></i> Lead
+                        Lead
                         <span class="account-tab-badge">{{ $account->leads->count() }}</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-opportunity" type="button"
                         role="tab">
-                        <i class="fa fa-bullseye me-1"></i> Opportunity
+                        Opportunity
                         <span class="account-tab-badge">{{ $account->opportunities->count() }}</span>
                     </button>
                 </li>
@@ -623,7 +622,7 @@
                         <div class="col-lg-6">
                             <div class="card-custom" style="box-shadow:none">
                                 <div class="card-header-custom">
-                                    <span><i class="fa fa-building me-2" style="color:var(--accent)"></i>Company
+                                    <span>Company
                                         Information</span>
                                 </div>
                                 <div class="card-body-custom">
@@ -700,7 +699,7 @@
                         <div class="col-lg-6">
                             <div class="card-custom card-collapsible collapsed">
                                 <div class="card-header-custom">
-                                    <span><i class="fa fa-file-invoice me-2" style="color:var(--accent)"></i>Billing
+                                    <span>Billing
                                         Address</span>
                                     <span class="chevron"></span>
                                 </div>
@@ -717,11 +716,10 @@
                                             ->join(', ');
                                     @endphp
                                     @if ($billing)
-                                        <div class="address-block"><i
-                                                class="fa fa-location-dot"></i><span>{{ $billing }}</span></div>
+                                        <div class="address-block"><span>{{ $billing }}</span></div>
                                     @else
-                                        <div class="empty-state" style="padding:18px"><i class="fa fa-location-dot"></i>
-                                            <p>Belum ada alamat billing.</p>
+                                        <div class="empty-state" style="padding:18px">
+                                            <p>No billing address yet.</p>
                                         </div>
                                     @endif
                                 </div>
@@ -729,7 +727,7 @@
 
                             <div class="card-custom card-collapsible collapsed mt-4">
                                 <div class="card-header-custom">
-                                    <span><i class="fa fa-truck me-2" style="color:var(--accent)"></i>Shipping
+                                    <span>Shipping
                                         Address</span>
                                     <span class="chevron"></span>
                                 </div>
@@ -746,11 +744,10 @@
                                             ->join(', ');
                                     @endphp
                                     @if ($shipping)
-                                        <div class="address-block"><i
-                                                class="fa fa-location-dot"></i><span>{{ $shipping }}</span></div>
+                                        <div class="address-block"><span>{{ $shipping }}</span></div>
                                     @else
-                                        <div class="empty-state" style="padding:18px"><i class="fa fa-location-dot"></i>
-                                            <p>Belum ada alamat shipping.</p>
+                                        <div class="empty-state" style="padding:18px">
+                                            <p>No shipping address yet.</p>
                                         </div>
                                     @endif
                                 </div>
@@ -762,8 +759,7 @@
                 <div class="tab-pane fade" id="tab-contact" role="tabpanel">
                     @if ($account->contacts->isEmpty())
                         <div class="empty-state contact-empty">
-                            <i class="fa fa-address-book"></i>
-                            <p>Belum ada kontak pada account ini.</p>
+                            <p>No contacts for this account yet.</p>
                         </div>
                     @else
                         <div class="contact-list" style="padding:16px">
@@ -802,25 +798,25 @@
                                             <div class="contact-card__rows">
                                                     @if ($c->email)
                                                         <div class="contact-card__row">
-                                                            <i class="fa fa-envelope"></i>
+                                                            <span class="contact-card__label">Email</span>
                                                             <a href="mailto:{{ $c->email }}">{{ $c->email }}</a>
                                                         </div>
                                                     @endif
                                                     @if ($c->phone)
                                                         <div class="contact-card__row">
-                                                            <i class="fa fa-phone"></i>
+                                                            <span class="contact-card__label">Phone</span>
                                                             <a href="tel:{{ $c->phone }}">{{ $c->phone }}</a>
                                                         </div>
                                                     @endif
                                                     @if ($c->mobile)
                                                         <div class="contact-card__row">
-                                                            <i class="fa fa-mobile"></i>
+                                                            <span class="contact-card__label">Mobile</span>
                                                             <a href="tel:{{ $c->mobile }}">{{ $c->mobile }}</a>
                                                         </div>
                                                     @endif
                                                     @if ($c->contactMethod?->method_name || $c->contactOwner?->display_name)
                                                         <div class="contact-card__row">
-                                                            <i class="fa fa-address-book"></i>
+                                                            <span class="contact-card__label">Contact</span>
                                                             <span>
                                                                 @if ($c->contactMethod?->method_name)
                                                                     {{ $c->contactMethod->method_name }}
@@ -844,8 +840,7 @@
                 <div class="tab-pane fade" id="tab-lead" role="tabpanel">
                     @if ($account->leads->isEmpty())
                         <div class="empty-state contact-empty">
-                            <i class="fa fa-bolt"></i>
-                            <p>Belum ada lead pada account ini.</p>
+                            <p>No leads for this account yet.</p>
                         </div>
                     @else
                         <div class="contact-list" style="padding:0">
@@ -863,14 +858,11 @@
                                 @endphp
                                 <a class="contact-item"
                                     href="{{ route('leads-management.show', ['leads_management' => $lead->id]) }}">
-                                    <div class="contact-item__avatar" style="background:var(--info-soft);color:#1e40af">
-                                        <i class="fa fa-bolt"></i>
-                                    </div>
                                     <div class="contact-item__body">
                                         <div class="contact-item__name">{{ $lead->lead_title ?? '—' }}</div>
                                         <div class="contact-item__job">
                                             @if ($lead->accountContact?->full_name)
-                                                <i class="fa fa-user"></i> {{ $lead->accountContact->full_name }}
+                                                Contact: {{ $lead->accountContact->full_name }}
                                             @endif
                                             @if ($lead->source?->source_name)
                                                 <span style="color:var(--text-muted)">&middot;
@@ -879,11 +871,10 @@
                                         </div>
                                         <div class="contact-item__meta">
                                             @if ($lead->leadOwner?->display_name)
-                                                <span><i class="fa fa-user"></i> {{ $lead->leadOwner->display_name }}</span>
+                                                <span>Owner: {{ $lead->leadOwner->display_name }}</span>
                                             @endif
                                             @if ($lead->closed_date)
-                                                <span><i class="fa fa-calendar"></i>
-                                                    {{ $lead->closed_date->format('d M Y') }}</span>
+                                                <span>Closed: {{ $lead->closed_date->format('d M Y') }}</span>
                                             @endif
                                         </div>
                                     </div>
@@ -897,17 +888,13 @@
                 <div class="tab-pane fade" id="tab-opportunity" role="tabpanel">
                     @if ($account->opportunities->isEmpty())
                         <div class="empty-state contact-empty">
-                            <i class="fa fa-bullseye"></i>
-                            <p>Belum ada opportunity pada account ini.</p>
+                            <p>No opportunities for this account yet.</p>
                         </div>
                     @else
                         <div class="contact-list" style="padding:0">
                             @foreach ($account->opportunities as $opp)
                                 <a class="contact-item"
                                     href="{{ route('opportunity-management.show', ['opportunity' => $opp->id]) }}">
-                                    <div class="contact-item__avatar" style="background:var(--accent-soft)">
-                                        <i class="fa fa-bullseye"></i>
-                                    </div>
                                     <div class="contact-item__body">
                                         <div class="contact-item__name">{{ $opp->opportunity_name ?? '—' }}</div>
                                         <div class="contact-item__job">
@@ -923,11 +910,10 @@
                                         </div>
                                         <div class="contact-item__meta">
                                             @if ($opp->owner?->display_name)
-                                                <span><i class="fa fa-user"></i> {{ $opp->owner->display_name }}</span>
+                                                <span>Owner: {{ $opp->owner->display_name }}</span>
                                             @endif
                                             @if ($opp->close_date)
-                                                <span><i class="fa fa-calendar"></i>
-                                                    {{ $opp->close_date->format('d M Y') }}</span>
+                                                <span>Close date: {{ $opp->close_date->format('d M Y') }}</span>
                                             @endif
                                         </div>
                                     </div>
@@ -963,7 +949,7 @@
 
                     <div class="contact-form-section">
                         <div class="contact-form-section-header">
-                            <span><i class="fa fa-user me-2" style="color:var(--accent)"></i>Contact Information</span>
+                            <span>Contact Information</span>
                         </div>
                         <div class="contact-form-section-body">
                             <div class="contact-form-row">
@@ -998,7 +984,7 @@
                                 <div class="form-group">
                                     <label>Job Title <span class="text-danger">*</span></label>
                                     <select name="job_titles_id" id="ac-contact-job-title">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($jobTitles as $jt)
                                         <option value="{{ $jt->id }}">{{ $jt->title_name }}</option>
                                         @endforeach
@@ -1007,7 +993,7 @@
                                 <div class="form-group">
                                     <label>Contact Source <span class="text-danger">*</span></label>
                                     <select name="sources_id" id="ac-contact-source">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($sources as $src)
                                         <option value="{{ $src->id }}" @if(str_contains(strtolower($src->source_name), 'referral')) data-referral="1" @endif>{{ $src->source_name }}</option>
                                         @endforeach
@@ -1016,7 +1002,7 @@
                                 <div class="form-group">
                                     <label>Department <span class="text-danger">*</span></label>
                                     <select name="divisions_id" id="ac-contact-division">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($divisions as $div)
                                         <option value="{{ $div->id }}">{{ $div->division_name }}</option>
                                         @endforeach
@@ -1026,14 +1012,14 @@
                             <div class="contact-form-row" id="ac-contact-referral-group" style="display:none">
                                 <div class="form-group">
                                     <label>Referral Name <span class="text-danger">*</span></label>
-                                    <input type="text" name="name_referral" id="ac-contact-referral" maxlength="150" placeholder="Nama pemberi referensi">
+                                    <input type="text" name="name_referral" id="ac-contact-referral" maxlength="150" placeholder="Name of the person who referred">
                                 </div>
                             </div>
                             <div class="contact-form-row">
                                 <div class="form-group">
                                     <label>Preferred Contact Method <span class="text-danger">*</span></label>
                                     <select name="contact_methods_id" id="ac-contact-method">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($contactMethods as $cm)
                                         <option value="{{ $cm->id }}">{{ $cm->method_name }}</option>
                                         @endforeach
@@ -1042,7 +1028,7 @@
                                 <div class="form-group">
                                     <label>Role in Project <span class="text-danger">*</span></label>
                                     <select name="role_in_projects_id" id="ac-contact-role">
-                                        <option value="">— Pilih —</option>
+                                        <option value="">— Select —</option>
                                         @foreach($roleInProjects as $rp)
                                         <option value="{{ $rp->id }}">{{ $rp->role_name }}</option>
                                         @endforeach
@@ -1056,7 +1042,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-account-contact">
-                    <i class="fa fa-save me-1"></i> Save
+                    Save
                 </button>
             </div>
 </div>
@@ -1182,7 +1168,7 @@
                 const val = $el.val() ? $el.val().trim() : '';
                 if (!val) {
                     $el.addClass('is-invalid');
-                    toastr.error(v.label + ' wajib diisi.');
+                    toastr.error(v.label + ' is required.');
                     $el.focus();
                     return;
                 }
@@ -1190,7 +1176,7 @@
 
             if (!$('#ac-contact-mobile').val() || !$('#ac-contact-mobile').val().replace(/\D/g, '')) {
                 $('#ac-contact-mobile').addClass('is-invalid');
-                toastr.error('Mobile wajib diisi.');
+                toastr.error('Mobile is required.');
                 $('#ac-contact-mobile').focus();
                 return;
             }
@@ -1199,7 +1185,7 @@
             if ($('#ac-contact-source').find(':selected').data('referral') && !$.trim($('#ac-contact-referral').val())) {
                 $('#ac-contact-referral-group').show();
                 $('#ac-contact-referral').addClass('is-invalid');
-                toastr.error('Referral Name wajib diisi untuk sumber Referral.');
+                toastr.error('Referral Name is required for the Referral source.');
                 $('#ac-contact-referral').focus();
                 return;
             }
@@ -1207,7 +1193,7 @@
             const formData = new FormData(document.getElementById('account-contact-form'));
             formData.append('_token', '{{ csrf_token() }}');
 
-            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
             $.ajax({
                 url: '{{ route("contact-management.store") }}',
@@ -1221,7 +1207,7 @@
                     window.location.reload();
                 },
                 error: function(xhr) {
-                    $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                    $btn.prop('disabled', false).html('Save');
                     var errors = xhr.responseJSON?.errors;
                     if (errors) {
                         var first = Object.values(errors)[0];

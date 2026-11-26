@@ -130,11 +130,12 @@
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Barang Dikirim</span>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="doEditor.openQuotation()"><i class="fa fa-file-invoice me-1"></i> Dari Quotation</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="do-pos-btn" onclick="doEditor.openPos()" disabled title="Pilih project terlebih dahulu"><i class="fa fa-file-invoice me-1"></i> Dari POS</button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="doEditor.addLine({})"><i class="fa fa-plus me-1"></i> Baris Kosong</button>
                 </div>
             </div>
             <div class="card-body-custom p-2">
+                <div id="do-pos-hint" style="display:none;font-size:12.5px;color:#92400e;background:#fef3c7;border-radius:var(--radius-sm);padding:7px 10px;margin:0 0 8px"></div>
                 <div id="do-lines"></div>
                 <div class="px-1" style="font-size:12px;color:var(--text-muted)"><i class="fa fa-circle-info me-1"></i>Setiap baris wajib berisi minimal satu barang dari stok project. SN tercetak di kolom Serial Number surat jalan.</div>
             </div>
@@ -225,7 +226,12 @@ function doSyncMode() {
 function doLoadProject() {
     var projectId = $('#do-project').val();
     $('#do-warehouse').html('<option value="">— Pilih project dulu —</option>');
-    if (!projectId) return;
+    if (!projectId) {
+        doEditor.setPosItems([]);
+        $('#do-pos-btn').prop('disabled', true).attr('title', 'Pilih project terlebih dahulu');
+        $('#do-pos-hint').hide().empty();
+        return;
+    }
 
     $.get(doProjectUrl, { project_id: projectId }).done(function(res) {
         var opts = '<option value="">— Pilih Gudang —</option>';
@@ -235,7 +241,17 @@ function doLoadProject() {
         if (wh) $('#do-warehouse').val(String(wh));
         doInitialWarehouse = null;
 
-        doEditor.setQuotationItems(res.quotation_items || []);
+        var posItems = res.pos_items || [];
+        doEditor.setPosItems(posItems);
+        $('#do-pos-btn').prop('disabled', posItems.length === 0)
+            .attr('title', posItems.length ? '' : 'Project ini belum punya POS');
+        if (posItems.length) {
+            $('#do-pos-hint').hide().empty();
+        } else {
+            $('#do-pos-hint').html('<i class="fa fa-circle-info me-1"></i>' + (res.pos_number
+                ? 'POS ' + doEsc(res.pos_number) + ' tidak memiliki item — isi deskripsi sendiri atau perbaiki POS.'
+                : 'Project ini belum punya POS — isi deskripsi sendiri atau buat POS terlebih dahulu.')).show();
+        }
         var r = res.recipient || {};
         if (!doIsEdit) {
             $('#do-recipient').val(r.name || '');

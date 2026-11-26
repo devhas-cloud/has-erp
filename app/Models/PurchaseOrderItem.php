@@ -130,6 +130,40 @@ class PurchaseOrderItem extends Model
         return max(0, $received - $this->returnedQty());
     }
 
+    /**
+     * Kurs rata-rata penerimaan untuk unit ke-($skip + 1) s.d. ($skip + $qty) secara FIFO
+     * (unit yang sudah ditagih dilewati). Hanya baris penerimaan yang mencatat kurs;
+     * null bila tidak ada sama sekali (penerimaan lama).
+     */
+    public function receiptRate(int $skip, int $qty): ?float
+    {
+        $items = $this->relationLoaded('goodsReceiptItems')
+            ? $this->goodsReceiptItems
+            : $this->goodsReceiptItems()->with('goodsReceipt')->get();
+
+        $weighted = 0.0;
+        $counted = 0;
+        foreach ($items->filter(fn (GoodsReceiptItem $i) => $i->goodsReceipt?->status === GoodsReceipt::STATUS_POSTED)->sortBy('id') as $item) {
+            if ($qty <= 0) {
+                break;
+            }
+            $available = (int) $item->qty;
+            $skipped = min($skip, $available);
+            $skip -= $skipped;
+            $take = min($available - $skipped, $qty);
+            if ($take <= 0) {
+                continue;
+            }
+            $qty -= $take;
+            if ($item->exchange_rate) {
+                $weighted += $take * (float) $item->exchange_rate;
+                $counted += $take;
+            }
+        }
+
+        return $counted ? round($weighted / $counted, 6) : null;
+    }
+
     public function remainingReceiptQty(): int
     {
         return max(0, (int) ($this->qty ?? 0) - $this->receivedQty());

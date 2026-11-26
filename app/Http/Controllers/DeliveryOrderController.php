@@ -99,12 +99,15 @@ class DeliveryOrderController extends Controller
         $validated = $request->validate(['project_id' => 'required|integer|exists:projects,id']);
         $project = Project::with('company')->findOrFail($validated['project_id']);
         $packingWarehouses = PackingList::where('project_id', $project->id)->where('status', PackingList::STATUS_READY)->pluck('warehouse_id')->all();
+        $pos = ShipmentLines::pos($project);
 
         return response()->json([
             'success' => true,
             'warehouses' => ShipmentLines::projectWarehouses($project->id, $packingWarehouses),
             'recipient' => ShipmentLines::projectDefaults($project),
             'quotation_items' => ShipmentLines::quotationItems($project),
+            'pos_number' => $pos?->pos_number,
+            'pos_items' => ShipmentLines::posItems($pos),
         ]);
     }
 

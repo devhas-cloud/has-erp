@@ -120,15 +120,14 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ route('task-planner.show', $task->id) }}" class="btn-ghost">
-            <i class="fa-solid fa-arrow-left"></i>
-            <span>Kembali</span>
+            <span>Back</span>
         </a>
     </div>
 </div>
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <span><i class="fa-solid fa-pen-to-square me-2" style="color:var(--accent)"></i>Form Edit Task</span>
+        <span>Form Edit Task</span>
     </div>
     <div class="card-body-custom">
         <form id="editTaskForm">
@@ -136,13 +135,11 @@
             @method('PUT')
 
             <div class="task-identity">
-                <div class="task-identity-icon">
-                    <i class="fa-solid fa-list-check"></i>
-                </div>
+                <div class="task-identity-icon" style="font-size:12px;font-weight:700">#{{ $task->id }}</div>
                 <div class="task-identity-info">
                     <div class="task-identity-name">{{ $task->title }}</div>
                     <div class="task-identity-meta">
-                        #{{ $task->id }} · Dibuat oleh <strong>{{ $task->creator?->display_name ?? '—' }}</strong>
+                        #{{ $task->id }} · Created by <strong>{{ $task->creator?->display_name ?? '—' }}</strong>
                         · {{ $task->category?->name ?? 'Tanpa Kategori' }}
                     </div>
                 </div>
@@ -163,7 +160,7 @@
 
             <div class="task-section open fade-in stagger-1">
                 <div class="task-section-header" onclick="toggleSection(this)">
-                    <span><span class="section-icon"><i class="fa-solid fa-circle-info"></i></span>Task Information</span>
+                    <span>Task Information</span>
                     <i class="fa-solid fa-chevron-down chevron"></i>
                 </div>
                 <div class="task-section-body">
@@ -238,7 +235,7 @@
 
             <div class="task-section open fade-in stagger-2">
                 <div class="task-section-header" onclick="toggleSection(this)">
-                    <span><span class="section-icon"><i class="fa-solid fa-users"></i></span>Assignees & Delegation</span>
+                    <span>Assignees & Delegation</span>
                     <i class="fa-solid fa-chevron-down chevron"></i>
                 </div>
                 <div class="task-section-body">
@@ -259,7 +256,7 @@
 
             <div class="task-section open fade-in stagger-3">
                 <div class="task-section-header" onclick="toggleSection(this)">
-                    <span><span class="section-icon"><i class="fa-solid fa-bell"></i></span>Alert Settings</span>
+                    <span>Alert Settings</span>
                     <i class="fa-solid fa-chevron-down chevron"></i>
                 </div>
                 <div class="task-section-body">
@@ -294,18 +291,17 @@
                         </div>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
-                        Reminder WhatsApp dikirim otomatis setiap hari pukul 08:00 untuk task yang jatuh tempo hari ini atau besok.
+                        A WhatsApp reminder is sent automatically every day at 08:00 for tasks due today or tomorrow.
                     </div>
                 </div>
             </div>
 
             <div class="form-actions">
                 <button type="submit" class="btn-accent" id="btn-submit">
-                    <i class="fa-solid fa-floppy-disk"></i>
                     <span>Update Task</span>
                 </button>
                 <a href="{{ route('task-planner.show', $task->id) }}" class="btn-ghost">
-                    <span>Batal</span>
+                    <span>Cancel</span>
                 </a>
             </div>
         </form>
@@ -332,7 +328,7 @@
         $(document).on('change', '#edit_category_id', toggleAccountContact);
 
         $('#edit_project').select2({
-            placeholder: 'Cari no / nama project, PO, atau company...',
+            placeholder: 'Search project no. / name, PO, or company...',
             allowClear: true,
             ajax: {
                 url: '{{ route('task-planner.fetch-projects') }}',
@@ -345,7 +341,7 @@
         });
 
         $('#edit_account_contact').select2({
-            placeholder: 'Cari kontak yang dikunjungi...',
+            placeholder: 'Search the contact to visit...',
             allowClear: true,
             ajax: {
                 url: '{{ route('task-planner.fetch-account-contacts') }}',
@@ -362,7 +358,7 @@
         });
 
         $('#edit_assignees').select2({
-            placeholder: 'Cari assignee...',
+            placeholder: 'Search assignee...',
             ajax: {
                 url: '{{ route('task-planner.fetch-assignees') }}',
                 dataType: 'json',
@@ -378,7 +374,7 @@
         });
 
         $('#edit_whatsapp_group').select2({
-            placeholder: 'Cari WhatsApp group...',
+            placeholder: 'Search WhatsApp group...',
             allowClear: true,
             ajax: {
                 url: '{{ route('task-planner.fetch-whatsapp-groups') }}',
@@ -404,8 +400,8 @@
                 text: 'Perubahan data tugas akan disimpan.',
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Ya, update',
-                cancelButtonText: 'Batal',
+                confirmButtonText: 'Yes, update',
+                cancelButtonText: 'Cancel',
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#64748b',
                 reverseButtons: true,
@@ -413,7 +409,7 @@
                 if (!result.isConfirmed) return;
 
                 $btn.prop('disabled', true).html(
-                    '<i class="fa-solid fa-spinner fa-spin"></i><span>Menyimpan...</span>'
+                    '<span class="spinner-border spinner-border-sm me-1"></span><span>Saving...</span>'
                 );
 
                 var formData = new FormData($form[0]);
@@ -433,10 +429,10 @@
                         }, 500);
                     },
                     error: function(xhr) {
-                        var msg = xhr.responseJSON?.message || 'Gagal memperbarui task.';
+                        var msg = xhr.responseJSON?.message || 'Failed to update the task.';
                         toastr.error(msg);
                         $btn.prop('disabled', false).html(
-                            '<i class="fa-solid fa-floppy-disk"></i><span>Update Task</span>'
+                            '<span>Update Task</span>'
                         );
                     }
                 });

@@ -22,10 +22,10 @@ class StockEntry extends Model
     public const REASON_OTHER = 'other';
 
     public const REASON_LABELS = [
-        self::REASON_OPENING => 'Saldo Awal',
-        self::REASON_RETURN => 'Retur dari Project / Customer',
-        self::REASON_SAMPLE => 'Hibah / Sampel',
-        self::REASON_OTHER => 'Lain-lain',
+        self::REASON_OPENING => 'Opening Balance',
+        self::REASON_RETURN => 'Return from Project / Customer',
+        self::REASON_SAMPLE => 'Grant / Sample',
+        self::REASON_OTHER => 'Other',
     ];
 
     protected $fillable = [

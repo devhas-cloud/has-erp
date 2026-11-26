@@ -17,6 +17,7 @@ use App\Models\TaskCategory;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class QuotationTest extends TestCase
@@ -471,6 +472,62 @@ class QuotationTest extends TestCase
         $task->assignees()->attach($lateSales->id, ['assigned_at' => now()]);
 
         $this->assertStringNotContainsString('Late Sales', $quotation->salesNames());
+    }
+
+    public function test_print_sales_orders_intern_then_manager_when_intern_exists(): void
+    {
+        $config = $this->createApprovedConfiguration();
+        $task = Task::findOrFail($config->task_id);
+
+        $intern = User::create([
+            'username' => 'intern1',
+            'full_name' => 'Intan Magang',
+            'email' => 'intern1@has.com',
+            'password' => bcrypt('secret'),
+            'division_id' => $this->salesDivision->id,
+            'role' => 'User',
+            'intern' => true,
+        ]);
+        $task->assignees()->attach($intern->id, ['assigned_at' => now()]);
+
+        // Sales manager = user dgn division_id 6 + task_role_id 4 (id tetap DB produksi).
+        DB::table('divisions')->insert([
+            'id' => 6, 'division_name' => 'Sales', 'type' => 'Internal',
+            'status' => 'Active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('task_roles')->insert([
+            'id' => 4, 'role_name' => 'Manager Division', 'hierarchy_level' => 20,
+            'is_global_delegator' => false, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $manager = User::create([
+            'username' => 'manager1',
+            'full_name' => 'Maya Manager',
+            'email' => 'manager1@has.com',
+            'password' => bcrypt('secret'),
+            'division_id' => 6,
+            'task_role_id' => 4,
+            'role' => 'User',
+        ]);
+
+        $quotation = new Quotation([
+            'task_id' => $task->id,
+            'sales_ids' => [$this->sales->id, $intern->id],
+            'from_name' => 'Zuri Muriani',
+        ]);
+
+        // Cetakan: intern dulu, lalu sales manager, lalu sales lain.
+        $this->assertSame(
+            [$intern->id, $manager->id, $this->sales->id],
+            $quotation->printSalesUsers()->pluck('id')->all()
+        );
+        $this->assertSame('Intan Magang, Maya Manager, zuri', $quotation->printSalesNames());
+
+        // Perilaku lama tidak berubah (snapshot apa adanya, tanpa manager).
+        $this->assertSame('zuri, Intan Magang', $quotation->salesNames());
+
+        // Tanpa intern: cetakan = daftar biasa.
+        $plain = new Quotation(['task_id' => $task->id, 'sales_ids' => [$this->sales->id]]);
+        $this->assertSame([$this->sales->id], $plain->printSalesUsers()->pluck('id')->all());
     }
 
     public function test_fetch_task_merges_water_and_ims_configs(): void

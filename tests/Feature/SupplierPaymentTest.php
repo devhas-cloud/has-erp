@@ -78,6 +78,14 @@ class SupplierPaymentTest extends TestCase
         ], $extra));
     }
 
+    public function test_open_bills_rejects_payment_from_another_supplier(): void
+    {
+        $this->actingAs($this->staff)->getJson(route('supplier-payment.open-bills', [
+            'supplier_id' => $this->supplier->id,
+            'payment_id' => 999999,
+        ]))->assertStatus(422)->assertJsonValidationErrors('payment_id');
+    }
+
     public function test_partial_then_full_payment_updates_bill_and_po_status(): void
     {
         $bill = $this->bill(6000);

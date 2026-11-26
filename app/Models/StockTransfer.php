@@ -73,15 +73,15 @@ class StockTransfer extends Model
     public function kindLabel(): string
     {
         return match (true) {
-            ! $this->from_project_id && $this->to_project_id => 'Alokasi ke Project',
-            $this->from_project_id && ! $this->to_project_id => 'Lepas Alokasi',
-            $this->from_project_id !== $this->to_project_id => 'Pindah Project',
-            default => 'Pindah Gudang',
+            ! $this->from_project_id && $this->to_project_id => 'Allocate to Project',
+            $this->from_project_id && ! $this->to_project_id => 'Release Allocation',
+            $this->from_project_id !== $this->to_project_id => 'Move Between Projects',
+            default => 'Move Warehouse',
         };
     }
 
     public static function ownershipLabel(?Project $project): string
     {
-        return $project ? $project->project_number.' — '.$project->project_name : 'Stok bebas';
+        return $project ? $project->project_number.' — '.$project->project_name : 'Free stock';
     }
 }

@@ -182,6 +182,33 @@ class ContactManagementTest extends TestCase
         $this->assertSame('assignee', $response->json('data.0.assigned_to_name'));
     }
 
+    public function test_data_endpoint_filters_and_export_follow_toolbar(): void
+    {
+        $active = AccountContact::create(array_merge($this->payload, [
+            'contact_owner_id' => $this->creator->id, 'assigned_to_id' => $this->assignee->id, 'status' => 'Active',
+        ]));
+        // last_activity_at tidak fillable (diisi sistem saat ada aktivitas).
+        AccountContact::whereKey($active->id)->update(['last_activity_at' => now()->subDays(3)]);
+        AccountContact::create(array_merge($this->payload, [
+            'full_name' => 'Siti Aminah', 'email' => 'siti@example.com', 'mobile' => '81200000001',
+            'contact_owner_id' => $this->assignee->id, 'assigned_to_id' => null, 'status' => 'Active',
+        ]));
+
+        $count = fn (array $params) => $this->actingAs($this->creator)->getJson(route('contact-management.data', $params))->assertOk()->json('recordsFiltered');
+
+        $this->assertSame(2, $count([]));
+        $this->assertSame(1, $count(['activity' => '7d']));
+        $this->assertSame(1, $count(['activity' => 'none']));
+        $this->assertSame(1, $count(['assigned' => 'none']));
+        $this->assertSame(1, $count(['assigned' => $this->assignee->id]));
+        $this->assertSame(1, $count(['mine' => 1]));
+        $this->assertSame(0, $count(['account' => 999999]));
+        $this->assertSame(1, $count(['search' => ['value' => 'Siti']]));
+
+        // Export ikut filter aktif.
+        $this->actingAs($this->creator)->get(route('contact-management.export', ['activity' => 'none', 'q' => 'Siti']))->assertOk();
+    }
+
     public function test_data_endpoint_shows_dash_when_unassigned(): void
     {
         AccountContact::create(array_merge($this->payload, ['contact_owner_id' => $this->creator->id, 'status' => 'Active']));

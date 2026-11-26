@@ -26,10 +26,11 @@ class StockCost
 
     /**
      * Harga satuan dokumen (mata uang dokumen, setelah diskon) -> base.
+     * $rate = kurs yang sudah ditetapkan (mis. kurs penerimaan); null = kurs master saat ini.
      */
-    public static function toBase(?float $price, ?string $currency, float $discountPercent = 0): float
+    public static function toBase(?float $price, ?string $currency, float $discountPercent = 0, ?float $rate = null): float
     {
-        return round((float) $price * (1 - $discountPercent / 100) * Currency::rateOf($currency), 4);
+        return round((float) $price * (1 - $discountPercent / 100) * ($rate ?? Currency::rateOf($currency)), 4);
     }
 
     /**

@@ -235,7 +235,12 @@
                     @if($bill->supplier?->bank_account_no)<dt>Rekening</dt><dd>{{ $bill->supplier->bank_name }} {{ $bill->supplier->bank_account_no }}<div class="sb-muted">a.n. {{ $bill->supplier->bank_account_name }}</div></dd>@endif
                     <dt>Tgl Tagihan</dt><dd>{{ $bill->bill_date?->format('d/m/Y') }}</dd>
                     <dt>Jatuh Tempo</dt><dd>{{ $bill->due_date?->format('d/m/Y') }}</dd>
-                    @if($bill->isForeign())<dt>Kurs Tagihan</dt><dd>1 {{ $bill->currency }} = {{ $baseCurrency }} {{ $money($bill->exchange_rate) }}<div class="sb-muted">{{ $bill->rate_estimated ? 'Perkiraan dari kurs master — koreksi sesuai tanggal invoice' : 'Kurs tanggal invoice supplier' }}</div></dd>@endif
+                    @if($bill->isForeign())<dt>Kurs Tagihan</dt><dd>1 {{ $bill->currency }} = {{ $baseCurrency }} {{ $money($bill->exchange_rate) }}<div class="sb-muted">{{ $bill->rate_estimated ? 'Perkiraan dari kurs master — koreksi sesuai tanggal invoice' : 'Kurs tanggal invoice supplier' }}</div>
+                        @if($bill->receipt_rate)
+                            @php $receiptFx = $bill->receiptFxDifference(); @endphp
+                            <div class="sb-muted">Kurs penerimaan barang {{ $money($bill->receipt_rate) }}@if(abs($receiptFx) >= 0.01) · <span class="{{ $receiptFx > 0 ? 'text-danger' : 'text-success' }}" title="Nilai barang × (kurs tagihan − kurs penerimaan). Nilai stok tidak diubah.">{{ $receiptFx > 0 ? 'rugi' : 'laba' }} selisih {{ $baseCurrency }} {{ $money(abs($receiptFx)) }}</span>@endif</div>
+                        @endif
+                    </dd>@endif
                     @if($bill->tax_invoice_number)<dt>Faktur Pajak</dt><dd>{{ $bill->tax_invoice_number }}</dd>@endif
                     <dt>Dibuat</dt><dd>{{ $bill->creator?->display_name ?? '—' }}<div class="sb-muted">{{ $bill->created_at?->format('d/m/Y H:i') }}</div></dd>
                     @if($bill->verified_at)<dt>Diverifikasi</dt><dd>{{ $bill->verifier?->display_name ?? '—' }}<div class="sb-muted">{{ $bill->verified_at->format('d/m/Y H:i') }}</div></dd>@endif

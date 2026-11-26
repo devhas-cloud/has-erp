@@ -95,8 +95,8 @@
         <h1 class="page-header-title">Detail Purchase Order</h1>
     </div>
     <div class="page-header-actions">
-        <a href="{{ route('purchase-order.pdf', $po->id) }}" target="_blank" class="btn btn-secondary btn-sm"><i class="fa fa-print me-1"></i> Print PDF</a>
-        <a href="{{ route('purchase-order.index') }}" class="btn btn-secondary btn-sm"><i class="fa fa-arrow-left me-1"></i> Back</a>
+        <a href="{{ route('purchase-order.pdf', $po->id) }}" target="_blank" class="btn btn-secondary btn-sm">Print PDF</a>
+        <a href="{{ route('purchase-order.index') }}" class="btn btn-secondary btn-sm">Back</a>
     </div>
 </div>
 
@@ -108,7 +108,7 @@
             <div class="po-number">{{ $po->po_number ?: 'PO #'.$po->id }}</div>
             <div class="po-muted">{{ $po->type_label }} &middot; {{ $po->supplier_name }} &middot; {{ $po->date?->format('d/m/Y') ?? 'No date' }}</div>
             @if($po->revisionOf)
-                <div class="po-muted mt-1"><i class="fa fa-code-branch me-1"></i>Revision of <a href="{{ route('purchase-order.show', $po->revision_of_id) }}">{{ $po->revisionOf->po_number }}</a> (Rejected)</div>
+                <div class="po-muted mt-1">Revision of <a href="{{ route('purchase-order.show', $po->revision_of_id) }}">{{ $po->revisionOf->po_number }}</a> (Rejected)</div>
             @endif
         </div>
         <div class="po-total">
@@ -124,7 +124,7 @@
             @endphp
             <div class="po-step {{ $state }}">
                 <div class="dot">
-                    @if($state === 'done')<i class="fa fa-check"></i>@elseif($state === 'stopped')<i class="fa fa-xmark"></i>@else{{ $i + 1 }}@endif
+                    {{ $i + 1 }}
                 </div>
                 <div>{{ $state === 'stopped' ? ($po->status === 'rejected' ? 'Rejected' : 'Cancelled') : ($i === 1 && $po->approved_at ? 'Approved' : $label) }}</div>
                 @if(! empty($stepNotes[$i]))<div class="po-step-note">{{ $stepNotes[$i] }}</div>@endif
@@ -140,8 +140,8 @@
             <div class="txt"><strong>{{ $isOwner ? 'Review items, then submit for approval' : 'Still draft' }}</strong>Goods can only be received after the PO is approved.</div>
             @if($isOwner)
             <div class="acts">
-                <a href="{{ route('purchase-order.edit', $po->id) }}" class="btn btn-secondary btn-sm"><i class="fa fa-pen me-1"></i> Edit</a>
-                <button type="button" class="btn btn-primary btn-sm" onclick="poSubmit()"><i class="fa fa-paper-plane me-1"></i> Submit Approval</button>
+                <a href="{{ route('purchase-order.edit', $po->id) }}" class="btn btn-secondary btn-sm">Edit</a>
+                <button type="button" class="btn btn-primary btn-sm" onclick="poSubmit()">Submit Approval</button>
             </div>
             @endif
         </div>
@@ -151,8 +151,8 @@
             <div class="txt"><strong>{{ $canApprove ? 'Waiting for your approval' : 'Waiting for approver approval' }}</strong>Only 1 approver (user with Approve permission). Review supplier, items, and total before deciding.</div>
             @if($canApprove)
             <div class="acts">
-                <button type="button" class="btn btn-danger btn-sm" onclick="poOpenReject()"><i class="fa fa-xmark me-1"></i> Reject</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="poApprove()"><i class="fa fa-check me-1"></i> Approve</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="poOpenReject()">Reject</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="poApprove()">Approve</button>
             </div>
             @endif
         </div>
@@ -163,16 +163,16 @@
             <div class="txt"><strong>{{ $receivedQty > 0 ? 'Remaining '.$remainingQty.' qty to be received' : 'Ready to receive goods' }}</strong>Record incoming goods via Receive Goods, can be in stages.</div>
             <div class="acts">
                 @if($po->canBeCancelled() && $canApprove)
-                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="poOpenCancel()"><i class="fa fa-ban me-1"></i> Cancel PO</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="poOpenCancel()">Cancel PO</button>
                 @endif
                 @if($po->isReceivable())
-                    <a href="{{ route('goods-receipt.create', ['source_type' => 'po', 'source_id' => $po->id]) }}" class="btn btn-primary btn-sm"><i class="fa fa-truck-ramp-box me-1"></i> Receive Goods</a>
+                    <a href="{{ route('goods-receipt.create', ['source_type' => 'po', 'source_id' => $po->id]) }}" class="btn btn-primary btn-sm">Receive Goods</a>
                 @endif
             </div>
         </div>
         @break
     @case('received')
-        <div class="po-next ok"><div class="txt"><strong><i class="fa fa-circle-check me-1"></i>All goods received</strong>PO completed.</div></div>
+        <div class="po-next ok"><div class="txt"><strong>All goods received</strong>PO completed.</div></div>
         @break
     @case('rejected')
         @php $revision = $po->revisions->first(); @endphp
@@ -180,14 +180,14 @@
             <div class="txt">
                 <strong>Rejected{{ $po->finalChecker ? ' by '.$po->finalChecker->display_name : '' }}</strong>{{ $po->approval_note ?: 'No reason.' }}
                 @if($revision)
-                    <div class="mt-1"><i class="fa fa-code-branch me-1"></i>Revised to <a href="{{ route('purchase-order.show', $revision->id) }}" class="fw-semibold">{{ $revision->po_number }}</a> ({{ $revision->status_label }}).</div>
+                    <div class="mt-1">Revised to <a href="{{ route('purchase-order.show', $revision->id) }}" class="fw-semibold">{{ $revision->po_number }}</a> ({{ $revision->status_label }}).</div>
                 @else
                     <div class="mt-1">Fix via <strong>Create Revision</strong>: PO is copied into a new draft with the same number + REV.</div>
                 @endif
             </div>
             @if(! $revision && $canUpdate)
             <div class="acts">
-                <button type="button" class="btn btn-primary btn-sm" id="po-revise-btn" onclick="poRevise()"><i class="fa fa-code-branch me-1"></i> Create Revision</button>
+                <button type="button" class="btn btn-primary btn-sm" id="po-revise-btn" onclick="poRevise()">Create Revision</button>
             </div>
             @endif
         </div>
@@ -203,7 +203,7 @@
     <div class="col-xl-8">
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom">
-                <span><i class="fa-solid fa-list me-2" style="color:var(--accent)"></i>Item <span class="po-muted">({{ $po->items->count() }})</span></span>
+                <span>Items <span class="po-muted">({{ $po->items->count() }})</span></span>
             </div>
             <div class="card-body-custom p-2">
                 <div class="table-responsive">
@@ -219,7 +219,7 @@
                         </thead>
                         <tbody>
                             @forelse($poGroups as $group)
-                                <tr class="po-group-row"><td colspan="5"><i class="fa-solid fa-diagram-project me-1"></i>{{ $group['label'] }}</td></tr>
+                                <tr class="po-group-row"><td colspan="5">{{ $group['label'] }}</td></tr>
                                 @foreach($group['items'] as $item)
                                     @php
                                         $gr = $item->goodsRequest();
@@ -232,7 +232,7 @@
                                             <div class="po-desc">{!! $item->description ?: '—' !!}</div>
                                             @if($gr)
                                                 <a href="{{ route('goods-request.show', $gr->id) }}" class="po-muted text-decoration-none" title="Source Goods Request">
-                                                    <i class="fa fa-link me-1"></i>Permintaan {{ $gr->number_label }} · {{ $gr->division?->division_name ?? '-' }}
+                                                    Request {{ $gr->number_label }} · {{ $gr->division?->division_name ?? '-' }}
                                                 </a>
                                             @endif
                                         </td>
@@ -241,7 +241,7 @@
                                         <td class="text-end fw-semibold">{{ $money($item->amount()) }}</td>
                                         <td style="font-size:12px">
                                             @if($received >= $item->qty && $item->qty > 0)
-                                                <span style="color:#15803d;font-weight:600"><i class="fa fa-check me-1"></i>Complete</span>
+                                                <span style="color:#15803d;font-weight:600">Complete</span>
                                             @else
                                                 {{ $received }} / {{ $item->qty }}@if($cancelled) <span class="po-muted">· released</span>@endif
                                             @endif
@@ -262,9 +262,9 @@
         @php $returnable = $po->items->sum(fn ($item) => max(0, $item->receivedQty() - $item->billedQty())); @endphp
         <div class="card-custom fade-in mb-3">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span><i class="fa-solid fa-truck-ramp-box me-2" style="color:var(--accent)"></i>Goods Receiving <span class="po-muted">({{ $po->goodsReceipts->count() }})</span></span>
+                <span>Goods Receiving <span class="po-muted">({{ $po->goodsReceipts->count() }})</span></span>
                 @if($canCreateReturn && $returnable > 0 && $po->supplier_id)
-                    <a href="{{ route('supplier-return.create', ['purchase_order_id' => $po->id]) }}" class="btn btn-outline-secondary btn-sm"><i class="fa fa-truck-arrow-right me-1"></i> Return to Supplier</a>
+                    <a href="{{ route('supplier-return.create', ['purchase_order_id' => $po->id]) }}" class="btn btn-outline-secondary btn-sm">Return to Supplier</a>
                 @endif
             </div>
             <div class="card-body-custom p-2">
@@ -274,7 +274,7 @@
                             <tr>
                                 <td><a href="{{ route('goods-receipt.show', $receipt->id) }}" class="fw-semibold">{{ $receipt->receipt_number }}</a></td>
                                 <td>{{ $receipt->received_date?->format('d/m/Y') }}</td>
-                                <td>{{ $receipt->warehouse?->name ?? 'Use directly' }}</td>
+                                <td>{{ $receipt->warehouse?->name ?? 'Direct use' }}</td>
                                 <td class="text-end">{{ (int) $receipt->items_sum_qty }} qty</td>
                                 <td class="text-end">{!! $receipt->statusBadgeHtml() !!}</td>
                             </tr>
@@ -294,7 +294,7 @@
         @if(in_array($po->status, ['approved', 'partially_received', 'received', 'cancelled'], true))
         <div class="card-custom fade-in">
             <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span><i class="fa-solid fa-file-invoice me-2" style="color:var(--accent)"></i>Supplier Bill
+                <span>Supplier Bill
                     <span class="status-badge ms-1" style="background:{{ $billingColors[$billing] }}">{{ \App\Models\PurchaseOrder::BILLING_LABELS[$billing] }}</span>
                     @php $payState = $po->paymentStatus(); @endphp
                     @if($payState !== 'unbilled')
@@ -303,10 +303,10 @@
                 </span>
                 <div class="d-flex gap-2 flex-wrap">
                     @if($canCreateBill && $po->isReceivable() && ($po->supplier?->max_advance_percent ?? 0) > 0 && $po->advanceLimit() - $po->advanceBilled() > 0.005)
-                        <a href="{{ route('supplier-bill.create', ['purchase_order_id' => $po->id, 'type' => 'advance']) }}" class="btn btn-outline-secondary btn-sm"><i class="fa fa-hand-holding-dollar me-1"></i> Advance</a>
+                        <a href="{{ route('supplier-bill.create', ['purchase_order_id' => $po->id, 'type' => 'advance']) }}" class="btn btn-outline-secondary btn-sm">Advance</a>
                     @endif
                     @if($canCreateBill && $billableNow > 0)
-                        <a href="{{ route('supplier-bill.create', ['purchase_order_id' => $po->id]) }}" class="btn btn-soft btn-sm"><i class="fa fa-plus me-1"></i> Record Bill</a>
+                        <a href="{{ route('supplier-bill.create', ['purchase_order_id' => $po->id]) }}" class="btn btn-soft btn-sm">Record Bill</a>
                     @endif
                 </div>
             </div>
@@ -356,7 +356,7 @@
             'hint' => 'Optional — supplier quote, signed PO, etc. Once the PO is decided, documents can only be added.',
         ])
         <div class="card-custom fade-in mb-3">
-            <div class="card-header-custom"><span><i class="fa-solid fa-calculator me-2" style="color:var(--accent)"></i>Total ({{ $currency }})</span></div>
+            <div class="card-header-custom"><span>Total ({{ $currency }})</span></div>
             <div class="card-body-custom">
                 <div class="po-sum"><span>Subtotal</span><span class="v">{{ $money($poTotals['subtotal']) }}</span></div>
                 @if($poTotals['discount'] > 0)
@@ -367,11 +367,14 @@
                     <div class="po-sum"><span>VAT {{ $percent($po->ppn_percent) }}%</span><span class="v">{{ $money($poTotals['ppn']) }}</span></div>
                 @endif
                 <div class="po-sum grand"><span>Grand Total</span><span>{{ $money($poTotals['total']) }}</span></div>
+                @if($currency !== \App\Models\Currency::baseName())
+                    <div class="po-sum"><span>≈ {{ \App\Models\Currency::baseName() }}</span><span class="v">{{ $money($poTotals['total'] * $po->exchangeRate()) }}</span></div>
+                @endif
             </div>
         </div>
 
         <div class="card-custom fade-in">
-            <div class="card-header-custom"><span><i class="fa-solid fa-circle-info me-2" style="color:var(--accent)"></i>Information</span></div>
+            <div class="card-header-custom"><span>Information</span></div>
             <div class="card-body-custom">
                 <dl class="po-dl">
                     <dt>Supplier</dt>
@@ -382,6 +385,10 @@
                         @if($po->supplier_attn)<div class="po-muted">Attn {{ $po->supplier_attn }}</div>@endif
                     </dd>
                     <dt>Type</dt><dd>{{ $po->type_label }}</dd>
+                    @if($currency !== \App\Models\Currency::baseName())
+                        <dt>Exchange Rate</dt><dd>1 {{ $currency }} = {{ \App\Models\Currency::baseName() }} {{ \App\Support\Number::rate($po->exchangeRate()) }}
+                            <div class="po-muted">{{ $po->exchange_rate ? 'Set on this PO — used to value goods on receipt' : 'Not set on this PO — current master rate is used' }}</div></dd>
+                    @endif
                     @if($po->payment_term_days !== null)<dt>Payment Terms</dt><dd>{{ \App\Models\Supplier::termLabel($po->payment_term_days) }}</dd>@endif
                     @if($po->terms)<dt>Terms</dt><dd>{{ $po->terms }}</dd>@endif
                     @if($po->delivery)<dt>Delivery</dt><dd>{{ $po->delivery }}</dd>@endif
@@ -416,7 +423,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                 <button type="button" class="btn btn-danger btn-sm" id="po-btn-cancel">
-                    <i class="fa fa-ban me-1"></i> Cancel PO
+                    Cancel PO
                 </button>
             </div>
         </div>
@@ -439,7 +446,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger btn-sm" id="po-btn-reject">
-                    <i class="fa fa-xmark me-1"></i> Reject
+                    Reject
                 </button>
             </div>
         </div>
@@ -497,7 +504,7 @@ $(document).on('click', '#po-btn-cancel', function() {
     $('#po-btn-cancel').prop('disabled', true);
     $.post(poCancelUrl, { _token: '{{ csrf_token() }}', cancel_reason: reason })
         .done(function(res) {
-            toastr.success(res.message || 'PO dibatalkan.');
+            toastr.success(res.message || 'PO cancelled.');
             poCancelModalInstance.hide();
             setTimeout(function() { window.location.reload(); }, 800);
         }).fail(function(xhr) {

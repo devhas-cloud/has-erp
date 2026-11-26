@@ -15,6 +15,7 @@ use App\Models\SupplierBill;
 use App\Models\User;
 use App\Models\UserAccessControl;
 use App\Models\Warehouse;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -158,6 +159,14 @@ class SupplierBillTest extends TestCase
         $this->assertSame(SupplierBill::STATUS_VERIFIED, SupplierBill::find($ownBill)->status);
     }
 
+    public function test_billable_lines_rejects_bill_from_another_po(): void
+    {
+        $this->actingAs($this->staff)->getJson(route('supplier-bill.billable-lines', [
+            'purchase_order_id' => $this->po->id,
+            'bill_id' => 999999,
+        ]))->assertStatus(422)->assertJsonValidationErrors('bill_id');
+    }
+
     public function test_pages_edit_and_delete_draft(): void
     {
         $id = $this->storeBill(4)->assertOk()->json('id');
@@ -186,5 +195,28 @@ class SupplierBillTest extends TestCase
 
         $this->actingAs($this->staff)->deleteJson(route('supplier-bill.destroy', $id))->assertOk();
         $this->assertDatabaseMissing('supplier_bills', ['id' => $id]);
+    }
+
+    public function test_database_rejects_duplicate_active_supplier_invoice_number(): void
+    {
+        $this->makeDirectBill('BILL-DB-1');
+
+        $this->expectException(QueryException::class);
+
+        $this->makeDirectBill('BILL-DB-2');
+    }
+
+    private function makeDirectBill(string $billNumber): SupplierBill
+    {
+        return SupplierBill::create([
+            'bill_number' => $billNumber,
+            'supplier_id' => $this->supplier->id,
+            'supplier_invoice_number' => 'INV-DB-1',
+            'bill_date' => '2026-11-02',
+            'due_date' => '2026-12-02',
+            'currency' => 'IDR',
+            'status' => SupplierBill::STATUS_DRAFT,
+            'created_by' => $this->staff->id,
+        ]);
     }
 }

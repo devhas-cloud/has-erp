@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\Invoice;
 use App\Models\Log;
 use App\Models\MasterProduct;
+use App\Models\Pos;
 use App\Models\Project;
 use App\Models\ProjectBillingTerm;
 use App\Models\Quotation;
@@ -43,6 +44,21 @@ class InvoiceController extends Controller
                         ->orWhere('project_name', 'like', "%{$searchValue}%")
                         ->orWhereHas('company', fn ($c) => $c->where('account_name', 'like', "%{$searchValue}%")));
             });
+        }
+
+        if ($request->filled('company_id')) {
+            $query->whereHas('project', fn ($p) => $p->where('company_id', (int) $request->input('company_id')));
+        }
+
+        if ($request->filled('project_id')) {
+            $query->where('project_id', (int) $request->input('project_id'));
+        }
+
+        if ($request->boolean('overdue')) {
+            $query->where('approval_status', Invoice::APPROVAL_APPROVED)
+                ->where('status', Invoice::STATUS_UNPAID)
+                ->whereNotNull('due_date')
+                ->whereDate('due_date', '<', now()->toDateString());
         }
 
         $recordsFiltered = $query->count();
@@ -598,6 +614,7 @@ class InvoiceController extends Controller
         $currentInvoiceId = $request->integer('invoice_id') ?: null;
         $company = $project->company;
         $quotationTotals = $this->quotationTotals($project);
+        $pos = Pos::with('items')->where('project_id', $project->id)->latest('id')->first();
 
         return response()->json([
             'success' => true,
@@ -614,6 +631,8 @@ class InvoiceController extends Controller
                 'net_sale_amount' => (float) $project->net_sale_amount,
                 'quotation_number' => $project->quotation?->quotation_number,
                 'quotation_items' => $this->quotationItems($project),
+                'pos_number' => $pos?->pos_number,
+                'pos_items' => $this->posItems($pos),
                 'billing_terms' => $project->billingTerms->map(function (ProjectBillingTerm $term) use ($currentInvoiceId) {
                     $active = $term->activeInvoice();
 
@@ -664,7 +683,7 @@ class InvoiceController extends Controller
         $validated = $request->validate([
             'project_id' => 'required|integer|exists:projects,id',
             'billing_term_id' => ['nullable', 'integer', Rule::exists('project_billing_terms', 'id')->where('project_id', $request->integer('project_id'))],
-            'invoice_date' => 'required|date',
+            'invoice_date' => 'required|date|before_or_equal:today',
             'ship_to' => 'nullable|string',
             'date_shipped' => 'nullable|date',
             'shipping_method' => 'nullable|string|max:100',
@@ -964,6 +983,37 @@ class InvoiceController extends Controller
         );
 
         return $document;
+    }
+
+    /**
+     * Item POS project (penamaan customer) siap dipakai sebagai item invoice.
+     * POS tidak menyimpan product_id, jadi produk dikosongkan dan nama diisi
+     * dari deskripsi. Baris tanpa qty dilewati.
+     */
+    private function posItems(?Pos $pos): array
+    {
+        if (! $pos) {
+            return [];
+        }
+
+        return $pos->items
+            ->filter(fn ($item) => (float) $item->qty > 0)
+            ->map(function ($item) {
+                $plain = Str::squish(html_entity_decode(strip_tags(
+                    str_replace(['<br>', '<br/>', '<br />'], ' ', (string) $item->description)
+                ), ENT_QUOTES | ENT_HTML5));
+
+                return [
+                    'product_id' => null,
+                    'product_name' => Str::limit($plain !== '' ? $plain : 'Item', 255, ''),
+                    'description' => $plain !== '' ? nl2br(e($plain)) : '',
+                    'qty' => (float) $item->qty,
+                    'unit' => $item->unit,
+                    'unit_price' => (float) $item->unit_price,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

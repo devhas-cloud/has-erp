@@ -35,6 +35,8 @@ class StockLog extends Model
 
     public const TYPE_SHIP_IN = 'ship_in';             // Branch Transfer diterima di gudang tujuan
 
+    public const TYPE_MERGE = 'merge';                 // penggabungan baris material lama ke satu saldo
+
     public const TYPE_LABELS = [
         self::TYPE_IN => 'Masuk',
         self::TYPE_OUT => 'Keluar',
@@ -46,6 +48,7 @@ class StockLog extends Model
         self::TYPE_DETAIL_UPDATE => 'Lengkapi Data',
         self::TYPE_SHIP_OUT => 'Kirim Antar Branch',
         self::TYPE_SHIP_IN => 'Terima Antar Branch',
+        self::TYPE_MERGE => 'Penggabungan Saldo',
     ];
 
     public const REF_GOODS_RECEIPT_ITEM = 'goods_receipt_item';
@@ -70,6 +73,8 @@ class StockLog extends Model
 
     public const REF_MATERIAL_HANDOVER_ITEM = 'material_handover_item';
 
+    public const REF_MATERIAL_RETURN_ITEM = 'material_return_item';
+
     /** Barang jadi masuk / batal produksi (ref_id = productions.id). */
     public const REF_PRODUCTION = 'production';
 
@@ -85,6 +90,7 @@ class StockLog extends Model
         self::REF_GOODS_REQUEST_ITEM => [GoodsRequestItem::class, 'goodsRequest', 'goods-request.show'],
         self::REF_BRANCH_TRANSFER_ITEM => [BranchTransferItem::class, 'branchTransfer', 'branch-transfer.show'],
         self::REF_MATERIAL_HANDOVER_ITEM => [MaterialHandoverItem::class, 'materialHandover', 'material-handover.show'],
+        self::REF_MATERIAL_RETURN_ITEM => [MaterialReturnItem::class, 'materialReturn', 'material-return.show'],
         self::REF_PRODUCTION => [Production::class, null, 'production.show'],
     ];
 

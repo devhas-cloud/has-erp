@@ -531,6 +531,21 @@ const pjTermTemplates = {
     ]
 };
 
+// Pilihan Payment Name pada billing timeline.
+const pjTermNames = ['Term 1', 'Term 2', 'Term 3', 'Term 4', 'DP', 'Settlement', 'Full Payment', 'Retensi'];
+
+function pjTermNameOptions(selected) {
+    var names = pjTermNames.slice();
+    // Nama legacy di luar daftar tetap ditampilkan agar nilai lama tidak hilang.
+    if (selected && names.indexOf(selected) === -1) names.push(selected);
+
+    var html = '<option value="">— Pilih Payment —</option>';
+    names.forEach(function(n) {
+        html += '<option value="' + pjEsc(n) + '"' + (n === selected ? ' selected' : '') + '>' + pjEsc(n) + '</option>';
+    });
+    return html;
+}
+
 function pjTermRowHtml(term) {
     term = term || {};
     // Termin yang sudah ditagih: persen terkunci & tidak bisa dihapus.
@@ -538,7 +553,7 @@ function pjTermRowHtml(term) {
     var key = 'term-' + (++pjTermSeq);
     var html = '<tr data-key="' + key + '" data-id="' + (term.id || '') + '"' + (locked ? ' class="locked" data-locked="1"' : '') + '>';
     html += '<td class="text-center pj-term-num"></td>';
-    html += '<td><input type="text" class="form-control form-control-sm pj-term-name" maxlength="100" placeholder="e.g. DP, Term 1" value="' + pjEsc(term.name || '') + '">';
+    html += '<td><select class="form-select form-select-sm pj-term-name"' + (locked ? ' disabled' : '') + '>' + pjTermNameOptions(term.name || '') + '</select>';
     if (locked) {
         html += '<div class="pj-term-lock"><i class="fa fa-lock me-1"></i>Already billed: ' + pjEsc(term.invoice_number || '') + '</div>';
     }

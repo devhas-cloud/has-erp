@@ -254,4 +254,30 @@ class PoSupplierApprovalTest extends TestCase
         $this->assertEqualsCanonicalizing([$active1->id, $active2->id], $ids);
         $this->assertSame($active2->project_number, $response->json('data.0.project_number'));
     }
+
+    public function test_status_filters_counts_and_index_page(): void
+    {
+        $none = $this->createProject();
+        $half = $this->createProject();
+        $ready = $this->createProject();
+        $this->actingAs($this->approver1)->postJson(route('po-supplier-approval.approve', $half->id))->assertOk();
+        $this->actingAs($this->approver1)->postJson(route('po-supplier-approval.approve', $ready->id))->assertOk();
+        $this->actingAs($this->approver2)->postJson(route('po-supplier-approval.approve', $ready->id))->assertOk();
+
+        $ids = fn (User $user, array $params) => collect($this->actingAs($user)->getJson(route('po-supplier-approval.data', $params + ['draw' => 1]))->assertOk()->json('data'))->pluck('id')->all();
+
+        $this->assertSame([$none->id], $ids($this->approver1, ['status' => 'none']));
+        $this->assertSame([$half->id], $ids($this->approver1, ['status' => 'half']));
+        $this->assertSame([$ready->id], $ids($this->approver1, ['status' => 'ready']));
+        // approver1 sudah approve $half -> hanya $none yang perlu approval-nya; approver2 masih perlu $none & $half.
+        $this->assertSame([$none->id], $ids($this->approver1, ['status' => 'waiting_me']));
+        $this->assertEqualsCanonicalizing([$none->id, $half->id], $ids($this->approver2, ['status' => 'waiting_me']));
+
+        $this->actingAs($this->approver2)->getJson(route('po-supplier-approval.data'))->assertOk()
+            ->assertJsonPath('status_counts', ['waiting_me' => 2, 'none' => 1, 'half' => 1, 'ready' => 1])
+            // Yang masih perlu approval tampil lebih dulu; yang sudah siap di akhir.
+            ->assertJsonPath('data.2.id', $ready->id);
+
+        $this->actingAs($this->approver1)->get(route('po-supplier-approval.index'))->assertOk()->assertSee('Needs my approval');
+    }
 }

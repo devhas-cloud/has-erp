@@ -6,9 +6,9 @@
 --}}
 <div class="card-custom fade-in mb-3" id="pdoc-card">
     <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span><i class="fa-solid fa-folder-open me-2" style="color:var(--accent)"></i>Purchase Documents <span style="color:var(--text-muted);font-size:12px" id="pdoc-count">({{ count($documents) }})</span></span>
+        <span>Purchase Documents <span style="color:var(--text-muted);font-size:12px" id="pdoc-count">({{ count($documents) }})</span></span>
         @if($canUpload)
-            <button type="button" class="btn btn-soft btn-sm" onclick="$('#pdoc-form').slideToggle(150)"><i class="fa fa-upload me-1"></i> Upload Document</button>
+            <button type="button" class="btn btn-soft btn-sm" onclick="$('#pdoc-form').slideToggle(150)">Upload Document</button>
         @endif
     </div>
     <div class="card-body-custom">
@@ -34,13 +34,13 @@
             </div>
             <div class="d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2">
                 <small style="color:var(--text-muted)">PDF / JPG / PNG, max 10MB per file, {{ \App\Models\Document::MAX_FILES }} files per upload.</small>
-                <button type="submit" class="btn btn-primary btn-sm" id="pdoc-submit"><i class="fa fa-upload me-1"></i> Upload</button>
+                <button type="submit" class="btn btn-primary btn-sm" id="pdoc-submit">Upload</button>
             </div>
         </form>
         @endif
 
         <div id="pdoc-list"></div>
-        <small class="d-block mt-2" style="color:var(--text-muted)"><i class="fa fa-circle-info me-1"></i>{{ $hint ?? 'Optional — purchase archive reference.' }}</small>
+        <small class="d-block mt-2" style="color:var(--text-muted)">{{ $hint ?? 'Optional — purchase archive reference.' }}</small>
     </div>
 </div>
 
@@ -54,7 +54,7 @@ function pdocEsc(s) { return $('<div>').text(s == null ? '' : s).html(); }
 function pdocRender() {
     $('#pdoc-count').text('(' + pdocDocuments.length + ')');
     if (!pdocDocuments.length) {
-        $('#pdoc-list').html('<div style="color:var(--text-muted);font-size:13px"><i class="fa-solid fa-inbox me-1"></i>No documents yet.</div>');
+        $('#pdoc-list').html('<div style="color:var(--text-muted);font-size:13px">No documents yet.</div>');
         return;
     }
     var html = '<div class="d-flex flex-column gap-2">';
@@ -103,7 +103,7 @@ function pdocUpload(e) {
             $('#pdoc-form').slideUp(150);
         })
         .fail(function(xhr) { pdocError(xhr, 'Failed to upload documents.'); })
-        .always(function() { $('#pdoc-submit').prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Upload'); });
+        .always(function() { $('#pdoc-submit').prop('disabled', false).html('Upload'); });
     return false;
 }
 

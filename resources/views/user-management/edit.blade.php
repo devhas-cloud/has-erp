@@ -286,6 +286,15 @@
                     </div>
                     <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Jadwal &amp; perhitungan visit user ini tampil di Dashboard Task Planner.</div>
                 </div>
+                <div class="col-md-6">
+                    <label class="form-label">Magang</label>
+                    <div class="form-check form-switch" style="padding-top:6px">
+                        <input type="hidden" name="intern" value="0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="intern" name="intern" value="1" {{ old('intern', $user->intern) ? 'checked' : '' }}>
+                        <label class="form-check-label" for="intern" style="font-size:13px">Ya, akun magang</label>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Tandai akun pengguna magang.</div>
+                </div>
             </div>
 
             <!-- Access Control -->

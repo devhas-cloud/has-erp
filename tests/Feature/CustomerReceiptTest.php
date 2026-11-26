@@ -9,6 +9,7 @@ use App\Models\Module;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\UserAccessControl;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -37,7 +38,7 @@ class CustomerReceiptTest extends TestCase
         ]);
         $this->approver = $this->makeUser('approver', [
             [$receiptModule, ['can_read' => true, 'can_create' => true, 'can_approve' => true]],
-            [$invoiceModule, ['can_read' => true, 'can_create' => true]],
+            [$invoiceModule, ['can_read' => true, 'can_create' => true, 'can_approve' => true]],
         ]);
         $this->viewer = $this->makeUser('viewer', [
             [$receiptModule, ['can_read' => true]],
@@ -271,5 +272,23 @@ class CustomerReceiptTest extends TestCase
             ->assertSee('Penerimaan '.$receipt->receipt_number.' (Draft)');
         $this->actingAs($this->approver)->get(route('invoice.show', $other->id))->assertOk()
             ->assertSee(route('customer-receipt.create', ['invoice_id' => $other->id]), false);
+    }
+
+    public function test_database_rejects_second_active_receipt_for_same_invoice(): void
+    {
+        $invoice = $this->invoice();
+        $this->draft($invoice);
+
+        $this->expectException(QueryException::class);
+
+        CustomerReceipt::create([
+            'receipt_number' => 'RV-DB-2',
+            'invoice_id' => $invoice->id,
+            'receipt_date' => now()->toDateString(),
+            'method' => 'transfer',
+            'amount' => 1,
+            'status' => CustomerReceipt::STATUS_DRAFT,
+            'created_by' => $this->staff->id,
+        ]);
     }
 }

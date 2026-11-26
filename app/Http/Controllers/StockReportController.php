@@ -17,7 +17,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Laporan Stok — saldo per (produk, gudang, kepemilikan) langsung dari baris
- * stok terbuka (stocks), nilai = SUM(qty x harga modal baris). Kartu Stok per
+ * stok terbuka (stocks), nilai = SUM(qty x harga modal baris). Material = satu
+ * baris saldo (harga rata-rata tertimbang); barang ber-SN = jumlah unit. Kartu Stok per
  * produk dari stock_logs: saldo awal periode dihitung mundur dari saldo
  * sekarang (saldo sekarang - log sejak tanggal awal), tanpa membaca seluruh riwayat.
  * Filter kepemilikan: '' = semua, 'free' = stok bebas, angka = project id.
@@ -37,19 +38,26 @@ class StockReportController extends Controller
      */
     private function inTransit()
     {
-        return BranchTransfer::visibleTo(Auth::user())
+        $transfers = BranchTransfer::visibleTo(Auth::user())
             ->where('status', BranchTransfer::STATUS_IN_TRANSIT)
             ->with(['fromBranch', 'toBranch', 'items.stock'])
             ->orderBy('shipped_at')
-            ->get()
-            ->map(fn (BranchTransfer $t) => [
+            ->get();
+
+        // Nilai = harga saat dikirim (log ship_out), karena harga rata-rata saldo material bisa berubah.
+        $shipCosts = StockLog::where('ref_type', StockLog::REF_BRANCH_TRANSFER_ITEM)
+            ->where('type', StockLog::TYPE_SHIP_OUT)
+            ->whereIn('ref_id', $transfers->flatMap->items->pluck('id')->all() ?: [0])
+            ->pluck('unit_cost', 'ref_id');
+
+        return $transfers->map(fn (BranchTransfer $t) => [
                 'id' => $t->id,
                 'number' => $t->transfer_number,
                 'from' => $t->fromBranch?->name,
                 'to' => $t->toBranch?->name,
                 'shipped_at' => $t->shipped_at?->format('d/m/Y'),
                 'items' => $t->items->count(),
-                'value' => round($t->items->sum(fn ($item) => $item->qty * (float) ($item->stock?->unit_cost ?? 0)), 2),
+                'value' => round($t->items->sum(fn ($item) => $item->qty * (float) ($shipCosts[$item->id] ?? $item->stock?->unit_cost ?? 0)), 2),
             ]);
     }
 
@@ -60,6 +68,7 @@ class StockReportController extends Controller
             ->when(! $request->boolean('include_zero'), fn ($q) => $q->where('s.is_open', true))
             ->groupBy('s.master_product_id', 's.warehouse_id', 's.project_id')
             ->selectRaw('s.master_product_id, s.warehouse_id, s.project_id, SUM(s.qty) AS balance, SUM(s.qty * s.unit_cost) AS value, MAX(s.unit) AS unit,
+                SUM(CASE WHEN s.qty > 0 THEN 1 ELSE 0 END) AS open_rows, MAX(s.updated_at) AS last_change,
                 SUM(CASE WHEN s.qty > 0 AND s.serial_number IS NULL AND mp.is_material = 0 THEN 1 ELSE 0 END) AS missing_serial');
 
         $query = DB::query()->fromSub($balances, 'b')
@@ -68,6 +77,9 @@ class StockReportController extends Controller
             ->leftJoin('projects as pr', 'pr.id', '=', 'b.project_id')
             ->leftJoin('branches as br', 'br.id', '=', 'w.branch_id')
             ->when($request->integer('branch_id'), fn ($q, $id) => $q->where('w.branch_id', $id))
+            ->when($request->input('kind') === 'material', fn ($q) => $q->where('p.is_material', true))
+            ->when($request->input('kind') === 'serial', fn ($q) => $q->where('p.is_material', false))
+            ->when($request->boolean('missing_sn'), fn ($q) => $q->where('b.missing_serial', '>', 0))
             ->select('b.*', 'p.code', 'p.name as product_name', 'p.is_material', 'w.code as warehouse_code', 'w.name as warehouse_name', 'br.name as branch_name', 'pr.project_number', 'pr.project_name');
 
         $recordsTotal = (clone $query)->count();
@@ -82,6 +94,14 @@ class StockReportController extends Controller
 
         $recordsFiltered = (clone $query)->count();
         $totalValue = (float) (clone $query)->sum('b.value');
+        // select() mengganti kolom baris (b.*, p.code, ...) — MySQL menolak campuran kolom & agregat tanpa GROUP BY.
+        $summary = (clone $query)->reorder()->select(DB::raw('
+                COALESCE(SUM(CASE WHEN p.is_material = 1 THEN b.value ELSE 0 END), 0) AS material_value,
+                COALESCE(SUM(CASE WHEN p.is_material = 1 THEN 1 ELSE 0 END), 0) AS material_positions,
+                COALESCE(SUM(CASE WHEN p.is_material = 0 THEN b.value ELSE 0 END), 0) AS serial_value,
+                COALESCE(SUM(CASE WHEN p.is_material = 0 THEN b.open_rows ELSE 0 END), 0) AS serial_units,
+                COALESCE(SUM(b.missing_serial), 0) AS missing_serial,
+                COUNT(DISTINCT b.master_product_id) AS products'))->first();
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 25);
@@ -99,6 +119,8 @@ class StockReportController extends Controller
             'project_id' => $row->project_id ? (int) $row->project_id : null,
             'ownership' => $row->project_id ? $row->project_number.' — '.$row->project_name : 'Stok bebas',
             'balance' => round((float) $row->balance, 4),
+            'units' => (int) $row->open_rows,
+            'last_change' => $row->last_change ? Carbon::parse($row->last_change)->format('d/m/Y') : null,
             'unit' => $row->unit,
             'average_cost' => (float) $row->balance > 0 ? round($row->value / $row->balance, 2) : 0,
             'value' => round((float) $row->value, 2),
@@ -110,6 +132,14 @@ class StockReportController extends Controller
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
             'total_value' => round($totalValue, 2),
+            'summary' => [
+                'products' => (int) $summary->products,
+                'material_value' => round((float) $summary->material_value, 2),
+                'material_positions' => (int) $summary->material_positions,
+                'serial_value' => round((float) $summary->serial_value, 2),
+                'serial_units' => (int) $summary->serial_units,
+                'missing_serial' => (int) $summary->missing_serial,
+            ],
             'data' => $data,
         ]);
     }

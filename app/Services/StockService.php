@@ -17,6 +17,12 @@ use Illuminate\Support\Facades\Auth;
  * Parameter $log: ['date' => 'Y-m-d', 'ref_type' => ?, 'ref_id' => ?,
  * 'note' => ?, 'goods_request_item_id' => ?].
  *
+ * Material (is_material) = SATU baris saldo permanen per produk + gudang +
+ * kepemilikan (stok bebas / project). Semua barang masuk menambah saldo itu
+ * dengan harga rata-rata tertimbang; tanpa lacak lot. Riwayat masuk/keluar
+ * per dokumen ada di stock_logs (harga saat itu ikut dicatat).
+ * Barang ber-SN = 1 baris per unit.
+ *
  * Reservasi: qty yang dipesan Packing List Siap Kirim tidak bisa diambil,
  * dipindah, atau dikurangi opname. Posting DO melepas PKL-nya (status
  * Terkirim) lebih dulu, baru mengambil stoknya.
@@ -58,8 +64,8 @@ class StockService
     }
 
     /**
-     * Barang masuk: buat baris stok baru (material = 1 baris; barang ber-SN =
-     * 1 baris per unit, SN boleh sebagian/kosong).
+     * Barang masuk: material menambah baris saldo (lihat addToBalance); barang
+     * ber-SN = 1 baris baru per unit, SN boleh sebagian/kosong.
      *
      * @param  array  $attrs  warehouse_id, project_id, received_date, expiry_date, batch_number,
      *                        supplier_id, warranty_until, unit, unit_cost, source_type, source_id, note
@@ -84,7 +90,9 @@ class StockService
             if ($serials) {
                 throw new StockException($product->code.' adalah material (dihitung per jumlah) dan tidak memakai SN.');
             }
-            $rows->push(Stock::create($base + ['qty_in' => $qty, 'qty' => $qty, 'serial_number' => null]));
+            $balance = $this->addToBalance($product, $qty, (int) $attrs['warehouse_id'], isset($attrs['project_id']) ? (int) $attrs['project_id'] : null, (float) ($attrs['unit_cost'] ?? 0), $attrs, $type, $log);
+
+            return collect([$balance]);
         } else {
             $units = $this->assertWholeUnits($product, $qty);
             if (count($serials) > $units) {
@@ -106,18 +114,27 @@ class StockService
     /**
      * Kurangi baris stok (DO, pemakaian internal, retur supplier).
      * Material boleh sebagian; barang ber-SN selalu utuh dan wajib ber-SN bila $requireSerial.
+     *
+     * $unitCost (material saja): keluar dengan harga tertentu, bukan harga rata-rata
+     * saldo — mis. retur ke supplier dengan harga penerimaan aslinya. Nilai yang keluar
+     * = qty x $unitCost, harga rata-rata sisa saldo dihitung ulang dari nilai sisanya.
      */
-    public function take(Stock $stock, float $qty, string $type, array $log, bool $requireSerial = true): StockLog
+    public function take(Stock $stock, float $qty, string $type, array $log, bool $requireSerial = true, ?float $unitCost = null): StockLog
     {
         $qty = $this->assertTakeable($stock, $qty);
         if ($requireSerial && ! $stock->canLeave()) {
             throw new StockException('Unit '.$this->label($stock).' belum punya SN. Lengkapi SN di halaman Lengkapi Data Stok sebelum dikeluarkan.');
         }
 
-        $stock->qty = $this->remaining($stock->qty - $qty);
+        $before = (float) $stock->qty;
+        $stock->qty = $this->remaining($before - $qty);
+        if ($unitCost !== null && ! $stock->isSerialized() && $stock->qty > Stock::EPSILON) {
+            $remainingValue = $before * (float) $stock->unit_cost - $qty * $unitCost;
+            $stock->unit_cost = round(max(0.0, $remainingValue) / $stock->qty, 4);
+        }
         $stock->save();
 
-        return $this->writeLog($stock, $type, -$qty, $log);
+        return $this->writeLog($stock, $type, -$qty, $log, null, $stock->isSerialized() ? null : $unitCost);
     }
 
     /**
@@ -137,6 +154,16 @@ class StockService
         [$outType, $inType] = $kind === StockLog::TYPE_ALLOCATE
             ? [StockLog::TYPE_ALLOCATE, StockLog::TYPE_ALLOCATE]
             : [StockLog::TYPE_TRANSFER_OUT, StockLog::TYPE_TRANSFER_IN];
+
+        // Material: saldo asal berkurang, saldo tujuan bertambah (harga rata-rata di tujuan).
+        if (! $stock->isSerialized()) {
+            $cost = (float) $stock->unit_cost;
+            $stock->qty = $this->remaining($stock->qty - $qty);
+            $stock->save();
+            $this->writeLog($stock, $outType, -$qty, $log);
+
+            return $this->addToBalance($stock->masterProduct, $qty, $warehouseId, $projectId, $cost, $stock->only(['unit', 'supplier_id']), $inType, $log);
+        }
 
         if (abs($qty - $stock->qty) < Stock::EPSILON) {
             $this->writeLog($stock, $outType, -$qty, $log, 0.0);
@@ -176,6 +203,16 @@ class StockService
                 throw new StockException($this->reservedMessage($stock, $reserved));
             }
             $stock->qty = $this->remaining($stock->qty + $delta);
+            $stock->save();
+            $this->writeLog($stock, StockLog::TYPE_ADJUST, $delta, $log);
+
+            return null;
+        }
+
+        // Material: saldo naik langsung (total masuk ikut naik), tanpa baris baru.
+        if (! $stock->isSerialized()) {
+            $stock->qty_in = self::round($stock->qty_in + $delta);
+            $stock->qty = self::round($stock->qty + $delta);
             $stock->save();
             $this->writeLog($stock, StockLog::TYPE_ADJUST, $delta, $log);
 
@@ -222,10 +259,10 @@ class StockService
 
     /**
      * Barang tiba dari pengiriman antar branch. Barang ber-SN kembali ke baris
-     * SN-nya sendiri (riwayat satu jalur); material menjadi baris baru di gudang
-     * tujuan dengan parent_id ke baris asal (harga modal, batch ikut disalin).
+     * SN-nya sendiri (riwayat satu jalur); material menambah saldo gudang tujuan
+     * dengan harga saat dikirim ($unitCost, default harga baris asal).
      */
-    public function arrive(Stock $origin, float $qty, int $warehouseId, ?int $projectId, array $log): Stock
+    public function arrive(Stock $origin, float $qty, int $warehouseId, ?int $projectId, array $log, ?float $unitCost = null): Stock
     {
         $qty = self::round($qty);
         if ($qty <= 0) {
@@ -236,10 +273,79 @@ class StockService
             return $this->reactivate($origin, $warehouseId, $projectId, StockLog::TYPE_SHIP_IN, $log);
         }
 
-        $arrived = $this->split($origin, $qty, ['warehouse_id' => $warehouseId, 'project_id' => $projectId]);
-        $this->writeLog($arrived, StockLog::TYPE_SHIP_IN, $qty, $log);
+        return $this->addToBalance($origin->masterProduct, $qty, $warehouseId, $projectId, $unitCost ?? (float) $origin->unit_cost, $origin->only(['unit', 'supplier_id']), StockLog::TYPE_SHIP_IN, $log);
+    }
 
-        return $arrived;
+    /**
+     * Baris saldo material untuk produk + gudang + kepemilikan (null bila belum ada).
+     * Saldo yang habis tetap baris yang sama dan terisi lagi saat barang masuk.
+     */
+    public static function balanceRow(int $productId, int $warehouseId, ?int $projectId, bool $lock = false): ?Stock
+    {
+        return Stock::pool($productId, $warehouseId, $projectId)
+            ->whereNull('serial_number')
+            ->orderBy('id')
+            ->when($lock, fn ($q) => $q->lockForUpdate())
+            ->first();
+    }
+
+    /**
+     * Tambah qty ke saldo material (buat baris saldo bila belum ada). Harga
+     * saldo = rata-rata tertimbang; log 'in' mencatat harga barang yang masuk.
+     * Produk dikunci lebih dulu agar dua transaksi bersamaan tidak membuat dua saldo.
+     */
+    private function addToBalance(MasterProduct $product, float $qty, int $warehouseId, ?int $projectId, float $unitCost, array $attrs, string $type, array $log): Stock
+    {
+        $qty = self::round($qty);
+        MasterProduct::whereKey($product->id)->lockForUpdate()->value('id');
+        $balance = self::balanceRow($product->id, $warehouseId, $projectId, true);
+
+        if (! $balance) {
+            $balance = Stock::create(array_merge(
+                collect($attrs)->only(['received_date', 'expiry_date', 'batch_number', 'supplier_id', 'warranty_until', 'unit', 'source_type', 'source_id', 'note'])->all(),
+                [
+                    'master_product_id' => $product->id,
+                    'warehouse_id' => $warehouseId,
+                    'project_id' => $projectId,
+                    'is_material' => true,
+                    'serial_number' => null,
+                    'qty_in' => $qty,
+                    'qty' => $qty,
+                    'unit_cost' => round($unitCost, 4),
+                    'received_date' => $attrs['received_date'] ?? ($log['date'] ?? now()->toDateString()),
+                    'created_by' => Auth::id(),
+                ]
+            ));
+            $balance->setRelation('masterProduct', $product);
+            $this->writeLog($balance, $type, $qty, $log, null, $unitCost);
+
+            return $balance;
+        }
+
+        $current = max(0.0, (float) $balance->qty);
+        $total = self::round($current + $qty);
+        $balance->unit_cost = $total > Stock::EPSILON
+            ? round(($current * (float) $balance->unit_cost + $qty * $unitCost) / $total, 4)
+            : round($unitCost, 4);
+        $balance->qty_in = self::round((float) $balance->qty_in + $qty);
+        $balance->qty = $total;
+        // Saldo tanpa lacak lot: kedaluwarsa = yang paling dekat, supplier & garansi = masuk terakhir.
+        if (! empty($attrs['expiry_date']) && (! $balance->expiry_date || $balance->expiry_date->gt(\Illuminate\Support\Carbon::parse($attrs['expiry_date'])))) {
+            $balance->expiry_date = $attrs['expiry_date'];
+        }
+        foreach (['supplier_id', 'warranty_until', 'unit'] as $key) {
+            if (! empty($attrs[$key])) {
+                $balance->{$key} = $attrs[$key];
+            }
+        }
+        if (! empty($attrs['batch_number']) && $balance->batch_number !== $attrs['batch_number']) {
+            $balance->batch_number = null;
+        }
+        $balance->save();
+        $balance->setRelation('masterProduct', $product);
+        $this->writeLog($balance, $type, $qty, $log, null, $unitCost);
+
+        return $balance;
     }
 
     /**
@@ -392,7 +498,7 @@ class StockService
         return $qty < 0.0001 ? 0.0 : $qty;
     }
 
-    private function writeLog(Stock $stock, string $type, float $qty, array $log, ?float $qtyAfter = null): StockLog
+    private function writeLog(Stock $stock, string $type, float $qty, array $log, ?float $qtyAfter = null, ?float $unitCost = null): StockLog
     {
         return StockLog::create([
             'stock_id' => $stock->id,
@@ -404,7 +510,7 @@ class StockService
             'type' => $type,
             'qty' => self::round($qty),
             'qty_after' => self::round($qtyAfter ?? $stock->qty),
-            'unit_cost' => $stock->unit_cost,
+            'unit_cost' => $unitCost !== null ? round($unitCost, 4) : $stock->unit_cost,
             'ref_type' => $log['ref_type'] ?? null,
             'ref_id' => $log['ref_id'] ?? null,
             'goods_request_item_id' => $log['goods_request_item_id'] ?? null,

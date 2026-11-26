@@ -4,11 +4,11 @@ namespace App\Support;
 
 use App\Models\Currency;
 use App\Models\DirectPurchase;
+use App\Models\GoodsReceipt;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\StockLog;
-use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Models\SupplierBillItem;
 use App\Models\SupplierPayment;
@@ -49,12 +49,58 @@ class PayableReport
         return Currency::baseName();
     }
 
+    /** Daftar mata uang yang muncul pada tagihan (untuk opsi filter). */
+    public function currencies(): Collection
+    {
+        return SupplierBill::whereIn('status', [SupplierBill::STATUS_VERIFIED, SupplierBill::STATUS_PARTIALLY_PAID, SupplierBill::STATUS_PAID])
+            ->distinct()->pluck('currency')
+            ->map(fn ($c) => strtoupper((string) $c))->filter()->sort()->values();
+    }
+
     public function toBase(float $amount, ?string $currency): float
     {
         $code = strtoupper((string) $currency);
         $this->rates[$code] ??= Currency::rateOf($code);
 
         return round($amount * $this->rates[$code], 2);
+    }
+
+    /**
+     * Harga modal rata-rata (base) per unit yang diterima untuk baris PO: kurs penerimaan
+     * tiap baris GRN posted; penerimaan lama tanpa kurs memakai kurs PO. Qty dan nilai
+     * retur supplier dikurangkan agar barang yang dikembalikan tidak ikut merata-ratakan
+     * harga (retur memakai harga modal baris stok asal; fallback kurs PO bila tanpa stok).
+     */
+    private function receiptUnitCost(PurchaseOrderItem $item, float $discount, float $poRate): float
+    {
+        $posted = $item->goodsReceiptItems->filter(fn ($gr) => $gr->goodsReceipt?->status === GoodsReceipt::STATUS_POSTED);
+        $qty = (float) $posted->sum('qty');
+        $value = (float) $posted->sum(fn ($gr) => $gr->qty * StockCost::toBase((float) $item->price, $item->currency, $discount, $gr->exchange_rate ?: $poRate));
+
+        $returns = $item->relationLoaded('returnItems')
+            ? $item->returnItems
+            : $item->returnItems()->with('stock')->get();
+
+        $returnedQty = 0.0;
+        $returnedValue = 0.0;
+        foreach ($returns as $return) {
+            $returnQty = (float) $return->qty;
+            if ($returnQty <= 0) {
+                continue;
+            }
+
+            $unitCost = $return->stock?->unit_cost
+                ?? StockCost::toBase((float) $item->price, $item->currency, $discount, $poRate);
+            $returnedQty += $returnQty;
+            $returnedValue += $returnQty * (float) $unitCost;
+        }
+
+        $qty -= $returnedQty;
+        if ($qty <= 0) {
+            return StockCost::toBase((float) $item->price, $item->currency, $discount, $poRate);
+        }
+
+        return max(0, $value - $returnedValue) / $qty;
     }
 
     /** Tagihan terverifikasi yang masih punya sisa hutang. */
@@ -88,44 +134,70 @@ class PayableReport
     }
 
     /**
-     * Ringkasan per supplier (dalam mata uang dasar): nilai PO aktif, kas keluar
-     * bersih (pembayaran - refund), uang muka belum terpakai, sisa hutang,
-     * terlambat, jatuh tempo terdekat.
+     * Ringkasan hutang per (supplier × mata uang), murni dari tagihan
+     * (verified / sebagian lunas / lunas). Total = amountDue, Bayar = paidAmount,
+     * Sisa = outstanding — semuanya dalam mata uang tagihan.
      */
-    public function supplierSummary(): Collection
+    public function supplierByCurrency(): Collection
     {
-        $openBills = $this->openBills()->groupBy('supplier_id');
+        return SupplierBill::with(['supplier', 'allocations.payment'])
+            ->whereIn('status', [SupplierBill::STATUS_VERIFIED, SupplierBill::STATUS_PARTIALLY_PAID, SupplierBill::STATUS_PAID])
+            ->get()
+            ->groupBy(fn (SupplierBill $b) => $b->supplier_id.'|'.strtoupper((string) $b->currency))
+            ->map(function (Collection $bills) {
+                $first = $bills->first();
+                $open = $bills->filter(fn (SupplierBill $b) => $b->outstanding() > 0);
+                $overdue = $open->filter(fn (SupplierBill $b) => $this->daysOverdue($b) > 0);
 
-        $pos = PurchaseOrder::with(['supplier', 'items', 'supplierBills.allocations.payment', 'supplierRefunds'])
-            ->whereNotNull('supplier_id')
-            ->whereIn('status', [PurchaseOrder::STATUS_APPROVED, PurchaseOrder::STATUS_PARTIALLY_RECEIVED, PurchaseOrder::STATUS_RECEIVED, PurchaseOrder::STATUS_CANCELLED])
-            ->get()->groupBy('supplier_id');
+                return [
+                    'supplier' => $first->supplier,
+                    'currency' => strtoupper((string) $first->currency),
+                    'total' => round($bills->sum(fn (SupplierBill $b) => $b->amountDue()), 2),
+                    'paid' => round($bills->sum(fn (SupplierBill $b) => $b->paidAmount()), 2),
+                    'sisa' => round($bills->sum(fn (SupplierBill $b) => $b->outstanding()), 2),
+                    'open_count' => $open->count(),
+                    'overdue' => round($overdue->sum(fn (SupplierBill $b) => $b->outstanding()), 2),
+                    'next_due' => $open->sortBy('due_date')->first()?->due_date,
+                ];
+            })
+            ->sortByDesc('sisa')->values();
+    }
 
-        $payments = SupplierPayment::where('status', SupplierPayment::STATUS_POSTED)->get()->groupBy('supplier_id');
-        $refunds = SupplierRefund::where('status', SupplierRefund::STATUS_POSTED)->get()->groupBy('supplier_id');
+    /**
+     * Daftar tagihan ber-project per (bill × project), dalam mata uang tagihan:
+     * total = porsi amountDue (setelah diskon, charge, PPN, advance, PPh),
+     * bayar = porsi paidAmount, sisa = total − bayar. Porsi dihitung dari nilai
+     * baris project dibagi nilai barang + charge tagihan, sehingga total antar
+     * project menjumlah ke amountDue dan rekonsiliasi dengan laporan hutang.
+     */
+    public function projectBills(): Collection
+    {
+        return SupplierBillItem::with(['bill.supplier', 'bill.allocations.payment', 'project'])
+            ->whereNotNull('project_id')
+            ->whereHas('bill', fn ($q) => $q->whereIn('status', [SupplierBill::STATUS_VERIFIED, SupplierBill::STATUS_PARTIALLY_PAID, SupplierBill::STATUS_PAID]))
+            ->get()
+            ->groupBy(fn (SupplierBillItem $item) => $item->supplier_bill_id.'|'.$item->project_id)
+            ->map(function (Collection $items) {
+                $bill = $items->first()->bill;
+                $project = $items->first()->project;
+                $lineBase = round((float) $items->sum('amount'), 2);
+                $billBase = round((float) $bill->subtotal + (float) $bill->other_charges, 2);
+                $ratio = $billBase > 0 ? min(1, $lineBase / $billBase) : 0;
+                $total = round($bill->amountDue() * $ratio, 2);
+                $paid = round($bill->paidAmount() * $ratio, 2);
 
-        $supplierIds = collect([$openBills->keys(), $pos->keys(), $payments->keys()])->flatten()->unique();
-
-        return Supplier::whereIn('id', $supplierIds)->orderBy('name')->get()->map(function (Supplier $supplier) use ($openBills, $pos, $payments, $refunds) {
-            $bills = $openBills->get($supplier->id, collect());
-            $supplierPos = $pos->get($supplier->id, collect());
-            $outstanding = $bills->sum(fn (SupplierBill $b) => $b->outstandingBase());
-            $current = $bills->sum(fn (SupplierBill $b) => $this->toBase($b->outstanding(), $b->currency));
-            $overdueBills = $bills->filter(fn (SupplierBill $b) => $this->daysOverdue($b) > 0);
-
-            return [
-                'supplier' => $supplier,
-                'po_value' => round($supplierPos->where('status', '!=', PurchaseOrder::STATUS_CANCELLED)->sum(fn (PurchaseOrder $po) => $this->toBase($po->netTotal(), $po->currencyCode())), 2),
-                'paid' => round($payments->get($supplier->id, collect())->sum('amount_base') - $refunds->get($supplier->id, collect())->sum('amount_base'), 2),
-                'advance_balance' => round($supplierPos->sum(fn (PurchaseOrder $po) => $this->toBase($po->advanceBalance(), $po->currencyCode())), 2),
-                'outstanding' => round($outstanding, 2),
-                'unrealized_fx' => round($current - $outstanding, 2),
-                'overdue' => round($overdueBills->sum(fn (SupplierBill $b) => $b->outstandingBase()), 2),
-                'overdue_count' => $overdueBills->count(),
-                'open_count' => $bills->count(),
-                'next_due' => $bills->sortBy('due_date')->first()?->due_date,
-            ];
-        })->filter(fn ($row) => $row['po_value'] > 0 || $row['outstanding'] > 0 || $row['paid'] != 0 || $row['advance_balance'] > 0)->values();
+                return [
+                    'project' => $project,
+                    'bill' => $bill,
+                    'currency' => strtoupper((string) $bill->currency),
+                    'date' => $bill->bill_date,
+                    'total' => $total,
+                    'paid' => $paid,
+                    'sisa' => round($total - $paid, 2),
+                ];
+            })
+            ->sortBy(fn (array $r) => ($r['project']?->project_number ?? '').'|'.($r['date']?->format('Y-m-d') ?? ''))
+            ->values();
     }
 
     /** Umur hutang per supplier: [supplier, buckets => [key => nilai dasar], total]. */
@@ -183,24 +255,28 @@ class PayableReport
 
     /**
      * Biaya pembelian per project (sebelum pajak, mata uang dasar):
-     *  - komitmen  : baris PO aktif & DP disetujui untuk project (PO batal: yang sudah diterima);
-     *  - diterima  : qty diterima x harga;
+     *  - diterima  : qty diterima x harga setelah diskon PO x kurs penerimaan (= nilai stok);
+     *  - komitmen  : diterima + sisa PO belum diterima (kurs PO) + DP disetujui
+     *                (PO batal: hanya yang sudah diterima);
      *  - ditagih   : baris tagihan terverifikasi ber-project;
      *  - terbayar  : porsi baris tersebut dari bagian tagihan yang sudah diselesaikan
      *                (pembayaran + potongan uang muka + PPh dipotong);
-     *  - alokasi stok: stok bebas yang dialokasikan ke project (harga modal baris stok).
+     *  - alokasi stok: stok bebas yang dialokasikan ke project (harga modal baris stok);
+     *  - selisih kurs: terima -> tagihan (kurs tagihan - kurs penerimaan) dan tagihan -> bayar
+     *                (fx_difference pembayaran Posted), porsi baris tagihan ber-project; positif = rugi.
+     * Biaya aktual = komitmen + alokasi stok + selisih kurs (Rupiah riil). Nilai stok tidak diubah.
      * Pembelian untuk stok belum menjadi biaya project sampai dialokasikan.
      */
     public function projectCosts(?int $projectId = null): Collection
     {
         $rows = [];
         $row = function (int $id) use (&$rows) {
-            $rows[$id] ??= ['commitment' => 0.0, 'received' => 0.0, 'billed' => 0.0, 'paid' => 0.0, 'stock_allocated' => 0.0];
+            $rows[$id] ??= ['commitment' => 0.0, 'received' => 0.0, 'billed' => 0.0, 'paid' => 0.0, 'stock_allocated' => 0.0, 'fx_receipt' => 0.0, 'fx_payment' => 0.0];
 
             return $id;
         };
 
-        PurchaseOrderItem::with(['purchaseOrder', 'goodsRequestItem.goodsRequest', 'goodsReceiptItems.goodsReceipt', 'returnItems'])
+        PurchaseOrderItem::with(['purchaseOrder', 'goodsRequestItem.goodsRequest', 'goodsReceiptItems.goodsReceipt', 'returnItems.stock'])
             ->whereHas('purchaseOrder', fn ($q) => $q->whereIn('status', [PurchaseOrder::STATUS_APPROVED, PurchaseOrder::STATUS_PARTIALLY_RECEIVED, PurchaseOrder::STATUS_RECEIVED, PurchaseOrder::STATUS_CANCELLED]))
             ->get()
             ->each(function (PurchaseOrderItem $item) use (&$rows, $row, $projectId) {
@@ -210,9 +286,13 @@ class PayableReport
                 }
                 $row($project);
                 $cancelled = $item->purchaseOrder->status === PurchaseOrder::STATUS_CANCELLED;
-                $qty = $cancelled ? $item->receivedQty() : (int) $item->qty;
-                $rows[$project]['commitment'] += $this->toBase($qty * (float) $item->price, $item->currency);
-                $rows[$project]['received'] += $this->toBase($item->receivedQty() * (float) $item->price, $item->currency);
+                $discount = (float) ($item->purchaseOrder->discount_percent ?? 0);
+                $receivedQty = $item->receivedQty();
+                $poRate = $item->purchaseOrder->exchangeRate();
+                $received = $receivedQty * $this->receiptUnitCost($item, $discount, $poRate);
+                $pending = $cancelled ? 0 : max(0, (int) $item->qty - $receivedQty) * StockCost::toBase((float) $item->price, $item->currency, $discount, $poRate);
+                $rows[$project]['received'] += $received;
+                $rows[$project]['commitment'] += $received + $pending;
             });
 
         DirectPurchase::with('items')
@@ -223,7 +303,8 @@ class PayableReport
             ->get()
             ->each(function (DirectPurchase $dp) use (&$rows, $row) {
                 $row($dp->project_id);
-                $amount = $this->toBase($dp->grandTotal(), $dp->currencyCode());
+                // Kurs yang ditetapkan di DP (DP lama tanpa kurs -> kurs master).
+                $amount = round($dp->grandTotal() * $dp->exchangeRate(), 2);
                 $rows[$dp->project_id]['commitment'] += $amount;
                 $rows[$dp->project_id]['received'] += $amount;
             });
@@ -241,6 +322,13 @@ class PayableReport
                 // Ditagih & terbayar memakai kurs tagihan (historis), bukan kurs hari ini.
                 $rows[$item->project_id]['billed'] += $bill->toBook($item->amount);
                 $rows[$item->project_id]['paid'] += $bill->toBook($base > 0 ? $item->amount * $settledRatio : 0);
+                if ($bill->isForeign() && $base > 0) {
+                    // Barang: nilai setelah diskon x (kurs tagihan - kurs penerimaan); biaya tambahan tidak punya kurs terima.
+                    if ($bill->receipt_rate && $item->line_type === SupplierBillItem::TYPE_ITEM) {
+                        $rows[$item->project_id]['fx_receipt'] += $item->amount * (1 - (float) $bill->discount_percent / 100) * ((float) $bill->exchange_rate - (float) $bill->receipt_rate);
+                    }
+                    $rows[$item->project_id]['fx_payment'] += $bill->realizedFx() * $item->amount / $base;
+                }
             });
 
         // Stok bebas yang dialokasikan ke project (dan dilepas kembali): log bertanda
@@ -261,7 +349,8 @@ class PayableReport
         return collect($rows)->map(function (array $values, int $id) use ($projects) {
             $values = array_map(fn ($v) => round($v, 2), $values);
             $estimate = $projects[$id]?->quotation?->profitEstimate?->total_cost;
-            $actual = round($values['commitment'] + $values['stock_allocated'], 2);
+            $values['fx'] = round($values['fx_receipt'] + $values['fx_payment'], 2);
+            $actual = round($values['commitment'] + $values['stock_allocated'] + $values['fx'], 2);
 
             return $values + [
                 'project' => $projects[$id] ?? null,
@@ -283,7 +372,7 @@ class PayableReport
      */
     public function fx(?string $from = null, ?string $to = null): array
     {
-        $payments = SupplierPaymentAllocation::with(['payment', 'bill.supplier'])
+        $payments = SupplierPaymentAllocation::with(['payment', 'bill.supplier', 'bill.items.project', 'bill.allocations.payment'])
             ->whereHas('payment', fn ($q) => $q->where('status', SupplierPayment::STATUS_POSTED)
                 ->where('currency', '!=', $this->baseCurrency())
                 ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from))
@@ -295,7 +384,11 @@ class PayableReport
                 'number' => $a->payment->payment_number,
                 'url' => route('supplier-payment.show', $a->supplier_payment_id),
                 'supplier' => $a->bill?->supplier?->name,
-                'reference' => 'Tagihan '.$a->bill?->bill_number,
+                'supplier_id' => $a->bill?->supplier_id,
+                // Project dari baris tagihan yang dibayar (satu tagihan bisa beberapa project).
+                'projects' => $a->bill ? $a->bill->items->pluck('project')->filter()->unique('id')->values() : collect(),
+                'remaining' => $a->bill ? $a->bill->outstanding() : 0.0,
+                'reference' => 'Bill '.$a->bill?->bill_number,
                 'currency' => $a->payment->currency,
                 'amount' => $a->amount,
                 'book_rate' => (float) $a->bill?->exchange_rate,
@@ -305,7 +398,7 @@ class PayableReport
                 'difference' => $a->fx_difference,
             ]);
 
-        $refunds = SupplierRefund::with('supplier')
+        $refunds = SupplierRefund::with(['supplier', 'purchaseOrder.items.goodsRequestItem.goodsRequest.project'])
             ->where('status', SupplierRefund::STATUS_POSTED)
             ->where('currency', '!=', $this->baseCurrency())
             ->when($from, fn ($q) => $q->whereDate('refund_date', '>=', $from))
@@ -317,7 +410,13 @@ class PayableReport
                 'number' => $r->refund_number,
                 'url' => route('supplier-refund.show', $r->id),
                 'supplier' => $r->supplier?->name,
-                'reference' => 'Refund uang muka',
+                'supplier_id' => $r->supplier_id,
+                'projects' => $r->purchaseOrder
+                    ? $r->purchaseOrder->items->map(fn ($item) => $item->goodsRequest()?->isForProject() ? $item->goodsRequest()->project : null)->filter()->unique('id')->values()
+                    : collect(),
+                // Refund menyelesaikan uang muka: tidak ada sisa tagihan.
+                'remaining' => 0.0,
+                'reference' => 'Advance refund',
                 'currency' => $r->currency,
                 'amount' => $r->amount,
                 'book_rate' => $r->amount > 0 ? round($r->amount_base_book / $r->amount, 6) : 0,

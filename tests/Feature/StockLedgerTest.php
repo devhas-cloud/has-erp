@@ -94,7 +94,7 @@ class StockLedgerTest extends TestCase
         $this->assertSame($po->supplier_id, $rows->first()->supplier_id);
         $this->assertSame(1, Stock::missingSerial()->count());
 
-        $this->actingAs($this->user)->get(route('goods-receipt.show', $id))->assertOk()->assertSee('1 unit SN belum diisi');
+        $this->actingAs($this->user)->get(route('goods-receipt.show', $id))->assertOk()->assertSee('1 SN unit not filled in');
 
         // Daftar: kolom SN kosong + filter toolbar.
         $data = fn (array $filters) => $this->actingAs($this->user)->getJson(route('goods-receipt.data', $filters))->assertOk();
@@ -104,7 +104,7 @@ class StockLedgerTest extends TestCase
         $data(['warehouse' => 'direct'])->assertJsonPath('recordsFiltered', 0);
         $data(['warehouse' => $this->warehouse->id, 'date_from' => '2026-11-16', 'date_to' => '2026-11-16', 'supplier' => 'PT Supplier'])->assertJsonPath('recordsFiltered', 1);
         $data(['date_from' => '2026-11-17'])->assertJsonPath('recordsFiltered', 0);
-        $this->actingAs($this->user)->get(route('goods-receipt.index'))->assertOk()->assertSee('SN belum lengkap');
+        $this->actingAs($this->user)->get(route('goods-receipt.index'))->assertOk()->assertSee('SN incomplete');
 
         // SN yang sudah terdaftar ditolak di penerimaan berikutnya.
         $po2 = $this->approvedPo($this->inverter, 1);
@@ -174,24 +174,77 @@ class StockLedgerTest extends TestCase
         $service->move($unit->fresh('masterProduct'), 0.5, $this->warehouse->id, null, StockLog::TYPE_TRANSFER_OUT, []);
     }
 
-    public function test_material_partial_take_splits_and_keeps_source(): void
+    public function test_material_is_one_balance_per_position_with_weighted_cost(): void
     {
+        // Dua penerimaan material di gudang yang sama -> satu saldo, harga rata-rata tertimbang.
         $roll = $this->seedStock($this->warehouse->id, $this->cable, 100, ['unit_cost' => 5000, 'batch_number' => 'LOT-A'])->first();
+        $again = $this->seedStock($this->warehouse->id, $this->cable, 50, ['unit_cost' => 8000, 'batch_number' => 'LOT-B'])->first();
+        $this->assertSame($roll->id, $again->id);
+        $roll->refresh();
+        $this->assertEquals(150, $roll->qty);
+        $this->assertEquals(150, $roll->qty_in);
+        $this->assertEquals(6000, $roll->unit_cost); // (100×5000 + 50×8000) / 150
+        $this->assertNull($roll->batch_number, 'batch berbeda tidak memisah saldo');
+        $this->assertEquals(8000, StockLog::where('stock_id', $roll->id)->orderByDesc('id')->value('unit_cost'), 'log masuk mencatat harga barang yang masuk');
 
-        $this->actingAs($this->user)->postJson(route('stock-transfer.store'), [
+        // Transfer sebagian: saldo asal berkurang, saldo tujuan dibuat / ditambah (tanpa pecahan baris).
+        $transfer = fn (float $qty) => $this->actingAs($this->user)->postJson(route('stock-transfer.store'), [
             'from_warehouse_id' => $this->warehouse->id,
             'to_warehouse_id' => $this->site->id,
-            'items' => [['stock_id' => $roll->id, 'qty' => 15.5]],
+            'items' => [['stock_id' => $roll->id, 'qty' => $qty]],
         ])->assertOk();
+        $transfer(15.5);
+        $transfer(4.5);
 
-        $child = Stock::where('parent_id', $roll->id)->firstOrFail();
-        $this->assertEquals(84.5, $roll->fresh()->qty);
-        $this->assertEquals(15.5, $child->qty);
-        $this->assertSame(['LOT-A', 5000.0, $this->site->id], [$child->batch_number, $child->unit_cost, $child->warehouse_id]);
-        $this->assertSame($roll->received_date->toDateString(), $child->received_date->toDateString());
+        $site = Stock::pool($this->cable->id, $this->site->id, null)->get();
+        $this->assertCount(1, $site);
+        $this->assertEquals(20, $site->first()->qty);
+        $this->assertEquals(6000, $site->first()->unit_cost);
+        $this->assertNull($site->first()->parent_id);
+        $this->assertEquals(130, $roll->fresh()->qty);
+        $this->assertSame(2, Stock::count());
 
-        // Riwayat pecahan menampilkan asal.
-        $this->actingAs($this->user)->get(route('stock-detail.show', $child->id))->assertOk()->assertSee('#'.$roll->id);
+        // Saldo habis lalu terisi lagi: tetap baris yang sama.
+        $this->actingAs($this->user);
+        app(StockService::class)->take($site->first()->fresh('masterProduct'), 20, StockLog::TYPE_OUT, ['note' => 'pakai']);
+        $refill = $this->seedStock($this->site->id, $this->cable, 5, ['unit_cost' => 7000])->first();
+        $this->assertSame($site->first()->id, $refill->id);
+        $this->assertEquals(7000, $refill->fresh()->unit_cost);
+
+        // Setiap keluar tetap tercatat per transaksi.
+        $this->assertSame(1, StockLog::where('stock_id', $site->first()->id)->where('type', StockLog::TYPE_OUT)->count());
+        $this->actingAs($this->user)->get(route('stock-detail.show', $roll->id))->assertOk();
+    }
+
+    public function test_migration_merges_old_material_rows_into_one_balance(): void
+    {
+        // Baris material lama (sebelum aturan saldo): 3 baris di posisi yang sama + 1 baris habis.
+        $make = fn (float $qty, float $cost, float $qtyIn = null) => Stock::create([
+            'master_product_id' => $this->cable->id, 'warehouse_id' => $this->warehouse->id, 'project_id' => null,
+            'is_material' => true, 'qty_in' => $qtyIn ?? max($qty, 1), 'qty' => $qty, 'unit_cost' => $cost, 'received_date' => now()->toDateString(),
+        ]);
+        $first = $make(10, 1000);
+        $closed = $make(0, 9999, 4);
+        $second = $make(20, 2500);
+        $third = $make(5, 4000, 8);
+        $unit = $this->seedStock($this->warehouse->id, $this->inverter, 1, [], ['SN-X'])->first();
+
+        (require database_path('migrations/2026_11_19_000002_merge_material_stock_rows.php'))->up();
+
+        $first->refresh();
+        $this->assertEquals(35, $first->qty);
+        $this->assertEquals(10 + 20 + 5, $first->qty_in);
+        $this->assertEquals(round((10 * 1000 + 20 * 2500 + 5 * 4000) / 35, 4), $first->unit_cost);
+        $this->assertEquals(0, $second->fresh()->qty);
+        $this->assertEquals(0, $third->fresh()->qty);
+        $this->assertEquals(0, $closed->fresh()->qty);
+        $this->assertSame(4, StockLog::where('type', StockLog::TYPE_MERGE)->count());
+        $this->assertEquals(35, $this->stockBalance($this->warehouse->id, $this->cable->id));
+        // Barang ber-SN tidak disentuh.
+        $this->assertEquals(1, $unit->fresh()->qty);
+
+        // Masuk berikutnya menambah saldo yang sama.
+        $this->assertSame($first->id, $this->seedStock($this->warehouse->id, $this->cable, 1, ['unit_cost' => 1000])->first()->id);
     }
 
     public function test_stock_entry_returns_serial_to_its_history_and_rejects_serial_in_stock(): void

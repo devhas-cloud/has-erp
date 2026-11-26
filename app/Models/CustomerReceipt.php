@@ -33,6 +33,18 @@ class CustomerReceipt extends Model
 
     public const METHOD_LABELS = SupplierPayment::METHOD_LABELS;
 
+    /**
+     * Penanda baris aktif untuk unique index (invoice_id, active_receipt):
+     * draft/posted = 1, void = null. Dengan begitu satu invoice hanya boleh
+     * punya satu penerimaan aktif, tetapi banyak penerimaan void.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $receipt): void {
+            $receipt->active_receipt = $receipt->status === self::STATUS_VOID ? null : 1;
+        });
+    }
+
     protected $fillable = [
         'receipt_number',
         'invoice_id',

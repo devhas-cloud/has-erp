@@ -83,7 +83,7 @@ class ContactImportService
                     $success++;
                 } else {
                     $failed++;
-                    $errors[] = "Baris {$rowNum}: {$result}";
+                    $errors[] = "Row {$rowNum}: {$result}";
                 }
             }
 
@@ -187,24 +187,24 @@ class ContactImportService
 
         foreach ($required as [$field, $value]) {
             if ($value === '') {
-                return "{$field} wajib diisi.";
+                return "{$field} is required.";
             }
         }
 
         if (! in_array($salutation, ['Ibu', 'Bapak'])) {
-            return "salutation tidak valid: '{$salutation}'. Gunakan: Ibu, Bapak";
+            return "invalid salutation: '{$salutation}'. Use: Ibu, Bapak";
         }
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return "email tidak valid: '{$email}'";
+            return "invalid email: '{$email}'";
         }
 
         if (AccountContact::where('email', $email)->exists()) {
-            return "email sudah digunakan: '{$email}'";
+            return "email already in use: '{$email}'";
         }
 
         if (AccountContact::where('mobile', $mobile)->exists()) {
-            return "mobile sudah digunakan: '{$mobile}'";
+            return "mobile already in use: '{$mobile}'";
         }
 
         // --- Resolve lookups ---
@@ -250,7 +250,7 @@ class ContactImportService
 
             return null; // success
         } catch (\Exception $e) {
-            return 'Gagal menyimpan: '.$e->getMessage();
+            return 'Failed to save: '.$e->getMessage();
         }
     }
 
@@ -302,7 +302,7 @@ class ContactImportService
         $id = $this->lookups[$key][$name] ?? null;
         if ($id === null) {
             $valid = implode(', ', array_keys($this->lookups[$key]));
-            $errors[] = "{$label} '{$name}' tidak ditemukan. Pilihan: {$valid}";
+            $errors[] = "{$label} '{$name}' not found. Options: {$valid}";
 
             return null;
         }

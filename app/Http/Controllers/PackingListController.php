@@ -99,12 +99,15 @@ class PackingListController extends Controller
     {
         $validated = $request->validate(['project_id' => 'required|integer|exists:projects,id']);
         $project = Project::with('company')->findOrFail($validated['project_id']);
+        $pos = ShipmentLines::pos($project);
 
         return response()->json([
             'success' => true,
             'warehouses' => ShipmentLines::projectWarehouses($project->id),
             'defaults' => ShipmentLines::projectDefaults($project),
             'quotation_items' => ShipmentLines::quotationItems($project),
+            'pos_number' => $pos?->pos_number,
+            'pos_items' => ShipmentLines::posItems($pos),
         ]);
     }
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\BranchTransferController;
 use App\Http\Controllers\MaterialHandoverController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\MaterialRequestTemplateController;
+use App\Http\Controllers\MaterialReturnController;
 use App\Http\Controllers\PackingListController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProjectTrackingController;
@@ -37,6 +38,7 @@ use App\Http\Controllers\OvertimeRequestController;
 use App\Http\Controllers\PayableReportController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PoSupplierApprovalController;
+use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductManagementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfitEstimateController;
@@ -169,7 +171,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('opportunity-management/{opportunity}/negotiation', [OpportunityManagementController::class, 'requestNegotiation'])->name('opportunity-management.negotiation');
     Route::post('opportunity-management/{opportunity}/negotiation/approve', [OpportunityManagementController::class, 'approveNegotiation'])->name('opportunity-management.negotiation.approve');
     Route::post('opportunity-management/{opportunity}/close-loss', [OpportunityManagementController::class, 'requestCloseLoss'])->name('opportunity-management.close-loss');
-    Route::post('opportunity-management/{opportunity}/next-step', [OpportunityManagementController::class, 'updateNextStep'])->name('opportunity-management.next-step');
+    Route::put('opportunity-management/{opportunity}/next-step', [OpportunityManagementController::class, 'updateNextStep'])->name('opportunity-management.next-step');
     Route::post('opportunity-management/{opportunity}/approve', [OpportunityManagementController::class, 'approveCloseLoss'])->name('opportunity-management.approve');
     Route::resource('opportunity-management', OpportunityManagementController::class)->except(['edit'])->parameters(['opportunity-management' => 'opportunity']);
 
@@ -362,6 +364,8 @@ Route::middleware(['auth', 'access.control'])->group(function () {
 
     // Finance — Laporan Piutang
     Route::get('receivable-report', [ReceivableReportController::class, 'index'])->name('receivable-report.index');
+    Route::get('receivable-report/data', [ReceivableReportController::class, 'data'])->name('receivable-report.data');
+    Route::get('receivable-report/forecast', [ReceivableReportController::class, 'forecast'])->name('receivable-report.forecast');
     Route::get('receivable-report/export', [ReceivableReportController::class, 'export'])->name('receivable-report.export');
 
     // Master Data — Notifikasi Finance (pengingat WhatsApp hutang & piutang)
@@ -399,6 +403,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('direct-purchase/data', [DirectPurchaseController::class, 'data'])->name('direct-purchase.data');
     Route::get('direct-purchase/search-products', [DirectPurchaseController::class, 'searchProducts'])->name('direct-purchase.search-products');
     Route::get('direct-purchase/material-requests', [DirectPurchaseController::class, 'materialRequests'])->name('direct-purchase.material-requests');
+    Route::get('direct-purchase/material-requests/pdf', [DirectPurchaseController::class, 'materialRequestsPdf'])->name('direct-purchase.material-requests.pdf');
     Route::post('direct-purchase/{id}/submit', [DirectPurchaseController::class, 'submit'])->name('direct-purchase.submit');
     Route::post('direct-purchase/{id}/approve', [DirectPurchaseController::class, 'approve'])->name('direct-purchase.approve');
     Route::post('direct-purchase/{id}/reject', [DirectPurchaseController::class, 'reject'])->name('direct-purchase.reject');
@@ -416,6 +421,9 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('goods-receipt/{id}/documents', [GoodsReceiptController::class, 'uploadDocument'])->name('goods-receipt.documents.store');
     Route::get('goods-receipt/{id}/documents/{document}', [GoodsReceiptController::class, 'viewDocument'])->name('goods-receipt.documents.show');
     Route::delete('goods-receipt/{id}/documents/{document}', [GoodsReceiptController::class, 'deleteDocument'])->name('goods-receipt.documents.destroy');
+    Route::post('goods-receipt/{id}/items/{item}/photos', [GoodsReceiptController::class, 'uploadItemPhotos'])->whereNumber(['id', 'item'])->name('goods-receipt.photos.store');
+    Route::get('goods-receipt/{id}/items/{item}/photos/{document}', [GoodsReceiptController::class, 'viewItemPhoto'])->whereNumber(['id', 'item', 'document'])->name('goods-receipt.photos.show');
+    Route::delete('goods-receipt/{id}/items/{item}/photos/{document}', [GoodsReceiptController::class, 'deleteItemPhoto'])->whereNumber(['id', 'item', 'document'])->name('goods-receipt.photos.destroy');
     Route::resource('goods-receipt', GoodsReceiptController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
 
     Route::get('stock-out', [StockOutController::class, 'index'])->name('stock-out.index');
@@ -456,7 +464,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::resource('material-request', MaterialRequestController::class);
 
     Route::get('material-handover/data', [MaterialHandoverController::class, 'data'])->name('material-handover.data');
-    Route::get('material-handover/stock-options', [MaterialHandoverController::class, 'stockOptions'])->name('material-handover.stock-options');
+    Route::get('material-handover/{id}/pdf', [MaterialHandoverController::class, 'pdf'])->whereNumber('id')->name('material-handover.pdf');
     Route::resource('material-handover', MaterialHandoverController::class)->only(['index', 'create', 'store', 'show']);
 
     Route::get('production/data', [ProductionController::class, 'data'])->name('production.data');
@@ -465,8 +473,23 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('production/{id}/void', [ProductionController::class, 'void'])->whereNumber('id')->name('production.void');
     Route::resource('production', ProductionController::class)->only(['index', 'create', 'store', 'show']);
 
+    Route::get('material-return/data', [MaterialReturnController::class, 'data'])->name('material-return.data');
+    Route::get('material-return/pool', [MaterialReturnController::class, 'pool'])->name('material-return.pool');
+    Route::post('material-return/{id}/approve', [MaterialReturnController::class, 'approve'])->whereNumber('id')->name('material-return.approve');
+    Route::post('material-return/{id}/reject', [MaterialReturnController::class, 'reject'])->whereNumber('id')->name('material-return.reject');
+    Route::resource('material-return', MaterialReturnController::class)->only(['index', 'create', 'store', 'show']);
+
+    Route::get('pos/data', [PosController::class, 'data'])->name('pos.data');
+    Route::get('pos/quotation-items/{id}', [PosController::class, 'quotationItems'])->whereNumber('id')->name('pos.quotation-items');
+    Route::post('pos/{id}/submit', [PosController::class, 'submit'])->whereNumber('id')->name('pos.submit');
+    Route::post('pos/{id}/approve', [PosController::class, 'approve'])->whereNumber('id')->name('pos.approve');
+    Route::post('pos/{id}/reject', [PosController::class, 'reject'])->whereNumber('id')->name('pos.reject');
+    Route::resource('pos', PosController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
+
+
     Route::get('stock-entry/data', [StockEntryController::class, 'data'])->name('stock-entry.data');
     Route::get('stock-entry/search-products', [StockEntryController::class, 'searchProducts'])->name('stock-entry.search-products');
+    Route::get('stock-entry/balances', [StockEntryController::class, 'balances'])->name('stock-entry.balances');
     Route::resource('stock-entry', StockEntryController::class)->only(['index', 'create', 'store', 'show']);
 
     Route::get('stock-detail', [StockDetailController::class, 'index'])->name('stock-detail.index');
@@ -526,7 +549,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::post('supplier-refund/{id}/documents', [SupplierRefundController::class, 'uploadDocument'])->name('supplier-refund.documents.store');
     Route::get('supplier-refund/{id}/documents/{document}', [SupplierRefundController::class, 'viewDocument'])->name('supplier-refund.documents.show');
     Route::delete('supplier-refund/{id}/documents/{document}', [SupplierRefundController::class, 'deleteDocument'])->name('supplier-refund.documents.destroy');
-    Route::resource('supplier-refund', SupplierRefundController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
+    Route::resource('supplier-refund', SupplierRefundController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
 
     Route::get('supplier-return/data', [SupplierReturnController::class, 'data'])->name('supplier-return.data');
     Route::get('supplier-return/returnable-lines', [SupplierReturnController::class, 'returnableLines'])->name('supplier-return.returnable-lines');
@@ -536,6 +559,7 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::patch('supplier-bill/{id}/exchange-rate', [SupplierBillController::class, 'updateExchangeRate'])->name('supplier-bill.exchange-rate');
 
     Route::get('payable-report', [PayableReportController::class, 'index'])->name('payable-report.index');
+    Route::get('payable-report/data', [PayableReportController::class, 'data'])->name('payable-report.data');
     Route::get('payable-report/export', [PayableReportController::class, 'export'])->name('payable-report.export');
 
     Route::post('supplier/{id}/advance-limit', [SupplierController::class, 'updateAdvanceLimit'])->name('supplier.advance.approve');

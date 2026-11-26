@@ -4,6 +4,7 @@
 @section('page-title', 'Task Planner')
 
 @section('styles')
+@include('partials.list-toolbar')
 <style>
     .modal-task .modal-dialog { max-width: 800px; }
     .task-form-section {
@@ -90,8 +91,15 @@
     }
     .filter-bar .select2-container { min-width: 200px; font-size: 12px; }
     /* Pilihan tampilan */
-    .view-toggle { display: inline-flex; border: 1px solid var(--card-border); border-radius: var(--radius-sm); overflow: hidden; margin-left: 10px; vertical-align: middle; }
-    .view-toggle button { border: 0; background: #fff; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .view-toggle { display: inline-flex; border: 1px solid var(--card-border); border-radius: var(--radius-sm); overflow: hidden; vertical-align: middle; height: 32px; }
+    .view-toggle button { border: 0; background: #fff; padding: 0 12px; font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
+    /* Toolbar tugas: tampilan + filter + aksi dalam satu baris */
+    .task-toolbar { border-bottom: 1px solid var(--card-border); margin-bottom: 6px; }
+    .task-toolbar .lt-label { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+    .task-toolbar .select2-container { min-width: 200px; max-width: 240px; }
+    .task-actions { display: flex; gap: 6px; margin-left: auto; }
+    .task-btn { font-size: 12.5px; height: 32px; white-space: nowrap; display: inline-flex; align-items: center; }
+    @media (max-width: 767.98px) { .task-actions { margin-left: 0; width: 100%; justify-content: flex-end; } }
     .view-toggle button + button { border-left: 1px solid var(--card-border); }
     .view-toggle button.active { background: var(--accent-soft); color: var(--accent); }
 
@@ -129,62 +137,53 @@
 <div class="page-header">
     <div>
         <h1 class="page-header-title">Task Planner</h1>
-        <p class="page-header-sub">Kelola tugas dan pendelegasian lintas divisi</p>
+        <p class="page-header-sub">Manage tasks and delegation across divisions.</p>
     </div>
-    @if($canCreate)
-    <div class="page-header-actions">
-        <button type="button" class="btn-accent" onclick="openCreateModal()">
-            <i class="fa fa-plus"></i>
-            <span>Add Task</span>
-        </button>
-    </div>
-    @endif
 </div>
 
 <div class="card-custom fade-in">
     <div class="card-header-custom">
-        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px">
-            <span>
-                <i class="fa fa-tasks me-2" style="color:var(--accent)"></i>Tasks List
-                <span class="view-toggle" role="group" aria-label="Tampilan">
-                    <button type="button" data-view="table" class="active" onclick="taskSetView('table')"><i class="fa fa-table-list me-1"></i>Tabel</button>
-                    <button type="button" data-view="kanban" onclick="taskSetView('kanban')"><i class="fa fa-table-columns me-1"></i>Kanban</button>
-                </span>
+        <span>Task List</span>
+    </div>
+    <div class="card-body-custom p-2">
+        <div class="list-toolbar task-toolbar">
+            <span class="view-toggle" role="group" aria-label="View">
+                <button type="button" data-view="table" class="active" onclick="taskSetView('table')">Table</button>
+                <button type="button" data-view="kanban" onclick="taskSetView('kanban')">Kanban</button>
             </span>
-            <div class="filter-bar">
-                <input type="date" id="filter-due-from" onchange="taskReload()" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date From">
-                <input type="date" id="filter-due-to" onchange="taskReload()" style="padding:5px 8px;border:1px solid var(--card-border);border-radius:var(--radius-sm);font-size:12px" placeholder="Due Date To">
-                <select id="filter-status" onchange="taskReload()">
-                    <option value="">All Status</option>
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="waiting_approval">Waiting Approval</option>
-                    <option value="done">Done</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
-                <select id="filter-project" style="width:220px"></select>
-                <select id="filter-category" onchange="taskReload()">
-                    <option value="">All Categories</option>
-                    @foreach($categories as $cat)
-                        <option value="{{ $cat->id }}">{{ $cat->name }}</option>
-                    @endforeach
-                </select>
-                <button type="button" class="btn btn-sm btn-success" style="font-size:12px" onclick="exportTasks()">
-                    <i class="fa fa-download me-1"></i>Export
-                </button>
+            <div class="lt-date" title="Due date">
+                <span class="lt-label">Due</span>
+                <input type="date" class="form-control" id="filter-due-from" onchange="taskReload()" aria-label="Due date from">
+                <span>–</span>
+                <input type="date" class="form-control" id="filter-due-to" onchange="taskReload()" aria-label="Due date to">
+            </div>
+            <select class="form-select" id="filter-status" onchange="taskReload()" aria-label="Status">
+                <option value="">All Status</option>
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="waiting_approval">Waiting Approval</option>
+                <option value="done">Done</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+            <select id="filter-project" aria-label="Project"></select>
+            <select class="form-select" id="filter-category" onchange="taskReload()" aria-label="Category">
+                <option value="">All Categories</option>
+                @foreach($categories as $cat)
+                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                @endforeach
+            </select>
+            <div class="task-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary task-btn" onclick="exportTasks()">Export</button>
                 @if($canCreate)
-                <button type="button" class="btn btn-sm btn-info" style="font-size:12px;color:#fff" onclick="openImportModal()">
-                    <i class="fa fa-upload me-1"></i>Import
-                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary task-btn" onclick="openImportModal()">Import</button>
+                <button type="button" class="btn btn-sm btn-primary task-btn" onclick="openCreateModal()">Add Task</button>
                 @endif
             </div>
         </div>
-    </div>
-    <div class="card-body-custom p-2">
         <div id="kanban-view" style="display:none">
             <div class="kb-toolbar">
-                <input type="text" id="kb-search" placeholder="Cari task, assignee, project...">
-                <span><i class="fa fa-hand-pointer me-1"></i>Geser kartu untuk mengubah status. Task Visit / Quote / Proposal diselesaikan dari halaman detail.</span>
+                <input type="text" id="kb-search" placeholder="Search task, assignee, project...">
+                <span>Drag a card to change its status. Visit / Quote / Proposal tasks are completed from the detail page.</span>
             </div>
             <div class="kb-board" id="kb-board"></div>
         </div>
@@ -223,7 +222,7 @@
 
                     <div class="task-form-section open">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
-                            <span><i class="fa fa-info-circle me-2" style="color:var(--accent)"></i>Task Information</span>
+                            <span>Task Information</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="task-form-section-body">
@@ -287,7 +286,7 @@
 
                     <div class="task-form-section open" id="task-assignees-section">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
-                            <span><i class="fa fa-users me-2" style="color:var(--accent)"></i>Assignees & Delegation</span>
+                            <span>Assignees & Delegation</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="task-form-section-body">
@@ -305,7 +304,7 @@
 
                     <div class="task-form-section" id="task-alert-section">
                         <div class="task-form-section-header" onclick="toggleTaskSection(this)">
-                            <span><i class="fa fa-bell me-2" style="color:var(--accent)"></i>Alert Settings</span>
+                            <span>Alert Settings</span>
                             <span class="chevron"><i class="fa fa-chevron-down"></i></span>
                         </div>
                         <div class="task-form-section-body">
@@ -331,12 +330,12 @@
                                     <label>WhatsApp Group (for alert group)</label>
                                     <select name="whatsapp_group_id" id="task-whatsapp-group" style="width:100%"></select>
                                     <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-                                        Pilih grup WA untuk notifikasi.
+                                        Select the WhatsApp group for notifications.
                                     </div>
                                 </div>
                             </div>
                             <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
-                                Reminder WhatsApp dikirim otomatis setiap hari pukul 08:00 untuk task yang jatuh tempo hari ini atau besok.
+                                A WhatsApp reminder is sent automatically every day at 08:00 for tasks due today or tomorrow.
                             </div>
                         </div>
                     </div>
@@ -345,7 +344,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-save-task">
-                    <i class="fa fa-save me-1"></i> Save
+                    Save
                 </button>
             </div>
         </div>
@@ -356,15 +355,15 @@
     <div class="modal-dialog modal-dialog-centered" style="max-width:500px">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="fa fa-upload me-2" style="color:var(--accent)"></i>Import Tasks</h6>
+                <h6 class="modal-title">Import Tasks</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
-                    Download template terlebih dahulu, isi data, lalu upload kembali.
+                    Download the template first, fill in the data, then upload it back.
                 </p>
                 <a href="{{ route('task-planner.template') }}" class="btn btn-sm btn-accent mb-3">
-                    <i class="fa fa-download me-1"></i> Download Template
+                    Download Template
                 </a>
                 <hr>
                 <div class="form-group">
@@ -377,7 +376,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-import-task">
-                    <i class="fa fa-upload me-1"></i> Import
+                    Import
                 </button>
             </div>
         </div>
@@ -465,7 +464,7 @@ function resetTaskForm() {
 function openCreateModal() {
     resetTaskForm();
     document.getElementById('taskModalTitle').textContent = 'Add Task';
-    $('#btn-save-task').prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+    $('#btn-save-task').prop('disabled', false).html('Save');
     if (!taskModalInstance) {
         taskModalInstance = new bootstrap.Modal(document.getElementById('taskModal'));
     }
@@ -499,7 +498,7 @@ function initTasksTable() {
                     var html = $('<div>').text(data).html();
                     if (row.project_number) {
                         var label = row.project_number + ' — ' + (row.project_name || '');
-                        html += '<div><span class="task-project-tag" title="' + $('<div>').text(label).html() + '"><i class="fa fa-diagram-project"></i>' + $('<div>').text(label).html() + '</span></div>';
+                        html += '<div><span class="task-project-tag" title="' + $('<div>').text(label).html() + '">' + $('<div>').text(label).html() + '</span></div>';
                     }
                     return html;
                 }
@@ -526,7 +525,7 @@ function initTasksTable() {
                 data: null,
                 render: function(data, type, row) {
                     var cls = row.is_overdue ? 'text-danger fw-bold' : '';
-                    return '<span class="' + cls + '">' + row.due_date + (row.is_overdue ? ' <i class="fa fa-exclamation-circle"></i>' : '') + '</span>';
+                    return '<span class="' + cls + '">' + row.due_date + (row.is_overdue ? ' <span class="small">(overdue)</span>' : '') + '</span>';
                 }
             },
             { data: 'status_label', orderable: true },
@@ -541,13 +540,13 @@ function initTasksTable() {
                     html += '<a href="' + showUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Detail"><i class="fa fa-eye"></i></a>';
                     var isCreator = row.creator_id === currentUserId;
                     if (row.can_cancel) {
-                        html += ' <button type="button" class="btn-icon danger btn-cancel-task" title="Batalkan" data-id="' + row.id + '"><i class="fa fa-ban"></i></button>';
+                        html += ' <button type="button" class="btn-icon danger btn-cancel-task" title="Cancel task" data-id="' + row.id + '"><i class="fa fa-ban"></i></button>';
                     }
                     if (taskCanUpdate && isCreator && row.status !== 'cancelled') {
                         html += ' <a href="' + editUrl.replace('__ID__', row.id) + '" class="btn-icon" title="Edit"><i class="fa fa-pen"></i></a>';
                     }
                     if (taskCanDelete && isCreator) {
-                        html += ' <button type="button" class="btn-icon danger btn-delete-task" title="Hapus" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
+                        html += ' <button type="button" class="btn-icon danger btn-delete-task" title="Delete" data-id="' + row.id + '"><i class="fa fa-trash-can"></i></button>';
                     }
                     html += '</div>';
                     return html;
@@ -583,7 +582,7 @@ $(document).on('click', '#btn-save-task', function() {
             if (section.length && !section.hasClass('open')) {
                 section.addClass('open');
             }
-            toastr.error(v.label + ' wajib diisi.');
+            toastr.error(v.label + ' is required.');
             $el.focus();
             return;
         }
@@ -611,7 +610,7 @@ $(document).on('click', '#btn-save-task', function() {
     }).then(function(result) {
         if (!result.isConfirmed) return;
 
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Saving...');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
         $.ajax({
             url: url,
@@ -625,7 +624,7 @@ $(document).on('click', '#btn-save-task', function() {
                 taskReload();
             },
             error: function(xhr) {
-                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i> Save');
+                $btn.prop('disabled', false).html('Save');
                 var errors = xhr.responseJSON?.errors;
                 if (errors) {
                     Object.keys(errors).forEach(function(field) {
@@ -654,17 +653,17 @@ $(document).on('change input', '#task-form input.is-invalid, #task-form select.i
 $(document).on('click', '.btn-cancel-task', function() {
     const id = $(this).data('id');
     Swal.fire({
-        title: 'Batalkan task?',
-        text: 'Task yang dibatalkan tidak bisa dilanjutkan.',
+        title: 'Cancel this task?',
+        text: 'A cancelled task cannot be continued.',
         icon: 'warning',
         input: 'textarea',
-        inputPlaceholder: 'Alasan pembatalan...',
+        inputPlaceholder: 'Cancellation reason...',
         inputValidator: function(v) {
-            if (!v || !v.trim()) return 'Alasan pembatalan wajib diisi.';
+            if (!v || !v.trim()) return 'Cancellation reason is required.';
         },
         showCancelButton: true,
-        confirmButtonText: 'Ya, Batalkan',
-        cancelButtonText: 'Tidak',
+        confirmButtonText: 'Yes, cancel it',
+        cancelButtonText: 'No',
         confirmButtonColor: '#dc2626',
         cancelButtonColor: '#64748b',
         reverseButtons: true,
@@ -679,7 +678,7 @@ $(document).on('click', '.btn-cancel-task', function() {
                 taskReload();
             },
             error: function(xhr) {
-                toastr.error(xhr.responseJSON?.message || 'Gagal membatalkan task.');
+                toastr.error(xhr.responseJSON?.message || 'Failed to cancel the task.');
             }
         });
     });
@@ -755,7 +754,7 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
     if (!$('#task-project').hasClass('select2-hidden-accessible')) {
         $('#task-project').select2({
             theme: 'bootstrap-5',
-            placeholder: 'Cari no / nama project, PO, atau company...',
+            placeholder: 'Search project no. / name, PO, or company...',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#taskModal'),
@@ -773,7 +772,7 @@ $(document).on('shown.bs.modal', '#taskModal', function() {
     if (!$('#task-account-contact').hasClass('select2-hidden-accessible')) {
         $('#task-account-contact').select2({
             theme: 'bootstrap-5',
-            placeholder: 'Cari kontak yang dikunjungi...',
+            placeholder: 'Search the contact to visit...',
             allowClear: true,
             width: '100%',
             dropdownParent: $('#taskModal'),
@@ -882,7 +881,7 @@ function kbLoad() {
     kbLoading = true;
     $.getJSON(kanbanUrl, kbFilters())
         .done(function(res) { kbRender(res); })
-        .fail(function(xhr) { toastr.error(xhr.responseJSON?.message || 'Gagal memuat Kanban.'); })
+        .fail(function(xhr) { toastr.error(xhr.responseJSON?.message || 'Failed to load the Kanban board.'); })
         .always(function() { kbLoading = false; });
 }
 
@@ -896,9 +895,9 @@ function kbCardHtml(card, color) {
         + '<div class="tt">' + kbEsc(card.title) + (card.is_visit ? ' 📍' : '') + '</div>'
         + '<div class="meta">'
         + (card.category ? '<span class="tag">' + kbEsc(card.category) + '</span>' : '')
-        + (card.project_number ? '<span class="tag prj"><i class="fa fa-diagram-project me-1"></i>' + kbEsc(card.project_number) + '</span>' : '')
+        + (card.project_number ? '<span class="tag prj">' + kbEsc(card.project_number) + '</span>' : '')
         + '</div>'
-        + '<div class="foot"><span class="' + (card.is_overdue ? 'late' : '') + '"><i class="fa fa-calendar me-1"></i>'
+        + '<div class="foot"><span class="' + (card.is_overdue ? 'late' : '') + '">'
         + kbEsc(card.due_date || '—') + (card.time ? ' · ' + kbEsc(card.time) : '') + (card.is_overdue ? ' ⚠' : '') + '</span>'
         + '<span class="kb-avatars">' + avatars + '</span></div>'
         + '</div>';
@@ -912,10 +911,10 @@ function kbRender(res) {
         cards.forEach(function(c) { kbCards[c.id] = c; });
         html += '<div class="kb-col" style="--c:' + col.color + '">'
             + '<div class="kb-col-head"><span>' + col.label
-            + (col.key === 'done' ? '<span class="sub">' + res.done_days + ' hari terakhir</span>' : '')
+            + (col.key === 'done' ? '<span class="sub">' + 'last ' + res.done_days + ' days</span>' : '')
             + '</span><span class="cnt">' + cards.length + '</span></div>'
             + '<div class="kb-list" data-status="' + col.key + '">'
-            + (cards.length ? cards.map(function(c) { return kbCardHtml(c, col.color); }).join('') : '<div class="kb-empty">Tidak ada task</div>')
+            + (cards.length ? cards.map(function(c) { return kbCardHtml(c, col.color); }).join('') : '<div class="kb-empty">No tasks</div>')
             + '</div></div>';
     });
     $('#kb-board').html(html);
@@ -965,7 +964,7 @@ function kbMove(id, from, to) {
 
     $.post(url, data)
         .done(function(res) { toastr.success(res.message || 'Status diupdate.'); kbLoad(); })
-        .fail(function(xhr) { fail(xhr.responseJSON?.message || 'Gagal mengubah status.'); });
+        .fail(function(xhr) { fail(xhr.responseJSON?.message || 'Failed to change the status.'); });
 }
 
 $(document).on('click', '.kb-card', function() {
@@ -1001,7 +1000,7 @@ $(document).on('click', '#btn-import-task', function() {
     var $btn = $(this);
     var file = $('#import-file')[0].files[0];
     if (!file) {
-        toastr.error('Pilih file terlebih dahulu.');
+        toastr.error('Select a file first.');
         return;
     }
 
@@ -1009,7 +1008,7 @@ $(document).on('click', '#btn-import-task', function() {
     formData.append('file', file);
     formData.append('_token', '{{ csrf_token() }}');
 
-    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Importing...');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Importing...');
     $('#import-result').hide().empty();
 
     $.ajax({
@@ -1036,11 +1035,11 @@ $(document).on('click', '#btn-import-task', function() {
             taskReload();
         },
         error: function(xhr) {
-            var msg = xhr.responseJSON?.message || 'Gagal mengimpor.';
+            var msg = xhr.responseJSON?.message || 'Import failed.';
             $('#import-result').html('<div class="alert alert-danger py-2 px-3 mb-0" style="font-size:13px">' + msg + '</div>').show();
         },
         complete: function() {
-            $btn.prop('disabled', false).html('<i class="fa fa-upload me-1"></i> Import');
+            $btn.prop('disabled', false).html('Import');
         }
     });
 });

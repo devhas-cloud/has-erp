@@ -17,33 +17,66 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Transfer Stok — pindah gudang dan/atau pindah kepemilikan dalam satu
- * dokumen. Asal & tujuan = (gudang, project|bebas). User memilih baris stok
- * asal; material boleh sebagian (baris dipecah), barang ber-SN pindah utuh dan
- * boleh belum ber-SN. Pindah kepemilikan dicatat sebagai alokasi (biaya project).
- * Disimpan langsung terposting, tidak bisa diubah/dihapus — koreksi dengan transfer balik.
+ * dokumen (satu branch). Asal & tujuan = (gudang, project|bebas).
+ *   - Material: saldo asal berkurang, saldo tujuan bertambah (harga rata-rata
+ *     di tujuan); boleh sebagian.
+ *   - Barang ber-SN: unit pindah utuh, boleh belum ber-SN.
+ * Pindah kepemilikan dicatat sebagai alokasi (biaya project). Disimpan langsung
+ * terposting, tidak bisa diubah/dihapus — koreksi dengan transfer balik.
  */
 class StockTransferController extends Controller
 {
     public function index()
     {
-        return view('stock-transfer.index');
+        $warehouseIds = StockTransfer::pluck('from_warehouse_id')->merge(StockTransfer::pluck('to_warehouse_id'))->unique();
+        $projectIds = StockTransfer::pluck('from_project_id')->merge(StockTransfer::pluck('to_project_id'))->filter()->unique();
+
+        return view('stock-transfer.index', [
+            'warehouses' => Warehouse::whereIn('id', $warehouseIds->all() ?: [0])->orderBy('name')->get(['id', 'code', 'name']),
+            'projects' => Project::whereIn('id', $projectIds->all() ?: [0])->orderByDesc('id')->get(['id', 'project_number', 'project_name']),
+        ]);
     }
+
+    /** Jenis transfer dari kombinasi kepemilikan asal & tujuan. */
+    public const KIND_FILTERS = [
+        'move' => 'Move Warehouse',
+        'allocate' => 'Allocate to Project',
+        'release' => 'Release Allocation',
+        'project' => 'Move Between Projects',
+    ];
 
     public function data(Request $request): JsonResponse
     {
-        $query = StockTransfer::withCount('items')->with(['fromWarehouse', 'toWarehouse', 'fromProject', 'toProject', 'creator']);
+        $query = StockTransfer::withCount('items')->with(['fromWarehouse', 'toWarehouse', 'fromProject', 'toProject', 'creator', 'items:id,stock_transfer_id,stock_id,qty', 'items.stock:id,master_product_id', 'items.stock.masterProduct:id,is_material']);
 
         $recordsTotal = (clone $query)->count();
 
-        $searchValue = $request->input('search.value');
-        if ($searchValue) {
+        $ownership = (string) $request->input('ownership', '');
+        $query
+            ->when($request->input('kind') === 'move', fn ($q) => $q->where(fn ($w) => $w
+                ->where(fn ($n) => $n->whereNull('from_project_id')->whereNull('to_project_id'))
+                ->orWhereColumn('from_project_id', 'to_project_id')))
+            ->when($request->input('kind') === 'allocate', fn ($q) => $q->whereNull('from_project_id')->whereNotNull('to_project_id'))
+            ->when($request->input('kind') === 'release', fn ($q) => $q->whereNotNull('from_project_id')->whereNull('to_project_id'))
+            ->when($request->input('kind') === 'project', fn ($q) => $q->whereNotNull('from_project_id')->whereNotNull('to_project_id')->whereColumn('from_project_id', '!=', 'to_project_id'))
+            ->when($request->integer('warehouse'), fn ($q, $id) => $q->where(fn ($w) => $w->where('from_warehouse_id', $id)->orWhere('to_warehouse_id', $id)))
+            ->when($ownership === 'free', fn ($q) => $q->where(fn ($w) => $w->whereNull('from_project_id')->orWhereNull('to_project_id')))
+            ->when(ctype_digit($ownership), fn ($q) => $q->where(fn ($w) => $w->where('from_project_id', (int) $ownership)->orWhere('to_project_id', (int) $ownership)))
+            ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('transfer_date', '>=', $date))
+            ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('transfer_date', '<=', $date))
+            ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', Auth::id()));
+
+        $searchValue = trim((string) $request->input('search.value', ''));
+        if ($searchValue !== '') {
             $query->where(function ($q) use ($searchValue) {
                 $q->where('transfer_number', 'like', "%{$searchValue}%")
                     ->orWhere('note', 'like', "%{$searchValue}%")
                     ->orWhereHas('fromWarehouse', fn ($w) => $w->where('name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('toWarehouse', fn ($w) => $w->where('name', 'like', "%{$searchValue}%"))
                     ->orWhereHas('fromProject', fn ($p) => $p->where('project_number', 'like', "%{$searchValue}%")->orWhere('project_name', 'like', "%{$searchValue}%"))
-                    ->orWhereHas('toProject', fn ($p) => $p->where('project_number', 'like', "%{$searchValue}%")->orWhere('project_name', 'like', "%{$searchValue}%"));
+                    ->orWhereHas('toProject', fn ($p) => $p->where('project_number', 'like', "%{$searchValue}%")->orWhere('project_name', 'like', "%{$searchValue}%"))
+                    ->orWhereHas('items.stock', fn ($st) => $st->where('serial_number', 'like', "%{$searchValue}%")
+                        ->orWhereHas('masterProduct', fn ($p) => $p->where('code', 'like', "%{$searchValue}%")->orWhere('name', 'like', "%{$searchValue}%")));
             });
         }
 
@@ -54,6 +87,20 @@ class StockTransferController extends Controller
 
         $transfers = $query->orderByDesc('id')->offset($start)->limit($length)->get();
 
+        // Nilai = qty x harga saat dipindah (log keluar di baris asal).
+        $itemToTransfer = collect();
+        foreach ($transfers as $t) {
+            foreach ($t->items as $item) {
+                $itemToTransfer[$item->id] = $t->id;
+            }
+        }
+        $values = $itemToTransfer->isEmpty() ? collect() : StockLog::where('ref_type', StockLog::REF_STOCK_TRANSFER_ITEM)
+            ->whereIn('ref_id', $itemToTransfer->keys())
+            ->where('qty', '<', 0)
+            ->get(['ref_id', 'qty', 'unit_cost'])
+            ->groupBy(fn ($log) => $itemToTransfer[$log->ref_id])
+            ->map(fn ($logs) => round($logs->sum(fn ($log) => abs($log->qty) * $log->unit_cost), 2));
+
         $data = $transfers->map(fn (StockTransfer $transfer, $i) => [
             'DT_RowIndex' => $start + $i + 1,
             'id' => $transfer->id,
@@ -62,7 +109,14 @@ class StockTransferController extends Controller
             'kind' => $transfer->kindLabel(),
             'from' => $transfer->fromWarehouse?->name.' · '.StockTransfer::ownershipLabel($transfer->fromProject),
             'to' => $transfer->toWarehouse?->name.' · '.StockTransfer::ownershipLabel($transfer->toProject),
+            'from_warehouse' => $transfer->fromWarehouse ? $transfer->fromWarehouse->code.' — '.$transfer->fromWarehouse->name : '—',
+            'to_warehouse' => $transfer->toWarehouse ? $transfer->toWarehouse->code.' — '.$transfer->toWarehouse->name : '—',
+            'from_owner' => StockTransfer::ownershipLabel($transfer->fromProject),
+            'to_owner' => StockTransfer::ownershipLabel($transfer->toProject),
             'item_count' => $transfer->items_count,
+            'material_lines' => $transfer->items->filter(fn ($i) => $i->stock?->masterProduct?->isMaterial())->count(),
+            'serial_units' => $transfer->items->filter(fn ($i) => $i->stock?->masterProduct && ! $i->stock->masterProduct->isMaterial())->count(),
+            'value' => (float) ($values[$transfer->id] ?? 0),
             'creator' => $transfer->creator?->display_name ?? '—',
         ]);
 
@@ -99,7 +153,8 @@ class StockTransferController extends Controller
                 'warehouse_id' => $validated['warehouse_id'],
                 'project' => $validated['project_id'] ?? 'free',
                 'q' => $validated['q'] ?? null,
-                'limit' => 300,
+                // Semua baris dimuat sekali; pencarian & filter di browser.
+                'limit' => 2000,
             ]),
         ]);
     }
@@ -117,23 +172,23 @@ class StockTransferController extends Controller
             'items.*.stock_id' => 'required|integer|distinct',
             'items.*.qty' => 'required|numeric|gt:0',
         ], [
-            'items.required' => 'Pilih minimal satu baris stok yang ditransfer.',
-            'items.*.stock_id.distinct' => 'Baris stok yang sama tidak boleh dipilih dua kali.',
+            'items.required' => 'Select at least one stock line to transfer.',
+            'items.*.stock_id.distinct' => 'The same stock line cannot be selected twice.',
         ]);
 
         $fromProjectId = $validated['from_project_id'] ?? null;
         $toProjectId = $validated['to_project_id'] ?? null;
 
         if ((int) $validated['from_warehouse_id'] === (int) $validated['to_warehouse_id'] && $fromProjectId == $toProjectId) {
-            return response()->json(['success' => false, 'message' => 'Asal dan tujuan sama. Ubah gudang tujuan atau kepemilikan tujuan.'], 422);
+            return response()->json(['success' => false, 'message' => 'Source and destination are the same. Change the destination warehouse or ownership.'], 422);
         }
         if (! Warehouse::active()->whereKey($validated['to_warehouse_id'])->exists()) {
-            return response()->json(['success' => false, 'message' => 'Gudang tujuan tidak aktif.'], 422);
+            return response()->json(['success' => false, 'message' => 'The destination warehouse is not active.'], 422);
         }
         // Transfer Stok hanya dalam satu branch; antar branch wajib lewat Branch Transfer (surat jalan + penerimaan).
         $branches = Warehouse::whereIn('id', [$validated['from_warehouse_id'], $validated['to_warehouse_id']])->pluck('branch_id', 'id');
         if ((int) ($branches[$validated['from_warehouse_id']] ?? 0) !== (int) ($branches[$validated['to_warehouse_id']] ?? 0)) {
-            return response()->json(['success' => false, 'message' => 'Gudang asal dan tujuan berbeda branch. Gunakan Branch Transfer untuk pengiriman antar branch.'], 422);
+            return response()->json(['success' => false, 'message' => 'Source and destination warehouses are in different branches. Use Branch Transfer to ship between branches.'], 422);
         }
 
         // Pindah kepemilikan (bebas <-> project, antar project) = alokasi -> biaya project.
@@ -159,7 +214,7 @@ class StockTransferController extends Controller
                 foreach (array_values($validated['items']) as $i => $row) {
                     $stock = $stocks->get((int) $row['stock_id']);
                     if (! $stock) {
-                        throw new StockException('Baris '.($i + 1).': baris stok tidak ditemukan.');
+                        throw new StockException('Line '.($i + 1).': stock line not found.');
                     }
                     $service->assertPosition($stock, (int) $validated['from_warehouse_id'], $fromProjectId ? (int) $fromProjectId : null);
 
@@ -197,7 +252,7 @@ class StockTransferController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Transfer '.$transfer->transfer_number.' diposting.',
+            'message' => 'Transfer '.$transfer->transfer_number.' posted.',
             'id' => $transfer->id,
         ]);
     }
@@ -206,6 +261,13 @@ class StockTransferController extends Controller
     {
         $transfer = StockTransfer::with(['items.stock.masterProduct', 'fromWarehouse', 'toWarehouse', 'fromProject', 'toProject', 'creator'])->findOrFail($id);
 
-        return view('stock-transfer.show', compact('transfer'));
+        // Log per baris: keluar (asal, harga saat dipindah) & masuk (tujuan, saldo sesudahnya).
+        $logs = StockLog::where('ref_type', StockLog::REF_STOCK_TRANSFER_ITEM)
+            ->whereIn('ref_id', $transfer->items->pluck('id')->all() ?: [0])
+            ->orderBy('id')
+            ->get()
+            ->groupBy('ref_id');
+
+        return view('stock-transfer.show', compact('transfer', 'logs'));
     }
 }

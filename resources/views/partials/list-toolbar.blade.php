@@ -13,9 +13,15 @@
 <style>
     .list-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 6px 10px; }
     .list-toolbar .lt-search { position: relative; flex: 1 1 240px; max-width: 340px; }
-    .list-toolbar .lt-search i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; }
-    .list-toolbar .lt-search input { padding-left: 30px; font-size: 12.5px; height: 32px; }
-    .list-toolbar .lt-search .lt-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--text-muted); font-size: 12px; display: none; }
+    /* Hanya ikon kaca pembesar (anak langsung), bukan ikon di dalam tombol × */
+    .list-toolbar .lt-search > i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; pointer-events: none; }
+    .list-toolbar .lt-search input { padding-left: 30px; padding-right: 30px; font-size: 12.5px; height: 32px; }
+    /* Sembunyikan tombol × bawaan browser (Chrome/Edge/Safari) — toolbar sudah punya .lt-clear sendiri */
+    .list-toolbar .lt-search input[type="search"]::-webkit-search-cancel-button,
+    .list-toolbar .lt-search input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+    .list-toolbar .lt-search input[type="search"]::-ms-clear { display: none; width: 0; height: 0; }
+    .list-toolbar .lt-search .lt-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); font-size: 12px; line-height: 1; display: none; align-items: center; justify-content: center; }
+    .list-toolbar .lt-search .lt-clear:hover { background: #f1f5f9; color: var(--text-primary); }
     .list-toolbar select.form-select, .list-toolbar input[type="date"] { font-size: 12.5px; height: 32px; padding-top: 4px; padding-bottom: 4px; width: auto; max-width: 200px; }
     .list-toolbar .lt-date { display: inline-flex; align-items: center; gap: 4px; }
     .list-toolbar .lt-date span { font-size: 12px; color: var(--text-muted); }
@@ -68,7 +74,7 @@ function ListToolbar(rootSelector, getTable) {
         });
         var search = $root.find('[data-search]').val();
         if (search) active++;
-        $root.find('.lt-clear').toggle(!!search);
+        $root.find('.lt-clear').css('display', search ? 'inline-flex' : 'none');
         $root.find('[data-reset]').prop('disabled', active === 0)
             .find('.badge').text(active).toggle(active > 0);
     }
@@ -116,7 +122,8 @@ function ListToolbar(rootSelector, getTable) {
                 var $opt = $root.find('[data-status-select] option[value="' + key + '"]');
                 $opt.text($opt.data('label') + ' (' + total + ')');
             });
-            $root.find('[data-status-select] option[value=""]').text('All Statuses (' + all + ')');
+            var $all = $root.find('[data-status-select] option[value=""]');
+            $all.text(($all.data('label') || 'All Statuses') + ' (' + all + ')');
         }
     };
 }

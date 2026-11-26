@@ -77,6 +77,7 @@ class UserManagementController extends Controller
                 'role' => $user->role,
                 'task_role_name' => $user->hierarchyRole?->role_name,
                 'salesperson' => (bool) $user->salesperson,
+                'intern' => (bool) $user->intern,
                 'created_at' => $user->created_at->format('d M Y'),
                 'created_at_raw' => $user->created_at->toISOString(),
             ];
@@ -113,8 +114,10 @@ class UserManagementController extends Controller
             'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
             'salesperson' => 'nullable|boolean',
+            'intern' => 'nullable|boolean',
         ]);
         $validated['salesperson'] = $request->boolean('salesperson');
+        $validated['intern'] = $request->boolean('intern');
         $validated['branch_id'] = $validated['branch_id'] ?? null;
 
         $roleRecord = TaskRole::where('role_name', $validated['role'])->first();
@@ -176,8 +179,10 @@ class UserManagementController extends Controller
             'role' => 'required|in:Admin,User',
             'task_role_id' => 'nullable|exists:task_roles,id',
             'salesperson' => 'nullable|boolean',
+            'intern' => 'nullable|boolean',
         ]);
         $validated['salesperson'] = $request->boolean('salesperson');
+        $validated['intern'] = $request->boolean('intern');
         $validated['branch_id'] = $validated['branch_id'] ?? null;
 
         if ($request->filled('password')) {

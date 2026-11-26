@@ -7,7 +7,7 @@
     $fmtQty = fn ($v) => \App\Support\StockCost::qty($v);
     $fmtMoney = fn ($v) => \App\Support\StockCost::format($v);
     $total = $production->totalCost();
-    $stock = $production->outputStock;
+    $stock = $outputStock ?? $production->outputStock;
 @endphp
 
 @section('content')
@@ -60,7 +60,7 @@
                     <tr><td>Total material</td><td class="text-end fw-semibold">{{ $fmtMoney($total) }}</td></tr>
                     <tr><td>Harga per unit</td><td class="text-end fw-semibold">{{ $fmtMoney($production->output_qty > 0 ? round($total / $production->output_qty, 2) : 0) }}</td></tr>
                     @if($stock && $production->isPosted())
-                    <tr><td>Stok tersisa</td><td class="text-end">{{ $fmtQty($stock->qty) }} {{ $stock->unit }}</td></tr>
+                    <tr><td>{{ $stock->isSerialized() ? 'Stok tersisa' : 'Saldo di gudang' }}</td><td class="text-end">{{ $fmtQty($stock->qty) }} {{ $stock->unit }}</td></tr>
                     @endif
                 </table>
                 @if($production->isPosted() && ! $canVoid)
@@ -81,6 +81,7 @@
                         <th style="width:45px" class="text-center">#</th>
                         <th>Material</th>
                         <th>Serah Terima</th>
+                        <th>Project Asal</th>
                         <th class="text-end" style="width:110px">Qty</th>
                         <th class="text-end" style="width:130px">Harga Modal</th>
                         <th class="text-end" style="width:130px">Nilai</th>
@@ -88,7 +89,7 @@
                 </thead>
                 <tbody>
                     @foreach($production->items as $i => $item)
-                        @php $source = $item->handoverItem; @endphp
+                        @php $source = $item->handoverItem; $srcProject = $source?->materialHandover?->materialRequest?->project; @endphp
                         <tr>
                             <td class="text-center" style="color:var(--text-muted)">{{ $i + 1 }}</td>
                             <td>
@@ -96,6 +97,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted)">{{ $source?->stock?->masterProduct?->code }} &middot; {{ $source?->stock?->identity_label }}</div>
                             </td>
                             <td>@if($source?->materialHandover)<a href="{{ route('material-handover.show', $source->materialHandover->id) }}">{{ $source->materialHandover->handover_number }}</a>@endif</td>
+                            <td style="font-size:12.5px;color:var(--text-muted)">{{ $srcProject?->project_number ?? '—' }}</td>
                             <td class="text-end">{{ $fmtQty($item->qty) }} <span style="color:var(--text-muted);font-size:12px">{{ $source?->stock?->unit }}</span></td>
                             <td class="text-end">{{ $fmtMoney($source?->unitCost()) }}</td>
                             <td class="text-end">{{ $fmtMoney($item->value()) }}</td>

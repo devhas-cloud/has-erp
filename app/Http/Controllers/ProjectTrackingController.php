@@ -11,9 +11,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
 /**
- * Project Tracking — monitoring 7 tahap setiap project (Project, Pembelian,
- * Terima Barang, Produksi, Packing List, Delivery Order, Invoice), dihitung
- * App\Support\ProjectTracker dari dokumen yang ada. Default: project Active.
+ * Project Tracking — monitoring 9 tahap setiap project (Project, Purchasing, Purchase
+ * Payment, Goods Receipt, Incoming Quality, Production, Delivery, Installation, Invoice),
+ * dihitung App\Support\ProjectTracker dari dokumen & task yang ada. Default: project Active.
  * Detail per project di halaman tracking sendiri (show).
  */
 class ProjectTrackingController extends Controller
@@ -25,10 +25,11 @@ class ProjectTrackingController extends Controller
         return view('project-tracking.index', [
             'summary' => [
                 'active' => $rows->count(),
-                'purchasing' => $rows->where('current', 2)->count(),
-                'shipping' => $rows->filter(fn ($r) => in_array($r['current'], [5, 6], true))->count(),
+                // Pembelian s/d pengecekan barang (tahap 2–5), produksi s/d pemasangan (6–8).
+                'purchasing' => $rows->filter(fn ($r) => in_array($r['current'], [2, 3, 4, 5], true))->count(),
+                'shipping' => $rows->filter(fn ($r) => in_array($r['current'], [6, 7, 8], true))->count(),
                 'unbilled' => $rows->filter(fn ($r) => $r['finance']['billed_pct'] < 100)->count(),
-                'overdue' => $rows->filter(fn ($r) => $r['due_days'] !== null && $r['due_days'] < 0 && $r['stages'][6]['status'] !== ProjectTracker::DONE)->count(),
+                'overdue' => $rows->filter(fn ($r) => $r['due_days'] !== null && $r['due_days'] < 0 && $r['stages'][7]['status'] !== ProjectTracker::DONE)->count(),
             ],
             'companies' => AccountCompany::whereIn('id', Project::select('company_id'))->orderBy('account_name')->get(['id', 'account_name']),
             'alertDays' => (int) config('project_tracking.alert_days', 14),
@@ -58,10 +59,14 @@ class ProjectTrackingController extends Controller
                 'status' => $s['status'],
                 'status_label' => $s['status_label'],
                 'summary' => $s['summary'],
+                'start' => $s['start']?->format('d/m/Y'),
+                'end' => $s['end']?->format('d/m/Y'),
             ])->values(),
             'current' => $r['current'],
             'current_label' => $r['current_label'],
             'current_summary' => $r['current'] ? $r['stages'][$r['current']]['summary'] : null,
+            'current_since' => $r['current_since']?->format('d/m/Y'),
+            'progress' => $this->overallProgress($r['stages']),
             'due_date' => $r['due_date']?->format('d/m/Y'),
             'due_days' => $r['due_days'],
             'billed_pct' => $r['finance']['billed_pct'],
@@ -84,10 +89,18 @@ class ProjectTrackingController extends Controller
                 'name' => $term->name,
                 'percent' => (float) $term->percent,
                 'amount' => $receivable->termAmount($project, $term),
-                'position' => ReceivableReport::POSITIONS[$receivable->termPosition($term)] ?? '—',
+                'position' => ReceivableReport::POSITIONS_EN[$receivable->termPosition($term)] ?? '—',
                 'target' => $term->target_date,
             ]),
         ]);
+    }
+
+    /** Jumlah tahap selesai dari tahap yang dipakai project (tahap "Not used" tidak dihitung). */
+    private function overallProgress(array $stages): array
+    {
+        $used = collect($stages)->reject(fn ($s) => $s['status'] === ProjectTracker::NA);
+
+        return ['done' => $used->where('status', ProjectTracker::DONE)->count(), 'total' => $used->count()];
     }
 
     private function rows(?string $status, ?int $companyId = null): Collection
