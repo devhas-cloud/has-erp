@@ -155,7 +155,7 @@
     <div class="card-body-custom p-2">
         <div class="gr-tools" id="gr-tools" style="display:none">
             <div class="form-check mb-0">
-                <input type="checkbox" class="form-check-input" id="gr-check-all" checked>
+                <input type="checkbox" class="form-check-input" id="gr-check-all">
                 <label class="form-check-label" for="gr-check-all" style="font-size:12.5px">Select all lines</label>
             </div>
             <button type="button" class="btn btn-outline-secondary btn-sm" id="gr-fill-all">Receive all outstanding</button>
@@ -405,12 +405,12 @@ function grLoadItems() {
                     : (it.serialized ? '<span class="gr-kind gr-kind-serial">Serial</span>' : '<span class="gr-kind gr-kind-material">Material</span>');
                 html += '<tr data-line-id="' + it.source_line_id + '" data-remaining="' + it.remaining + '" data-serialized="' + (it.serialized ? 1 : 0) + '" data-dest="' + dest + '"'
                     + ' data-priced="' + (it.price == null ? 0 : 1) + '" data-currency="' + grEsc(it.currency || '') + '">';
-                html += '<td><input type="checkbox" class="form-check-input gr-check" checked aria-label="Receive ' + grEsc(name) + '"></td>';
+                html += '<td><input type="checkbox" class="form-check-input gr-check" aria-label="Receive ' + grEsc(name) + '"></td>';
                 html += '<td><div class="gr-name">' + grEsc(name) + '</div>'
                     + '<div class="gr-sub">' + grEsc(it.product_code || it.part_number || '') + ' ' + kind
                     + '<span class="gr-sn-tag" style="display:none"></span></div>'
                     + (dest === 'warehouse'
-                        ? '<button type="button" class="gr-toggle" data-line="' + it.source_line_id + '">' + (it.serialized ? 'SN &amp; details' : 'Add note') + ' <i class="fa fa-chevron-down" style="font-size:9px"></i></button>'
+                        ? '<button type="button" class="gr-toggle" data-line="' + it.source_line_id + '" style="display:none">' + (it.serialized ? 'SN &amp; details' : 'Add note') + ' <i class="fa fa-chevron-down" style="font-size:9px"></i></button>'
                         : '')
                     + '</td>';
                 html += '<td>' + (it.project_label
@@ -426,10 +426,8 @@ function grLoadItems() {
             });
             $('#gr-items-body').html(html);
             $('#gr-tools').show();
-            // Barang ber-SN: rincian terbuka supaya SN mudah diisi.
-            $('#gr-items-body tr[data-serialized="1"][data-dest="warehouse"]').each(function() {
-                grToggleDetail($(this).attr('data-line-id'), true);
-            });
+            // Awal: semua baris belum dicentang — centang barang yang benar-benar datang.
+            // Rincian SN baru terbuka saat baris ber-SN dicentang.
             grSuggestWarehouse();
             grUpdateSummary();
         })
