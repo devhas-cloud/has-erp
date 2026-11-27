@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountManagementController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BranchTransferController;
+use App\Http\Controllers\ItemLoanController;
 use App\Http\Controllers\MaterialHandoverController;
 use App\Http\Controllers\MaterialRequestController;
 use App\Http\Controllers\MaterialRequestTemplateController;
@@ -444,6 +445,17 @@ Route::middleware(['auth', 'access.control'])->group(function () {
     Route::get('branch-transfer/{id}/items/{item}/photos/{document}', [BranchTransferController::class, 'viewPhoto'])->whereNumber('id')->name('branch-transfer.photos.show');
     Route::delete('branch-transfer/{id}/items/{item}/photos/{document}', [BranchTransferController::class, 'deletePhoto'])->whereNumber('id')->name('branch-transfer.photos.destroy');
     Route::resource('branch-transfer', BranchTransferController::class);
+    Route::get('item-loan/data', [ItemLoanController::class, 'data'])->name('item-loan.data');
+    Route::get('item-loan/stock-options', [ItemLoanController::class, 'stockOptions'])->name('item-loan.stock-options');
+    Route::post('item-loan/reminder', [ItemLoanController::class, 'saveReminder'])->name('item-loan.reminder');
+    Route::get('item-loan/{id}/pdf', [ItemLoanController::class, 'pdf'])->whereNumber('id')->name('item-loan.pdf');
+    Route::post('item-loan/{id}/return', [ItemLoanController::class, 'recordReturn'])->whereNumber('id')->name('item-loan.return');
+    Route::post('item-loan/{id}/extend', [ItemLoanController::class, 'extend'])->whereNumber('id')->name('item-loan.extend');
+    Route::post('item-loan/{id}/cancel', [ItemLoanController::class, 'cancel'])->whereNumber('id')->name('item-loan.cancel');
+    Route::post('item-loan/{id}/items/{item}/photos', [ItemLoanController::class, 'uploadPhotos'])->whereNumber(['id', 'item'])->name('item-loan.photos.store');
+    Route::get('item-loan/{id}/items/{item}/photos/{document}', [ItemLoanController::class, 'viewPhoto'])->whereNumber(['id', 'item', 'document'])->name('item-loan.photos.show');
+    Route::delete('item-loan/{id}/items/{item}/photos/{document}', [ItemLoanController::class, 'deletePhoto'])->whereNumber(['id', 'item', 'document'])->name('item-loan.photos.destroy');
+    Route::resource('item-loan', ItemLoanController::class)->only(['index', 'create', 'store', 'show']);
 
     // Produksi: Material Request -> Serah Terima -> Produksi
     // Template Material Request (tab di daftar MR; hak mengikuti modul Material Request).

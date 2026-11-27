@@ -58,6 +58,7 @@ class ModulesTableSeeder extends Seeder
             'MOD_STOCK_OUT',
             'MOD_STOCK_TRANSFER',
             'MOD_BRANCH_TRANSFER',
+            'MOD_ITEM_LOAN',
             'MOD_STOCK_ENTRY',
             'MOD_STOCK_OPNAME',
             'MOD_STOCK_DETAIL',
@@ -351,6 +352,14 @@ class ModulesTableSeeder extends Seeder
                 'description' => 'Pengiriman barang antar branch dengan surat jalan — stok dalam pengiriman sampai diterima dan diperiksa branch tujuan',
                 'route_name' => 'branch-transfer',
                 'icon' => 'fa fa-truck-fast',
+                'group' => 'Inventory',
+            ],
+            [
+                'module_code' => 'MOD_ITEM_LOAN',
+                'module_name' => 'Item Loan',
+                'description' => 'Peminjaman unit ber-SN ke user internal atau pihak luar — unit tetap tercatat milik inventory sampai dikembalikan',
+                'route_name' => 'item-loan',
+                'icon' => 'fa fa-hand-holding',
                 'group' => 'Inventory',
             ],
             [

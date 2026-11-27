@@ -69,7 +69,8 @@ class StockReportController extends Controller
             ->groupBy('s.master_product_id', 's.warehouse_id', 's.project_id')
             ->selectRaw('s.master_product_id, s.warehouse_id, s.project_id, SUM(s.qty) AS balance, SUM(s.qty * s.unit_cost) AS value, MAX(s.unit) AS unit,
                 SUM(CASE WHEN s.qty > 0 THEN 1 ELSE 0 END) AS open_rows, MAX(s.updated_at) AS last_change,
-                SUM(CASE WHEN s.qty > 0 AND s.serial_number IS NULL AND mp.is_material = 0 THEN 1 ELSE 0 END) AS missing_serial');
+                SUM(CASE WHEN s.qty > 0 AND s.serial_number IS NULL AND mp.is_material = 0 THEN 1 ELSE 0 END) AS missing_serial,
+                SUM(CASE WHEN s.qty > 0 THEN '.\App\Models\ItemLoanItem::onLoanSql('s.id').' ELSE 0 END) AS on_loan');
 
         $query = DB::query()->fromSub($balances, 'b')
             ->join('master_products as p', 'p.id', '=', 'b.master_product_id')
@@ -125,6 +126,8 @@ class StockReportController extends Controller
             'average_cost' => (float) $row->balance > 0 ? round($row->value / $row->balance, 2) : 0,
             'value' => round((float) $row->value, 2),
             'missing_serial' => (int) $row->missing_serial,
+            // Unit ber-SN yang sedang dipinjam (Item Loan): tetap di saldo, tidak tersedia.
+            'on_loan' => (int) $row->on_loan,
         ]);
 
         return response()->json([

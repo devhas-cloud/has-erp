@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\PayableDueNotifier;
+use App\Services\ItemLoanDueNotifier;
 use App\Services\ReceivableDueNotifier;
 use App\Services\TaskAlertService;
 use Illuminate\Foundation\Inspiring;
@@ -28,3 +29,8 @@ Schedule::call(function () {
 Schedule::call(function () {
     app(ReceivableDueNotifier::class)->send();
 })->everyFiveMinutes()->name('send-receivable-due-reminders')->withoutOverlapping();
+
+// Pengingat WhatsApp jatuh tempo peminjaman barang (Item Loan): pengaturan di halaman Item Loan.
+Schedule::call(function () {
+    app(ItemLoanDueNotifier::class)->send();
+})->everyFiveMinutes()->name('send-item-loan-reminders')->withoutOverlapping();

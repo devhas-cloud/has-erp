@@ -214,7 +214,8 @@ $(document).ready(function() {
             { data: 'balance', orderable: false, searchable: false, className: 'text-end',
                 render: function(data, type, row) {
                     return '<span class="sr-qty">' + srQty(data) + '</span> <span class="sr-sub">' + srEsc(row.unit || '') + '</span>'
-                        + (row.serialized ? '<div class="sr-sub">' + row.units + ' unit SN</div>' : (row.last_change ? '<div class="sr-sub">ubah ' + srEsc(row.last_change) + '</div>' : ''));
+                        + (row.serialized ? '<div class="sr-sub">' + row.units + ' unit SN</div>' : (row.last_change ? '<div class="sr-sub">ubah ' + srEsc(row.last_change) + '</div>' : ''))
+                        + (row.on_loan > 0 ? '<div class="sr-sub" style="color:#92400e" title="Unit dipinjam (Item Loan): tetap di saldo, tidak tersedia untuk dokumen lain">' + row.on_loan + ' sedang dipinjam</div>' : '');
                 } },
             { data: 'average_cost', orderable: false, searchable: false, className: 'text-end sr-money',
                 render: function(data, type, row) { return row.balance > 0 ? srMoney(data) : '<span class="sr-sub">—</span>'; } },

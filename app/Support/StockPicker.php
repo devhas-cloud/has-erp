@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\ItemLoanItem;
 use App\Models\PackingListItem;
 use App\Models\Stock;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,8 +11,8 @@ use Illuminate\Support\Collection;
 /**
  * Daftar baris stok yang bisa dipilih user (Transfer, DO, Retur, Stock Out).
  * Hanya baris terbuka (qty > 0), lewat index pick (produk, gudang, is_open, project).
- * Qty yang dipesan Packing List Siap Kirim dikurangkan; baris yang habis
- * dipesan tidak ditampilkan (kolom available).
+ * Qty yang dipesan Packing List Siap Kirim atau sedang dipinjam (Item Loan)
+ * dikurangkan; baris yang habis ditahan tidak ditampilkan (kolom available).
  *
  * Filter:
  *  - warehouse_id   : gudang (wajib di hampir semua dokumen)
@@ -32,7 +33,8 @@ class StockPicker
         $project = $filters['project'] ?? 'any';
         $q = trim((string) ($filters['q'] ?? ''));
 
-        $reserved = PackingListItem::reservedSql('stocks.id');
+        // Ditahan = dipesan Packing List Siap Kirim + sedang dipinjam (Item Loan).
+        $reserved = '('.PackingListItem::reservedSql('stocks.id').' + '.ItemLoanItem::onLoanSql('stocks.id').')';
 
         return Stock::query()
             ->select('stocks.*')

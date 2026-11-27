@@ -37,6 +37,12 @@ class StockLog extends Model
 
     public const TYPE_MERGE = 'merge';                 // penggabungan baris material lama ke satu saldo
 
+    public const TYPE_LOAN_OUT = 'loan_out';           // unit dipinjamkan (qty 0: stok tetap, hanya ditahan)
+
+    public const TYPE_LOAN_IN = 'loan_in';             // unit dikembalikan (qty 0)
+
+    public const TYPE_LOAN_LOST = 'loan_lost';         // unit pinjaman hilang (stok berkurang)
+
     public const TYPE_LABELS = [
         self::TYPE_IN => 'Masuk',
         self::TYPE_OUT => 'Keluar',
@@ -49,6 +55,9 @@ class StockLog extends Model
         self::TYPE_SHIP_OUT => 'Kirim Antar Branch',
         self::TYPE_SHIP_IN => 'Terima Antar Branch',
         self::TYPE_MERGE => 'Penggabungan Saldo',
+        self::TYPE_LOAN_OUT => 'Dipinjamkan',
+        self::TYPE_LOAN_IN => 'Kembali dari Pinjaman',
+        self::TYPE_LOAN_LOST => 'Pinjaman Hilang',
     ];
 
     public const REF_GOODS_RECEIPT_ITEM = 'goods_receipt_item';
@@ -75,6 +84,8 @@ class StockLog extends Model
 
     public const REF_MATERIAL_RETURN_ITEM = 'material_return_item';
 
+    public const REF_ITEM_LOAN_ITEM = 'item_loan_item';
+
     /** Barang jadi masuk / batal produksi (ref_id = productions.id). */
     public const REF_PRODUCTION = 'production';
 
@@ -92,6 +103,7 @@ class StockLog extends Model
         self::REF_MATERIAL_HANDOVER_ITEM => [MaterialHandoverItem::class, 'materialHandover', 'material-handover.show'],
         self::REF_MATERIAL_RETURN_ITEM => [MaterialReturnItem::class, 'materialReturn', 'material-return.show'],
         self::REF_PRODUCTION => [Production::class, null, 'production.show'],
+        self::REF_ITEM_LOAN_ITEM => [ItemLoanItem::class, 'itemLoan', 'item-loan.show'],
     ];
 
     protected $fillable = [

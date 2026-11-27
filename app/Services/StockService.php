@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ItemLoanItem;
 use App\Models\MasterProduct;
 use App\Models\PackingListItem;
 use App\Models\Stock;
@@ -26,6 +27,10 @@ use Illuminate\Support\Facades\Auth;
  * Reservasi: qty yang dipesan Packing List Siap Kirim tidak bisa diambil,
  * dipindah, atau dikurangi opname. Posting DO melepas PKL-nya (status
  * Terkirim) lebih dulu, baru mengambil stoknya.
+ *
+ * Pinjaman (Item Loan): unit ber-SN yang sedang dipinjam tetap tercatat di stok
+ * (qty tidak berubah) tetapi ditahan — tidak bisa diambil, dipindah, atau
+ * dikurangi opname sampai pengembaliannya dicatat.
  */
 class StockService
 {
@@ -195,6 +200,7 @@ class StockService
         }
 
         if ($delta < 0) {
+            $this->assertNotOnLoan($stock);
             if ($stock->qty + $delta < -Stock::EPSILON) {
                 throw new StockException('Penyesuaian '.$this->label($stock).' membuat stok minus (sisa sekarang '.self::round($stock->qty).', selisih '.$delta.').');
             }
@@ -419,6 +425,7 @@ class StockService
         if ($qty > $stock->qty + Stock::EPSILON) {
             throw new StockException('Sisa '.$this->label($stock).' tinggal '.self::round($stock->qty).' (diminta '.$qty.').');
         }
+        $this->assertNotOnLoan($stock);
         $reserved = PackingListItem::reservedQty($stock->id);
         if ($reserved > Stock::EPSILON && $qty > $stock->qty - $reserved + Stock::EPSILON) {
             throw new StockException($this->reservedMessage($stock, $reserved));
@@ -430,10 +437,31 @@ class StockService
         return min($qty, $stock->qty);
     }
 
-    /** Qty baris stok yang belum dipesan Packing List Siap Kirim. */
+    /** Qty baris stok yang belum dipesan Packing List Siap Kirim dan tidak sedang dipinjam. */
     public static function available(Stock $stock, ?int $exceptPackingListId = null): float
     {
-        return max(0.0, self::round($stock->qty - PackingListItem::reservedQty($stock->id, $exceptPackingListId)));
+        return max(0.0, self::round($stock->qty
+            - PackingListItem::reservedQty($stock->id, $exceptPackingListId)
+            - ItemLoanItem::onLoanQty($stock->id)));
+    }
+
+    /**
+     * Catat riwayat tanpa mengubah qty (mis. unit dipinjamkan / dikembalikan):
+     * tampil di kartu stok, saldo & nilai tetap.
+     */
+    public function note(Stock $stock, string $type, array $log): StockLog
+    {
+        return $this->writeLog($stock, $type, 0.0, $log);
+    }
+
+    /** Unit yang sedang dipinjam tidak boleh diambil / dipindah / dikurangi. */
+    public function assertNotOnLoan(Stock $stock): void
+    {
+        $loanItem = ItemLoanItem::activeFor($stock->id);
+        if ($loanItem) {
+            throw new StockException($this->label($stock).' sedang dipinjam ('.$loanItem->itemLoan->loan_number.' · '
+                .$loanItem->itemLoan->borrowerLabel().'). Catat pengembaliannya dulu di Item Loan.');
+        }
     }
 
     private function reservedMessage(Stock $stock, float $reserved): string

@@ -19,6 +19,16 @@
     </div>
 </div>
 
+@php $activeLoan = \App\Models\ItemLoanItem::activeFor($stock->id)?->itemLoan; @endphp
+@if($activeLoan)
+    <div class="mb-3" style="border:1px solid #fde68a;background:#fffbeb;color:#78350f;border-radius:var(--radius);padding:10px 14px;font-size:13px">
+        <strong>Sedang dipinjam</strong> oleh {{ $activeLoan->borrowerLabel() }}{{ $activeLoan->isExternal() && $activeLoan->borrower_company ? ' ('.$activeLoan->borrower_company.')' : '' }}
+        sejak {{ $activeLoan->loan_date->format('d/m/Y') }}, kembali {{ $activeLoan->due_date->format('d/m/Y') }}{{ $activeLoan->isOverdue() ? ' — lewat jatuh tempo' : '' }}.
+        Unit tetap tercatat di stok tetapi tidak bisa dipakai dokumen lain.
+        <a href="{{ route('item-loan.show', $activeLoan->id) }}" class="fw-semibold">{{ $activeLoan->loan_number }}</a>
+    </div>
+@endif
+
 <div class="row g-3 mb-3">
     <div class="col-lg-6">
         <div class="card-custom fade-in h-100">
