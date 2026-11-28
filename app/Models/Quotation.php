@@ -178,6 +178,37 @@ class Quotation extends Model
     }
 
     /**
+     * Kontak PIC quotation, diambil lewat opportunity (Quotation → Opportunity → AccountContact).
+     * Dipakai untuk sapaan Bapak/Ibu pada dokumen PDF.
+     */
+    public function getPicContactAttribute(): ?AccountContact
+    {
+        return $this->opportunity?->accountContact;
+    }
+
+    /**
+     * Nama PIC siap cetak: "Bapak Wisnu Akbar Nugraha" / "Ibu Sari".
+     * Sapaan diambil dari AccountContact.salutation; dilewati bila nama sudah
+     * diawali Bapak/Ibu, dan jatuh ke attn_name bila relasi kontak tidak ada.
+     */
+    public function getAttnDisplayNameAttribute(): string
+    {
+        $name = trim((string) ($this->attn_name ?? ''));
+
+        if ($name === '') {
+            return '—';
+        }
+
+        $salutation = trim((string) ($this->pic_contact?->salutation ?? ''));
+
+        $alreadyTitled = preg_match('/^(bapak|ibu|bpk|bp|sdr|sdri)\b/i', $name) === 1;
+
+        return ($salutation !== '' && ! $alreadyTitled)
+            ? $salutation.' '.$name
+            : $name;
+    }
+
+    /**
      * Sales quotation dari snapshot. Quotation lama tanpa snapshot memakai
      * sales task secara live.
      */

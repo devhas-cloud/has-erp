@@ -271,7 +271,7 @@
         </tr>
         <tr>
             <td class="k">Attn.</td>
-            <td>{{ $quotation->attn_name ?? '—' }}</td>
+            <td>{{ $quotation->attn_display_name }}</td>
             <td class="kr">Our Ref</td>
             <td class="right">{{ $quotation->quotation_number ?? '—' }}</td>
         </tr>
