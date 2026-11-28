@@ -187,6 +187,39 @@ class Quotation extends Model
     }
 
     /**
+     * Perusahaan akun quotation, diambil lewat opportunity
+     * (Quotation → Opportunity → AccountCompany).
+     */
+    public function getAccountCompanyAttribute(): ?AccountCompany
+    {
+        return $this->opportunity?->accountCompany;
+    }
+
+    /**
+     * Nama tujuan siap cetak: "PT Wiraswasta Gemilang Indonesia" / "CV ...".
+     * Badan usaha (PT/CV/Other) diambil dari AccountCompany.typesAccountsCompany;
+     * dilewati bila to_name sudah diawali badan usaha tersebut.
+     */
+    public function getToDisplayNameAttribute(): string
+    {
+        $name = trim((string) ($this->to_name ?? ''));
+
+        if ($name === '') {
+            return '—';
+        }
+
+        $badan = trim((string) ($this->account_company?->typesAccountsCompany?->type_name ?? ''));
+
+        if ($badan === '') {
+            return $name;
+        }
+
+        $alreadyPrefixed = str_starts_with(strtoupper($name), strtoupper($badan));
+
+        return $alreadyPrefixed ? $name : $badan.' '.$name;
+    }
+
+    /**
      * Kontak PIC quotation, diambil lewat opportunity (Quotation → Opportunity → AccountContact).
      * Dipakai untuk sapaan Bapak/Ibu pada dokumen PDF.
      */

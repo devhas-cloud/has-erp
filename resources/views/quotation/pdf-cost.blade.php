@@ -203,7 +203,7 @@
     <table class="info">
         <tr>
             <td class="k">To</td>
-            <td>{{ $quotation->to_name ?? '—' }}</td>
+            <td>{{ $quotation->to_display_name }}</td>
             <td class="kr">Date</td>
             <td class="right">{{ $quotation->date?->format('d F Y') ?? '—' }}</td>
         </tr>

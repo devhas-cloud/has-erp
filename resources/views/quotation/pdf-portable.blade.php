@@ -253,7 +253,7 @@
     <table class="info">
         <tr>
             <td class="k">To</td>
-            <td>{{ $quotation->to_name ?? '—' }}</td>
+            <td>{{ $quotation->to_display_name }}</td>
             <td class="kr">From</td>
             <td class="right">
                 @forelse($quotation->printSalesUsers() as $sales)

@@ -263,7 +263,7 @@
             <table class="info-detail">
                 <tr>
                     <td class="k">To</td>
-                    <td>{{ $quotation->to_name ?? '—' }}</td>
+                    <td>{{ $quotation->to_display_name }}</td>
                 </tr>
                 <tr>
                     <td class="k">Address</td>
