@@ -53,8 +53,8 @@ class Quotation extends Model
     public const PPN_RATE = 0.11;
 
     /**
-     * DPP diturunkan dari PPN dengan asumsi PPN dihitung atas DPP dengan
-     * tarif 12%, sehingga DPP = subtotal x 11/12 (sesuai contoh dokumen).
+     * Tarif dasar PPN atas DPP (12%). PPN yang dipungut tetap 11% dari netto,
+     * sehingga DPP = netto x 11/12 (PPN 12% x DPP = 11% x netto).
      */
     public const DPP_TAX_BASE_RATE = 0.12;
 
@@ -175,6 +175,15 @@ class Quotation extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Netto = subtotal - diskon. Dipakai tampilan ringkasan harga;
+     * DPP dihitung terpisah (lihat calculateTotals).
+     */
+    public function getNettoAttribute(): float
+    {
+        return round((float) $this->subtotal - (float) $this->discount_amount, 2);
     }
 
     /**
@@ -466,7 +475,10 @@ class Quotation extends Model
      *   - subtotal = jumlah(qty x selling_price)
      *   - diskon   = jika discount_percent diisi -> subtotal x persen/100;
      *                jika tidak, pakai discount_amount (manual).
-     *   - netto    = subtotal - diskon  (sekaligus menjadi DPP)
+     *   - netto    = subtotal - diskon
+     *   - dpp      = jika ppn_percent diisi -> floor(netto x persen / 12)
+     *                (bulat ke bawah, tanpa desimal);
+     *                jika PPN manual -> DPP = netto.
      *   - ppn      = jika ppn_percent diisi -> netto x persen/100;
      *                jika tidak, pakai ppn_amount (manual).
      *   - grand total = netto + ppn
@@ -494,6 +506,12 @@ class Quotation extends Model
 
         $netto = round($subtotal - $discount, 2);
 
+        // DPP mengikuti tarif: netto x persen / 12, dibulatkan ke bawah (floor)
+        // dan tanpa desimal. Untuk PPN 11% hasilnya floor(netto x 11/12).
+        $dpp = $ppnPercent
+            ? floor($netto * $ppnPercent / (self::DPP_TAX_BASE_RATE * 100))
+            : $netto;
+
         $ppn = $ppnPercent
             ? round($netto * $ppnPercent / 100, 2)
             : round((float) ($ppnAmount ?? 0), 2);
@@ -504,7 +522,7 @@ class Quotation extends Model
             'subtotal' => $subtotal,
             'discount_percent' => $discountPercent,
             'discount_amount' => $discount,
-            'dpp' => $netto,
+            'dpp' => $dpp,
             'ppn_percent' => $ppnPercent,
             'ppn' => $ppn,
             'grand_total' => $grandTotal,

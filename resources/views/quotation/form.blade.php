@@ -626,7 +626,11 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td>Netto / DPP Pajak</td>
+                                    <td>Netto</td>
+                                    <td class="text-end" id="qt-netto">0</td>
+                                </tr>
+                                <tr>
+                                    <td>DPP Pajak</td>
                                     <td class="text-end" id="qt-dpp">0</td>
                                 </tr>
                                 <tr>
@@ -645,7 +649,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <small style="color:var(--text-muted)">Diskon &amp; PPN: isi persen untuk menghitung nominal otomatis, atau isi nominal manual. PPN dihitung dari Netto (Subtotal − Diskon).</small>
+                    <small style="color:var(--text-muted)">Diskon &amp; PPN: isi persen untuk menghitung nominal otomatis, atau isi nominal manual. PPN dihitung dari Netto (Subtotal − Diskon); DPP = Netto x tarif/12.</small>
                 </div>
             </div>
         </div>
@@ -1082,7 +1086,8 @@ function qtRecalc() {
     }
 
     $('#qt-subtotal').text(qtFmt(subtotal));
-    $('#qt-dpp').text(qtFmt(netto));
+    $('#qt-netto').text(qtFmt(netto));
+    $('#qt-dpp').text(qtFmt(ppnPct > 0 && !$('#qt-ppn-amt').data('fx-formula') ? Math.floor(netto * ppnPct / 12) : Math.floor(netto)));
     $('#qt-total').text(qtFmt(total));
 }
 

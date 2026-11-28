@@ -870,7 +870,11 @@
                             </tr>
                             @endif
                             <tr>
-                                <td>Netto / DPP Pajak</td>
+                                <td>Netto</td>
+                                <td class="text-end">{{ \App\Models\Quotation::formatMoney($quotation->netto) }}</td>
+                            </tr>
+                            <tr>
+                                <td>DPP Pajak</td>
                                 <td class="text-end">{{ \App\Models\Quotation::formatMoney($quotation->dpp) }}</td>
                             </tr>
                             <tr>

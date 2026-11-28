@@ -743,10 +743,10 @@ class QuotationTest extends TestCase
 
         // Total hanya dari baris ber-qty & ber-harga:
         // 123.100.000 + 50.000.000 + 2 x 100.000 = 173.300.000
-        // DPP = Netto (tanpa diskon) = subtotal; PPN 11% x netto.
+        // DPP = netto x 11/12 (PPN 12% atas DPP = 11% netto); PPN 11% x netto.
         $this->assertSame(173300000.0, $quotation->subtotal);
         $this->assertSame(0.0, (float) $quotation->discount_amount);
-        $this->assertSame(173300000.0, $quotation->dpp);
+        $this->assertSame(158858333.0, (float) $quotation->dpp);
         $this->assertSame(19063000.0, $quotation->ppn);
         $this->assertSame(11.0, (float) $quotation->ppn_percent);
         $this->assertSame(192363000.0, $quotation->grand_total);
@@ -803,7 +803,7 @@ class QuotationTest extends TestCase
         $this->assertSame(1000000.0, $quotation->subtotal);
         $this->assertSame(10.0, (float) $quotation->discount_percent);
         $this->assertSame(100000.0, (float) $quotation->discount_amount);
-        $this->assertSame(900000.0, (float) $quotation->dpp); // netto
+        $this->assertSame(825000.0, (float) $quotation->dpp); // netto x 11/12
         $this->assertSame(11.0, (float) $quotation->ppn_percent);
         $this->assertSame(99000.0, (float) $quotation->ppn); // 11% x netto
         $this->assertSame(999000.0, (float) $quotation->grand_total); // netto + ppn
@@ -1553,7 +1553,7 @@ class QuotationTest extends TestCase
             'status' => Quotation::STATUS_DRAFT,
             'created_by' => $this->admin->id,
             'subtotal' => 173300000,
-            'dpp' => 158858333.33,
+            'dpp' => 158858333,
             'ppn' => 19063000,
             'grand_total' => 192363000,
         ]);
